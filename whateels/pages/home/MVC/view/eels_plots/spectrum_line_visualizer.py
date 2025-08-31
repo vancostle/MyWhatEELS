@@ -61,6 +61,42 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
         self._click_tolerance = 0.5  # Minimum distance to trigger update
 
     # -- Public Methods --
+    
+    def create_all_plots(self):
+        tabs = pn.Tabs()
+        for dataset in self._model.all_datasets:
+            # Sum over y dimension to create image
+            image_data = dataset.ElectronCount.squeeze()
+            image_data = image_data.fillna(0.0)
+            image_data = image_data.where(np.isfinite(image_data), 0.0)
+            x_coords = dataset.coords[self._model.constants.AXIS_X]
+            eloss_coords = dataset.coords[self._model.constants.ELOSS]
+            x_coords = x_coords.where(np.isfinite(x_coords), 0.0)
+            eloss_coords = eloss_coords.where(np.isfinite(eloss_coords), 0.0)
+            clean_image_data = image_data.assign_coords({
+                self._model.constants.AXIS_X: x_coords,
+                self._model.constants.ELOSS: eloss_coords
+            })
+            image = self._create_image(clean_image_data, x_coords, eloss_coords)
+            empty_spectrum = self._create_empty_spectrum(eloss_coords)
+            # Setup tap interaction
+            self.tap_stream = streams.Tap(x=0, y=0, source=image)
+            self.tap_stream.add_subscriber(self._handle_tap_stream)
+            image_pane = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
+            self.spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
+            self._trigger_refresh(image_pane)
+            
+            app = pn.Column(
+                image_pane,
+                self.spectrum_pane,
+                sizing_mode=self._STRETCH_BOTH
+            )
+            
+            attrs = self._model.dataset.attrs if self._model.dataset is not None else {}
+            image_name = attrs.get('image_name', 'N/A')
+
+            tabs.append((image_name, app))
+        return tabs
 
     @override
     def create_plots(self):

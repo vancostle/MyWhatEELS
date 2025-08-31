@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import Model
     from .. import Controller
+    from xarray import Dataset
 
 class FileOperationService:
     """
@@ -35,12 +36,12 @@ class FileOperationService:
             model: The Model instance containing application state
             controller: Reference to the controller for accessing layout manager
         """
-        self.model = model
-        self.controller = controller
+        self._model = model
+        self._controller = controller
         
         # Initialize file processing services
-        self.file_processor = EELSFileProcessorService(model)
-        self.data_processor = EELSDataProcessorService(model)
+        self._file_processor = EELSFileProcessorService(model)
+        self._data_processor = EELSDataProcessorService(model)
     
     def handle_file_upload(self, filename: str, file_content: bytes) -> bool:
         """
@@ -55,27 +56,44 @@ class FileOperationService:
         """
         try:
             # Show loading state
-            self.controller.layout.show_loading_placeholder_in_main_layout()
+            self._controller.layout.show_loading_placeholder_in_main_layout()
+            
+            dataset: Dataset | None
+            all_datasets: list[Dataset] = []
             
             # Process the file
-            dataset = self.file_processor.process_upload(filename, file_content)
-            
+            dataset, all_datasets = self._file_processor.process_upload(filename, file_content)
+
+            # TODO - DELETE IT
             if dataset is None:
                 self._handle_file_upload_error(filename)
                 return False
             
+            if not all_datasets:
+                self._handle_file_upload_error(filename)
+                return False
+            
             # Update model with new dataset
-            self.model.dataset = dataset
+            self._model.dataset = dataset
+            self._model.all_datasets = all_datasets
             
+            # TODO - DELETE IT
             # Create plots and UI components
-            success = self._create_and_display_plots(dataset)
-            
-            if not success:
+            # success = self._create_and_display_plots(dataset)
+            # TODO - DELETE IT
+            # if not success:
+                # self._handle_file_upload_error(filename)
+                # return False
+
+            print("all datasets is a tuple:", isinstance(all_datasets, tuple))
+            all_success = self._create_and_display_all_plots(all_datasets)
+
+            if not all_success:
                 self._handle_file_upload_error(filename)
                 return False
             
             return True
-                
+
         except Exception as e:
             print(f"Error during file upload: {e}")
             traceback.print_exc()
@@ -91,24 +109,55 @@ class FileOperationService:
         """
         try:            
             # Clear the dataset from model
-            self.model.dataset = None
+            self._model.dataset = None
             
             # Clear UI components
-            self.controller.layout.remove_dataset_info_from_sidebar()
-            self.controller.layout.reset_main_layout()
+            self._controller.layout.remove_dataset_info_from_sidebar()
+            self._controller.layout.reset_main_layout()
             
             # Reset AppState metadata
             app_state = AppState()
             app_state.metadata = None
             
             # Clear any active spectrum reference
-            if hasattr(self.controller.view, 'chosen_spectrum'):
-                self.controller.view.chosen_spectrum = None
+            if hasattr(self._controller.view, 'chosen_spectrum'):
+                self._controller.view.chosen_spectrum = None
                 
         except Exception as e:
             print(f"Error during file removal: {e}")
             traceback.print_exc()
-    
+            
+    def _create_and_display_all_plots(self, all_datasets: list["Dataset"]) -> bool:
+        DATASET_TYPE = 'dataset_type'
+
+        try:
+            eels_plot_factory = EELSPlotFactory(self._model, self._controller)
+
+            for dataset in all_datasets:
+                dataset_type = dataset.attrs.get(DATASET_TYPE, None)
+
+                # Create plots using the factory
+                chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type)
+                
+                if chosen_spectrum is None:
+                    return False
+                
+                # Store reference and create components
+                self._controller.view.chosen_spectrum = chosen_spectrum
+                spectrum_plots = chosen_spectrum.create_all_plots()
+                spectrum_dataset_info = chosen_spectrum.create_dataset_info()
+                
+                # Update UI
+                self._controller.layout.remove_dataset_info_from_sidebar()
+                self._controller.layout.update_main_layout(spectrum_plots)
+                self._controller.layout.add_component_to_sidebar_layout(spectrum_dataset_info)
+                
+            return True
+        except Exception as e:
+            print(f"Error creating all plots: {e}")
+            traceback.print_exc()
+            return False
+
     def _create_and_display_plots(self, dataset) -> bool:
         """
         Create EELS plots and update the UI.
@@ -123,21 +172,21 @@ class FileOperationService:
             dataset_type = dataset.attrs.get('dataset_type', None)
             
             # Create plots using the factory
-            eels_plot_factory = EELSPlotFactory(self.model, self.controller)
+            eels_plot_factory = EELSPlotFactory(self._model, self._controller)
             chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type)
             
             if chosen_spectrum is None:
                 return False
             
             # Store reference and create components
-            self.controller.view.chosen_spectrum = chosen_spectrum
+            self._controller.view.chosen_spectrum = chosen_spectrum
             spectrum_plots = chosen_spectrum.create_plots()
             spectrum_dataset_info = chosen_spectrum.create_dataset_info()
             
             # Update UI
-            self.controller.layout.remove_dataset_info_from_sidebar()
-            self.controller.layout.update_main_layout(spectrum_plots)
-            self.controller.layout.add_component_to_sidebar_layout(spectrum_dataset_info)
+            self._controller.layout.remove_dataset_info_from_sidebar()
+            self._controller.layout.update_main_layout(spectrum_plots)
+            self._controller.layout.add_component_to_sidebar_layout(spectrum_dataset_info)
             
             return True
             
@@ -148,4 +197,4 @@ class FileOperationService:
     
     def _handle_file_upload_error(self, filename: str) -> None:
         """Handle file upload error by resetting UI state."""
-        self.controller.layout.show_error_placeholder_in_main_layout()
+        self._controller.layout.show_error_placeholder_in_main_layout()

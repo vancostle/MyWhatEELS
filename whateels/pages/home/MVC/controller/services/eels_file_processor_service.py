@@ -30,7 +30,7 @@ class EELSFileProcessorService:
 
     # -- Public Methods --
 
-    def process_upload(self, filename: str, file_content: bytes) -> xr.Dataset:
+    def process_upload(self, filename: str, file_content: bytes) -> tuple[xr.Dataset | None, list[xr.Dataset]]:
         """Process uploaded file bytes into EELS dataset."""
         # Get the correct file extension from the uploaded filename
         file_extension = Path(filename).suffix
@@ -42,28 +42,30 @@ class EELSFileProcessorService:
                 with open(temp_path, 'wb') as f:
                     f.write(file_content)
                 
-                # Load the DM3/DM4 file and convert to xarray dataset
-                dataset: xr.Dataset | None = self._load_dm_file(temp_path)
+                dataset: xr.Dataset | None
+                all_datasets: list[xr.Dataset] = []
 
-                if dataset is not None:
-                    return dataset
-                else:
+                # Load the DM3/DM4 file and convert to xarray dataset
+                dataset, all_datasets = self._load_dm_file(temp_path)
+
+                if dataset is None:
                     print(f'Error loading file: {filename}')
-                    return None
-                    
+                    return None, []
+                
+                return dataset, all_datasets
             except Exception as e:
                 print(f"Error during file upload processing: {e}")
                 traceback.print_exc()
-                return None
+                return None, []
 
     # -- Private Methods --
     
-    def _load_dm_file(self, filepath) -> xr.Dataset | None:
+    def _load_dm_file(self, filepath) -> tuple[xr.Dataset | None, list[xr.Dataset]]:
         """Load DM3/DM4 file and convert to xarray dataset with metadata."""
         try:
             # Check file size first
             if not self._validate_file_size(filepath):
-                return None
+                return None, []
 
             # Read the file
             dm_eels_reader = DM_EELS_Reader(filepath)
@@ -91,16 +93,18 @@ class EELSFileProcessorService:
             self._log_all_data_quality(all_electron_count_data, all_energy_axes)
 
             # Clean energy axis for NaN/inf values
-            energy_axis = np.nan_to_num(energy_axis, nan=0.0, posinf=0.0, neginf=0.0) # TODO - DELETE IT
+            cleaned_energy_axis = np.nan_to_num(energy_axis, nan=0.0, posinf=0.0, neginf=0.0) # TODO - DELETE IT
             all_energy_axes = self._clean_all_axes(all_energy_axes)
 
             # Clean electron count data
-            electron_count_data = np.nan_to_num(electron_count_data, nan=0.0, posinf=0.0, neginf=0.0) # TODO - DELETE IT
+            cleaned_electron_count_data = np.nan_to_num(electron_count_data, nan=0.0, posinf=0.0, neginf=0.0) # TODO - DELETE IT
             all_electron_count_data = self._clean_all_electron_count_data(all_electron_count_data)
 
             # Add metadata and return
-            dataset: xr.Dataset | None = self._create_dataset_from_data(electron_count_data, energy_axis, spectrum_image, filepath)
-            return dataset
+            dataset: xr.Dataset | None = self._create_dataset_from_data(cleaned_electron_count_data, cleaned_energy_axis, spectrum_image, filepath)
+            all_datasets: list[xr.Dataset] = self._create_all_datasets_from_data(all_electron_count_data, all_energy_axes, spectrum_image, filepath)
+
+            return dataset, all_datasets
 
         except Exception as exception:
             return self._handle_file_error(exception)
@@ -171,6 +175,71 @@ class EELSFileProcessorService:
                 print(f"Warning: Raw data has {data_nan_count} NaN values and {data_inf_count} Inf values")
             if energy_nan_count > 0 or energy_inf_count > 0:
                 print(f"Warning: Energy axis has {energy_nan_count} NaN values and {energy_inf_count} Inf values")
+                
+    def _create_all_datasets_from_data(self, all_electron_count_data, all_energy_axes, spectrum_image, filepath) -> list[xr.Dataset]:
+        """
+            Create xarray datasets from all processed data.
+        """
+        ELECTRON_COUNT = 'ElectronCount'
+        X = 'x'
+        Y = 'y'
+        ELOSS = 'Eloss'
+        
+        ORIGINAL_NAME = 'original_name'
+        DATASET_TYPE = 'dataset_type'
+        BEAM_ENERGY = 'beam_energy'
+        COLLECTION_ANGLE = 'collection_angle'
+        CONVERGENCE_ANGLE = 'convergence_angle'
+        IMAGE_NAME = 'image_name'
+        NAME = 'Name'
+        SHAPE = 'shape'
+        
+        eels_data_processor = EELSDataProcessorService(self._model)
+        
+        all_datasets = []
+
+        for electron_count_data, energy_axis in zip(all_electron_count_data, all_energy_axes):
+            # Process the data using DataService
+            processed_data = eels_data_processor.process_data_for_xarray(electron_count_data, energy_axis)
+            if processed_data is None:
+                continue
+
+            electron_count_data, x_coordinates, y_coordinates = processed_data
+            
+            # Validate dimensions match
+            if electron_count_data.shape != (len(y_coordinates), len(x_coordinates), len(energy_axis)):
+                print(f"ERROR: Shape mismatch!")
+                print(f"Expected: ({len(y_coordinates)}, {len(x_coordinates)}, {len(energy_axis)})")
+                print(f"Actual: {electron_count_data.shape}")
+                return []
+            
+            dataset = xr.Dataset({
+                ELECTRON_COUNT: ([Y, X, ELOSS], electron_count_data)},
+                coords={Y: y_coordinates, X: x_coordinates, ELOSS: energy_axis
+            })
+            
+            # Clean dataset for NaN/inf values
+            dataset = eels_data_processor.clean_dataset(dataset)
+            
+            # Determine dataset type using the data service
+            dataset_type = eels_data_processor.determine_dataset_type(dataset)
+            
+            # Add metadata
+            dataset.attrs[ORIGINAL_NAME] = os.path.basename(filepath)
+            dataset.attrs[DATASET_TYPE] = dataset_type
+            dataset.attrs[BEAM_ENERGY] = getattr(spectrum_image, BEAM_ENERGY, 0)
+            dataset.attrs[COLLECTION_ANGLE] = getattr(spectrum_image, COLLECTION_ANGLE, 0.0)
+            dataset.attrs[CONVERGENCE_ANGLE] = getattr(spectrum_image, CONVERGENCE_ANGLE, 0.0)
+
+            try:
+                dataset.attrs[IMAGE_NAME] = spectrum_image.spectral_info.get(NAME, '')
+                dataset.attrs[SHAPE] = list(dataset[ELECTRON_COUNT].shape)
+            except Exception:
+                pass
+            
+            all_datasets.append(dataset)
+
+        return all_datasets
 
     def _create_dataset_from_data(self, electron_count_data, energy_axis, spectrum_image, filepath) -> xr.Dataset | None:
         """Create xarray dataset from processed data"""
@@ -237,10 +306,10 @@ class EELSFileProcessorService:
         error_message = str(exception)
         if "Expected versions 3 or 4" in error_message:
             print(f"Error loading DM file - Invalid or corrupted DM3/DM4 file: {exception}")
-            return None
+            return None, []
         elif "File size" in error_message and "too small" in error_message:
             print(f"Error loading DM file - File too small: {exception}")
-            return None
+            return None, []
         else:
             print(f"Error loading DM file: {exception}")
-            return None
+            return None, []

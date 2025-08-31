@@ -26,6 +26,10 @@ Data cleaning → xarray Dataset → Type classification
 import numpy as np
 import xarray as xr
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ...model import Model
+
 class EELSDataProcessorService:
     """
     Processes EELS data arrays into standardized xarray datasets.
@@ -38,8 +42,8 @@ class EELSDataProcessorService:
     _AXIS_X = 'x'
     _AXIS_Y = 'y'
     _ELOSS = 'Eloss'
-    
-    def __init__(self, model):
+
+    def __init__(self, model: "Model"):
         """Initialize the processor with a Model instance for constants/config."""
         self._model = model
 

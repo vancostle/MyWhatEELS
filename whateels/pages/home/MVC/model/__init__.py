@@ -12,6 +12,7 @@ class Model:
     def __init__(self):
         # State attributes
         self._dataset: "Dataset" | None = None  # Loaded EELS dataset
+        self._all_datasets: list["Dataset"] = []  # List of all loaded EELS datasets
 
         # Shared configuration and constants
         self._constants = Constants()
@@ -22,6 +23,9 @@ class Model:
     @property
     def dataset(self) -> Optional["Dataset"]:
         return self._dataset
+    @property
+    def all_datasets(self) -> list["Dataset"]:
+        return self._all_datasets
     @property
     def constants(self) -> Constants:
         return self._constants
@@ -39,4 +43,7 @@ class Model:
     def dataset(self, dataset: Optional["Dataset"]):
         """Set the EELS dataset and update any dependent state."""
         self._dataset = dataset
-    
+    @all_datasets.setter
+    def all_datasets(self, datasets: list["Dataset"]):
+        """Set the list of all EELS datasets."""
+        self._all_datasets = datasets

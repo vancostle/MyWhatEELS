@@ -6,6 +6,7 @@ import panel as pn
 import holoviews as hv
 import numpy as np
 
+from typing import override
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 
 # Initialize HoloViews with Bokeh backend

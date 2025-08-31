@@ -57,16 +57,16 @@ class EELSPlotFactory:
             RuntimeError: If an exception occurs during visualizer instantiation.
         """
         try:
-            chosed_spectrum_visualizer = self._all_spectrum_visualizer.get(dataset_type)
-            if chosed_spectrum_visualizer:
-                chosed_spectrum_visualizer = chosed_spectrum_visualizer(self._model, self._controller)
-                return chosed_spectrum_visualizer
+            chosen_spectrum_visualizer = self._all_spectrum_visualizer.get(dataset_type)
+            if chosen_spectrum_visualizer:
+                chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, self._controller)
+                return chosen_spectrum_visualizer
             else:
-                chosed_spectrum_visualizer = None
+                chosen_spectrum_visualizer = None
                 error_msg = self._UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_spectrum_visualizer.keys()))
                 raise ValueError(error_msg)
         except Exception as e:
-            chosed_spectrum_visualizer = None
+            chosen_spectrum_visualizer = None
             error_msg = self._EXCEPTION_ERROR.format(dataset_type, e)
             traceback.print_exc()
             raise RuntimeError(error_msg) from e
