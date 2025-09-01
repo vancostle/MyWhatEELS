@@ -137,6 +137,8 @@ class FileOperationService:
 
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, None)
+                attrs = dataset.attrs if dataset is not None else {}
+                image_name = attrs.get('image_name', 'N/A')
 
                 # Create plots using the factory
                 chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type, dataset)
@@ -148,7 +150,7 @@ class FileOperationService:
                 self._controller.view.chosen_spectrum = chosen_spectrum
                 spectrum_plots = chosen_spectrum.create_plots()
                 
-                plots_tab.append((dataset_type, spectrum_plots))
+                plots_tab.append((image_name, spectrum_plots))
                 
                 
                 # spectrum_dataset_info = chosen_spectrum.create_dataset_info()

@@ -63,15 +63,23 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
         
     @override
     def create_dataset_info(self):
+        SHAPE = 'shape'
+        BEAM_ENERGY = 'beam_energy'
+        COLLECTION_ANGLE = 'collection_angle'
+        CONVERGENCE_ANGLE = 'convergence_angle'
+        HTML_FILE = 'metadata_info.html'
+        READ_MODE = 'r'
+        UTF_8 = 'utf-8'
+        
         attrs = self._dataset.attrs if self._dataset is not None else {}
-        shape = attrs.get('shape', self._NOT_AVAILABLE)
-        beam_energy = attrs.get('beam_energy', self._NOT_AVAILABLE)
-        convergence_angle = attrs.get('convergence_angle', self._NOT_AVAILABLE)
-        collection_angle = attrs.get('collection_angle', self._NOT_AVAILABLE)
+        shape = attrs.get(SHAPE, self._NOT_AVAILABLE)
+        beam_energy = attrs.get(BEAM_ENERGY, self._NOT_AVAILABLE)
+        convergence_angle = attrs.get(CONVERGENCE_ANGLE, self._NOT_AVAILABLE)
+        collection_angle = attrs.get(COLLECTION_ANGLE, self._NOT_AVAILABLE)
 
         # Load metadata button HTML
-        metadata_html_path = HTML_ROOT / "metadata_info.html"
-        with open(metadata_html_path, 'r', encoding='utf-8') as f:
+        metadata_html_path = HTML_ROOT / HTML_FILE
+        with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
             metadata_button_html = f.read()
         
         metadata_button = pn.pane.HTML(metadata_button_html, margin=0)

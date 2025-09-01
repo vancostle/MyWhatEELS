@@ -63,44 +63,6 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
     # -- Public Methods --
     @override
     def create_plots(self):
-        # Sum over y dimension to create image
-        image_data = self._dataset.ElectronCount.squeeze()
-        image_data = image_data.fillna(0.0)
-        image_data = image_data.where(np.isfinite(image_data), 0.0)
-
-        x_coords = self._dataset.coords[self._model.constants.AXIS_X]
-        eloss_coords = self._dataset.coords[self._model.constants.ELOSS]
-        x_coords = x_coords.where(np.isfinite(x_coords), 0.0)
-
-        eloss_coords = eloss_coords.where(np.isfinite(eloss_coords), 0.0)
-        clean_image_data = image_data.assign_coords({
-            self._model.constants.AXIS_X: x_coords,
-            self._model.constants.ELOSS: eloss_coords
-        })
-
-        image = self._create_image(clean_image_data, x_coords, eloss_coords)
-        empty_spectrum = self._create_empty_spectrum(eloss_coords)
-
-        # Setup tap interaction
-        self._tap_stream = streams.Tap(x=0, y=0, source=image)
-        self._tap_stream.add_subscriber(self._handle_tap_stream)
-        image_pane = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
-        self._spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
-        self._trigger_refresh(image_pane)
-        
-        plot = pn.Column(
-            image_pane,
-            self._spectrum_pane,
-            sizing_mode=self._STRETCH_BOTH
-        )
-
-        # attrs = dataset.attrs if dataset is not None else {}
-        # image_name = attrs.get('image_name', 'N/A')
-
-        return plot
-
-    @override
-    def create_plots(self):
         """Create layout for spectrum line visualization with tap/click interaction."""
         # Sum over y dimension to create image
         image_data = self._dataset.ElectronCount.squeeze()
@@ -123,19 +85,13 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
         self._spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
         self._trigger_refresh(image_pane)
         
-        app = pn.Column(
+        plots = pn.Column(
             image_pane,
             self._spectrum_pane,
             sizing_mode=self._STRETCH_BOTH
         )
 
-        attrs = self._dataset.attrs if self._dataset is not None else {}
-        image_name = attrs.get('image_name', 'N/A')
-
-        tabs = pn.Tabs(
-            (image_name, app),
-        )
-        return tabs
+        return plots
 
     @override
     def create_dataset_info(self):
