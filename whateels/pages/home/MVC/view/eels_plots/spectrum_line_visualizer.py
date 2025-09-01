@@ -13,7 +13,6 @@ from whateels.helpers import HTML_ROOT
 
 if TYPE_CHECKING:
     from ...model import Model
-    from ...controller import Controller
 
 # Initialize HoloViews with Bokeh backend
 hv.extension("bokeh", logo=False)
@@ -50,63 +49,65 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
     _SPECTRUM_WIDTH = 600
     _SPECTRUM_HEIGHT = 300
     
-    def __init__(self, model: "Model", controller: "Controller"):
-        print("Initializing DM4Plots")
+    def __init__(self, model: "Model", dataset: "xr.Dataset"):
         self._model = model
-        self.controller = controller  # Optional for this visualizer
-        self.tap_stream = None
-        self.spectrum_pane = None
+        self._dataset = dataset
+
+        self._tap_stream = None
+        self._spectrum_pane = None
+        
         # For tap/click throttling
         self._last_click_x = None
         self._click_tolerance = 0.5  # Minimum distance to trigger update
 
     # -- Public Methods --
-    
-    def create_all_plots(self):
-        tabs = pn.Tabs()
-        for dataset in self._model.all_datasets:
-            # Sum over y dimension to create image
-            image_data = dataset.ElectronCount.squeeze()
-            image_data = image_data.fillna(0.0)
-            image_data = image_data.where(np.isfinite(image_data), 0.0)
-            x_coords = dataset.coords[self._model.constants.AXIS_X]
-            eloss_coords = dataset.coords[self._model.constants.ELOSS]
-            x_coords = x_coords.where(np.isfinite(x_coords), 0.0)
-            eloss_coords = eloss_coords.where(np.isfinite(eloss_coords), 0.0)
-            clean_image_data = image_data.assign_coords({
-                self._model.constants.AXIS_X: x_coords,
-                self._model.constants.ELOSS: eloss_coords
-            })
-            image = self._create_image(clean_image_data, x_coords, eloss_coords)
-            empty_spectrum = self._create_empty_spectrum(eloss_coords)
-            # Setup tap interaction
-            self.tap_stream = streams.Tap(x=0, y=0, source=image)
-            self.tap_stream.add_subscriber(self._handle_tap_stream)
-            image_pane = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
-            self.spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
-            self._trigger_refresh(image_pane)
-            
-            app = pn.Column(
-                image_pane,
-                self.spectrum_pane,
-                sizing_mode=self._STRETCH_BOTH
-            )
-            
-            attrs = self._model.dataset.attrs if self._model.dataset is not None else {}
-            image_name = attrs.get('image_name', 'N/A')
+    @override
+    def create_plots(self):
+        # Sum over y dimension to create image
+        image_data = self._dataset.ElectronCount.squeeze()
+        image_data = image_data.fillna(0.0)
+        image_data = image_data.where(np.isfinite(image_data), 0.0)
 
-            tabs.append((image_name, app))
-        return tabs
+        x_coords = self._dataset.coords[self._model.constants.AXIS_X]
+        eloss_coords = self._dataset.coords[self._model.constants.ELOSS]
+        x_coords = x_coords.where(np.isfinite(x_coords), 0.0)
+
+        eloss_coords = eloss_coords.where(np.isfinite(eloss_coords), 0.0)
+        clean_image_data = image_data.assign_coords({
+            self._model.constants.AXIS_X: x_coords,
+            self._model.constants.ELOSS: eloss_coords
+        })
+
+        image = self._create_image(clean_image_data, x_coords, eloss_coords)
+        empty_spectrum = self._create_empty_spectrum(eloss_coords)
+
+        # Setup tap interaction
+        self._tap_stream = streams.Tap(x=0, y=0, source=image)
+        self._tap_stream.add_subscriber(self._handle_tap_stream)
+        image_pane = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
+        self._spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
+        self._trigger_refresh(image_pane)
+        
+        plot = pn.Column(
+            image_pane,
+            self._spectrum_pane,
+            sizing_mode=self._STRETCH_BOTH
+        )
+
+        # attrs = dataset.attrs if dataset is not None else {}
+        # image_name = attrs.get('image_name', 'N/A')
+
+        return plot
 
     @override
     def create_plots(self):
         """Create layout for spectrum line visualization with tap/click interaction."""
         # Sum over y dimension to create image
-        image_data = self._model.dataset.ElectronCount.squeeze()
+        image_data = self._dataset.ElectronCount.squeeze()
         image_data = image_data.fillna(0.0)
         image_data = image_data.where(np.isfinite(image_data), 0.0)
-        x_coords = self._model.dataset.coords[self._model.constants.AXIS_X]
-        eloss_coords = self._model.dataset.coords[self._model.constants.ELOSS]
+        x_coords = self._dataset.coords[self._model.constants.AXIS_X]
+        eloss_coords = self._dataset.coords[self._model.constants.ELOSS]
         x_coords = x_coords.where(np.isfinite(x_coords), 0.0)
         eloss_coords = eloss_coords.where(np.isfinite(eloss_coords), 0.0)
         clean_image_data = image_data.assign_coords({
@@ -116,19 +117,19 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
         image = self._create_image(clean_image_data, x_coords, eloss_coords)
         empty_spectrum = self._create_empty_spectrum(eloss_coords)
         # Setup tap interaction
-        self.tap_stream = streams.Tap(x=0, y=0, source=image)
-        self.tap_stream.add_subscriber(self._handle_tap_stream)
+        self._tap_stream = streams.Tap(x=0, y=0, source=image)
+        self._tap_stream.add_subscriber(self._handle_tap_stream)
         image_pane = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
-        self.spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
+        self._spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
         self._trigger_refresh(image_pane)
         
         app = pn.Column(
             image_pane,
-            self.spectrum_pane,
+            self._spectrum_pane,
             sizing_mode=self._STRETCH_BOTH
         )
-        
-        attrs = self._model.dataset.attrs if self._model.dataset is not None else {}
+
+        attrs = self._dataset.attrs if self._dataset is not None else {}
         image_name = attrs.get('image_name', 'N/A')
 
         tabs = pn.Tabs(
@@ -138,7 +139,7 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
 
     @override
     def create_dataset_info(self):
-        attrs = self._model.dataset.attrs if self._model.dataset is not None else {}
+        attrs = self._dataset.attrs if self._dataset is not None else {}
         shape = attrs.get('shape', 'N/A')
         beam_energy = attrs.get('beam_energy', 'N/A')
         convergence_angle = attrs.get('convergence_angle', 'N/A')
@@ -217,7 +218,7 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
         """Update the spectrum pane with the spectrum at the tapped x position."""
         # Get spectrum at tapped x position
         try:
-            spectrum = self._model.dataset.ElectronCount.sel(
+            spectrum = self._dataset.ElectronCount.sel(
                 x=x, method='nearest'
             )
             # Ensure the spectrum is 1D by reducing over 'y' if present
@@ -225,7 +226,7 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
                 spectrum = spectrum.mean(dim='y')
         except Exception:
             return
-        eloss_coords = self._model.dataset.coords[self._model.constants.ELOSS]
+        eloss_coords = self._dataset.coords[self._model.constants.ELOSS]
         spectrum_curve = hv.Curve(
             (eloss_coords, spectrum),
             kdims=[self._model.constants.ELOSS],
@@ -239,8 +240,8 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
             ylabel=self._SPECTRUM_Y_LABEL,
             title=self._SPECTRUM_TITLE
         )
-        if self.spectrum_pane is not None:
-            self.spectrum_pane.object = spectrum_curve
+        if self._spectrum_pane is not None:
+            self._spectrum_pane.object = spectrum_curve
 
     def _create_image(self, clean_image_data, x_coords, eloss_coords):
         """Create the spectrum line image"""

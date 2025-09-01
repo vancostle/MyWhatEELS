@@ -8,6 +8,12 @@ import numpy as np
 
 from typing import override
 from .abstract_eels_visualizer import AbstractEELSVisualizer
+from whateels.helpers import HTML_ROOT
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...model import Model
+    from xarray import Dataset
 
 # Initialize HoloViews with Bokeh backend
 hv.extension("bokeh", logo=False)
@@ -15,16 +21,20 @@ hv.extension("bokeh", logo=False)
 class SingleSpectrumVisualizer(AbstractEELSVisualizer):
     """Composes single spectrum visualizations from EELS data"""
     
-    def __init__(self, model):
+    _STRETCH_WIDTH = 'stretch_width'
+    _STRETCH_BOTH = 'stretch_both'
+    _NOT_AVAILABLE = 'N/A'
+
+    def __init__(self, model: "Model", dataset: "Dataset"):
         self._model = model
-        self._STRETCH_WIDTH = 'stretch_width'
-        self._STRETCH_BOTH = 'stretch_both'
+        self._dataset = dataset
     
-    def create_layout(self):
+    @override
+    def create_plots(self):
         """Create layout for single spectrum visualization"""
         # Create spectrum plot
-        spectrum_data = self._model.dataset.ElectronCount.squeeze()
-        
+        spectrum_data = self._dataset.ElectronCount.squeeze()
+
         # Clean spectrum data for any remaining NaN/inf values
         spectrum_data = spectrum_data.fillna(0.0)
         spectrum_data = spectrum_data.where(np.isfinite(spectrum_data), 0.0)
@@ -53,11 +63,11 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
         
     @override
     def create_dataset_info(self):
-        attrs = self._model.dataset.attrs if self._model.dataset is not None else {}
-        shape = attrs.get('shape', 'N/A')
-        beam_energy = attrs.get('beam_energy', 'N/A')
-        convergence_angle = attrs.get('convergence_angle', 'N/A')
-        collection_angle = attrs.get('collection_angle', 'N/A')
+        attrs = self._dataset.attrs if self._dataset is not None else {}
+        shape = attrs.get('shape', self._NOT_AVAILABLE)
+        beam_energy = attrs.get('beam_energy', self._NOT_AVAILABLE)
+        convergence_angle = attrs.get('convergence_angle', self._NOT_AVAILABLE)
+        collection_angle = attrs.get('collection_angle', self._NOT_AVAILABLE)
 
         # Load metadata button HTML
         metadata_html_path = HTML_ROOT / "metadata_info.html"

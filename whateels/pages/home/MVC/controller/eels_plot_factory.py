@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import Model
     from ..controller import Controller
+    from typing import TYPE_CHECKING
+    from xarray import Dataset
 
 import traceback
 
@@ -42,7 +44,7 @@ class EELSPlotFactory:
             model.constants.SINGLE_SPECTRUM: SingleSpectrumVisualizer,
         }
     
-    def choose_spectrum(self, dataset_type: str) -> SpectrumLineVisualizer | SpectrumImageVisualizer | None:
+    def choose_spectrum(self, dataset_type: str, dataset: "Dataset") -> SpectrumLineVisualizer | SpectrumImageVisualizer | SingleSpectrumVisualizer | None:
         """
         Instantiates and returns the appropriate EELS visualizer for the specified dataset type.
 
@@ -59,7 +61,7 @@ class EELSPlotFactory:
         try:
             chosen_spectrum_visualizer = self._all_spectrum_visualizer.get(dataset_type)
             if chosen_spectrum_visualizer:
-                chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, self._controller)
+                chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)
                 return chosen_spectrum_visualizer
             else:
                 chosen_spectrum_visualizer = None

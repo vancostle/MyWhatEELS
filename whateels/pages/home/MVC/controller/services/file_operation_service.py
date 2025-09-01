@@ -5,7 +5,8 @@ Centralizes file upload, removal, and state management logic.
 Coordinates between file processing and UI updates.
 """
 
-import traceback
+import traceback, panel as pn
+
 from .eels_file_processor_service import EELSFileProcessorService
 from .eels_data_processor_service import EELSDataProcessorService
 from ..eels_plot_factory import EELSPlotFactory
@@ -132,26 +133,31 @@ class FileOperationService:
 
         try:
             eels_plot_factory = EELSPlotFactory(self._model, self._controller)
+            plots_tab = pn.Tabs()
 
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, None)
 
                 # Create plots using the factory
-                chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type)
+                chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type, dataset)
                 
                 if chosen_spectrum is None:
                     return False
                 
                 # Store reference and create components
                 self._controller.view.chosen_spectrum = chosen_spectrum
-                spectrum_plots = chosen_spectrum.create_all_plots()
-                spectrum_dataset_info = chosen_spectrum.create_dataset_info()
+                spectrum_plots = chosen_spectrum.create_plots()
                 
-                # Update UI
-                self._controller.layout.remove_dataset_info_from_sidebar()
-                self._controller.layout.update_main_layout(spectrum_plots)
-                self._controller.layout.add_component_to_sidebar_layout(spectrum_dataset_info)
+                plots_tab.append((dataset_type, spectrum_plots))
                 
+                
+                # spectrum_dataset_info = chosen_spectrum.create_dataset_info()
+                
+            # Update UI
+            # self._controller.layout.remove_dataset_info_from_sidebar()
+            self._controller.layout.update_main_layout(plots_tab)
+            # self._controller.layout.add_component_to_sidebar_layout(spectrum_dataset_info)
+
             return True
         except Exception as e:
             print(f"Error creating all plots: {e}")
