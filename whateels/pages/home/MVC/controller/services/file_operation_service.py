@@ -86,7 +86,6 @@ class FileOperationService:
                 # self._handle_file_upload_error(filename)
                 # return False
 
-            print("all datasets is a tuple:", isinstance(all_datasets, tuple))
             all_success = self._create_and_display_all_plots(all_datasets)
 
             if not all_success:
@@ -130,6 +129,8 @@ class FileOperationService:
             
     def _create_and_display_all_plots(self, all_datasets: list["Dataset"]) -> bool:
         DATASET_TYPE = 'dataset_type'
+        IMAGE_NAME_ATTRIBUTE = 'image_name'
+        NOT_AVAILABLE = 'N/A'
 
         try:
             eels_plot_factory = EELSPlotFactory(self._model, self._controller)
@@ -137,8 +138,7 @@ class FileOperationService:
 
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, None)
-                attrs = dataset.attrs if dataset is not None else {}
-                image_name = attrs.get('image_name', 'N/A')
+                image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
 
                 # Create plots using the factory
                 chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type, dataset)

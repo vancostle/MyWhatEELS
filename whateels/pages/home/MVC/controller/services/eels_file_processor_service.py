@@ -73,7 +73,7 @@ class EELSFileProcessorService:
             # Get file metadata
             all_metadata_file = dm_eels_reader.file_metadata
             spectrum_image: DM_EELS_data = dm_eels_reader.processed_eels_spectrum
-            all_spectrum_images: DM_EELS_data = dm_eels_reader.processed_all_eels_spectrums
+            eels_data: DM_EELS_data = dm_eels_reader.processed_all_eels_spectrums
 
             # print("all_spectrum_images:", all_spectrum_images.all_data)
             # print("length:", len(all_spectrum_images.all_data))
@@ -85,31 +85,31 @@ class EELSFileProcessorService:
             electron_count_data = spectrum_image.data
             energy_axis = spectrum_image.energy_axis
 
-            all_electron_count_data = all_spectrum_images.all_data
-            all_energy_axes = all_spectrum_images.all_energy_axes
+            all_spectrum_images = eels_data.all_data
+            all_energy_axes = eels_data.all_energy_axes
 
             # Check for NaN/inf in raw data
-            self._log_data_quality(electron_count_data, energy_axis) # TODO - DELETE IT
-            self._log_all_data_quality(all_electron_count_data, all_energy_axes)
+            # self._log_data_quality(electron_count_data, energy_axis) # TODO - DELETE IT
+            self._log_all_data_quality(all_spectrum_images, all_energy_axes)
 
             # Clean energy axis for NaN/inf values
             cleaned_energy_axis = np.nan_to_num(energy_axis, nan=0.0, posinf=0.0, neginf=0.0) # TODO - DELETE IT
-            all_energy_axes = self._clean_all_axes(all_energy_axes)
+            cleaned_all_energy_axes = self._clean_all_axes(all_energy_axes)
 
             # Clean electron count data
             cleaned_electron_count_data = np.nan_to_num(electron_count_data, nan=0.0, posinf=0.0, neginf=0.0) # TODO - DELETE IT
-            all_electron_count_data = self._clean_all_electron_count_data(all_electron_count_data)
+            cleaned_all_electron_count_data = self._clean_all_electron_count_data(all_spectrum_images)
 
             # Add metadata and return
             dataset: xr.Dataset | None = self._create_dataset_from_data(cleaned_electron_count_data, cleaned_energy_axis, spectrum_image, filepath)
-            all_datasets: list[xr.Dataset] = self._create_all_datasets_from_data(all_electron_count_data, all_energy_axes, spectrum_image, filepath)
+            all_datasets: list[xr.Dataset] = self._create_all_datasets_from_data(cleaned_all_electron_count_data, cleaned_all_energy_axes, eels_data, filepath)
 
             return dataset, all_datasets
 
         except Exception as exception:
             return self._handle_file_error(exception)
         
-    def _clean_all_electron_count_data(self, all_electron_count_data) -> list[np.ndarray]:
+    def _clean_all_electron_count_data(self, all_electron_count_data: list[np.ndarray]) -> list[np.ndarray]:
         cleaned_electron_count_data = []
         for electron_count_data in all_electron_count_data:
             cleaned_electron_count_data.append(np.nan_to_num(electron_count_data, nan=0.0, posinf=0.0, neginf=0.0))
@@ -175,8 +175,8 @@ class EELSFileProcessorService:
                 print(f"Warning: Raw data has {data_nan_count} NaN values and {data_inf_count} Inf values")
             if energy_nan_count > 0 or energy_inf_count > 0:
                 print(f"Warning: Energy axis has {energy_nan_count} NaN values and {energy_inf_count} Inf values")
-                
-    def _create_all_datasets_from_data(self, all_electron_count_data, all_energy_axes, spectrum_image, filepath) -> list[xr.Dataset]:
+
+    def _create_all_datasets_from_data(self, all_spectrum_images, all_energy_axes, eels_data, filepath) -> list[xr.Dataset]:
         """
             Create xarray datasets from all processed data.
         """
@@ -191,30 +191,33 @@ class EELSFileProcessorService:
         COLLECTION_ANGLE = 'collection_angle'
         CONVERGENCE_ANGLE = 'convergence_angle'
         IMAGE_NAME = 'image_name'
-        NAME = 'Name'
         SHAPE = 'shape'
         
         eels_data_processor = EELSDataProcessorService(self._model)
-        
+        all_spectrum_metadata = list(eels_data.spectrum_images.values())
         all_datasets = []
 
-        for electron_count_data, energy_axis in zip(all_electron_count_data, all_energy_axes):
-            # Process the data using DataService
-            processed_data = eels_data_processor.process_data_for_xarray(electron_count_data, energy_axis)
+        for image, metadata, energy_axis in zip(all_spectrum_images, all_spectrum_metadata, all_energy_axes):
+            processed_data = eels_data_processor.process_data_for_xarray(image, energy_axis)
             if processed_data is None:
                 continue
 
-            electron_count_data, x_coordinates, y_coordinates = processed_data
+            image, x_coordinates, y_coordinates = processed_data
+            
+            shape = image.shape
+            len_x_axis = len(x_coordinates)
+            len_y_axis = len(y_coordinates)
+            len_energy_axis = len(energy_axis)
             
             # Validate dimensions match
-            if electron_count_data.shape != (len(y_coordinates), len(x_coordinates), len(energy_axis)):
+            if shape != (len_y_axis, len_x_axis, len_energy_axis):
                 print(f"ERROR: Shape mismatch!")
-                print(f"Expected: ({len(y_coordinates)}, {len(x_coordinates)}, {len(energy_axis)})")
-                print(f"Actual: {electron_count_data.shape}")
+                print(f"Expected: ({len_y_axis}, {len_x_axis}, {len_energy_axis})")
+                print(f"Actual: {shape}")
                 return []
             
             dataset = xr.Dataset({
-                ELECTRON_COUNT: ([Y, X, ELOSS], electron_count_data)},
+                ELECTRON_COUNT: ([Y, X, ELOSS], image)},
                 coords={Y: y_coordinates, X: x_coordinates, ELOSS: energy_axis
             })
             
@@ -227,12 +230,12 @@ class EELSFileProcessorService:
             # Add metadata
             dataset.attrs[ORIGINAL_NAME] = os.path.basename(filepath)
             dataset.attrs[DATASET_TYPE] = dataset_type
-            dataset.attrs[BEAM_ENERGY] = getattr(spectrum_image, BEAM_ENERGY, 0)
-            dataset.attrs[COLLECTION_ANGLE] = getattr(spectrum_image, COLLECTION_ANGLE, 0.0)
-            dataset.attrs[CONVERGENCE_ANGLE] = getattr(spectrum_image, CONVERGENCE_ANGLE, 0.0)
+            dataset.attrs[BEAM_ENERGY] = eels_data.get_beam_energy(metadata)
+            dataset.attrs[COLLECTION_ANGLE] = eels_data.get_collection_angle(metadata)
+            dataset.attrs[CONVERGENCE_ANGLE] = eels_data.get_convergence_angle(metadata)
 
             try:
-                dataset.attrs[IMAGE_NAME] = spectrum_image.spectral_info.get(NAME, '')
+                dataset.attrs[IMAGE_NAME] = eels_data.get_image_name(metadata)
                 dataset.attrs[SHAPE] = list(dataset[ELECTRON_COUNT].shape)
             except Exception:
                 pass
@@ -292,6 +295,10 @@ class EELSFileProcessorService:
         dataset.attrs[BEAM_ENERGY] = getattr(spectrum_image, BEAM_ENERGY, 0)
         dataset.attrs[COLLECTION_ANGLE] = getattr(spectrum_image, COLLECTION_ANGLE, 0.0)
         dataset.attrs[CONVERGENCE_ANGLE] = getattr(spectrum_image, CONVERGENCE_ANGLE, 0.0)
+        
+        print("SINGLE IMAGE ATTRIBUTES:", dir(spectrum_image))
+
+        print("SINGLE ENERGY BEAM:", dataset.attrs[BEAM_ENERGY])
 
         try:
             dataset.attrs[IMAGE_NAME] = spectrum_image.spectral_info.get(NAME, '')
