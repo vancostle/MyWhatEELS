@@ -5,7 +5,7 @@ Centralizes file upload, removal, and state management logic.
 Coordinates between file processing and UI updates.
 """
 
-import traceback, panel as pn
+import traceback, panel as pn, param
 
 from .eels_file_processor_service import EELSFileProcessorService
 from .eels_data_processor_service import EELSDataProcessorService
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from .. import Controller
     from xarray import Dataset
 
-class FileOperationService:
+class FileOperationService():
     """
     Service responsible for coordinating all file operations.
     
@@ -28,6 +28,8 @@ class FileOperationService:
     - Error handling and recovery
     - Coordination between file processing and plot creation
     """
+
+    # _selected_image_tab = param.Integer(0, doc="Index of the currently selected image tab")
 
     def __init__(self, model: "Model", controller: "Controller"):
         """
@@ -39,7 +41,10 @@ class FileOperationService:
         """
         self._model = model
         self._controller = controller
-        
+
+        # Store all dataset information
+        self._all_dataset_info = []
+
         # Initialize file processing services
         self._file_processor = EELSFileProcessorService(model)
         self._data_processor = EELSDataProcessorService(model)
@@ -131,6 +136,7 @@ class FileOperationService:
         DATASET_TYPE = 'dataset_type'
         IMAGE_NAME_ATTRIBUTE = 'image_name'
         NOT_AVAILABLE = 'N/A'
+        ACTIVE = 'active'
 
         try:
             eels_plot_factory = EELSPlotFactory(self._model, self._controller)
@@ -152,13 +158,16 @@ class FileOperationService:
                 
                 plots_tab.append((image_name, spectrum_plots))
                 
-                
                 # spectrum_dataset_info = chosen_spectrum.create_dataset_info()
+                self._all_dataset_info.append(chosen_spectrum.create_dataset_info())
+                
+            plots_tab.param.watch(self._on_tab_change, ACTIVE)
                 
             # Update UI
-            # self._controller.layout.remove_dataset_info_from_sidebar()
             self._controller.layout.update_main_layout(plots_tab)
-            # self._controller.layout.add_component_to_sidebar_layout(spectrum_dataset_info)
+
+            self._controller.layout.remove_dataset_info_from_sidebar()
+            self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[0])
 
             return True
         except Exception as e:
@@ -166,6 +175,12 @@ class FileOperationService:
             traceback.print_exc()
             return False
 
+    def _on_tab_change(self, event):
+        new_tab = event.new
+        self._controller.layout.remove_dataset_info_from_sidebar()
+        self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[new_tab])
+
+    # TODO - DELETE IT
     def _create_and_display_plots(self, dataset) -> bool:
         """
         Create EELS plots and update the UI.

@@ -114,9 +114,12 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         
         attrs = self._dataset.attrs if self._dataset is not None else {}
         shape = attrs.get(SHAPE, self._NOT_AVAILABLE)
+
         beam_energy = attrs.get(BEAM_ENERGY, self._NOT_AVAILABLE)
         convergence_angle = attrs.get(CONVERGENCE_ANGLE, self._NOT_AVAILABLE)
         collection_angle = attrs.get(COLLECTION_ANGLE, self._NOT_AVAILABLE)
+
+        # print(collection_angle, convergence_angle, '\n')
 
         # Load metadata button HTML
         metadata_html_path = HTML_ROOT / HTML_FILE

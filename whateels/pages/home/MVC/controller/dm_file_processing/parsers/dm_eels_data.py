@@ -82,7 +82,8 @@ class DM_EELS_data:
     def get_image_name(self, image: np.ndarray) -> str:
         """Get the name of a specific spectrum image from its metadata dictionary."""
         NAME = "Name"
-        return image.get(NAME, "Unnamed Image")
+        NO_NAME = "Unnamed Image"
+        return image.get(NAME, NO_NAME)
     
     # TODO - DELETE IT
     @property

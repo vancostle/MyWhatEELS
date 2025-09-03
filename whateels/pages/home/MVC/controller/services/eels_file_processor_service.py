@@ -234,6 +234,9 @@ class EELSFileProcessorService:
             dataset.attrs[COLLECTION_ANGLE] = eels_data.get_collection_angle(metadata)
             dataset.attrs[CONVERGENCE_ANGLE] = eels_data.get_convergence_angle(metadata)
 
+            print(f"DATASET COLLECTION ANGLE: {dataset.attrs[COLLECTION_ANGLE]}")
+            print(f"DATASET CONVERGENCE ANGLE: {dataset.attrs[CONVERGENCE_ANGLE]}")
+
             try:
                 dataset.attrs[IMAGE_NAME] = eels_data.get_image_name(metadata)
                 dataset.attrs[SHAPE] = list(dataset[ELECTRON_COUNT].shape)
@@ -295,10 +298,6 @@ class EELSFileProcessorService:
         dataset.attrs[BEAM_ENERGY] = getattr(spectrum_image, BEAM_ENERGY, 0)
         dataset.attrs[COLLECTION_ANGLE] = getattr(spectrum_image, COLLECTION_ANGLE, 0.0)
         dataset.attrs[CONVERGENCE_ANGLE] = getattr(spectrum_image, CONVERGENCE_ANGLE, 0.0)
-        
-        print("SINGLE IMAGE ATTRIBUTES:", dir(spectrum_image))
-
-        print("SINGLE ENERGY BEAM:", dataset.attrs[BEAM_ENERGY])
 
         try:
             dataset.attrs[IMAGE_NAME] = spectrum_image.spectral_info.get(NAME, '')
