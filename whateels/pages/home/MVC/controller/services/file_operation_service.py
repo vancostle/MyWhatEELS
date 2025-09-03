@@ -5,7 +5,7 @@ Centralizes file upload, removal, and state management logic.
 Coordinates between file processing and UI updates.
 """
 
-import traceback, panel as pn, param
+import traceback, panel as pn
 
 from .eels_file_processor_service import EELSFileProcessorService
 from .eels_data_processor_service import EELSDataProcessorService
@@ -64,32 +64,16 @@ class FileOperationService():
             # Show loading state
             self._controller.layout.show_loading_placeholder_in_main_layout()
             
-            dataset: Dataset | None
             all_datasets: list[Dataset] = []
             
             # Process the file
-            dataset, all_datasets = self._file_processor.process_upload(filename, file_content)
-
-            # TODO - DELETE IT
-            if dataset is None:
-                self._handle_file_upload_error(filename)
-                return False
+            all_datasets = self._file_processor.process_upload(filename, file_content)
             
             if not all_datasets:
                 self._handle_file_upload_error(filename)
                 return False
             
-            # Update model with new dataset
-            self._model.dataset = dataset
             self._model.all_datasets = all_datasets
-            
-            # TODO - DELETE IT
-            # Create plots and UI components
-            # success = self._create_and_display_plots(dataset)
-            # TODO - DELETE IT
-            # if not success:
-                # self._handle_file_upload_error(filename)
-                # return False
 
             all_success = self._create_and_display_all_plots(all_datasets)
 
@@ -112,10 +96,10 @@ class FileOperationService():
         Args:
             filename: Name of the removed file
         """
-        try:            
-            # Clear the dataset from model
-            self._model.dataset = None
-            
+        CHOSEN_SPECTRUM = 'chosen_spectrum'
+        ERROR_FILE_REMOVAL_MESSAGE = "Error during file removal: {}"
+
+        try:
             # Clear UI components
             self._controller.layout.remove_dataset_info_from_sidebar()
             self._controller.layout.reset_main_layout()
@@ -125,11 +109,11 @@ class FileOperationService():
             app_state.metadata = None
             
             # Clear any active spectrum reference
-            if hasattr(self._controller.view, 'chosen_spectrum'):
+            if hasattr(self._controller.view, CHOSEN_SPECTRUM):
                 self._controller.view.chosen_spectrum = None
                 
         except Exception as e:
-            print(f"Error during file removal: {e}")
+            print(ERROR_FILE_REMOVAL_MESSAGE.format(e))
             traceback.print_exc()
             
     def _create_and_display_all_plots(self, all_datasets: list["Dataset"]) -> bool:
@@ -191,9 +175,12 @@ class FileOperationService():
         Returns:
             bool: True if successful, False if failed
         """
+        DATASET_TYPE = 'dataset_type'
+        ERROR_PLOTS_MESSAGE = 'Error creating plots: {}'
+
         try:
-            dataset_type = dataset.attrs.get('dataset_type', None)
-            
+            dataset_type = dataset.attrs.get(DATASET_TYPE, None)
+
             # Create plots using the factory
             eels_plot_factory = EELSPlotFactory(self._model, self._controller)
             chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type)
@@ -214,7 +201,7 @@ class FileOperationService():
             return True
             
         except Exception as e:
-            print(f"Error creating plots: {e}")
+            print(ERROR_PLOTS_MESSAGE.format(e))
             traceback.print_exc()
             return False
     

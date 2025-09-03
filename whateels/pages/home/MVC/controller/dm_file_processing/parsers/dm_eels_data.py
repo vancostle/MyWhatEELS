@@ -34,7 +34,7 @@ class DM_EELS_data:
 
     def __init__(self):
         """Initialize instance attributes."""
-        self.spectrum_images = {}
+        self._all_spectral_info = {}
         self._spectral_info = None
         self._file = None
         self.data = None
@@ -55,71 +55,32 @@ class DM_EELS_data:
             _logger.exception(message)
             raise DMEmptyInfoDictionary(message)
 
-        self.spectrum_images = self._filter_spectrum_images(infoDict)
-
-        # For backward compatibility, set the first image as spectralInfo
-        imageKeys = list(self.spectrum_images.keys())
-        # TODO - Here is where the code is choosing the first image as spectralInfo
-        self._spectral_info = self.spectrum_images[imageKeys[0]] if imageKeys else None
-        self._all_spectral_info = self.spectrum_images
-
-    # TODO - DELETE IT
-    def handle_EELS_data(self):
-        """
-        This method will basically read from file, using numpy, the EELS data.
-        After that, it returns itself, the instance of this class created, so the properties
-        of the object can be accessed from the exterior (energy_axis, shape, collection_angle, etc)
-        """
-        self.data = self._get_eels_data()
-        return self
+        self._all_spectral_info = self._filter_spectrum_images(infoDict)
     
-    def handle_all_EELS_data(self):
-        self.all_data = self._get_all_eels_data()
+    def handle_eels_data(self):
+        self.all_data = self._get_eels_data()
         return self
 
     # ==================== PUBLIC PROPERTIES ====================
     
+    def get_shape(self, image: np.ndarray) -> tuple:
+        """
+        Get the shape of a spectrum image from its metadata dictionary.
+        Returns
+        -------
+        tuple
+            Shape of the image, reversed as in the current property.
+        """
+        dims = tuple(
+            [el[1] for el in image[self._IMAGE_DATA][self._DIMENSIONS].items()]
+        )
+        return dims[::-1]
+
     def get_image_name(self, image: np.ndarray) -> str:
         """Get the name of a specific spectrum image from its metadata dictionary."""
         NAME = "Name"
         NO_NAME = "Unnamed Image"
         return image.get(NAME, NO_NAME)
-    
-    # TODO - DELETE IT
-    @property
-    def spectral_info(self):
-        """Spectral information read from file (informationDictionary)."""
-        return self._spectral_info
-
-    # TODO - DELETE IT
-    @property
-    def beam_energy(self):
-        """Beam energy read from file (informationDictionary). In reality, a voltage is read.
-        Returns
-        --------------
-        E0 : float = Value in keV"""
-
-        MICROSCOPE_INFO = "Microscope Info"
-        VOLTAGE = "Voltage"
-        E0 = 0.0  # Default value in keV
-
-        try:
-            microscope_voltage = self._spectral_info[self._IMAGE_TAGS][MICROSCOPE_INFO][VOLTAGE]
-            E0 = self._volt_to_kilovolt(microscope_voltage)
-        except KeyError as e:
-            msg = "Expected a value for the beam energy. No such value in the parsed dictionary found"
-            _logger.warning(msg)
-            _logger.warning(e)
-            self._recursively_add_key(
-                self._spectral_info, [self._IMAGE_TAGS, MICROSCOPE_INFO]
-            )
-            _logger.info(
-                f"Added Route to the dictionary -> [{self._IMAGE_TAGS}][{MICROSCOPE_INFO}]"
-            )
-            self._spectral_info[self._IMAGE_TAGS][MICROSCOPE_INFO][VOLTAGE] = E0
-            _logger.info(f"Acceleration voltage V0 value updated to {microscope_voltage} V")
-
-        return E0
     
     def get_beam_energy(self, image) -> float:
         """Get beam energy for a specific spectrum image."""
@@ -144,35 +105,6 @@ class DM_EELS_data:
             _logger.info(f"Acceleration voltage V0 value updated to {microscope_voltage} V")
 
         return E0
-
-    # TODO - DELETE IT
-    @property
-    def convergence_angle(self):
-        """Convergence semi angle property, read from dictionary if available.
-        Returns
-        --------------
-        alpha : float = Value in mrad
-        """
-        try:
-            alpha = self._spectral_info[self._IMAGE_TAGS]["EELS"][self._EXPERIMENTAL_CONDITIONS][
-                "Convergence semi-angle (mrad)"
-            ]
-        except KeyError as e:
-            msg = "Expected a value for the convergence angle. No such value in the parsed dictionary found"
-            _logger.warning(msg)
-            _logger.warning(e)
-            self._recursively_add_key(
-                self._spectral_info, [self._IMAGE_TAGS, "EELS", self._EXPERIMENTAL_CONDITIONS]
-            )
-            _logger.info(
-                "Added Route to the dictionary -> [ImageTags][EELS][Experimental Conditions]"
-            )
-            alpha = 0
-            self._spectral_info[self._IMAGE_TAGS]["EELS"][self._EXPERIMENTAL_CONDITIONS][
-                "Convergence semi-angle (mrad)"
-            ] = alpha
-            _logger.info(f"Convergence angle alpha value updated to {alpha} mrad")
-        return alpha
     
     def get_convergence_angle(self, image: np.ndarray) -> float:
         """Get convergence angle for a specific spectrum image."""
@@ -198,35 +130,6 @@ class DM_EELS_data:
             _logger.info(f"Convergence angle alpha value updated to {alpha} mrad")
 
         return alpha
-
-    # TODO - DELETE IT
-    @property
-    def collection_angle(self):
-        """Collection semi angle property, read from dictionary if available.
-        Returns
-        --------------
-        beta : float = Value in mrad"""
-        EELS = "EELS"
-        try:
-            beta = self._spectral_info[self._IMAGE_TAGS][EELS][self._EXPERIMENTAL_CONDITIONS][
-                "Collection semi-angle (mrad)"
-            ]
-        except KeyError as e:
-            msg = "Expected a value for the convergence angle. No such value in the parsed dictionary found"
-            _logger.warning(msg)
-            _logger.warning(e)
-            self._recursively_add_key(
-                self._spectral_info, [self._IMAGE_TAGS, EELS, self._EXPERIMENTAL_CONDITIONS]
-            )
-            _logger.info(
-                f"Added Route to the dictionary -> [{self._IMAGE_TAGS}][{EELS}][{self._EXPERIMENTAL_CONDITIONS}]"
-            )
-            beta = 0
-            self._spectral_info[self._IMAGE_TAGS][EELS][self._EXPERIMENTAL_CONDITIONS][
-                "Collection semi-angle (mrad)"
-            ] = beta
-            _logger.info(f"Collection angle beta value updated to {beta} mrad")
-        return beta
 
     def get_collection_angle(self, image: np.ndarray) -> float:
         """"Get collection angle for a specific spectrum image."""
@@ -254,42 +157,6 @@ class DM_EELS_data:
 
         return beta
 
-    # TODO - DELETE IT
-    @property
-    def shape(self):
-        """Shape property for the EELS dataset read from the
-        information dictionary parsed. DM stores EELS spectral data
-        as - SImages (Eloss,Y,X) - SLines(Eloss,X) - SingleSpectrum (Eloss,)
-        """
-        dims = tuple(
-            [el[1] for el in self._spectral_info[self._IMAGE_DATA][self._DIMENSIONS].items()]
-        )
-        return dims[::-1]
-
-    def get_shape(self, image: np.ndarray) -> tuple:
-        """
-        Get the shape of a spectrum image from its metadata dictionary.
-        Returns
-        -------
-        tuple
-            Shape of the image, reversed as in the current property.
-        """
-        dims = tuple(
-            [el[1] for el in image[self._IMAGE_DATA][self._DIMENSIONS].items()]
-        )
-        return dims[::-1]
-
-    # TODO - DELETE IT
-    @property
-    def energy_axis(self):
-        """Energy axis for the spectral dataset.
-        This is one of the more confusing properties to extract
-        from DM. By some unknown reason, it is stored"""        
-        if len(self.shape) == 3:
-            return np.arange(self.shape[0]) * self._get_scales()[0] + self._get_unit_origins()[0]
-        # For Slines and single spectra, this works ...
-        return np.arange(self.shape[-1]) * self._get_scales()[-1] + self._get_unit_origins()[-1]
-    
     @property
     def all_energy_axes(self) -> list[np.ndarray]:
         """
@@ -321,6 +188,10 @@ class DM_EELS_data:
             energy_axes.append(np.arange(shape[-1]) * scale[-1] + origin[-1])
 
         return energy_axes
+    
+    @property
+    def all_spectral_info(self):
+        return self._all_spectral_info
 
     # ==================== PRIVATE METHODS ====================
     
@@ -376,43 +247,7 @@ class DM_EELS_data:
             _logger.exception(message)
             raise DMNonEelsError(message)
 
-    # TODO - DELETE IT
-    def _get_eels_data(self) -> np.ndarray:
-        """
-        This method will attempt to extract the actual EELS data,
-        to be handled to the factory later on.
-        It does several things.
-
-        Returns
-        -------
-        np.ndarray
-            The EELS data for the selected spectrum image, reshaped according to its dimensions.
-        """
-        idx = self._spectral_info[self._IMAGE_DATA]["DataType"]
-        try:
-            dtype = self._supported_dtypes[idx]
-        except KeyError as e:
-            message = (
-                f"Data Type index ({idx}) read from file ({self._file.name}) not supported."
-            )
-            _logger.exception(message)
-            raise DMNonSupportedDataType(message)
-
-        bSize = self._spectral_info[self._IMAGE_DATA]["Data"]["bytes_size"]
-        offset = self._spectral_info[self._IMAGE_DATA]["Data"]["offset"]
-        nItems = self._spectral_info[self._IMAGE_DATA]["Data"]["size"]
-        # Checking that the info is readable
-        if bSize / nItems != np.dtype(dtype).itemsize:
-            message = f"Size_in_bytes / Number_of_items = {bSize / nItems}\
-                != from NumPy expected size for {dtype} = {np.dtype(dtype).itemsize}"
-            _logger.error(message)
-            raise DMConflictingDataTypeRead(message)
-
-        self._file.seek(0)
-        data = np.fromfile(self._file, count=nItems, offset=offset, dtype=dtype)
-        return data.reshape(self.shape)
-
-    def _get_all_eels_data(self) -> list[np.ndarray]:
+    def _get_eels_data(self) -> list[np.ndarray]:
         """This method will extract all EELS data from the spectrum images."""
         
         DATA_TYPE = 'DataType'
@@ -425,7 +260,7 @@ class DM_EELS_data:
 
         all_eels_data = []
 
-        for _, image_data in self.spectrum_images.items():
+        for _, image_data in self._all_spectral_info.items():
             idx = image_data[self._IMAGE_DATA][DATA_TYPE]
             try:
                 dtype = self._supported_dtypes[idx]
@@ -461,17 +296,6 @@ class DM_EELS_data:
                 infoD[el] = dict()
             infoD = infoD[el]
 
-    # TODO - DELETE IT
-    def _get_scales(self):
-        """scale properties for all the dimensions involved"""
-        SCALE = 'Scale'
-        # TODO safeguard for the cases where the dimensions cannot be read from file
-        scale = [
-            el[SCALE]
-            for k, el in self._spectral_info[self._IMAGE_DATA][self._CALIBRATIONS][self._DIMENSION].items()
-        ]
-        return np.array(scale)[::-1]
-
     def _get_scales_of_one_image(self, image_dict):
         """Get scale properties for a single image."""
         SCALE = 'Scale'
@@ -481,19 +305,6 @@ class DM_EELS_data:
             for k, el in image_dict[self._IMAGE_DATA][self._CALIBRATIONS][self._DIMENSION].items()
         ]
         return np.array(scale)[::-1]
-
-    # TODO - DELETE IT
-    def _get_origins(self):
-        """origins for the dimensions involved"""
-        ORIGIN = 'Origin'
-        # TODO safeguard for the cases where the dimensions cannot be read from file
-        orig = [
-            el[ORIGIN]
-            for k, el in self._spectral_info[self._IMAGE_DATA][self._CALIBRATIONS][
-                self._DIMENSION
-            ].items()
-        ]
-        return np.array(orig)[::-1]
     
     def _get_origins_of_one_image(self, image_dict):
         """Get origins for the dimensions of a single image."""
@@ -504,11 +315,6 @@ class DM_EELS_data:
             for k, el in image_dict[self._IMAGE_DATA][self._CALIBRATIONS][self._DIMENSION].items()
         ]
         return np.array(orig)[::-1]
-
-    # TODO - DELETE IT
-    def _get_unit_origins(self):
-        """Origins for the dimensions involved that include the scaling factors"""
-        return -1 * self._get_origins() * self._get_scales()
 
     def _get_unit_origins_of_one_image(self, image_dict):
         """Origins for the dimensions of a single image that include the scaling factors"""

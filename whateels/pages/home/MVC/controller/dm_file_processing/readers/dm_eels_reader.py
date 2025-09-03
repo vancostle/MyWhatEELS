@@ -53,7 +53,6 @@ class DM_EELS_Reader:
         """
 
         self._file_metadata = None
-        self._processed_eels_spectrum = None
         self._processed_all_eels_spectrums = None
 
         self._read_data(filename)
@@ -67,7 +66,6 @@ class DM_EELS_Reader:
         handler = DM_EELS_data()
 
         file_metadata_dictionary = None
-        processed_eels_spectrum = None
 
         _logger.info(f"Opening file {filename}")
         
@@ -86,23 +84,17 @@ class DM_EELS_Reader:
             _logger.info(f"Starting EELS data extraction using: {handler.__module__}")
 
             handler.get_file_data(binary_file_stream, infoDict=file_metadata_dictionary)
-            processed_eels_spectrum: DM_EELS_data = handler.handle_EELS_data()
-            processed_all_eels_spectrums: DM_EELS_data = handler.handle_all_EELS_data()
+            processed_all_eels_spectrums: DM_EELS_data = handler.handle_eels_data()
 
             _logger.info("EELS data extraction completed successfully")
             _logger.info("##############")
 
         self._file_metadata = file_metadata_dictionary
-        self._processed_eels_spectrum = processed_eels_spectrum
         self._processed_all_eels_spectrums = processed_all_eels_spectrums
 
     @property
     def file_metadata(self):
         return self._file_metadata
-
-    @property
-    def processed_eels_spectrum(self) -> DM_EELS_data:
-        return self._processed_eels_spectrum
     
     @property
     def processed_all_eels_spectrums(self) -> DM_EELS_data:

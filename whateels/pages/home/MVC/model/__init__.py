@@ -11,7 +11,6 @@ class Model:
     """
     def __init__(self):
         # State attributes
-        self._dataset: "Dataset" | None = None  # Loaded EELS dataset
         self._all_datasets: list["Dataset"] = []  # List of all loaded EELS datasets
 
         # Shared configuration and constants
@@ -38,11 +37,7 @@ class Model:
     @property
     def placeholders(self) -> Placeholders:
         return self._placeholders
-    
-    @dataset.setter
-    def dataset(self, dataset: Optional["Dataset"]):
-        """Set the EELS dataset and update any dependent state."""
-        self._dataset = dataset
+
     @all_datasets.setter
     def all_datasets(self, datasets: list["Dataset"]):
         """Set the list of all EELS datasets."""
