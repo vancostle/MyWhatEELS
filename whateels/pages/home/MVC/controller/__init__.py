@@ -21,8 +21,8 @@ class Controller:
         self.model = model
         self.view = view
         # Initialize services
-        self._file_service = EELSFileProcessorService(model)
-        self._data_service = EELSDataProcessorService(self.model)
+        self._file_service = FileProcessorService(model)
+        self._data_service = DataProcessorService(self.model)
         self._file_operation_service = FileOperationService(model, self)
         # Initialize manager
         self._layout_manager = LayoutManager(view)

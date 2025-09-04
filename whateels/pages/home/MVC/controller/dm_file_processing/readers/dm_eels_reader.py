@@ -62,32 +62,42 @@ class DM_EELS_Reader:
         Read and process EELS data from the DM file.
         """
 
+        FILE_MODE_READ_BINARY = "rb"
+
+        LOG_OPENING_FILE = "Opening file {filename}"
+        LOG_SEPARATOR = "##############"
+        LOG_START_PARSING = "Starting file parsing for {filename}"
+        LOG_USING_PARSER = "Using parser: {parser}"
+        LOG_PARSING_SUCCESS = "File parsing completed successfully"
+        LOG_EELS_DATA_EXTRACTION = "Starting EELS data extraction using: {handler}"
+        LOG_EELS_DATA_EXTRACTION_SUCCESS = "EELS data extraction completed successfully"
+
         parser = DM_InfoParser()
         handler = DM_EELS_data()
 
         file_metadata_dictionary = None
 
-        _logger.info(f"Opening file {filename}")
-        
-        with open(filename, "rb") as binary_file_stream:
+        _logger.info(LOG_OPENING_FILE.format(filename=filename))
+
+        with open(filename, FILE_MODE_READ_BINARY) as binary_file_stream:
             # Step 1: Parse file structure and extract metadata
-            _logger.info(f"Starting file parsing for {filename}")
-            _logger.info(f"Using parser: {parser.__module__}")
+            _logger.info(LOG_START_PARSING.format(filename=filename))
+            _logger.info(LOG_USING_PARSER.format(parser=parser.__module__))
 
             parser.file = binary_file_stream
             file_metadata_dictionary = parser.parse_file()
 
-            _logger.info("File parsing completed successfully")
-            _logger.info("##############")
-            
+            _logger.info(LOG_PARSING_SUCCESS)
+            _logger.info(LOG_SEPARATOR)
+
             # Step 2: Extract and process EELS data
-            _logger.info(f"Starting EELS data extraction using: {handler.__module__}")
+            _logger.info(LOG_EELS_DATA_EXTRACTION.format(handler=handler.__module__))
 
             handler.get_file_data(binary_file_stream, infoDict=file_metadata_dictionary)
             processed_all_eels_spectrums: DM_EELS_data = handler.handle_eels_data()
 
-            _logger.info("EELS data extraction completed successfully")
-            _logger.info("##############")
+            _logger.info(LOG_EELS_DATA_EXTRACTION_SUCCESS)
+            _logger.info(LOG_SEPARATOR)
 
         self._file_metadata = file_metadata_dictionary
         self._processed_all_eels_spectrums = processed_all_eels_spectrums

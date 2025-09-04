@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from ...model import Model
     from xarray import Dataset
     from param.parameterized import Event
-    from xarray import Dataset
 
 class SpectrumImageVisualizer(AbstractEELSVisualizer):
     """
@@ -33,12 +32,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     _DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
     _DATASET_INFO_CLASS = ["dataset-info", "animated"]
     _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
-    _DATASET_DETAILS_NAME = "Dataset Details"
-    _DATASET_DETAILS_WIDTH = 350
-    _DATASET_DETAILS_HEIGHT = 250
-    _DATASET_DETAILS_POSITION = "center"
-    _DATASET_DETAILS_HEADER = "### More Dataset Details"
-    _DATASET_DETAILS_PLACEHOLDER = "(Add more details here as needed)"
     
     _NOT_AVAILABLE = 'N/A'
 
@@ -118,8 +111,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         beam_energy = attrs.get(BEAM_ENERGY, self._NOT_AVAILABLE)
         convergence_angle = attrs.get(CONVERGENCE_ANGLE, self._NOT_AVAILABLE)
         collection_angle = attrs.get(COLLECTION_ANGLE, self._NOT_AVAILABLE)
-
-        # print(collection_angle, convergence_angle, '\n')
 
         # Load metadata button HTML
         metadata_html_path = HTML_ROOT / HTML_FILE

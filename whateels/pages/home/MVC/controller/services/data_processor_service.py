@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import Model
 
-class EELSDataProcessorService:
+class DataProcessorService:
     """
     Processes EELS data arrays into standardized xarray datasets.
     
@@ -51,45 +51,64 @@ class EELSDataProcessorService:
 
     def clean_dataset(self, dataset):
         """Replace NaN/inf values with zeros in data and coordinates."""
+        
+        ELECTRON_COUNT = 'ElectronCount'
+        COULD_NOT_CLEAN_DATASET_MESSAGE = "Could not clean dataset: {}"
+
         try:
             # Clean the main electron count data array
             electron_count = dataset.ElectronCount.values
             electron_count = np.nan_to_num(electron_count, nan=0.0, posinf=0.0, neginf=0.0)
             
-            # Clean all coordinate arrays to prevent axis issues
+            # Clean coordinate arrays
             x_coords = dataset.coords[self._AXIS_X].values
             y_coords = dataset.coords[self._AXIS_Y].values
-            eloss_coords = dataset.coords[self._ELOSS].values
-
-            # Sanitize coordinate arrays
             x_coords = np.nan_to_num(x_coords, nan=0.0, posinf=0.0, neginf=0.0)
             y_coords = np.nan_to_num(y_coords, nan=0.0, posinf=0.0, neginf=0.0)
-            eloss_coords = np.nan_to_num(eloss_coords, nan=0.0, posinf=0.0, neginf=0.0)
             
-            # Reconstruct dataset with cleaned data and coordinates
+            # Check if dataset has energy dimension (EELS data)
+            if self._ELOSS in dataset.coords:
+                eloss_coords = dataset.coords[self._ELOSS].values
+                eloss_coords = np.nan_to_num(eloss_coords, nan=0.0, posinf=0.0, neginf=0.0)
+                
+                # Reconstruct 3D dataset with energy dimension
+                cleaned_dataset = xr.Dataset(
+                    {ELECTRON_COUNT: (dataset.ElectronCount.dims, electron_count)},
+                    coords={
+                        self._AXIS_X: x_coords, 
+                        self._AXIS_Y: y_coords, 
+                        self._ELOSS: eloss_coords
+                    }
+                )
+                # Preserve original metadata attributes
+                cleaned_dataset.attrs = dataset.attrs.copy()
+                return cleaned_dataset
+
+            # Reconstruct 2D dataset without energy dimension
             cleaned_dataset = xr.Dataset(
-                {
-                    'ElectronCount': (dataset.ElectronCount.dims, electron_count)
-                },
+                {ELECTRON_COUNT: (dataset.ElectronCount.dims, electron_count)},
                 coords={
                     self._AXIS_X: x_coords, 
-                    self._AXIS_Y: y_coords, 
-                    self._ELOSS: eloss_coords
+                    self._AXIS_Y: y_coords
                 }
             )
-            
+
             # Preserve original metadata attributes
             cleaned_dataset.attrs = dataset.attrs.copy()
-            
             return cleaned_dataset
+
         except Exception as e:
-            print(f"Warning: Could not clean dataset: {e}")
+            print(COULD_NOT_CLEAN_DATASET_MESSAGE.format(e))
             return dataset
 
-    def determine_dataset_type(self, dataset: xr.Dataset) -> str:
+    def determine_dataset_type(self, dataset: xr.Dataset, image_name: str) -> str:
         """Classify dataset as Single Spectrum, Spectrum Line, or Spectrum Image based on spatial dimensions."""
+
+        EELS = "EELS"
+
         x_size = len(dataset.coords[self._AXIS_X])
         y_size = len(dataset.coords[self._AXIS_Y])
+
         if x_size == 1 and y_size == 1:
             return self._model.constants.SINGLE_SPECTRUM
         elif y_size == 1:
@@ -97,18 +116,48 @@ class EELSDataProcessorService:
         else:
             return self._model.constants.SPECTRUM_IMAGE
 
-    def process_data_for_xarray(self, electron_count_data, energy_axis):
+    def process_data_for_xarray(self, electron_count_data, energy_axis, image_name: str) -> xr.Dataset | None:
         """Process raw EELS data into xarray format (y, x, energy)."""
         # Route to appropriate processing method based on data dimensionality
-        if len(electron_count_data.shape) == 3:
-            return self._process_3d_data(electron_count_data)
-        elif len(electron_count_data.shape) == 2:
-            return self._process_2d_data(electron_count_data, energy_axis)
-        elif len(electron_count_data.shape) == 1:
+        
+        UNSUPPORTED_DIMENSION_MESSAGE = f"ERROR: Unsupported data dimensionality: {electron_count_data.shape}"
+
+        len_shape = len(electron_count_data.shape)
+
+        if len_shape == 1:
             return self._process_1d_data(electron_count_data)
+        elif len_shape == 2:
+            return self._process_2d_data(electron_count_data, energy_axis)
+        elif len_shape == 3:
+            return self._process_3d_data(electron_count_data)
         else:
-            print(f"ERROR: Unsupported data dimensionality: {electron_count_data.shape}")
+            print(UNSUPPORTED_DIMENSION_MESSAGE)
             return None
+        
+    def _process_2d_eels_data(self, data):
+        """Process 2D non-EELS data: keep natural (y, x) format."""
+        # For 2D images (non-EELS), keep the natural 2D shape
+        # No need to add artificial dimensions
+        
+        # Generate spatial coordinates
+        y_coordinates = np.arange(0, data.shape[0], dtype=np.int32)  # Pixel rows
+        x_coordinates = np.arange(0, data.shape[1], dtype=np.int32)  # Pixel columns
+
+        return data, x_coordinates, y_coordinates
+
+    def _process_2d_eels_spatial_data(self, data, energy_axis):
+        """Process 2D EELS spatial data: reshape (y, x) → (y, x, energy=1)."""
+        # This handles EELS data that's missing the energy dimension
+        # Typically happens when EELS was acquired at a single energy point
+        
+        # Add energy dimension to make it (y, x, energy=1)
+        data = data[:, :, np.newaxis]  # Add energy axis with size 1
+        
+        # Generate spatial coordinates
+        y_coordinates = np.arange(0, data.shape[0], dtype=np.int32)  # Pixel rows
+        x_coordinates = np.arange(0, data.shape[1], dtype=np.int32)  # Pixel columns
+        
+        return data, x_coordinates, y_coordinates
 
     # --- Private Methods ---
 

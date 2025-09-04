@@ -7,8 +7,8 @@ Coordinates between file processing and UI updates.
 
 import traceback, panel as pn
 
-from .eels_file_processor_service import EELSFileProcessorService
-from .eels_data_processor_service import EELSDataProcessorService
+from .file_processor_service import FileProcessorService
+from .data_processor_service import DataProcessorService
 from ..eels_plot_factory import EELSPlotFactory
 from whateels.shared_state import AppState
 
@@ -46,8 +46,8 @@ class FileOperationService():
         self._all_dataset_info = []
 
         # Initialize file processing services
-        self._file_processor = EELSFileProcessorService(model)
-        self._data_processor = EELSDataProcessorService(model)
+        self._file_processor = FileProcessorService(model)
+        self._data_processor = DataProcessorService(model)
     
     def handle_file_upload(self, filename: str, file_content: bytes) -> bool:
         """

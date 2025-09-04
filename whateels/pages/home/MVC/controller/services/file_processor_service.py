@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..dm_file_processing.readers.dm_eels_reader import DM_EELS_data
 
-class EELSFileProcessorService:
+class FileProcessorService:
     """
     Handles DM3/DM4 file I/O and orchestrates file-to-dataset processing.
     
@@ -63,6 +63,7 @@ class EELSFileProcessorService:
 
                 if not all_datasets:
                     print(ERROR_MESSAGE_LOADING_FILE.format(filename))
+                    traceback.print_exc()
                     return []
                 
                 return all_datasets
@@ -251,12 +252,8 @@ class EELSFileProcessorService:
         all_datasets = []
 
         for image, metadata, energy_axis in zip(all_spectrum_images, all_spectrum_metadata, all_energy_axes):
-            # Get image name first for processing decisions
-            try:
-                image_name = eels_data.get_image_name(metadata)
-            except Exception:
-                image_name = "Unknown"
-                
+            image_name = eels_data.get_image_name(metadata)
+
             processed_data = eels_data_processor.process_data_for_xarray(image, energy_axis, image_name)
             if processed_data is None:
                 continue
@@ -266,39 +263,19 @@ class EELSFileProcessorService:
             shape = image.shape
             len_x_axis = len(x_coordinates)
             len_y_axis = len(y_coordinates)
-            
-            # Handle EELS vs non-EELS data differently
-            EELS = "EELS"
-            if EELS in image_name:
-                # EELS data: 3D format (y, x, energy)
-                energy_coords = energy_axis
-                len_energy_axis = len(energy_axis)
-                expected_shape = (len_y_axis, len_x_axis, len_energy_axis)
-                coord_dims = [Y, X, ELOSS]
-            else:
-                # Non-EELS data: 2D format (y, x)
-                energy_coords = None  # No energy dimension
-                expected_shape = (len_y_axis, len_x_axis)
-                coord_dims = [Y, X]
+            len_energy_axis = len(energy_axis)
             
             # Validate dimensions match
-            if shape != expected_shape:
+            if shape != (len_y_axis, len_x_axis, len_energy_axis):
                 print(f"ERROR: Shape mismatch!")
-                print(f"Expected: {expected_shape}")
+                print(f"Expected: ({len_y_axis}, {len_x_axis}, {len_energy_axis})")
                 print(f"Actual: {shape}")
                 return []
             
-            # Create dataset with appropriate dimensions
-            if EELS in image_name:
-                dataset = xr.Dataset({
-                    ELECTRON_COUNT: (coord_dims, image)},
-                    coords={Y: y_coordinates, X: x_coordinates, ELOSS: energy_coords
-                })
-            else:
-                dataset = xr.Dataset({
-                    ELECTRON_COUNT: (coord_dims, image)},
-                    coords={Y: y_coordinates, X: x_coordinates
-                })
+            dataset = xr.Dataset({
+                ELECTRON_COUNT: ([Y, X, ELOSS], image)},
+                coords={Y: y_coordinates, X: x_coordinates, ELOSS: energy_axis
+            })
             
             # Clean dataset for NaN/inf values
             dataset = eels_data_processor.clean_dataset(dataset)
@@ -316,8 +293,6 @@ class EELSFileProcessorService:
             try:
                 dataset.attrs[IMAGE_NAME] = eels_data.get_image_name(metadata)
                 dataset.attrs[SHAPE] = list(dataset[ELECTRON_COUNT].shape)
-                
-                print("SHAPEEEE", dataset.attrs[SHAPE])
             except Exception:
                 pass
             
@@ -338,13 +313,10 @@ class EELSFileProcessorService:
         error_message = str(exception)
         if "Expected versions 3 or 4" in error_message:
             print(f"Error loading DM file - Invalid or corrupted DM3/DM4 file: {exception}")
-            traceback.print_exc()
             return []
         elif "File size" in error_message and "too small" in error_message:
             print(f"Error loading DM file - File too small: {exception}")
-            traceback.print_exc()
             return []
         else:
             print(f"Error loading DM file: {exception}")
-            traceback.print_exc()
             return []
