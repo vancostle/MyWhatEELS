@@ -108,7 +108,12 @@ class DataProcessorService:
 
         x_size = len(dataset.coords[self._AXIS_X])
         y_size = len(dataset.coords[self._AXIS_Y])
+        
+        # First check if this is EELS data
+        if EELS not in image_name:
+            return self._model.constants.IMAGE  # Non-EELS data is just an image
 
+        # For EELS data, classify based on dimensions
         if x_size == 1 and y_size == 1:
             return self._model.constants.SINGLE_SPECTRUM
         elif y_size == 1:
@@ -120,9 +125,16 @@ class DataProcessorService:
         """Process raw EELS data into xarray format (y, x, energy)."""
         # Route to appropriate processing method based on data dimensionality
         
+        EELS = "EELS"
         UNSUPPORTED_DIMENSION_MESSAGE = f"ERROR: Unsupported data dimensionality: {electron_count_data.shape}"
 
+        # Check if this is EELS or non-EELS data
+        if EELS not in image_name:
+            return self._process_2d_image_data(electron_count_data)
+
         len_shape = len(electron_count_data.shape)
+
+        print(f"Shape {electron_count_data.shape} Name {image_name}")
 
         if len_shape == 1:
             return self._process_1d_data(electron_count_data)
@@ -133,31 +145,6 @@ class DataProcessorService:
         else:
             print(UNSUPPORTED_DIMENSION_MESSAGE)
             return None
-        
-    def _process_2d_eels_data(self, data):
-        """Process 2D non-EELS data: keep natural (y, x) format."""
-        # For 2D images (non-EELS), keep the natural 2D shape
-        # No need to add artificial dimensions
-        
-        # Generate spatial coordinates
-        y_coordinates = np.arange(0, data.shape[0], dtype=np.int32)  # Pixel rows
-        x_coordinates = np.arange(0, data.shape[1], dtype=np.int32)  # Pixel columns
-
-        return data, x_coordinates, y_coordinates
-
-    def _process_2d_eels_spatial_data(self, data, energy_axis):
-        """Process 2D EELS spatial data: reshape (y, x) → (y, x, energy=1)."""
-        # This handles EELS data that's missing the energy dimension
-        # Typically happens when EELS was acquired at a single energy point
-        
-        # Add energy dimension to make it (y, x, energy=1)
-        data = data[:, :, np.newaxis]  # Add energy axis with size 1
-        
-        # Generate spatial coordinates
-        y_coordinates = np.arange(0, data.shape[0], dtype=np.int32)  # Pixel rows
-        x_coordinates = np.arange(0, data.shape[1], dtype=np.int32)  # Pixel columns
-        
-        return data, x_coordinates, y_coordinates
 
     # --- Private Methods ---
 
@@ -190,6 +177,22 @@ class DataProcessorService:
         electron_count_data = electron_count_data.reshape(shape_dimensions)
         
         return electron_count_data, x_coordinates, y_coordinates
+    
+    def _process_2d_image_data(self, data):
+        """Process 2D non-EELS image data: keep natural (y, x) format."""
+        # For 2D images (non-EELS), keep the natural 2D shape
+        # No need to add artificial dimensions
+        
+        print(f"Processing 2D image data - Input shape: {data.shape}")
+        
+        # Generate spatial coordinates
+        y_coordinates = np.arange(0, data.shape[0], dtype=np.int32)  # Pixel rows
+        x_coordinates = np.arange(0, data.shape[1], dtype=np.int32)  # Pixel columns
+
+        print(f"Generated coordinates - Y: {len(y_coordinates)}, X: {len(x_coordinates)}")
+        print(f"Output shape: {data.shape}")
+        
+        return data, x_coordinates, y_coordinates
 
     def _process_3d_data(self, electron_count_data):
         """Process 3D spectrum image: transpose (energy, y, x) → (y, x, energy)."""

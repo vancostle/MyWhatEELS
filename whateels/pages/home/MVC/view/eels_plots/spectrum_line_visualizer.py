@@ -95,68 +95,7 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
 
     @override
     def create_dataset_info(self):
-        attrs = self._dataset.attrs if self._dataset is not None else {}
-        shape = attrs.get('shape', 'N/A')
-        beam_energy = attrs.get('beam_energy', 'N/A')
-        convergence_angle = attrs.get('convergence_angle', 'N/A')
-        collection_angle = attrs.get('collection_angle', 'N/A')
-
-        # Load metadata button HTML
-        metadata_html_path = HTML_ROOT / "metadata_info.html"
-        with open(metadata_html_path, 'r', encoding='utf-8') as f:
-            metadata_button_html = f.read()
-        
-        metadata_button = pn.pane.HTML(metadata_button_html, margin=0)
-
-        # Main info panel
-        header = pn.Row(
-            pn.pane.HTML(self._DATASET_INFO_TITLE, sizing_mode=self._STRETCH_WIDTH, margin=0),
-            metadata_button,
-            sizing_mode=self._STRETCH_WIDTH,
-            css_classes=self._DATASET_INFO_HEADER_CLASS,
-            margin=0
-        )
-
-        dataset_info = pn.Column(
-            header,
-            pn.Spacer(height=5),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML("<strong>Shape:</strong>"),
-                    sizing_mode=self._STRETCH_WIDTH
-                ),
-                pn.pane.Str(shape),
-                sizing_mode=self._STRETCH_WIDTH
-            ),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML("<strong>Beam Energy:</strong>"),
-                    sizing_mode=self._STRETCH_WIDTH
-                ),
-                pn.pane.Str(f"{beam_energy} keV"),
-                sizing_mode=self._STRETCH_WIDTH
-            ),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML("<strong>Convergence Angle:</strong>"),
-                    sizing_mode=self._STRETCH_WIDTH
-                ),
-                pn.pane.Str(f"{convergence_angle} mrad"),
-                sizing_mode=self._STRETCH_WIDTH
-            ),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML("<strong>Collection Angle:</strong>"),
-                    sizing_mode=self._STRETCH_WIDTH
-                ),
-                pn.pane.Str(f"{collection_angle} mrad"),
-                sizing_mode=self._STRETCH_WIDTH
-            ),
-            pn.Spacer(height=10),
-            sizing_mode=self._STRETCH_WIDTH,
-            css_classes=self._DATASET_INFO_CLASS
-        )
-        return dataset_info
+        return super().create_dataset_info()
 
     # -- Private Methods --
 

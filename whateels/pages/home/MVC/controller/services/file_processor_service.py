@@ -263,19 +263,41 @@ class FileProcessorService:
             shape = image.shape
             len_x_axis = len(x_coordinates)
             len_y_axis = len(y_coordinates)
-            len_energy_axis = len(energy_axis)
+            
+            # Handle EELS vs non-EELS data differently
+            EELS = 'EELS'
+            if EELS in image_name:
+                # EELS data: 3D format (y, x, energy)
+                len_energy_axis = len(energy_axis) if energy_axis is not None else 1
+                expected_shape = (len_y_axis, len_x_axis, len_energy_axis)
+                coord_dims = [Y, X, ELOSS]
+                energy_coords = energy_axis if energy_axis is not None else np.array([0.0])
+            else:
+                # Non-EELS data: 2D format (y, x)
+                expected_shape = (len_y_axis, len_x_axis)
+                coord_dims = [Y, X]
+                energy_coords = None
             
             # Validate dimensions match
-            if shape != (len_y_axis, len_x_axis, len_energy_axis):
+            if shape != expected_shape:
                 print(f"ERROR: Shape mismatch!")
-                print(f"Expected: ({len_y_axis}, {len_x_axis}, {len_energy_axis})")
+                print(f"Expected: {expected_shape}")
                 print(f"Actual: {shape}")
                 return []
             
-            dataset = xr.Dataset({
-                ELECTRON_COUNT: ([Y, X, ELOSS], image)},
-                coords={Y: y_coordinates, X: x_coordinates, ELOSS: energy_axis
-            })
+            # Create dataset with appropriate dimensions
+            if EELS in image_name:
+                dataset = xr.Dataset({
+                    ELECTRON_COUNT: (coord_dims, image)},
+                    coords={Y: y_coordinates, X: x_coordinates, ELOSS: energy_coords
+                })
+                print(f"Created EELS dataset for {image_name} - Shape: {dataset.ElectronCount.shape}")
+            else:
+                dataset = xr.Dataset({
+                    ELECTRON_COUNT: (coord_dims, image)},
+                    coords={Y: y_coordinates, X: x_coordinates
+                })
+                print(f"Created non-EELS dataset - Shape: {dataset.ElectronCount.shape}")
             
             # Clean dataset for NaN/inf values
             dataset = eels_data_processor.clean_dataset(dataset)
