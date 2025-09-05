@@ -11,6 +11,11 @@ from .file_processor_service import FileProcessorService
 from .data_processor_service import DataProcessorService
 from ..eels_plot_factory import EELSPlotFactory
 from whateels.shared_state import AppState
+from whateels.errors.dm.data import (
+    DMFileLoadingError, 
+    DMFileUploadError, 
+    DMShapeMismatchError
+)
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -60,6 +65,10 @@ class FileOperationService():
         Returns:
             bool: True if successful, False if failed
         """
+
+        # Clear previous dataset info panels to prevent caching old data
+        self._model.all_datasets = []
+
         try:
             # Show loading state
             self._controller.layout.show_loading_placeholder_in_main_layout()
@@ -83,8 +92,20 @@ class FileOperationService():
             
             return True
 
+        except DMFileLoadingError as e:
+            print(f"File loading error: {e}")
+            self._handle_file_upload_error(filename)
+            return False
+        except DMFileUploadError as e:
+            print(f"File upload error: {e}")
+            self._handle_file_upload_error(filename)
+            return False
+        except DMShapeMismatchError as e:
+            print(f"Data shape mismatch: {e}")
+            self._handle_file_upload_error(filename)
+            return False
         except Exception as e:
-            print(f"Error during file upload: {e}")
+            print(f"Unexpected error during file upload: {e}")
             traceback.print_exc()
             self._handle_file_upload_error(filename)
             return False
@@ -103,6 +124,9 @@ class FileOperationService():
             # Clear UI components
             self._controller.layout.remove_dataset_info_from_sidebar()
             self._controller.layout.reset_main_layout()
+            
+            # Clear previous dataset info panels to prevent caching old data
+            self._model.all_datasets = []
             
             # Reset AppState metadata
             app_state = AppState()
@@ -123,6 +147,9 @@ class FileOperationService():
         ACTIVE = 'active'
 
         try:
+            # Clear previous dataset info panels to prevent caching old data
+            self._all_dataset_info.clear()
+            
             eels_plot_factory = EELSPlotFactory(self._model, self._controller)
             plots_tab = pn.Tabs()
 

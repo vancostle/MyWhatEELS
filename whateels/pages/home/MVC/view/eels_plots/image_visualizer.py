@@ -23,8 +23,10 @@ class ImageVisualizer(AbstractEELSVisualizer):
     _STRETCH_WIDTH = 'stretch_width'
     
     def __init__(self, model: "Model", dataset: "xr.Dataset"):
+        super().__init__(model, dataset)
+
         self._model = model
-        self._dataset = dataset
+        self._dataset = dataset        
         
         # For tap/click throttling
         self._last_click_x = None

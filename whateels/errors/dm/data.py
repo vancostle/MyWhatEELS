@@ -7,7 +7,6 @@ and scientific data processing operations.
 
 from .base import DMFileError
 
-
 class DMNonEelsError(DMFileError):
     """Raised when the DM file doesn't contain EELS spectral data."""
     
@@ -34,3 +33,33 @@ class DMEmptyInfoDictionary(DMFileError):
     
     def __init__(self, dict_info=None):
         super().__init__("Empty or missing info dictionary from DM file", dict_info)
+
+
+class DMShapeMismatchError(DMFileError):
+    """Raised when data shape doesn't match expected dimensions."""
+    
+    def __init__(self, image_name=None, expected_shape=None, actual_shape=None):
+        self.image_name = image_name
+        self.expected_shape = expected_shape
+        self.actual_shape = actual_shape
+        
+        message = f"Shape mismatch for {image_name}: expected {expected_shape}, got {actual_shape}"
+        super().__init__(message, {
+            'image_name': image_name,
+            'expected_shape': expected_shape,
+            'actual_shape': actual_shape
+        })
+
+
+class DMFileLoadingError(DMFileError):
+    """Raised when DM file cannot be loaded or is corrupted."""
+    
+    def __init__(self, filename=None):
+        super().__init__("Invalid or corrupted DM3/DM4 file", filename)
+
+
+class DMFileUploadError(DMFileError):
+    """Raised when file upload processing fails."""
+    
+    def __init__(self, original_exception=None):
+        super().__init__("File upload processing failed", str(original_exception) if original_exception else None)

@@ -9,7 +9,6 @@ import xarray as xr
 from holoviews import streams
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
-from whateels.helpers import HTML_ROOT
 
 if TYPE_CHECKING:
     from ...model import Model
@@ -50,6 +49,8 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
     _SPECTRUM_HEIGHT = 300
     
     def __init__(self, model: "Model", dataset: "xr.Dataset"):
+        super().__init__(model, dataset)
+
         self._model = model
         self._dataset = dataset
 

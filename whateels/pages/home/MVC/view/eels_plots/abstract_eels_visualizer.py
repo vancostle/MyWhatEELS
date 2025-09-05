@@ -33,10 +33,13 @@ class AbstractEELSVisualizer(ABC):
 
     @abstractmethod
     def create_dataset_info(self):
+        # Dataset attribute keys
         SHAPE = 'shape'
         BEAM_ENERGY = 'beam_energy'
         COLLECTION_ANGLE = 'collection_angle'
         CONVERGENCE_ANGLE = 'convergence_angle'
+        
+        # File and encoding constants
         HTML_FILE = 'metadata_info.html'
         READ_MODE = 'r'
         UTF_8 = 'utf-8'
@@ -45,9 +48,25 @@ class AbstractEELSVisualizer(ABC):
         # Panel sizing modes
         STRETCH_WIDTH = "stretch_width"
         
+        # CSS classes
         DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
         DATASET_INFO_CLASS = ["dataset-info", "animated"]
+        
+        # HTML content
         DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
+        LABEL_SHAPE = "<strong>Shape:</strong>"
+        LABEL_BEAM_ENERGY = "<strong>Beam Energy:</strong>"
+        LABEL_CONVERGENCE_ANGLE = "<strong>Convergence Angle:</strong>"
+        LABEL_COLLECTION_ANGLE = "<strong>Collection Angle:</strong>"
+        
+        # Units
+        ENERGY_UNIT = " keV"
+        ANGLE_UNIT = " mrad"
+        
+        # Spacing
+        SPACER_HEIGHT_SMALL = 5
+        SPACER_HEIGHT_MEDIUM = 10
+        MARGIN_ZERO = 0
         
         attrs = self._dataset.attrs if self._dataset is not None else {}
 
@@ -56,30 +75,28 @@ class AbstractEELSVisualizer(ABC):
         convergence_angle = attrs.get(CONVERGENCE_ANGLE, NOT_AVAILABLE)
         collection_angle = attrs.get(COLLECTION_ANGLE, NOT_AVAILABLE)
 
-        # print(collection_angle, convergence_angle, '\n')
-
         # Load metadata button HTML
         metadata_html_path = HTML_ROOT / HTML_FILE
         with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
             metadata_button_html = f.read()
         
-        metadata_button = pn.pane.HTML(metadata_button_html, margin=0)
+        metadata_button = pn.pane.HTML(metadata_button_html, margin=MARGIN_ZERO)
 
         # Main info panel
         header = pn.Row(
-            pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=0),
+            pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=MARGIN_ZERO),
             metadata_button,
             sizing_mode=STRETCH_WIDTH,
             css_classes=DATASET_INFO_HEADER_CLASS,
-            margin=0
+            margin=MARGIN_ZERO
         )
 
         dataset_info = pn.Column(
             header,
-            pn.Spacer(height=5),
+            pn.Spacer(height=SPACER_HEIGHT_SMALL),
             pn.Row(
                 pn.Row(
-                    pn.pane.HTML("<strong>Shape:</strong>"),
+                    pn.pane.HTML(LABEL_SHAPE),
                     sizing_mode=STRETCH_WIDTH
                 ),
                 pn.pane.Str(shape),
@@ -87,29 +104,29 @@ class AbstractEELSVisualizer(ABC):
             ),
             pn.Row(
                 pn.Row(
-                    pn.pane.HTML("<strong>Beam Energy:</strong>"),
+                    pn.pane.HTML(LABEL_BEAM_ENERGY),
                     sizing_mode=STRETCH_WIDTH
                 ),
-                pn.pane.Str(f"{beam_energy} keV"),
+                pn.pane.Str(f"{beam_energy}{ENERGY_UNIT}"),
                 sizing_mode=STRETCH_WIDTH
             ),
             pn.Row(
                 pn.Row(
-                    pn.pane.HTML("<strong>Convergence Angle:</strong>"),
+                    pn.pane.HTML(LABEL_CONVERGENCE_ANGLE),
                     sizing_mode=STRETCH_WIDTH
                 ),
-                pn.pane.Str(f"{convergence_angle} mrad"),
+                pn.pane.Str(f"{convergence_angle}{ANGLE_UNIT}"),
                 sizing_mode=STRETCH_WIDTH
             ),
             pn.Row(
                 pn.Row(
-                    pn.pane.HTML("<strong>Collection Angle:</strong>"),
+                    pn.pane.HTML(LABEL_COLLECTION_ANGLE),
                     sizing_mode=STRETCH_WIDTH
                 ),
-                pn.pane.Str(f"{collection_angle} mrad"),
+                pn.pane.Str(f"{collection_angle}{ANGLE_UNIT}"),
                 sizing_mode=STRETCH_WIDTH
             ),
-            pn.Spacer(height=10),
+            pn.Spacer(height=SPACER_HEIGHT_MEDIUM),
             sizing_mode=STRETCH_WIDTH,
             css_classes=DATASET_INFO_CLASS
         )

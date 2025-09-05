@@ -11,7 +11,7 @@ import plotly.graph_objs as go
 
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
-from whateels.helpers import HTML_ROOT, SpectrumExtractor, SpectrumFitting
+from whateels.helpers import SpectrumExtractor, SpectrumFitting
 
 if TYPE_CHECKING:
     from ...model import Model
@@ -35,7 +35,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     
     _NOT_AVAILABLE = 'N/A'
 
-    def __init__(self, model: "Model", dataset: "Dataset") -> None:
+    def __init__(self, model: "Model", dataset: "Dataset"):
+        super().__init__(model, dataset)
+
         self._model = model
         self._dataset = dataset
 
