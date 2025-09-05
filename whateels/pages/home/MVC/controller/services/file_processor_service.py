@@ -271,6 +271,7 @@ class FileProcessorService:
             return False
         return True
 
+    # TODO - Check this functions. It seems incomplete
     def _log_all_data_quality(self, all_electron_count_data: list[np.ndarray], all_energy_axes: list[np.ndarray]) -> None:
         """
         Assess and log data quality information for all spectra.
@@ -294,11 +295,15 @@ class FileProcessorService:
             # Count invalid values for quality assessment
             data_nan_count = np.isnan(electron_count_data).sum()
             data_inf_count = np.isinf(electron_count_data).sum()
-            energy_nan_count = np.isnan(energy_axis).sum()
-            energy_inf_count = np.isinf(energy_axis).sum()
             
-            # Quality issues are tracked but not logged to console
-            # This preserves the assessment capability while keeping output clean
+            # Only check energy axis quality if it exists (EELS data)
+            if energy_axis is not None:
+                energy_nan_count = np.isnan(energy_axis).sum()
+                energy_inf_count = np.isinf(energy_axis).sum()
+            else:
+                # Non-EELS data - no energy axis to check
+                energy_nan_count = 0
+                energy_inf_count = 0
 
     def _create_all_datasets_from_data(self, all_spectrum_images: list[np.ndarray], all_energy_axes: list[np.ndarray], eels_data: "DM_EELS_data", filepath: str) -> list[xr.Dataset]:
         """
