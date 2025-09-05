@@ -63,3 +63,17 @@ class DMFileUploadError(DMFileError):
     
     def __init__(self, original_exception=None):
         super().__init__("File upload processing failed", str(original_exception) if original_exception else None)
+
+
+class DMFileRemovalError(DMFileError):
+    """Raised when file removal operations fail."""
+    
+    def __init__(self, original_exception=None):
+        super().__init__("File removal operation failed", str(original_exception) if original_exception else None)
+
+
+class DMPlotCreationError(DMFileError):
+    """Raised when plot creation fails."""
+    
+    def __init__(self, original_exception=None):
+        super().__init__("Plot creation failed", str(original_exception) if original_exception else None)

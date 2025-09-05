@@ -13,13 +13,13 @@ from ..view.eels_plots import SpectrumLineVisualizer, SpectrumImageVisualizer, S
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import Model
-    from ..controller import Controller
+    from . import Controller
     from typing import TYPE_CHECKING
     from xarray import Dataset
 
 import traceback
 
-class EELSPlotFactory:
+class VisualizerFactory:
     """
     Centralized factory for creating EELS visualizer components.
     
@@ -27,10 +27,6 @@ class EELSPlotFactory:
     - Maps dataset types to visualizer classes.
     - Raises exceptions for unknown types or plot creation errors.
     """
-    
-    # Error message constants
-    _UNKNOWN_TYPE_ERROR = "[EELSPlotFactory] Unknown dataset type: '{}'. Supported types: {}"
-    _EXCEPTION_ERROR = "[EELSPlotFactory] Exception while creating plot for dataset type '{}': {}"
     
     def __init__(self, model: "Model", controller: "Controller") -> None:
         self._model = model
@@ -59,6 +55,11 @@ class EELSPlotFactory:
             ValueError: If the dataset type is not recognized (not mapped in _all_spectrum_visualizer).
             RuntimeError: If an exception occurs during visualizer instantiation.
         """
+        
+        # Error message constants
+        UNKNOWN_TYPE_ERROR = "[VisualizerFactory] Unknown dataset type: '{}'. Supported types: {}"
+        EXCEPTION_ERROR = "[VisualizerFactory] Exception while creating plot for dataset type '{}': {}"
+
         try:
             chosen_spectrum_visualizer = self._all_spectrum_visualizer.get(dataset_type)
             if chosen_spectrum_visualizer:
@@ -66,10 +67,10 @@ class EELSPlotFactory:
                 return chosen_spectrum_visualizer
             else:
                 chosen_spectrum_visualizer = None
-                error_msg = self._UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_spectrum_visualizer.keys()))
+                error_msg = UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_spectrum_visualizer.keys()))
                 raise ValueError(error_msg)
         except Exception as e:
             chosen_spectrum_visualizer = None
-            error_msg = self._EXCEPTION_ERROR.format(dataset_type, e)
+            error_msg = EXCEPTION_ERROR.format(dataset_type, e)
             traceback.print_exc()
             raise RuntimeError(error_msg) from e

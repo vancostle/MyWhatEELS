@@ -61,7 +61,8 @@ class ImageVisualizer(AbstractEELSVisualizer):
         
         plots = pn.Column(
             image_pane,
-            sizing_mode=self._STRETCH_BOTH
+            sizing_mode=self._STRETCH_BOTH,
+            styles={'border': '2px solid red'}
         )
 
         return plots

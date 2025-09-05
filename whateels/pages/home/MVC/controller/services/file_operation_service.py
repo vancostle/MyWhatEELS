@@ -5,16 +5,18 @@ Centralizes file upload, removal, and state management logic.
 Coordinates between file processing and UI updates.
 """
 
-import traceback, panel as pn
+import panel as pn
 
 from .file_processor_service import FileProcessorService
 from .data_processor_service import DataProcessorService
-from ..eels_plot_factory import EELSPlotFactory
+from ..visualizer_factory import VisualizerFactory
 from whateels.shared_state import AppState
 from whateels.errors.dm.data import (
     DMFileLoadingError, 
     DMFileUploadError, 
-    DMShapeMismatchError
+    DMShapeMismatchError,
+    DMFileRemovalError,
+    DMPlotCreationError
 )
 
 from typing import TYPE_CHECKING
@@ -84,31 +86,22 @@ class FileOperationService():
             
             self._model.all_datasets = all_datasets
 
-            all_success = self._create_and_display_all_plots(all_datasets)
-
-            if not all_success:
-                self._handle_file_upload_error(filename)
-                return False
+            self._create_and_display_all_plots(all_datasets)
             
             return True
 
         except DMFileLoadingError as e:
-            print(f"File loading error: {e}")
             self._handle_file_upload_error(filename)
-            return False
+            raise e
         except DMFileUploadError as e:
-            print(f"File upload error: {e}")
             self._handle_file_upload_error(filename)
-            return False
+            raise e
         except DMShapeMismatchError as e:
-            print(f"Data shape mismatch: {e}")
             self._handle_file_upload_error(filename)
-            return False
+            raise e
         except Exception as e:
-            print(f"Unexpected error during file upload: {e}")
-            traceback.print_exc()
             self._handle_file_upload_error(filename)
-            return False
+            raise DMFileUploadError(e)
     
     def handle_file_removal(self, filename: str) -> None:
         """
@@ -116,9 +109,11 @@ class FileOperationService():
         
         Args:
             filename: Name of the removed file
+            
+        Raises:
+            DMFileRemovalError: When file removal operations fail
         """
         CHOSEN_SPECTRUM = 'chosen_spectrum'
-        ERROR_FILE_REMOVAL_MESSAGE = "Error during file removal: {}"
 
         try:
             # Clear UI components
@@ -137,10 +132,18 @@ class FileOperationService():
                 self._controller.view.chosen_spectrum = None
                 
         except Exception as e:
-            print(ERROR_FILE_REMOVAL_MESSAGE.format(e))
-            traceback.print_exc()
+            raise DMFileRemovalError(e)
             
-    def _create_and_display_all_plots(self, all_datasets: list["Dataset"]) -> bool:
+    def _create_and_display_all_plots(self, all_datasets: list["Dataset"]) -> None:
+        """
+        Create EELS plots and update the UI for all datasets.
+        
+        Args:
+            all_datasets: List of processed datasets to create plots for
+            
+        Raises:
+            DMPlotCreationError: When plot creation fails
+        """
         DATASET_TYPE = 'dataset_type'
         IMAGE_NAME_ATTRIBUTE = 'image_name'
         NOT_AVAILABLE = 'N/A'
@@ -150,7 +153,7 @@ class FileOperationService():
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
             
-            eels_plot_factory = EELSPlotFactory(self._model, self._controller)
+            eels_plot_factory = VisualizerFactory(self._model, self._controller)
             plots_tab = pn.Tabs()
 
             for dataset in all_datasets:
@@ -180,11 +183,8 @@ class FileOperationService():
             self._controller.layout.remove_dataset_info_from_sidebar()
             self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[0])
 
-            return True
         except Exception as e:
-            print(f"Error creating all plots: {e}")
-            traceback.print_exc()
-            return False
+            raise DMPlotCreationError(e)
 
     def _on_tab_change(self, event):
         new_tab = event.new
@@ -199,17 +199,16 @@ class FileOperationService():
         Args:
             dataset: The processed EELS dataset
             
-        Returns:
-            bool: True if successful, False if failed
+        Raises:
+            DMPlotCreationError: When plot creation fails
         """
         DATASET_TYPE = 'dataset_type'
-        ERROR_PLOTS_MESSAGE = 'Error creating plots: {}'
 
         try:
             dataset_type = dataset.attrs.get(DATASET_TYPE, None)
 
             # Create plots using the factory
-            eels_plot_factory = EELSPlotFactory(self._model, self._controller)
+            eels_plot_factory = VisualizerFactory(self._model, self._controller)
             chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type)
             
             if chosen_spectrum is None:
@@ -228,9 +227,7 @@ class FileOperationService():
             return True
             
         except Exception as e:
-            print(ERROR_PLOTS_MESSAGE.format(e))
-            traceback.print_exc()
-            return False
+            raise DMPlotCreationError(e)
     
     def _handle_file_upload_error(self, filename: str) -> None:
         """Handle file upload error by resetting UI state."""

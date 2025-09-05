@@ -26,7 +26,7 @@ class Controller:
         self._file_operation_service = FileOperationService(model, self)
         # Initialize manager
         self._layout_manager = LayoutManager(view)
-        # Set up callbacks for file dropper events
+        # Set up callbacks for file dropper events directly
         self.view.file_dropper.on_file_uploaded_callback = self._file_operation_service.handle_file_upload
         self.view.file_dropper.on_file_removed_callback = self._file_operation_service.handle_file_removal
 
