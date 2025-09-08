@@ -126,35 +126,34 @@ class DataProcessorService:
             print(COULD_NOT_CLEAN_DATASET_MESSAGE.format(e))
             return dataset
 
-    def determine_dataset_type(self, dataset: xr.Dataset, image_name: str) -> str:
+    def determine_dataset_type(self, dataset: xr.Dataset, is_eels: bool) -> str:
         """
-        Classify dataset type based on image name and spatial dimensions.
+        Classify dataset type based on EELS status and spatial dimensions.
         
-        First determines if data is EELS or non-EELS based on image name,
-        then classifies EELS data by spatial dimensions.
+        This method uses the boolean 'is_eels' to determine if the data is EELS or non-EELS.
+        For EELS data, it further classifies based on the spatial dimensions of the dataset.
+        For non-EELS data, it always returns IMAGE.
         
         Args:
-            dataset: xarray Dataset to classify
-            image_name: Name of the image from metadata
-            
+            dataset (xr.Dataset): The xarray Dataset to classify.
+            is_eels (bool): True if the data is EELS, False if non-EELS.
+        
         Returns:
             str: Dataset type constant (IMAGE, SINGLE_SPECTRUM, SPECTRUM_LINE, SPECTRUM_IMAGE)
-            
+        
         Classification Logic:
-            Non-EELS: Always returns IMAGE
-            EELS: 
+            - Non-EELS: Always returns IMAGE
+            - EELS:
                 - (1,1) spatial → SINGLE_SPECTRUM
-                - (1,x) spatial → SPECTRUM_LINE  
+                - (1,x) spatial → SPECTRUM_LINE
                 - (y,x) spatial → SPECTRUM_IMAGE
         """
-
-        EELS = "EELS"
 
         x_size = len(dataset.coords[self._AXIS_X])
         y_size = len(dataset.coords[self._AXIS_Y])
         
         # First check if this is EELS data
-        if EELS not in image_name:
+        if not is_eels:
             return self._model.constants.IMAGE  # Non-EELS data is just an image
 
         # For EELS data, classify based on dimensions
@@ -165,34 +164,36 @@ class DataProcessorService:
         else:
             return self._model.constants.SPECTRUM_IMAGE
 
-    def process_data_for_xarray(self, electron_count_data: np.ndarray, energy_axis: np.ndarray | None, image_name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    def process_data_for_xarray(self, electron_count_data: np.ndarray, energy_axis: np.ndarray | None, is_eels: bool) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
         """
         Process raw electron microscopy data into xarray-compatible format.
         
-        Main entry point for data processing that routes to appropriate methods
-        based on data type (EELS vs non-EELS) and dimensionality.
+        This method routes the input data to the appropriate processing function based on
+        whether the data is EELS (is_eels=True) or non-EELS (is_eels=False), and the shape
+        of the input array. For EELS data, it uses the energy_axis and array dimensionality
+        to determine the correct transformation. For non-EELS data, it always processes as
+        a 2D spatial image.
         
         Args:
-            electron_count_data: Raw numpy array of electron count data
-            energy_axis: Energy values for EELS data (None for non-EELS)
-            image_name: Image name from metadata for EELS detection
-            
+            electron_count_data (np.ndarray): Raw numpy array of electron count data.
+            energy_axis (np.ndarray | None): Energy values for EELS data (None for non-EELS).
+            is_eels (bool): True if the data is EELS, False if non-EELS.
+        
         Returns:
-            tuple[np.ndarray, np.ndarray, np.ndarray] | None: 
+            tuple[np.ndarray, np.ndarray, np.ndarray] | None:
                 (processed_data, x_coordinates, y_coordinates) or None if failed
-                
+        
         Processing Routes:
-            Non-EELS: → _process_2d_image_data() for 2D spatial data
-            EELS: → _process_1d_data(), _process_2d_data(), or _process_3d_data()
-                 based on input dimensionality
+            - Non-EELS: → _process_2d_image_data() for 2D spatial data
+            - EELS: → _process_1d_data(), _process_2d_data(), or _process_3d_data()
+                based on input dimensionality
         """
         # Route to appropriate processing method based on data type and dimensionality
         
-        EELS = "EELS"
         UNSUPPORTED_DIMENSION_MESSAGE = f"ERROR: Unsupported data dimensionality: {electron_count_data.shape}"
 
         # First branch: Check if this is EELS or non-EELS data
-        if EELS not in image_name:
+        if not is_eels:
             # Non-EELS data (conventional imaging) - always 2D spatial
             return self._process_2d_image_data(electron_count_data)
 

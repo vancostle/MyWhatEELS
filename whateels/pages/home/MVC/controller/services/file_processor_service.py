@@ -166,7 +166,7 @@ class FileProcessorService:
             all_energy_axes = eels_data.all_energy_axes
 
             # Assess and log data quality issues (NaN/inf detection)
-            self._log_all_data_quality(all_spectrum_images, all_energy_axes)
+            # self._log_all_data_quality(all_spectrum_images, all_energy_axes)
 
             # Clean data arrays by replacing NaN/inf values with zeros
             cleaned_all_energy_axes = self._clean_all_axes(all_energy_axes)
@@ -272,38 +272,38 @@ class FileProcessorService:
         return True
 
     # TODO - Check this functions. It seems incomplete
-    def _log_all_data_quality(self, all_electron_count_data: list[np.ndarray], all_energy_axes: list[np.ndarray]) -> None:
-        """
-        Assess and log data quality information for all spectra.
+    # def _log_all_data_quality(self, all_electron_count_data: list[np.ndarray], all_energy_axes: list[np.ndarray]) -> None:
+    #     """
+    #     Assess and log data quality information for all spectra.
         
-        Analyzes each spectrum and energy axis for data quality issues including
-        NaN and infinity values. This information is useful for understanding
-        data integrity and potential processing issues.
+    #     Analyzes each spectrum and energy axis for data quality issues including
+    #     NaN and infinity values. This information is useful for understanding
+    #     data integrity and potential processing issues.
         
-        Args:
-            all_electron_count_data: List of electron count arrays to analyze
-            all_energy_axes: List of energy axis arrays to analyze
+    #     Args:
+    #         all_electron_count_data: List of electron count arrays to analyze
+    #         all_energy_axes: List of energy axis arrays to analyze
             
-        Note:
-            Only logs warnings when quality issues are detected to avoid spam.
-        """
+    #     Note:
+    #         Only logs warnings when quality issues are detected to avoid spam.
+    #     """
         
-        RAW_DATA_QUALITY_ISSUES_MESSAGE = "Warning: Raw data has {} NaN values and {} Inf values"
-        ENERGY_AXIS_QUALITY_ISSUES_MESSAGE = "Warning: Energy axis has {} NaN values and {} Inf values"
+    #     RAW_DATA_QUALITY_ISSUES_MESSAGE = "Warning: Raw data has {} NaN values and {} Inf values"
+    #     ENERGY_AXIS_QUALITY_ISSUES_MESSAGE = "Warning: Energy axis has {} NaN values and {} Inf values"
 
-        for _, (electron_count_data, energy_axis) in enumerate(zip(all_electron_count_data, all_energy_axes)):
-            # Count invalid values for quality assessment
-            data_nan_count = np.isnan(electron_count_data).sum()
-            data_inf_count = np.isinf(electron_count_data).sum()
+    #     for _, (electron_count_data, energy_axis) in enumerate(zip(all_electron_count_data, all_energy_axes)):
+    #         # Count invalid values for quality assessment
+    #         data_nan_count = np.isnan(electron_count_data).sum()
+    #         data_inf_count = np.isinf(electron_count_data).sum()
             
-            # Only check energy axis quality if it exists (EELS data)
-            if energy_axis is not None:
-                energy_nan_count = np.isnan(energy_axis).sum()
-                energy_inf_count = np.isinf(energy_axis).sum()
-            else:
-                # Non-EELS data - no energy axis to check
-                energy_nan_count = 0
-                energy_inf_count = 0
+    #         # Only check energy axis quality if it exists (EELS data)
+    #         if energy_axis is not None:
+    #             energy_nan_count = np.isnan(energy_axis).sum()
+    #             energy_inf_count = np.isinf(energy_axis).sum()
+    #         else:
+    #             # Non-EELS data - no energy axis to check
+    #             energy_nan_count = 0
+    #             energy_inf_count = 0
 
     def _create_all_datasets_from_data(self, all_spectrum_images: list[np.ndarray], all_energy_axes: list[np.ndarray], eels_data: "DM_EELS_data", filepath: str) -> list[xr.Dataset]:
         """
@@ -338,17 +338,16 @@ class FileProcessorService:
         CONVERGENCE_ANGLE = 'convergence_angle'
         IMAGE_NAME = 'image_name'
         SHAPE = 'shape'
-        EELS = 'EELS'
 
         eels_data_processor = DataProcessorService(self._model)
         all_spectrum_metadata = list(eels_data.all_spectral_info.values())
         all_datasets = []
 
-        for image, metadata, energy_axis in zip(all_spectrum_images, all_spectrum_metadata, all_energy_axes):
-            image_name = eels_data.get_image_name(metadata)
+        for image, metadata, energy_axis in zip(all_spectrum_images, all_spectrum_metadata, all_energy_axes):            
+            is_eels = self._is_metadata_eels(metadata)
 
             # Process raw data into xarray-compatible format
-            processed_data = eels_data_processor.process_data_for_xarray(image, energy_axis, image_name)
+            processed_data = eels_data_processor.process_data_for_xarray(image, energy_axis, is_eels)
             if processed_data is None:
                 continue
 
@@ -359,7 +358,7 @@ class FileProcessorService:
             len_y_axis = len(y_coordinates)
             
             # Determine dataset structure based on data type (EELS vs non-EELS)
-            if EELS in image_name:
+            if is_eels:
                 # EELS data: 3D format (y, x, energy) with energy coordinates
                 len_energy_axis = len(energy_axis) if energy_axis is not None else 1
                 expected_shape = (len_y_axis, len_x_axis, len_energy_axis)
@@ -373,10 +372,11 @@ class FileProcessorService:
             
             # Validate that processed data matches expected dimensions
             if shape != expected_shape:
+                image_name = eels_data.get_image_name(metadata)
                 raise DMShapeMismatchError(image_name, expected_shape, shape)
-            
+
             # Create xarray dataset with appropriate coordinate system
-            if EELS in image_name:
+            if is_eels:
                 dataset = xr.Dataset(
                     {ELECTRON_COUNT: (coord_dims, image)},
                     coords={Y: y_coordinates, X: x_coordinates, ELOSS: energy_coords}
@@ -390,8 +390,8 @@ class FileProcessorService:
             dataset = eels_data_processor.clean_dataset(dataset)
             
             # Determine appropriate dataset type for visualization routing
-            dataset_type = eels_data_processor.determine_dataset_type(dataset, image_name)
-            
+            dataset_type = eels_data_processor.determine_dataset_type(dataset, is_eels)
+
             # Attach comprehensive metadata attributes
             dataset.attrs[ORIGINAL_NAME] = os.path.basename(filepath)
             dataset.attrs[DATASET_TYPE] = dataset_type
@@ -409,6 +409,14 @@ class FileProcessorService:
             all_datasets.append(dataset)
 
         return all_datasets
+    
+    def _is_metadata_eels(self, metadata: list) -> bool:
+        IMAGE_TAGS = 'ImageTags'
+        EELS = 'EELS'
+
+        image_tags = list(metadata[IMAGE_TAGS].keys())
+
+        return EELS in image_tags
 
     def _handle_file_error(self, exception: Exception) -> list:
         """
