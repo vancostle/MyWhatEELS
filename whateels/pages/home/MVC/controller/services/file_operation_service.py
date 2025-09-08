@@ -153,15 +153,15 @@ class FileOperationService():
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
             
-            eels_plot_factory = VisualizerFactory(self._model, self._controller)
-            plots_tab = pn.Tabs()
+            visualizer_factory = VisualizerFactory(self._model, self._controller)
+            plots_tab = pn.Tabs(styles={'border': '2px solid blue'}, sizing_mode='stretch_both')
 
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, None)
                 image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
 
                 # Create plots using the factory
-                chosen_spectrum = eels_plot_factory.choose_spectrum(dataset_type, dataset)
+                chosen_spectrum = visualizer_factory.choose_spectrum(dataset_type, dataset)
                 
                 if chosen_spectrum is None:
                     return False

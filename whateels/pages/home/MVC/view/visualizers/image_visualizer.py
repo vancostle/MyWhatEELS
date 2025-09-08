@@ -56,13 +56,12 @@ class ImageVisualizer(AbstractEELSVisualizer):
         })
         
         # Create 2D image plot
-        image = self._create_2d_image(clean_image_data)
-        image_pane = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
+        image: hv.Image = self._create_2d_image(clean_image_data)
         
         plots = pn.Column(
-            image_pane,
-            sizing_mode=self._STRETCH_BOTH,
-            styles={'border': '2px solid red'}
+            image,
+            styles={'border': '2px solid red'},
+            sizing_mode=self._STRETCH_BOTH
         )
 
         return plots
@@ -73,7 +72,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
 
     # -- Private Methods --
 
-    def _create_2d_image(self, clean_image_data):
+    def _create_2d_image(self, clean_image_data) -> hv.Image:
         """Create a 2D image plot for image data"""
         
         IMAGE_X_LABEL = 'X Position'
