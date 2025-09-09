@@ -35,7 +35,6 @@ class View:
         self._loading_placeholder = None
         self._no_file_placeholder = None
         self._error_placeholder = None
-        self._chosen_spectrum = None
         self._file_dropper = None
         
         self._init_visualization_components()
@@ -76,13 +75,6 @@ class View:
     def file_dropper(self) -> FileDropper:
         """FileDropper widget for file upload interactions."""
         return self._file_dropper
-    
-
-    @property
-    def chosen_spectrum(self):
-        """The currently active plotter/visualizer instance (set after file upload)."""
-        return self._chosen_spectrum
-
 
     @property
     def dataset_info(self) -> pn.viewable.Viewable:
@@ -96,12 +88,6 @@ class View:
         if component is not None and not isinstance(component, pn.viewable.Viewable):
             raise ValueError("Component must be a Panel Viewable")
         self._dataset_info_layout = component
-        
-
-    @chosen_spectrum.setter
-    def chosen_spectrum(self, plotter):
-        """Set the active plotter/visualizer instance."""
-        self._chosen_spectrum = plotter
 
     # --- Private/Internal Setup Methods ---
 

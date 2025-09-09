@@ -23,12 +23,12 @@ class Controller:
         # Initialize services
         self._file_service = FileProcessorService(model)
         self._data_service = DataProcessorService(self.model)
-        self._file_operation_service = FileOperationService(model, self)
+        self._file_workflow_service = FileWorkflowService(model, self)
         # Initialize manager
-        self._layout_manager = LayoutManager(view)
+        self._layout_manager = LayoutManager(view, self, model)
         # Set up callbacks for file dropper events directly
-        self.view.file_dropper.on_file_uploaded_callback = self._file_operation_service.handle_file_upload
-        self.view.file_dropper.on_file_removed_callback = self._file_operation_service.handle_file_removal
+        self.view.file_dropper.on_file_uploaded_callback = self._file_workflow_service.handle_file_upload
+        self.view.file_dropper.on_file_removed_callback = self._file_workflow_service.handle_file_removal
 
     @property
     def layout(self) -> LayoutManager:

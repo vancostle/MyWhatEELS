@@ -41,7 +41,11 @@ class VisualizerFactory:
             model.constants.IMAGE: ImageVisualizer
         }
 
-    def choose_spectrum(self, dataset_type: str, dataset: "Dataset") -> SpectrumLineVisualizer | SpectrumImageVisualizer | SingleSpectrumVisualizer | ImageVisualizer | None:
+    def choose_visualizer(
+        self, 
+        dataset_type: str, 
+        dataset: "Dataset"
+    ) -> SpectrumLineVisualizer | SpectrumImageVisualizer | SingleSpectrumVisualizer | ImageVisualizer | None:
         """
         Instantiates and returns the appropriate EELS visualizer for the specified dataset type.
 

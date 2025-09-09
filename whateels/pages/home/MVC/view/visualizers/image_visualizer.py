@@ -57,10 +57,10 @@ class ImageVisualizer(AbstractEELSVisualizer):
         
         # Create 2D image plot
         image: hv.Image = self._create_2d_image(clean_image_data)
+        image_container = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
         
         plots = pn.Column(
-            image,
-            styles={'border': '2px solid red'},
+            image_container,
             sizing_mode=self._STRETCH_BOTH
         )
 

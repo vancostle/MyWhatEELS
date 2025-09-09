@@ -79,22 +79,37 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     # --- Public layout builders (used by controller) ---
     @override
     def create_plots(self):
-
+        # right_col = pn.Column(
+        #     self.paneB, 
+        #     self.fitting_button, 
+        #     self.range_slider, 
+        #     styles={'border': '5px solid green'}
+        # )
+        # plots = pn.Column(
+        #     pn.Row(
+        #         self.paneA, 
+        #         right_col,
+        #         styles={'border': '2px solid red'},
+        #     ),
+        #     styles={'border': '2px solid blue'},
+        # )
+        
+        left_col = pn.Column(
+            "LEFT",
+            styles={'border': '2px solid blue'},
+            sizing_mode='stretch_both',
+        )
+        
         right_col = pn.Column(
-            self.paneB, 
-            self.fitting_button, 
-            self.range_slider, 
-            sizing_mode=self._STRETCH_WIDTH
+            "RIGHT",
+            styles={'border': '5px solid green'},
+            sizing_mode='stretch_both',
         )
-        plots = pn.Column(
-            pn.Row(
-                self.paneA, 
-                right_col, 
-                sizing_mode=self._STRETCH_WIDTH
-            ),
-            sizing_mode=self._STRETCH_WIDTH,
+        
+        plots = pn.Row(
+            left_col,
+            right_col
         )
-    
         return plots
 
     @override
@@ -174,8 +189,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True})
 
         # Pane B initial message (apply stored ranges if any)
-        self.paneB = pn.pane.Plotly(self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona")),
-                                    height=420, sizing_mode="fixed")
+        self.paneB = pn.pane.Plotly(
+            self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona")),
+            sizing_mode='stretch_height'
+        )
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---
     def _setup_callbacks(self):
@@ -200,9 +217,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             pass
         try:
             if isinstance(obj, dict):
-                # ensure layout.height exists for consistent rendering
-                if "layout" in obj and "height" not in obj["layout"]:
-                    obj["layout"]["height"] = 420
                 return obj
         except Exception:
             pass
@@ -212,7 +226,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         fig = go.Figure()
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
-        fig.update_layout(title=title, height=420, margin=dict(l=16, r=16, t=48, b=16))
+        fig.update_layout(title=title, margin=dict(l=16, r=16, t=48, b=16))
         fig.add_annotation(
             x=0.5, y=0.6, xref="paper", yref="paper",
             text=subtitle, showarrow=False,
@@ -227,7 +241,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"(i={i}, j={j})"))
-        fig.update_layout(title="figura_B_hover", height=420, margin=dict(l=16, r=16, t=48, b=16),
+        fig.update_layout(title="figura_B_hover", margin=dict(l=16, r=16, t=48, b=16),
                           xaxis_title="Energía", yaxis_title="Intensidad")
         return fig
 
@@ -238,8 +252,12 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         spec, N = res
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"suma (N={N})"))
-        fig.update_layout(title=f"figura_B_region — suma (N={N})", height=420,
-                          margin=dict(l=16, r=16, t=48, b=16), xaxis_title="Energía", yaxis_title="Intensidad")
+        fig.update_layout(
+            title=f"figura_B_region — suma (N={N})",
+            margin=dict(l=16, r=16, t=48, b=16), 
+            xaxis_title="Energía", 
+            yaxis_title="Intensidad"
+        )
         return fig
 
     # --- Inactivity logic (restaurar selección tras inactivity) ---
