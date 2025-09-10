@@ -4,7 +4,7 @@ import panel as pn
 pn.extension('filedropper', 'floatpanel', 'plotly', theme='default')
 
 from whateels.helpers import LoadCSS, CSS_ROOT
-from whateels.pages import Home, NLLS, Login, GOS, Metadata
+from whateels.pages import Home, NLLS, Login, GOS, Metadata, Test
 
 class App:
     """
@@ -29,7 +29,7 @@ class App:
         
         # Define the pages for the application
         pages = {
-            "/": Home(),
+            "/": Test(),
             "/metadata-details": Metadata(),
             "/gos": GOS(),
             "/nlls": NLLS(),

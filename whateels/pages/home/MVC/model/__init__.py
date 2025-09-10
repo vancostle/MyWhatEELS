@@ -18,10 +18,7 @@ class Model:
         self._colors = Colors()
         self._file_dropper = FileDropper()
         self._placeholders = Placeholders()
-    
-    @property
-    def dataset(self) -> Optional["Dataset"]:
-        return self._dataset
+
     @property
     def all_datasets(self) -> list["Dataset"]:
         return self._all_datasets

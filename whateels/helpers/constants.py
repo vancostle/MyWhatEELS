@@ -15,3 +15,4 @@ PROJECT_ROOT = Path(__file__).parent.parent
 ASSETS_ROOT = PROJECT_ROOT / "assets"
 CSS_ROOT = ASSETS_ROOT / "css"
 HTML_ROOT = ASSETS_ROOT / "html"
+JS_ROOT = ASSETS_ROOT / "js"

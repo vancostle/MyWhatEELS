@@ -59,9 +59,6 @@ class FileWorkflowService:
             DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
 
-        # Clear previous dataset info panels to prevent caching old data
-        self._model.all_datasets = []
-
         try:
             # Show loading state
             self._controller.layout.show_loading_placeholder_in_main_layout()
@@ -75,9 +72,7 @@ class FileWorkflowService:
                 self._handle_file_upload_error(filename)
                 return False
             
-            self._model.all_datasets = all_datasets
-
-            self._controller.layout.create_and_display_all_plots(all_datasets)
+            self._controller.layout.create_tab_and_dataset_info(all_datasets)
             
             return True
 
@@ -104,7 +99,6 @@ class FileWorkflowService:
         Raises:
             DMFileRemovalError: When cleanup operations fail
         """
-        CHOSEN_SPECTRUM = 'chosen_spectrum'
 
         try:
             # Clear UI components
@@ -112,7 +106,7 @@ class FileWorkflowService:
             self._controller.layout.reset_main_layout()
             
             # Clear previous dataset info panels to prevent caching old data
-            self._model.all_datasets = []
+            # self._model.all_datasets = []
             
             # Reset AppState metadata
             app_state = AppState()

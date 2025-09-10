@@ -70,7 +70,7 @@ class LayoutManager:
             self._view.sidebar.remove(self._view.dataset_info)
             self._view.dataset_info = None
             
-    def create_and_display_all_plots(self, all_datasets: list["Dataset"]) -> None:
+    def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
         """
         Create visualizations for all datasets and setup tabbed UI interface.
         
@@ -109,7 +109,7 @@ class LayoutManager:
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
-            plots_tab.param.watch(self._on_tab_change, ACTIVE)
+            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
                 
             # Update UI
             self._controller.layout.update_main_layout(plots_tab)
@@ -118,14 +118,8 @@ class LayoutManager:
 
         except Exception as e:
             raise DMPlotCreationError(e)
-        
-    def create_all_visualizers():
-        pass
-    
-    def create_all_dataset_info_panels():
-        pass
 
-    def _on_tab_change(self, event):
+    def _on_tab_with_visualizers_change(self, event):
         """Handle tab changes by updating sidebar with selected dataset info."""
 
         new_tab = event.new

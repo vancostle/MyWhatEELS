@@ -79,37 +79,37 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     # --- Public layout builders (used by controller) ---
     @override
     def create_plots(self):
-        # right_col = pn.Column(
-        #     self.paneB, 
-        #     self.fitting_button, 
-        #     self.range_slider, 
-        #     styles={'border': '5px solid green'}
-        # )
-        # plots = pn.Column(
-        #     pn.Row(
-        #         self.paneA, 
-        #         right_col,
-        #         styles={'border': '2px solid red'},
-        #     ),
-        #     styles={'border': '2px solid blue'},
-        # )
-        
-        left_col = pn.Column(
-            "LEFT",
-            styles={'border': '2px solid blue'},
-            sizing_mode='stretch_both',
-        )
-        
         right_col = pn.Column(
-            "RIGHT",
-            styles={'border': '5px solid green'},
-            sizing_mode='stretch_both',
+            self.paneB, 
+            self.fitting_button, 
+            self.range_slider, 
+            styles={'border': '5px solid green'}
+        )
+        plots = pn.Column(
+            pn.Row(
+                self.paneA, 
+                right_col,
+                styles={'border': '2px solid red'},
+            ),
+            styles={'border': '2px solid blue'},
         )
         
-        plots = pn.Row(
-            left_col,
-            right_col
-        )
+        # left_col = pn.Column(
+        #     "LEFT",
+        #     styles={'border': '2px solid blue'},
+        #     sizing_mode='stretch_both',
+        # )
+        
+        # right_col = pn.Column(
+        #     "RIGHT",
+        #     styles={'border': '5px solid green'},
+        #     sizing_mode='stretch_both',
+        # )
+        
+        # plots = pn.Row(
+        #     left_col,
+        #     right_col
+        # )
         return plots
 
     @override
