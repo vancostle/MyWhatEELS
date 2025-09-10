@@ -12,6 +12,7 @@ import plotly.graph_objs as go
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
+from whateels.components import ResizableColumns
 
 if TYPE_CHECKING:
     from ...model import Model
@@ -79,38 +80,25 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     # --- Public layout builders (used by controller) ---
     @override
     def create_plots(self):
-        right_col = pn.Column(
+        left_column = pn.Column(
+            self.paneA,
+            sizing_mode='stretch_both'
+        )
+        
+        right_column = pn.Column(
             self.paneB, 
             self.fitting_button, 
             self.range_slider, 
-            styles={'border': '5px solid green'}
-        )
-        plots = pn.Column(
-            pn.Row(
-                self.paneA, 
-                right_col,
-                styles={'border': '2px solid red'},
-            ),
-            styles={'border': '2px solid blue'},
+            sizing_mode='stretch_both'
         )
         
-        # left_col = pn.Column(
-        #     "LEFT",
-        #     styles={'border': '2px solid blue'},
-        #     sizing_mode='stretch_both',
-        # )
-        
-        # right_col = pn.Column(
-        #     "RIGHT",
-        #     styles={'border': '5px solid green'},
-        #     sizing_mode='stretch_both',
-        # )
-        
-        # plots = pn.Row(
-        #     left_col,
-        #     right_col
-        # )
-        return plots
+        resizable_columns = ResizableColumns(
+            left_column=left_column,
+            right_column=right_column,
+            sizing_mode='stretch_both',
+        )
+ 
+        return resizable_columns
 
     @override
     def create_dataset_info(self):

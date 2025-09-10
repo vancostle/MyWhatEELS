@@ -29,7 +29,7 @@ class App:
         
         # Define the pages for the application
         pages = {
-            "/": Test(),
+            "/": Home(),
             "/metadata-details": Metadata(),
             "/gos": GOS(),
             "/nlls": NLLS(),

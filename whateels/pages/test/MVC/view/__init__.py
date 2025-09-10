@@ -8,11 +8,9 @@ class View:
         resizable_columns = ResizableColumns(
             left_column=pn.Column(
                 "# LEFT Area", "This is the left content area.",
-                styles={'border': '2px solid green', 'padding': '0px', 'border-radius': '5px'}
             ),
             right_column=pn.Column(
                 "# RIGHT Area", "This is the right content area.",
-                styles={'border': '2px solid orange', 'padding': '10px', 'border-radius': '5px'}
             ),
             sizing_mode='stretch_both',
         )

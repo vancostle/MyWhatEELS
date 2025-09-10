@@ -116,6 +116,9 @@ export const render = ({ model }) => {
         recalculateColumns();
     }, 10); // Small delay to ensure DOM is ready
 
+    // Store cleanup function on the container for later use
+    container._cleanup = () => cleanup(container);
+
     return container;
 }
 
