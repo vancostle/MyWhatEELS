@@ -18,6 +18,9 @@ export const render = ({ model }) => {
     container.appendChild(gutter);
     container.appendChild(right_column);
 
+    // Track if this is the initial setup
+    let isInitialSetup = true;
+
     // Function to recalculate and update column sizes
     const recalculateColumns = () => {
         const containerWidth = container.offsetWidth;
@@ -36,14 +39,15 @@ export const render = ({ model }) => {
         
         let leftPercentage, rightPercentage;
         
-        if (currentTotalWidth > 0 && currentTotalWidth > (availableWidth * 0.8)) {
-            // Only maintain proportions if columns have reasonable sizes
-            leftPercentage = currentLeftWidth / currentTotalWidth;
-            rightPercentage = currentRightWidth / currentTotalWidth;
-        } else {
-            // Default to exact 50/50 if no current sizes or sizes are too small
+        if (isInitialSetup || currentTotalWidth === 0) {
+            // Force 50/50 on initial setup
             leftPercentage = 0.5;
             rightPercentage = 0.5;
+            isInitialSetup = false; // Mark as no longer initial setup
+        } else {
+            // Maintain current proportions for resize events
+            leftPercentage = currentLeftWidth / currentTotalWidth;
+            rightPercentage = currentRightWidth / currentTotalWidth;
         }
         
         // Apply minimum size constraints (20% each)
@@ -69,19 +73,7 @@ export const render = ({ model }) => {
         // Force layout recalculation
         left_column.offsetHeight;
         right_column.offsetHeight;
-        
-        // Debug logging to check calculations
-        console.log('Column sizing debug:', {
-            containerWidth,
-            gutterWidth,
-            gapWidth,
-            availableWidth,
-            currentSizes: `L:${currentLeftWidth}px R:${currentRightWidth}px Total:${currentTotalWidth}px`,
-            percentages: `L:${Math.round(leftPercentage * 100)}% R:${Math.round(rightPercentage * 100)}%`,
-            finalSizes: `L:${newLeftWidth}px R:${newRightWidth}px`,
-            difference: `${Math.abs(newLeftWidth - newRightWidth)}px diff`,
-            totalCheck: `Sum: ${newLeftWidth + newRightWidth} = Available: ${availableWidth}`
-        });
+
     };
 
     // Initialize column widths after container is built
