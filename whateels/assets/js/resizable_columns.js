@@ -36,12 +36,12 @@ export const render = ({ model }) => {
         
         let leftPercentage, rightPercentage;
         
-        if (currentTotalWidth > 0) {
-            // Maintain current proportions
+        if (currentTotalWidth > 0 && currentTotalWidth > (availableWidth * 0.8)) {
+            // Only maintain proportions if columns have reasonable sizes
             leftPercentage = currentLeftWidth / currentTotalWidth;
             rightPercentage = currentRightWidth / currentTotalWidth;
         } else {
-            // Default to 50/50 if no current sizes
+            // Default to exact 50/50 if no current sizes or sizes are too small
             leftPercentage = 0.5;
             rightPercentage = 0.5;
         }
@@ -58,8 +58,8 @@ export const render = ({ model }) => {
             rightPercentage = 1 - leftPercentage;
         }
         
-        // Calculate new pixel widths with precise rounding
-        const newLeftWidth = Math.floor(availableWidth * leftPercentage);
+        // Calculate new pixel widths with precise rounding for equal distribution
+        const newLeftWidth = Math.round(availableWidth * leftPercentage);
         const newRightWidth = availableWidth - newLeftWidth; // Ensure exact fit
         
         // Apply new widths (border-box means this includes borders)
@@ -69,6 +69,19 @@ export const render = ({ model }) => {
         // Force layout recalculation
         left_column.offsetHeight;
         right_column.offsetHeight;
+        
+        // Debug logging to check calculations
+        console.log('Column sizing debug:', {
+            containerWidth,
+            gutterWidth,
+            gapWidth,
+            availableWidth,
+            currentSizes: `L:${currentLeftWidth}px R:${currentRightWidth}px Total:${currentTotalWidth}px`,
+            percentages: `L:${Math.round(leftPercentage * 100)}% R:${Math.round(rightPercentage * 100)}%`,
+            finalSizes: `L:${newLeftWidth}px R:${newRightWidth}px`,
+            difference: `${Math.abs(newLeftWidth - newRightWidth)}px diff`,
+            totalCheck: `Sum: ${newLeftWidth + newRightWidth} = Available: ${availableWidth}`
+        });
     };
 
     // Initialize column widths after container is built
@@ -182,8 +195,8 @@ const create_gutter = (left_column, right_column) => {
             newRightWidth = availableWidth - newLeftWidth; // Always calculate right from left
         }
         
-        // Round to avoid sub-pixel issues
-        newLeftWidth = Math.floor(newLeftWidth);
+        // Round to avoid sub-pixel issues - use Math.round for equal distribution
+        newLeftWidth = Math.round(newLeftWidth);
         newRightWidth = availableWidth - newLeftWidth;
         
         // Apply new widths using passed column references
