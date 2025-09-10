@@ -15,6 +15,52 @@ class ResizableColumns(JSComponent):
 
     _esm = str(_JS_FILE)
     _stylesheets = ["""
+        /* Entrance animations */
+        @keyframes slide-in-left {
+            0% {
+                opacity: 0;
+                transform: translateX(-30px) scale(0.98);
+            }
+            70% {
+                opacity: 1;
+                transform: translateX(2px) scale(1.01);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+        
+        @keyframes slide-in-right {
+            0% {
+                opacity: 0;
+                transform: translateX(30px) scale(0.98);
+            }
+            70% {
+                opacity: 1;
+                transform: translateX(-2px) scale(1.01);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+        
+        @keyframes gutter-appear {
+            0% {
+                opacity: 0;
+                transform: scaleY(0.7) scaleX(0.8);
+            }
+            60% {
+                opacity: 1;
+                transform: scaleY(1.05) scaleX(1.1);
+            }
+            100% {
+                opacity: 1;
+                transform: scaleY(1) scaleX(1);
+            }
+        }
+
         .resizable-columns-container {
             display: flex;
             width: 100%;
@@ -28,6 +74,14 @@ class ResizableColumns(JSComponent):
                 background: #f8f9fa;
                 border: 1px solid #dee2e6;
                 /* Remove flex: 1 and percentage widths - let JS control */
+            }
+            
+            & #left_column {
+                animation: slide-in-left 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            }
+            
+            & #right_column {
+                animation: slide-in-right 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s both;
             }
             
             & #gutter {
@@ -44,6 +98,7 @@ class ResizableColumns(JSComponent):
                     inset 0 1px 0 rgba(255,255,255,0.8),
                     inset 0 -1px 0 rgba(0,0,0,0.1),
                     0 2px 4px rgba(0,0,0,0.1);
+                animation: gutter-appear 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s both;
             }
             
             & #gutter:hover {

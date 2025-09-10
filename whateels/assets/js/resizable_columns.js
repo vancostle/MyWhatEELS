@@ -21,11 +21,15 @@ export const render = ({ model }) => {
     // Function to recalculate and update column sizes
     const recalculateColumns = () => {
         const containerWidth = container.offsetWidth;
-        const gutterWidth = 12;
-        const gapWidth = 10;
+        
+        // Get actual gutter width (including any borders/margins)
+        const gutterWidth = gutter.offsetWidth;
+        const gapWidth = 10; // 5px gap on each side of gutter
+        
+        // Calculate available width for content
         const availableWidth = containerWidth - gutterWidth - gapWidth;
         
-        // Get current percentage split to maintain proportions
+        // Get current column content widths (excluding borders since we use border-box)
         const currentLeftWidth = left_column.offsetWidth;
         const currentRightWidth = right_column.offsetWidth;
         const currentTotalWidth = currentLeftWidth + currentRightWidth;
@@ -54,22 +58,17 @@ export const render = ({ model }) => {
             rightPercentage = 1 - leftPercentage;
         }
         
-        // Calculate new pixel widths
-        const newLeftWidth = availableWidth * leftPercentage;
-        const newRightWidth = availableWidth * rightPercentage;
+        // Calculate new pixel widths with precise rounding
+        const newLeftWidth = Math.floor(availableWidth * leftPercentage);
+        const newRightWidth = availableWidth - newLeftWidth; // Ensure exact fit
         
-        // Apply new widths
+        // Apply new widths (border-box means this includes borders)
         left_column.style.width = newLeftWidth + 'px';
         right_column.style.width = newRightWidth + 'px';
         
-        console.log('Columns recalculated:', {
-            containerWidth,
-            availableWidth,
-            leftWidth: newLeftWidth,
-            rightWidth: newRightWidth,
-            leftPercentage: Math.round(leftPercentage * 100) + '%',
-            rightPercentage: Math.round(rightPercentage * 100) + '%'
-        });
+        // Force layout recalculation
+        left_column.offsetHeight;
+        right_column.offsetHeight;
     };
 
     // Initialize column widths after container is built
@@ -84,7 +83,6 @@ export const render = ({ model }) => {
                 // Debounce resize events to avoid excessive recalculations
                 clearTimeout(container._resizeTimeout);
                 container._resizeTimeout = setTimeout(() => {
-                    console.log('Container resized, recalculating columns...');
                     recalculateColumns();
                 }, 50);
             }
@@ -100,7 +98,6 @@ export const render = ({ model }) => {
         const handleWindowResize = () => {
             clearTimeout(container._resizeTimeout);
             container._resizeTimeout = setTimeout(() => {
-                console.log('Window resized, recalculating columns...');
                 recalculateColumns();
             }, 100);
         };
@@ -108,6 +105,11 @@ export const render = ({ model }) => {
         window.addEventListener('resize', handleWindowResize);
         container._windowResizeHandler = handleWindowResize;
     }
+
+    // Perform initial sizing with proper calculations
+    setTimeout(() => {
+        recalculateColumns();
+    }, 10); // Small delay to ensure DOM is ready
 
     return container;
 }
@@ -142,7 +144,6 @@ const create_gutter = (left_column, right_column) => {
         document.body.style.userSelect = 'none';
         gutter.style.cursor = 'col-resize';
         
-        console.log('Drag started at:', startX);
         e.preventDefault();
     });
     
@@ -173,13 +174,17 @@ const create_gutter = (left_column, right_column) => {
         
         if (newLeftWidth < minWidth) {
             newLeftWidth = minWidth;
-            newRightWidth = availableWidth - newLeftWidth;
+            newRightWidth = availableWidth - newLeftWidth; // Ensure exact fit
         } else if (newLeftWidth > maxWidth) {
             newLeftWidth = maxWidth;
-            newRightWidth = availableWidth - newLeftWidth;
+            newRightWidth = availableWidth - newLeftWidth; // Ensure exact fit
         } else {
-            newRightWidth = availableWidth - newLeftWidth;
+            newRightWidth = availableWidth - newLeftWidth; // Always calculate right from left
         }
+        
+        // Round to avoid sub-pixel issues
+        newLeftWidth = Math.floor(newLeftWidth);
+        newRightWidth = availableWidth - newLeftWidth;
         
         // Apply new widths using passed column references
         left_column.style.width = newLeftWidth + 'px';
@@ -188,7 +193,6 @@ const create_gutter = (left_column, right_column) => {
         // Update startX for next move
         startX = currentX;
         
-        console.log('Resizing:', newLeftWidth, newRightWidth);
         e.preventDefault();
     });
     
@@ -200,8 +204,6 @@ const create_gutter = (left_column, right_column) => {
             
             // Remove dragging class to stop animations
             gutter.classList.remove('dragging');
-            
-            console.log('Drag ended');
         }
     });
     
