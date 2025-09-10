@@ -85,7 +85,7 @@ class ResizableColumns(JSComponent):
             }
             
             & #gutter {
-                width: 12px;
+                width: 16px;
                 height: 100%;
                 background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #f8f9fa 100%);
                 cursor: col-resize;
@@ -95,9 +95,9 @@ class ResizableColumns(JSComponent):
                 flex-shrink: 0;
                 position: relative;
                 box-shadow: 
-                    inset 0 1px 0 rgba(255,255,255,0.8),
-                    inset 0 -1px 0 rgba(0,0,0,0.1),
-                    0 2px 4px rgba(0,0,0,0.1);
+                    inset 0 1px 0 rgba(255,255,255,1),
+                    inset 0 -1px 0 rgba(0,0,0,0),
+                    0 2px 4px rgba(0,0,0,0);
                 animation: gutter-appear 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s both;
             }
             
@@ -118,16 +118,18 @@ class ResizableColumns(JSComponent):
                     0 1px 2px rgba(0,0,0,0.2);
             }
             
-            /* Dragging state - active while user drags */
-            & #gutter.dragging {
-                background: linear-gradient(135deg, #28a745 0%, #1e7e34 50%, #28a745 100%);
-                transform: scale(1.03);
+            /* Dragging state - active while user drags - higher specificity to override :active */
+            & #gutter.dragging,
+            & #gutter.dragging:active,
+            & #gutter:active.dragging {
+                background: linear-gradient(135deg, #28a745 0%, #1e7e34 50%, #28a745 100%) !important;
+                transform: scale(1.03) !important;
                 box-shadow: 
                     inset 0 1px 0 rgba(255,255,255,0.4),
                     inset 0 -1px 0 rgba(0,0,0,0.3),
                     0 6px 12px rgba(40,167,69,0.4),
-                    0 0 20px rgba(40,167,69,0.2);
-                animation: pulse-glow 0.8s ease-in-out infinite alternate;
+                    0 0 20px rgba(40,167,69,0.2) !important;
+                animation: pulse-glow 0.8s ease-in-out infinite alternate !important;
             }
             
             @keyframes pulse-glow {
@@ -193,13 +195,6 @@ class ResizableColumns(JSComponent):
             @keyframes grip-pulse {
                 0% { opacity: 0.8; }
                 100% { opacity: 1; }
-            }
-            
-            & #gutter {
-                width: 8px;
-                background-color: #666;
-                cursor: col-resize;
-                border-radius: 5px;
             }
         }
 
