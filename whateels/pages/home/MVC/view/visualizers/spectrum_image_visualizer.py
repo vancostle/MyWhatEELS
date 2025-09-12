@@ -164,17 +164,23 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             unselected=dict(marker=dict(opacity=0.01)),
         )
 
+        # Create figure with default size but lock aspect ratio so it doesn't deform
         figA = go.Figure(data=[heat, selectors])
         figA.update_layout(
             title="m_image (hover) + lasso/box para sumar",
-            height=400,
+            height=400,  # default initial height as in the original copy
             margin=dict(l=16, r=16, t=50, b=20),
             dragmode="lasso",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
         )
-        figA.update_yaxes(autorange="reversed", scaleanchor=None, constrain="domain")
+        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
+        figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
+                           showgrid=False, zeroline=False, showticklabels=False)
+        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
-        # Pane A (heatmap)
-        self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True})
+        # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
+        self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
 
         # Pane B initial message (apply stored ranges if any)
         self.paneB = pn.pane.Plotly(
