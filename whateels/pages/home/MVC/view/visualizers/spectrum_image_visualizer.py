@@ -185,7 +185,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Pane B initial message (apply stored ranges if any)
         self.paneB = pn.pane.Plotly(
             self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona")),
-            sizing_mode='stretch_height'
+            sizing_mode='stretch_both', config={"responsive": True}
         )
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---

@@ -212,6 +212,7 @@ const create_gutter = (left_column, right_column) => {
             
             // Remove dragging class to stop animations
             gutter.classList.remove('dragging');
+            window.dispatchEvent(new Event('resize'));
         }
     });
     
