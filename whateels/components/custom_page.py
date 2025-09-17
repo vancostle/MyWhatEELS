@@ -28,7 +28,6 @@ class CustomPage(pn.template.FastListTemplate):
         right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None,
         header_background: str = _DEFAULT_HEADER_BACKGROUND,
         sidebar_width: int = 275,
-        on_load_page: Optional[callable] = None
     ):
         """
         Initialize CustomPage with enhanced FastListTemplate.
@@ -41,7 +40,6 @@ class CustomPage(pn.template.FastListTemplate):
             right_sidebar: Right sidebar components (optional)
             header_background: Background color for the header (default: green)
             sidebar_width: Width of the left sidebar in pixels (default: 330)
-            collapsed_sidebar: Whether the sidebar starts in collapsed state
         """
         # Set default header if none provided (but not if empty list is explicitly passed)
         if header is None:
@@ -81,9 +79,7 @@ class CustomPage(pn.template.FastListTemplate):
         """
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
-            ("[GOS](/gos)", "GOS graph page"),
-            ("[NLLS](/nlls)", "Non-Linear Least Squares analysis"),
-            ("[Login](/login)", "User authentication"),
+            ("[Clustering](/clustering)", "Clustering analysis"),
         ]
         
         return [
