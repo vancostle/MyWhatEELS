@@ -29,7 +29,7 @@ class AppState(param.Parameterized):
         Dictionary containing EELS metadata, None if no data loaded, 
         or {'error': str} if extraction failed.
     """)
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -48,14 +48,3 @@ class AppState(param.Parameterized):
             _logger.info(f"Metadata updated via param")
         else:
             _logger.info("Metadata cleared via param")
-
-    @property
-    def is_metadata_available(self) -> bool:
-        """
-        Check if valid metadata is available.
-        
-        Returns:
-            bool: True if metadata is a non-empty dict without errors,
-                  False if metadata is None, contains errors, or is invalid.
-        """
-        return self.metadata is not None and isinstance(self.metadata, dict) and 'error' not in self.metadata

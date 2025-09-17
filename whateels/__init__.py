@@ -28,10 +28,11 @@ class App:
         ])
         
         # Define the pages for the application
+        # Use lambdas to avoid immediate instantiation
         pages = {
-            "/": Home(),
-            "/metadata-details": Metadata(),
-            "/clustering": Clustering(),
+            "/": lambda: Home(),
+            "/metadata-details": lambda: Metadata(),
+            "/clustering": lambda: Clustering(),
         }
 
         return pn.serve(

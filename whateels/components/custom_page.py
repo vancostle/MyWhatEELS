@@ -7,6 +7,7 @@ and CSS styling for the WhatEELS scientific web application.
 
 import panel as pn
 from typing import Optional, List, Union
+from whateels.shared_state import AppState
 
 class CustomPage(pn.template.FastListTemplate):
     """
@@ -39,12 +40,16 @@ class CustomPage(pn.template.FastListTemplate):
             header: Header navigation components (optional, defaults to standard nav, pass [] for no header)
             right_sidebar: Right sidebar components (optional)
             header_background: Background color for the header (default: green)
-            sidebar_width: Width of the left sidebar in pixels (default: 330)
+            sidebar_width: Width of the left sidebar in pixels (default: 275)
         """
+        # Track if metadata is loaded
+        self._is_metadata_loaded = False
+        # Create a reactive header container
+        self._header_container = pn.Row(*self._create_navigation_header())
         # Set default header if none provided (but not if empty list is explicitly passed)
         if header is None:
-            header = self._create_navigation_header()
-        
+            header = [self._header_container]
+
         # Set default main content if none provided
         if main is None:
             main = [pn.pane.Markdown("# Welcome to WhatEELS")]
@@ -77,9 +82,17 @@ class CustomPage(pn.template.FastListTemplate):
         Returns:
             List of Markdown panes configured as navigation links
         """
+        app_state = AppState()
+    
+        # Attach the watcher
+        app_state.param.watch(self.on_metadata_available_changed, 'metadata')
+
+        disabled_cluster_link = '<a href="/clustering" style="pointer-events: none; color: gray;">Clustering</a>'
+        enabled_cluster_link = '<a href="/clustering">Clustering</a>'
+        
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
-            ("[Clustering](/clustering)", "Clustering analysis"),
+            (enabled_cluster_link, "Clustering analysis")(disabled_cluster_link, "Clustering analysis (disabled)"),
         ]
         
         return [
@@ -90,3 +103,10 @@ class CustomPage(pn.template.FastListTemplate):
             )
             for link_text, description in navigation_links
         ]
+        
+    def on_metadata_available_changed(self, event):
+        app_state = AppState()
+        self._is_metadata_loaded = True if app_state.metadata and 'error' not in app_state.metadata else False
+        print(f"Metadata availability changed: {self._is_metadata_loaded}")
+        # Rebuild navigation header visually
+        self._header_container.objects = self._create_navigation_header()
