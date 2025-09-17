@@ -106,7 +106,6 @@ class FileWorkflowService:
             self._controller.layout.reset_main_layout()
             
             # Clear previous dataset info panels to prevent caching old data
-            # self._model.all_datasets = []
             
             # Reset AppState metadata
             app_state = AppState()

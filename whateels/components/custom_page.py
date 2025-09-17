@@ -42,9 +42,12 @@ class CustomPage(pn.template.FastListTemplate):
             header_background: Background color for the header (default: green)
             sidebar_width: Width of the left sidebar in pixels (default: 275)
         """
+        app_state = AppState()
+        app_state.param.watch(self.on_metadata_available_changed, 'metadata')
+        is_metadata_loaded = True if app_state.metadata and 'error' not in app_state.metadata else False
         
         # Create a reactive header container
-        self._header_container = pn.Row(*self._create_navigation_header())
+        self._header_container = pn.Row(*self._create_navigation_header(is_metadata_loaded))
         # Set default header if none provided (but not if empty list is explicitly passed)
         if header is None:
             header = [self._header_container]
@@ -81,10 +84,6 @@ class CustomPage(pn.template.FastListTemplate):
         Returns:
             List of Markdown panes configured as navigation links
         """
-        app_state = AppState()
-        # Attach the watcher
-        app_state.param.watch(self.on_metadata_available_changed, 'metadata')
-                
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
         ]
@@ -102,10 +101,13 @@ class CustomPage(pn.template.FastListTemplate):
             for link_text, description in navigation_links
         ]
         
-    def on_metadata_available_changed(self, event):
+    def on_metadata_available_changed(self, _):
         app_state = AppState()
         is_metadata_loaded = True if app_state.metadata and 'error' not in app_state.metadata else False
-        print(f"Metadata availability changed: {is_metadata_loaded}")
+        
+        print('----')
+        print(f'Metadata changed, is_metadata_loaded={is_metadata_loaded}')
+        print('----')
         
         # Rebuild navigation header visually
         self._header_container.objects = self._create_navigation_header(is_metadata_loaded)
