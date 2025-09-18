@@ -17,16 +17,13 @@ class App:
     _DEFAULT_PORT = 5006
     
     def __init__(self, title : str = _DEFAULT_TITLE):
-        self.title = title
+        self._title = title
 
     def run(self, port : int = _DEFAULT_PORT):
-        # Load CSS files only once
-        LoadCSS([
-            str(CSS_ROOT / "home.css"),
-            str(CSS_ROOT / "login.css"),
-            str(CSS_ROOT / "custom_page.css"),
-        ])
-        
+        # Load custom CSS for the entire app
+        CUSTOM_PAGE = str(CSS_ROOT / "custom_page.css")
+        LoadCSS([CUSTOM_PAGE])
+
         # Define the pages for the application
         # Use lambdas to avoid immediate instantiation
         pages = {
@@ -37,6 +34,6 @@ class App:
 
         return pn.serve(
             pages,
-            title=self.title,
+            title=self._title,
             port=port,
         )

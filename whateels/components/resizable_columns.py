@@ -14,8 +14,8 @@ class ResizableColumns(JSComponent):
     _JS_PATH = JS_ROOT / (_FILE_NAME + '.js')
     _CSS_PATH = CSS_ROOT / (_FILE_NAME + '.css')
 
-    _JS_FILE = str(_JS_PATH)
+    _JS_FILE = str(open(_JS_PATH, 'r', encoding='utf-8').read())
     _CSS_FILE = str(open(_CSS_PATH, 'r', encoding='utf-8').read())
 
-    _esm = _JS_FILE
+    _esm = rjsmin.jsmin(_JS_FILE)
     _stylesheets = [csscompressor.compress(_CSS_FILE)]

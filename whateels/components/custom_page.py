@@ -105,9 +105,5 @@ class CustomPage(pn.template.FastListTemplate):
         app_state = AppState()
         is_metadata_loaded = True if app_state.metadata and 'error' not in app_state.metadata else False
         
-        print('----')
-        print(f'Metadata changed, is_metadata_loaded={is_metadata_loaded}')
-        print('----')
-        
         # Rebuild navigation header visually
         self._header_container.objects = self._create_navigation_header(is_metadata_loaded)

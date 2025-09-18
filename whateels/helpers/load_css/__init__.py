@@ -1,27 +1,13 @@
 import os
 import panel as pn
+import csscompressor
 
 class LoadCSS:
     """
     A singleton class to load CSS files into the Panel configuration.
     This ensures CSS files are loaded only once, even if the class is instantiated multiple times.
     """
-    
-    _instance = None
-    _css_loaded = False
-    
-    def __new__(cls, *args, **kwargs):
-        """
-        Singleton pattern: Ensure only one instance exists.
-        This method is called BEFORE __init__ when creating an object.
         
-        Args:
-            *args, **kwargs: Accept any arguments (they'll be passed to __init__)
-        """
-        if cls._instance is None:
-            cls._instance = super(LoadCSS, cls).__new__(cls)
-        return cls._instance
-    
     def __init__(self, css_files=None):
         """
         Initialize the LoadCSS instance.
@@ -46,10 +32,7 @@ class LoadCSS:
                 if not isinstance(css_file, str):
                     raise TypeError(f"css_files[{i}] must be a string, got {type(css_file).__name__}")
         
-        # Only load CSS once, even if __init__ is called multiple times
-        if not LoadCSS._css_loaded:
-            self._load_css(css_files)
-            LoadCSS._css_loaded = True
+        self._load_css(css_files)
     
     def _load_css(self, css_files=None):
         """
@@ -58,17 +41,21 @@ class LoadCSS:
         Args:
             css_files: List/tuple of CSS file paths, or None to use defaults
         """
+        READ_MODE = "r"
+        ENCODING = "utf-8"
+        ERROR_MESSAGE = "❌ Error loading CSS file"
+        WARNING_MESSAGE = "⚠️ CSS file not found"
         
         for css_file in css_files:
             try:
                 if os.path.exists(css_file):
-                    with open(css_file, "r", encoding="utf-8") as f:
-                        pn.config.raw_css.append(f.read())
-                    print(f"✅ Loaded CSS: {css_file}")
+                    with open(css_file, READ_MODE, encoding=ENCODING) as f:
+                        min_css = csscompressor.compress(f.read())
+                        pn.config.raw_css.append(min_css)
                 else:
-                    print(f"⚠️  CSS file not found: {css_file}")
+                    print(f"{WARNING_MESSAGE}: {css_file}")
             except Exception as e:
-                print(f"❌ Error loading CSS {css_file}: {e}")
+                print(f"{ERROR_MESSAGE} {css_file}: {e}")
 
 
 # Usage example:

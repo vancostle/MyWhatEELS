@@ -10,6 +10,6 @@ holoviews>=1.16.0
 numba>=0.58.0
 scipy>=1.10.0
 plotly==5.19
-htmlmin==0.1.12
 csscompressor==0.9.5
 rjsmin==1.2.4
+minify-html==0.15.0

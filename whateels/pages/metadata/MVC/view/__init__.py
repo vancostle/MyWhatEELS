@@ -1,6 +1,7 @@
 import panel as pn
 from typing import TYPE_CHECKING
 from whateels.helpers import HTML_ROOT
+import minify_html
 
 if TYPE_CHECKING:
     from ..model import Model
@@ -34,18 +35,27 @@ class View:
     
     def create_no_metadata_component(self):
         """Creates no metadata available component."""
+        UTF8 = 'utf-8'
+        READ_MODE = 'r'
+        
         NO_METADATA_PATH = HTML_ROOT / "no_metadata_loaded.html"
-        with open(NO_METADATA_PATH, 'r', encoding='utf-8') as f:
+
+        with open(NO_METADATA_PATH, READ_MODE, encoding=UTF8) as f:
             no_metadata_template = f.read()
-        return pn.pane.HTML(no_metadata_template, sizing_mode=self._STRETCH_BOTH)
+        minified_html = minify_html.minify(no_metadata_template)
+        return pn.pane.HTML(minified_html, sizing_mode=self._STRETCH_BOTH)
 
     def create_error_component(self):
         """Creates error display component."""
+        UTF8 = 'utf-8'
+        READ_MODE = 'r'
+        
         JSON_ERROR_PATH = HTML_ROOT / "json_error.html"
-        with open(JSON_ERROR_PATH, 'r', encoding='utf-8') as f:
+        with open(JSON_ERROR_PATH, READ_MODE, encoding=UTF8) as f:
             error_template = f.read()
-        return pn.pane.HTML(error_template, sizing_mode=self._STRETCH_BOTH)
-    
+        minified_html = minify_html.minify(error_template.encode(UTF8)).decode(UTF8)
+        return pn.pane.HTML(minified_html, sizing_mode=self._STRETCH_BOTH)
+
     # --- Properties ---
     @property
     def main(self) -> pn.Column:

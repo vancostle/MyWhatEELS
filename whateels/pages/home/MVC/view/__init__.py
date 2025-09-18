@@ -2,6 +2,7 @@ import panel as pn, holoviews as hv
 
 from whateels.components import FileDropper
 from typing import TYPE_CHECKING
+from whateels.helpers import LoadCSS, CSS_ROOT
 
 if TYPE_CHECKING:
     from ..model import Model
@@ -37,6 +38,9 @@ class View:
         self._error_placeholder = None
         self._file_dropper = None
         
+        HOMEPAGE_CSS = str(CSS_ROOT / "home.css")
+        LoadCSS([HOMEPAGE_CSS]) # CSS for the whole homepage
+
         self._init_visualization_components()
 
     # --- Properties ---
