@@ -74,54 +74,32 @@ class ImageVisualizer(AbstractEELSVisualizer):
         fig_base = go.Figure(data=[heat])
         fig_base.update_layout(
             margin=dict(l=0, r=0, t=0, b=0),
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, constrain="domain"),
-            yaxis=dict(scaleanchor="x", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False, constrain="domain"),
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)'
         )
-
-        # layout padding values used to compute available size
-        # If viewport_size is available, prefer using full window (no extra margins)
-        if hasattr(pn.state, 'viewport_size'):
-            extra_vertical_px = 0
-            extra_horizontal_px = 0
-        else:
-            extra_vertical_px = 140
-            extra_horizontal_px = 24
-
-        def make_plot(vw, vh):
-            if not vw or not vh:
-                return pn.pane.Markdown("Cargando dimensiones…")
-
-            w_max = max(200, int(vw - extra_horizontal_px))
-            h_max = max(200, int(vh - extra_vertical_px))
-
-            # Encaje dentro de ambas cotas manteniendo aspect ratio
-            w = min(w_max, int(h_max / aspect))
-            h = int(max(1, w * aspect))
-
-            # Ensure within bounds
-            if h > h_max:
-                h = h_max
-                w = max(200, int(h / aspect))
-
-            f = go.Figure(fig_base)
-            f.update_layout(
-                autosize=False,
-                width=w,
-                height=h,
-                margin=dict(l=0, r=0, t=0, b=0),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
-            f.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain", fixedrange=True)
-            f.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain", scaleanchor="x", scaleratio=1, fixedrange=True)
-            return pn.pane.Plotly(f, config={"responsive": True})
+        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
+        fig_base.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
+                             showgrid=False, zeroline=False, showticklabels=False)
+        fig_base.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
         # Use a responsive Plotly pane that fills the parent container to avoid resize loops
-        image_panel = pn.pane.Plotly(fig_base, sizing_mode='stretch_both', config={'responsive': True})
+        image_panel = pn.pane.Plotly(self._to_plotly(fig_base), sizing_mode='stretch_both', config={'responsive': True})
         plots = pn.Column(image_panel, sizing_mode=self._STRETCH_BOTH)
         return plots
+
+    def _to_plotly(self, obj):
+        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
+        try:
+            if isinstance(obj, go.Figure):
+                return obj.to_plotly_json()
+        except Exception:
+            pass
+        try:
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+        return obj
 
     @override
     def create_dataset_info(self):
