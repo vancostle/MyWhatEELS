@@ -1,6 +1,5 @@
 import panel as pn
 from typing import TYPE_CHECKING
-from pathlib import Path
 from whateels.helpers import HTML_ROOT
 
 if TYPE_CHECKING:

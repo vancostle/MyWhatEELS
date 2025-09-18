@@ -1,201 +1,21 @@
 import panel as pn
-import param
+import csscompressor, rjsmin
 
 from panel.custom import JSComponent, Child
-from whateels.helpers.constants import JS_ROOT
+from whateels.helpers.constants import JS_ROOT, CSS_ROOT
 
 class ResizableColumns(JSComponent):
-    
-    value = param.Integer()
-        
+            
     left_column = Child(class_=pn.Column)
     right_column = Child(class_=pn.Column)
     
-    _JS_FILE = JS_ROOT / "resizable_columns.js"
+    _FILE_NAME = "resizable_columns"
 
-    _esm = str(_JS_FILE)
-    _stylesheets = ["""
-        /* Entrance animations */
-        @keyframes slide-in-left {
-            0% {
-                opacity: 0;
-                transform: translateX(-30px) scale(0.98);
-            }
-            70% {
-                opacity: 1;
-                transform: translateX(2px) scale(1.01);
-            }
-            100% {
-                opacity: 1;
-                transform: translateX(0) scale(1);
-            }
-        }
-        
-        @keyframes slide-in-right {
-            0% {
-                opacity: 0;
-                transform: translateX(30px) scale(0.98);
-            }
-            70% {
-                opacity: 1;
-                transform: translateX(-2px) scale(1.01);
-            }
-            100% {
-                opacity: 1;
-                transform: translateX(0) scale(1);
-            }
-        }
-        
-        @keyframes gutter-appear {
-            0% {
-                opacity: 0;
-                transform: scaleY(0.7) scaleX(0.8);
-            }
-            60% {
-                opacity: 1;
-                transform: scaleY(1.05) scaleX(1.1);
-            }
-            100% {
-                opacity: 1;
-                transform: scaleY(1) scaleX(1);
-            }
-        }
+    _JS_PATH = JS_ROOT / (_FILE_NAME + '.js')
+    _CSS_PATH = CSS_ROOT / (_FILE_NAME + '.css')
 
-        .resizable-columns-container {
-            display: flex;
-            width: 100%;
-            height: 100%;
-            gap: 5px; /* Add 5px gap between all flex items */
-            
-            & #left_column, #right_column {
-                height: 100%;
-                overflow: auto;
-                box-sizing: border-box;
-                background: #f8f9fa;
-                border: 1px solid #dee2e6;
-                /* Remove flex: 1 and percentage widths - let JS control */
-            }
-            
-            & #left_column {
-                animation: slide-in-left 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            }
-            
-            & #right_column {
-                animation: slide-in-right 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s both;
-            }
-            
-            & #gutter {
-                width: 16px;
-                height: 100%;
-                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #f8f9fa 100%);
-                cursor: col-resize;
-                border: none;
-                border-radius: 6px;
-                transition: all 0.3s ease;
-                flex-shrink: 0;
-                position: relative;
-                box-shadow: 
-                    inset 0 1px 0 rgba(255,255,255,1),
-                    inset 0 -1px 0 rgba(0,0,0,0),
-                    0 2px 4px rgba(0,0,0,0);
-                animation: gutter-appear 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s both;
-            }
-            
-            & #gutter:hover {
-                background: linear-gradient(135deg, #007bff 0%, #0056b3 50%, #007bff 100%);
-                box-shadow: 
-                    inset 0 1px 0 rgba(255,255,255,0.3),
-                    inset 0 -1px 0 rgba(0,0,0,0.2),
-                    0 4px 8px rgba(0,123,255,0.3);
-                transform: scale(1.01);
-            }
-            
-            & #gutter:active {
-                background: linear-gradient(135deg, #0056b3 0%, #003d82 50%, #0056b3 100%);
-                transform: scale(0.98);
-                box-shadow: 
-                    inset 0 2px 4px rgba(0,0,0,0.3),
-                    0 1px 2px rgba(0,0,0,0.2);
-            }
-            
-            /* Dragging state - active while user drags - higher specificity to override :active */
-            & #gutter.dragging,
-            & #gutter.dragging:active,
-            & #gutter:active.dragging {
-                background: linear-gradient(135deg, #28a745 0%, #1e7e34 50%, #28a745 100%) !important;
-                transform: scale(1.03) !important;
-                box-shadow: 
-                    inset 0 1px 0 rgba(255,255,255,0.4),
-                    inset 0 -1px 0 rgba(0,0,0,0.3),
-                    0 6px 12px rgba(40,167,69,0.4),
-                    0 0 20px rgba(40,167,69,0.2) !important;
-                animation: pulse-glow 0.8s ease-in-out infinite alternate !important;
-            }
-            
-            @keyframes pulse-glow {
-                0% {
-                    box-shadow: 
-                        inset 0 1px 0 rgba(255,255,255,0.4),
-                        inset 0 -1px 0 rgba(0,0,0,0.3),
-                        0 6px 12px rgba(40,167,69,0.4),
-                        0 0 20px rgba(40,167,69,0.2);
-                }
-                100% {
-                    box-shadow: 
-                        inset 0 1px 0 rgba(255,255,255,0.6),
-                        inset 0 -1px 0 rgba(0,0,0,0.2),
-                        0 8px 16px rgba(40,167,69,0.6),
-                        0 0 30px rgba(40,167,69,0.4);
-                }
-            }
-            
-            & #gutter::before {
-                content: '';
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 3px;
-                height: 40px;
-                background: repeating-linear-gradient(
-                    to bottom,
-                    #6c757d 0px,
-                    #6c757d 3px,
-                    transparent 3px,
-                    transparent 6px
-                );
-                border-radius: 2px;
-                opacity: 0.6;
-                transition: opacity 0.3s ease;
-            }
-            
-            & #gutter:hover::before {
-                background: repeating-linear-gradient(
-                    to bottom,
-                    rgba(255,255,255,0.9) 0px,
-                    rgba(255,255,255,0.9) 3px,
-                    transparent 3px,
-                    transparent 6px
-                );
-                opacity: 1;
-            }
-            
-            & #gutter.dragging::before {
-                background: repeating-linear-gradient(
-                    to bottom,
-                    rgba(255,255,255,1) 0px,
-                    rgba(255,255,255,1) 3px,
-                    transparent 3px,
-                    transparent 6px
-                );
-                opacity: 1;
-                animation: grip-pulse 0.6s ease-in-out infinite alternate;
-            }
-            
-            @keyframes grip-pulse {
-                0% { opacity: 0.8; }
-                100% { opacity: 1; }
-            }
-        }
+    _JS_FILE = str(_JS_PATH)
+    _CSS_FILE = str(open(_CSS_PATH, 'r', encoding='utf-8').read())
 
-    """]       
+    _esm = _JS_FILE
+    _stylesheets = [csscompressor.compress(_CSS_FILE)]

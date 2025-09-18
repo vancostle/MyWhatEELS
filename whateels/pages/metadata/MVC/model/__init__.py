@@ -11,7 +11,7 @@ class Model:
     
     def is_metadata_available(self) -> bool:
         """Check if metadata is available."""
-        return self._app_state.is_metadata_available
+        return self._app_state.metadata is not None
     
     @property
     def metadata(self):
