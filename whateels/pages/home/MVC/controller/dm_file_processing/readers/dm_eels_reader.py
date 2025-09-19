@@ -62,14 +62,7 @@ class DM_EELS_Reader:
         """
 
         FILE_MODE_READ_BINARY = "rb"
-
         LOG_OPENING_FILE = "Opening file {filename}"
-        LOG_SEPARATOR = "##############"
-        LOG_START_PARSING = "Starting file parsing for {filename}"
-        LOG_USING_PARSER = "Using parser: {parser}"
-        LOG_PARSING_SUCCESS = "File parsing completed successfully"
-        LOG_EELS_DATA_EXTRACTION = "Starting EELS data extraction using: {handler}"
-        LOG_EELS_DATA_EXTRACTION_SUCCESS = "EELS data extraction completed successfully"
 
         parser = DM_InfoParser()
         handler = DM_EELS_data()
