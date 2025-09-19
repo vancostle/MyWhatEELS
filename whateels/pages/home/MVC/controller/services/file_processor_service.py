@@ -30,7 +30,7 @@ Raw DM file → File validation → Data extraction → Quality assessment →
 Data cleaning → Dataset creation → Metadata attachment → xarray Dataset output
 """
 
-import os, numpy as np, xarray as xr
+import os, numpy as np, xarray as xr, io
 from pathlib import Path
 from whateels.errors.dm import (
     DMEmptyInfoDictionary, 
@@ -39,10 +39,30 @@ from whateels.errors.dm import (
     DMFileLoadingError, 
     DMFileUploadError
 )
-from whateels.helpers import TempFile
 from whateels.shared_state import AppState
+from whateels.helpers.logging import Logger
 from ..dm_file_processing import DM_EELS_Reader
 from .data_processor_service import DataProcessorService
+
+
+class FileCompatibleBytesIO(io.BytesIO):
+    """
+    Enhanced BytesIO that provides file-like compatibility for DM file processing.
+    
+    This wrapper ensures compatibility with libraries that may expect file 
+    descriptor operations while still maintaining in-memory processing.
+    """
+    
+    def __init__(self, data: bytes, name: str = "memory_file"):
+        """
+        Initialize with byte data and filename.
+        
+        Args:
+            data: Binary file content
+            name: Filename for compatibility
+        """
+        super().__init__(data)
+        self.name = name
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -75,6 +95,7 @@ class FileProcessorService:
             model: Application model containing constants and configuration
         """
         self._model = model
+        self._logger = Logger.get_logger("dm_file_reader.log", __name__)
 
     # -- Public Methods --
 
@@ -83,8 +104,8 @@ class FileProcessorService:
         Process uploaded DM3/DM4 file bytes into electron microscopy xarray datasets.
         
         Main entry point for file processing that handles the complete pipeline from
-        uploaded file bytes to processed datasets. Creates temporary files, validates
-        content, and orchestrates data extraction and processing.
+        uploaded file bytes to processed datasets. Processes files entirely in memory
+        without creating temporary files on disk.
         
         Args:
             filename: Name of the uploaded file (used for extension detection)
@@ -98,35 +119,31 @@ class FileProcessorService:
             DMFileUploadError: When file upload processing fails
             DMShapeMismatchError: When data dimensions don't match expectations
         """
-        BINARY_WRITE_MODE = 'wb'
-        
-        # Get the correct file extension from the uploaded filename
-        file_extension = Path(filename).suffix
-        
-        # Create temporary file that will be automatically cleaned up
-        with TempFile(suffix=file_extension, prefix=self._model.constants.TEMP_PREFIX) as temp_path:
-            try:
-                # Write the uploaded binary content to temporary file
-                with open(temp_path, BINARY_WRITE_MODE) as f:
-                    f.write(file_content)
-                
-                all_datasets: list[xr.Dataset] = []
+        try:
+            # Create enhanced in-memory file-like object from uploaded content
+            memory_file = FileCompatibleBytesIO(file_content, filename)
+            
+            # Log memory processing info
+            file_size_mb = len(file_content) / (1024**2)
+            self._logger.info(f"Processing file {filename} ({file_size_mb:.2f} MB) in memory")
 
-                # Load the DM3/DM4 file and convert to xarray dataset
-                all_datasets = self._load_dm_file(temp_path)
+            # Load the DM3/DM4 file directly from memory
+            all_datasets = self._load_dm_file(memory_file)
 
-                if not all_datasets:
-                    raise DMFileLoadingError(filename)
-                
-                return all_datasets
-            except DMFileLoadingError:
-                raise  # Re-raise DM-specific errors as-is
-            except Exception as e:
-                raise DMFileUploadError(e)
+            if not all_datasets:
+                raise DMFileLoadingError(filename)
+            
+            self._logger.info(f"Successfully processed {len(all_datasets)} dataset(s) from memory")
+            return all_datasets
+            
+        except DMFileLoadingError:
+            raise  # Re-raise DM-specific errors as-is
+        except Exception as e:
+            raise DMFileUploadError(e)
 
     # -- Private Methods --
 
-    def _load_dm_file(self, filepath: str) -> list[xr.Dataset]:
+    def _load_dm_file(self, file_source) -> list[xr.Dataset]:
         """
         Load DM3/DM4 file and convert to xarray datasets with metadata.
         
@@ -134,25 +151,26 @@ class FileProcessorService:
         file validation, data reading, quality assessment, cleaning, and dataset creation.
         
         Args:
-            filepath: Path to the DM3/DM4 file to process
+            file_source: Either a file path (str) or file-like object (io.BytesIO)
             
         Returns:
             list[xr.Dataset]: List of processed datasets, empty list if loading fails
             
         Processing Steps:
-            1. File size validation
+            1. File size validation (if file path provided)
             2. DM file reading and metadata extraction
             3. Data quality assessment and logging
             4. Data cleaning (NaN/inf handling)
             5. Dataset creation with metadata
         """
         try:
-            # Validate file size before processing
-            if not self._validate_file_size(filepath):
-                return []
+            # Handle file path validation if it's a string path
+            if isinstance(file_source, str):
+                if not self._validate_file_size(file_source):
+                    return []
 
-            # Read the DM file and extract data
-            dm_eels_reader = DM_EELS_Reader(filepath)
+            # Read the DM file and extract data using file-like object or path
+            dm_eels_reader = DM_EELS_Reader(file_source)
 
             # Extract file metadata and processed spectral data
             all_metadata_file = dm_eels_reader.file_metadata
@@ -173,11 +191,12 @@ class FileProcessorService:
             cleaned_all_electron_count_data = self._clean_all_electron_count_data(all_spectrum_images)
 
             # Create standardized xarray datasets with metadata
+            file_identifier = getattr(file_source, 'name', str(file_source))
             all_datasets: list[xr.Dataset] = self._create_all_datasets_from_data(
                 cleaned_all_electron_count_data, 
                 cleaned_all_energy_axes,
                 eels_data, 
-                filepath
+                file_identifier
             )
 
             return all_datasets
@@ -242,6 +261,7 @@ class FileProcessorService:
 
         if not infoDict:
             raise DMEmptyInfoDictionary(NOT_INFO_DICT_MESSAGE.format(infoDict))
+
         try:
             # Store metadata in AppState for application-wide access
             AppState().metadata = infoDict

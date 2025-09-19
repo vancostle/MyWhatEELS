@@ -279,9 +279,19 @@ class DM_EELS_data:
                 _logger.error(message)
                 raise DMConflictingDataTypeRead(message)
 
-            self._file.seek(0)
+            self._file.seek(offset)  # Seek to the data offset
             shape = self.get_shape(image_data)
-            all_eels_data.append(np.fromfile(self._file, count=nItems, offset=offset, dtype=dtype).reshape(shape))
+            
+            # Read binary data and convert to numpy array (compatible with file-like objects)
+            bytes_to_read = nItems * np.dtype(dtype).itemsize
+            binary_data = self._file.read(bytes_to_read)
+            
+            if len(binary_data) != bytes_to_read:
+                raise ValueError(f"Expected to read {bytes_to_read} bytes, but got {len(binary_data)} bytes")
+            
+            # Convert binary data to numpy array with specified dtype
+            array_data = np.frombuffer(binary_data, dtype=dtype, count=nItems).reshape(shape)
+            all_eels_data.append(array_data)
 
         return all_eels_data
 

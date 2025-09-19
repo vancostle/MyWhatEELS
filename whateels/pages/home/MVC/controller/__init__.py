@@ -1,7 +1,6 @@
 from .services import *
 from .managers import LayoutManager
 
-
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import Model
@@ -21,11 +20,11 @@ class Controller:
         self.model = model
         self.view = view
         # Initialize services
-        self._file_service = FileProcessorService(model)
-        self._data_service = DataProcessorService(self.model)
+        # self._data_service = DataProcessorService(self.model)
         self._file_workflow_service = FileWorkflowService(model, self)
         # Initialize manager
         self._layout_manager = LayoutManager(view, self, model)
+
         # Set up callbacks for file dropper events directly
         self.view.file_dropper.on_file_uploaded_callback = self._file_workflow_service.handle_file_upload
         self.view.file_dropper.on_file_removed_callback = self._file_workflow_service.handle_file_removal
@@ -34,4 +33,8 @@ class Controller:
     def layout(self) -> LayoutManager:
         """Expose the layout manager for external use."""
         return self._layout_manager
+    
+    def testing(self):
+        """Method for testing purposes."""
+        print("Controller testing method called.")
 
