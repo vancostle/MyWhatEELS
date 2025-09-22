@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from whateels.helpers import HTML_ROOT
 import panel as pn
-import minify_html
 
 from typing import TYPE_CHECKING
 
@@ -80,9 +79,8 @@ class AbstractEELSVisualizer(ABC):
         metadata_html_path = HTML_ROOT / HTML_FILE
         with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
             metadata_button_html = f.read()
-        minified_metadata_button_html = minify_html.minify(metadata_button_html)
 
-        metadata_button = pn.pane.HTML(minified_metadata_button_html, margin=MARGIN_ZERO)
+        metadata_button = pn.pane.HTML(metadata_button_html, margin=MARGIN_ZERO)
 
         # Main info panel
         header = pn.Row(
