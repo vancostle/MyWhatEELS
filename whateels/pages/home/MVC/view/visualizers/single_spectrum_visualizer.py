@@ -25,6 +25,10 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
     _STRETCH_BOTH = 'stretch_both'
     _NOT_AVAILABLE = 'N/A'
 
+    # Axis titles for spectrum plot (match spectrum_image_visualizer)
+    _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
+    _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+
     def __init__(self, model: "Model", dataset: "Dataset"):
         self._model = model
         self._dataset = dataset
@@ -48,8 +52,8 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
             height=400,
             color=self._model.Colors.BLACK,
             line_width=2,
-            xlabel='Energy Loss (eV)',
-            ylabel='Electron Count',
+            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             title='EELS Spectrum'
         )
         

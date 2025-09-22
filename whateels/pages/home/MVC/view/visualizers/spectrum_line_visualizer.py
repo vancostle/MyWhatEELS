@@ -23,8 +23,11 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
     _IMAGE_X_LABEL = 'Position'
     _IMAGE_Y_LABEL = 'Energy Loss (eV)'
     _IMAGE_TITLE = 'EELS Spectrum Line'
-    _SPECTRUM_X_LABEL = 'Energy Loss (eV)'
-    _SPECTRUM_Y_LABEL = 'Electron Count'
+    # Axis titles for spectrum plot (match spectrum_image_visualizer)
+    _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
+    _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+    _SPECTRUM_X_LABEL = _X_AXIS_SPECTRUM_TITLE
+    _SPECTRUM_Y_LABEL = _Y_AXIS_SPECTRUM_TITLE
     _SPECTRUM_TITLE = 'Selected Spectrum'
     _ERR_EMPTY_ELOSS = 'Energy loss coordinates are empty'
     _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"

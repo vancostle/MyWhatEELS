@@ -35,6 +35,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
     
     _NOT_AVAILABLE = 'N/A'
+    
+    # Axis titles for spectrum plot
+    _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
+    _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
     def __init__(self, model: "Model", dataset: "Dataset"):
         super().__init__(model, dataset)
@@ -117,7 +121,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.range_slider.param.watch(self._on_range_changed, 'value')
 
         # Fitting toggle button
-        self.fitting_button = pn.widgets.Button(name="fitting: OFF", button_type="primary")
+        self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
         self.range_slider.visible = False
 
@@ -167,7 +171,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Create figure with default size but lock aspect ratio so it doesn't deform
         figA = go.Figure(data=[heat, selectors])
         figA.update_layout(
-            title="m_image (hover) + lasso/box para sumar",
+            title=" ",
             height=400,  # default initial height as in the original copy
             margin=dict(l=16, r=16, t=50, b=20),
             dragmode="lasso",
@@ -184,7 +188,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         # Pane B initial message (apply stored ranges if any)
         self.paneB = pn.pane.Plotly(
-            self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona")),
+            self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
             sizing_mode='stretch_both', config={"responsive": True}
         )
 
@@ -230,27 +234,27 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     def _figB_hover(self, point):
         if not point:
-            return self._figB_message("figura_B_hover", "hover sobre un píxel…")
+            return self._figB_message("Hover", "Move the cursor over the image")
         i, j = int(point["y"]), int(point["x"])
         spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"(i={i}, j={j})"))
-        fig.update_layout(title="figura_B_hover", margin=dict(l=16, r=16, t=48, b=16),
-                          xaxis_title="Energía", yaxis_title="Intensidad")
+        fig.update_layout(title="Hover", margin=dict(l=16, r=16, t=48, b=16),
+                          xaxis_title=self._X_AXIS_SPECTRUM_TITLE, yaxis_title=self._Y_AXIS_SPECTRUM_TITLE)
         return fig
 
     def _figB_region(self, pairs):
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
         if res is None:
-            return self._figB_message("figura_B_region", "selecciona con lasso/box…")
-        spec, N = res
+            return self._figB_message("ROI", "Select with lasso/box...")
+        spec, n_points = res
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"suma (N={N})"))
+        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"sum (points={n_points})"))
         fig.update_layout(
-            title=f"figura_B_region — suma (N={N})",
+            title=f"ROI — sum (points={n_points})",
             margin=dict(l=16, r=16, t=48, b=16), 
-            xaxis_title="Energía", 
-            yaxis_title="Intensidad"
+            xaxis_title=self._X_AXIS_SPECTRUM_TITLE, 
+            yaxis_title=self._Y_AXIS_SPECTRUM_TITLE
         )
         return fig
 
@@ -421,7 +425,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                         fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
                     self.paneB.object = self._set_ranges_and_convert(fig)
             else:
-                self.paneB.object = self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona"))
+                self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
             return
 
         fig = self._figB_region(self._region_pairs)
@@ -507,7 +511,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     # --- Fitting and range behaviour ---
     def _on_fitting_clicked(self, event):
         self._fitting_active = not self._fitting_active
-        self.fitting_button.name = f"fitting: {'ON' if self._fitting_active else 'OFF'}"
+        self.fitting_button.name = f"Fitting: {'ON' if self._fitting_active else 'OFF'}"
         self.fitting_button.button_type = "danger" if self._fitting_active else "primary"
         self.range_slider.visible = self._fitting_active
 
