@@ -12,3 +12,4 @@ class Constants:
     SPECTRUM_LINE = 'SLi'
     SPECTRUM_IMAGE = 'SIm'
     SINGLE_SPECTRUM = 'SSp'
+    IMAGE = 'Img'

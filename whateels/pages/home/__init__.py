@@ -7,15 +7,13 @@ class Home(CustomPage):
     This class extends CustomPage to create a specific home page layout.
     """
 
-    def __init__(self, title: str = None):
-        self.model = Model()
-        self.view = View(self.model)
-        self.controller = Controller(self.model, self.view)
-        
-        title = title or self.model.constants.TITLE
-        
+    def __init__(self):
+        model = Model()
+        view = View(model)
+        Controller(model, view)
+
         super().__init__(
-            title=title,
-            main=[self.view.main, self.view.float_panel],
-            sidebar=[self.view.sidebar],
+            title=model.constants.TITLE,
+            main=[view.main],
+            sidebar=[view.sidebar],
         )

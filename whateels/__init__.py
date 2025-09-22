@@ -1,11 +1,10 @@
 import panel as pn
-from pathlib import Path
 
 # Configure Panel with theme support (only called once here)
-pn.extension('filedropper', 'floatpanel', theme='default')
+pn.extension('filedropper', 'floatpanel', 'plotly', theme='default')
 
-from whateels.helpers import LoadCSS
-from whateels.pages import Home, NLLS, Login, GOS
+from whateels.helpers import LoadCSS, CSS_ROOT
+from whateels.pages import Home, Metadata, Clustering
 
 class App:
     """
@@ -16,29 +15,25 @@ class App:
 
     _DEFAULT_TITLE = "App"
     _DEFAULT_PORT = 5006
-    _DEFAULT_CSS_PATH = Path(__file__).parent / "assets" / "css"
     
     def __init__(self, title : str = _DEFAULT_TITLE):
-        self.title = title
+        self._title = title
 
     def run(self, port : int = _DEFAULT_PORT):
-        # Load CSS files only once
-        LoadCSS([
-            str(self._DEFAULT_CSS_PATH / "home.css"),
-            str(self._DEFAULT_CSS_PATH / "login.css"),
-            str(self._DEFAULT_CSS_PATH / "custom_page.css"),
-        ])
-        
+        # Load custom CSS for the entire app
+        CUSTOM_PAGE = str(CSS_ROOT / "custom_page.css")
+        LoadCSS([CUSTOM_PAGE])
+
         # Define the pages for the application
+        # Use lambdas to avoid immediate instantiation
         pages = {
-            "/": Home(),
-            "/gos": GOS(),
-            "/nlls": NLLS(),
-            "/login": Login(),
+            "/": lambda: Home(),
+            "/metadata-details": lambda: Metadata(),
+            "/clustering": lambda: Clustering(),
         }
 
         return pn.serve(
             pages,
-            title=self.title,
+            title=self._title,
             port=port,
         )

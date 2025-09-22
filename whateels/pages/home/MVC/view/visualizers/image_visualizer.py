@@ -6,6 +6,16 @@ import plotly.graph_objects as go
 import numpy as np
 import xarray as xr
 
+<<<<<<< HEAD
+=======
+# Make Plotly modebar transparent
+pn.extension(raw_css=[
+    ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
+    ".plotly .modebar-btn { background: transparent !important; }",
+    ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
+])
+
+>>>>>>> andry
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 
@@ -67,6 +77,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
         fig_base = go.Figure(data=[heat])
         fig_base.update_layout(
             margin=dict(l=0, r=0, t=0, b=0),
+<<<<<<< HEAD
             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, constrain="domain"),
             yaxis=dict(scaleanchor="x", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False, constrain="domain"),
             paper_bgcolor='rgba(0,0,0,0)',
@@ -151,6 +162,35 @@ class ImageVisualizer(AbstractEELSVisualizer):
 
         return plots
 
+=======
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
+        fig_base.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
+                             showgrid=False, zeroline=False, showticklabels=False)
+        fig_base.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
+
+        # Use a responsive Plotly pane that fills the parent container to avoid resize loops
+        image_panel = pn.pane.Plotly(self._to_plotly(fig_base), sizing_mode='stretch_both', config={'responsive': True})
+        plots = pn.Column(image_panel, sizing_mode=self._STRETCH_BOTH)
+        return plots
+
+    def _to_plotly(self, obj):
+        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
+        try:
+            if isinstance(obj, go.Figure):
+                return obj.to_plotly_json()
+        except Exception:
+            pass
+        try:
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+        return obj
+
+>>>>>>> andry
     @override
     def create_dataset_info(self):
        return super().create_dataset_info()

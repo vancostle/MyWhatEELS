@@ -5,8 +5,8 @@ This module contains service classes that handle specific business logic
 operations, keeping the main controller focused on orchestration.
 """
 
-from .eels_file_processor import EELSFileProcessor
-from .eels_data_processor import EELSDataProcessor
-from .file_operation import FileOperation
+from .file_processor_service import FileProcessorService
+from .data_processor_service import DataProcessorService
+from .file_workflow_service import FileWorkflowService
 
-__all__ = ['EELSFileProcessor', 'EELSDataProcessor', 'FileOperation']
+__all__ = ['FileProcessorService', 'DataProcessorService', 'FileWorkflowService']

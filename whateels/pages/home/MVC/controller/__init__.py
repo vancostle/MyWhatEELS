@@ -1,4 +1,4 @@
-from .services import EELSFileProcessor, EELSDataProcessor, FileOperation
+from .services import *
 from .managers import LayoutManager
 
 from typing import TYPE_CHECKING
@@ -19,20 +19,22 @@ class Controller:
     def __init__(self, model: "Model", view: "View"):
         self.model = model
         self.view = view
-        
         # Initialize services
-        self._file_service = EELSFileProcessor(model)
-        self._data_service = EELSDataProcessor(self.model)
-        self._file_operation_service = FileOperation(model, self)
-        
+        # self._data_service = DataProcessorService(self.model)
+        self._file_workflow_service = FileWorkflowService(model, self)
         # Initialize manager
-        self._layout_manager = LayoutManager(view)
-        
-        # Set up callbacks for file dropper events
-        self.view.file_dropper.on_file_uploaded_callback = self._file_operation_service.handle_file_upload
-        self.view.file_dropper.on_file_removed_callback = self._file_operation_service.handle_file_removal
+        self._layout_manager = LayoutManager(view, self, model)
+
+        # Set up callbacks for file dropper events directly
+        self.view.file_dropper.on_file_uploaded_callback = self._file_workflow_service.handle_file_upload
+        self.view.file_dropper.on_file_removed_callback = self._file_workflow_service.handle_file_removal
 
     @property
     def layout(self) -> LayoutManager:
         """Expose the layout manager for external use."""
         return self._layout_manager
+    
+    def testing(self):
+        """Method for testing purposes."""
+        print("Controller testing method called.")
+
