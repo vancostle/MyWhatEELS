@@ -12,6 +12,10 @@ plotly==5.19
 =======
 plotly==5.19
 csscompressor==0.9.5
+<<<<<<< HEAD
 rjsmin==1.2.4
 minify-html==0.15.0
+>>>>>>> andry
+=======
+rjsmin==1.2.4
 >>>>>>> andry
