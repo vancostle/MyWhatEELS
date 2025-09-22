@@ -12,10 +12,7 @@ import plotly.graph_objs as go
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
-<<<<<<< HEAD
-=======
 from whateels.components import ResizableColumns
->>>>>>> andry
 
 if TYPE_CHECKING:
     from ...model import Model
@@ -83,40 +80,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     # --- Public layout builders (used by controller) ---
     @override
     def create_plots(self):
-<<<<<<< HEAD
-        right_col = pn.Column(
-            self.paneB, 
-            self.fitting_button, 
-            self.range_slider, 
-            styles={'border': '5px solid green'}
-        )
-        plots = pn.Column(
-            pn.Row(
-                self.paneA, 
-                right_col,
-                styles={'border': '2px solid red'},
-            ),
-            styles={'border': '2px solid blue'},
-        )
-        
-        # left_col = pn.Column(
-        #     "LEFT",
-        #     styles={'border': '2px solid blue'},
-        #     sizing_mode='stretch_both',
-        # )
-        
-        # right_col = pn.Column(
-        #     "RIGHT",
-        #     styles={'border': '5px solid green'},
-        #     sizing_mode='stretch_both',
-        # )
-        
-        # plots = pn.Row(
-        #     left_col,
-        #     right_col
-        # )
-        return plots
-=======
         left_column = pn.Column(
             self.paneA,
             sizing_mode='stretch_both'
@@ -136,7 +99,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         )
  
         return resizable_columns
->>>>>>> andry
 
     @override
     def create_dataset_info(self):
@@ -170,10 +132,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
 
         ny, nx = m_image.shape
-<<<<<<< HEAD
-        aspect = ny / nx
-=======
->>>>>>> andry
         # energy axis
         try:
             energy = np.asarray(self._e_axis)
@@ -187,22 +145,14 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         heat = go.Heatmap(
             z=m_image,
             x=np.arange(nx),
-<<<<<<< HEAD
-            y=np.arange(ny-1, -1, -1),  # Invertir eje Y
-=======
             y=np.arange(ny),
->>>>>>> andry
             colorscale="Greys_r",
             showscale=False,
             name="m_image",
             hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )
 
-<<<<<<< HEAD
-        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny-1, -1, -1))
-=======
         XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
->>>>>>> andry
         selectors = go.Scattergl(
             x=XX.ravel(),
             y=YY.ravel(),
@@ -214,40 +164,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             unselected=dict(marker=dict(opacity=0.01)),
         )
 
-<<<<<<< HEAD
-        figA_base = go.Figure(data=[heat, selectors])
-        figA_base.update_layout(
-            margin=dict(l=0, r=0, t=0, b=0),
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(scaleanchor="x", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False, constrain="domain"),
-            dragmode="lasso",
-        )
-
-        extra_vertical_px = 140  # Ajusta según tu layout
-        extra_horizontal_px = 24
-
-        def make_plot_figA(vw, vh):
-            if not vw or not vh:
-                return pn.pane.Markdown("Cargando dimensiones…")
-            w_max = max(200, int(vw - extra_horizontal_px))
-            h_max = max(200, int(vh - extra_vertical_px))
-            w = min(w_max, int(h_max / aspect))
-            h = int(w * aspect)
-            f = go.Figure(figA_base)
-            f.update_layout(autosize=False, width=w, height=h)
-            return pn.pane.Plotly(f, config={"responsive": True})
-
-        # --- Soporte robusto para Panel sin viewport_size ---
-        if hasattr(pn.state, "viewport_size"):
-            self.paneA = pn.bind(
-                make_plot_figA,
-                vw=pn.state.viewport_size.param.width,
-                vh=pn.state.viewport_size.param.height,
-            )
-        else:
-            # fallback: valores por defecto
-            self.paneA = make_plot_figA(1200, 800)
-=======
         # Create figure with default size but lock aspect ratio so it doesn't deform
         figA = go.Figure(data=[heat, selectors])
         figA.update_layout(
@@ -265,16 +181,11 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
         self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
->>>>>>> andry
 
         # Pane B initial message (apply stored ranges if any)
         self.paneB = pn.pane.Plotly(
             self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona")),
-<<<<<<< HEAD
-            sizing_mode='stretch_height'
-=======
             sizing_mode='stretch_both', config={"responsive": True}
->>>>>>> andry
         )
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---

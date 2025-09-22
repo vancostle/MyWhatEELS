@@ -6,8 +6,6 @@ import plotly.graph_objects as go
 import numpy as np
 import xarray as xr
 
-<<<<<<< HEAD
-=======
 # Make Plotly modebar transparent
 pn.extension(raw_css=[
     ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
@@ -15,7 +13,6 @@ pn.extension(raw_css=[
     ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
 ])
 
->>>>>>> andry
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 
@@ -77,92 +74,6 @@ class ImageVisualizer(AbstractEELSVisualizer):
         fig_base = go.Figure(data=[heat])
         fig_base.update_layout(
             margin=dict(l=0, r=0, t=0, b=0),
-<<<<<<< HEAD
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, constrain="domain"),
-            yaxis=dict(scaleanchor="x", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False, constrain="domain"),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-
-        # layout padding values used to compute available size
-        # If viewport_size is available, prefer using full window (no extra margins)
-        if hasattr(pn.state, 'viewport_size'):
-            extra_vertical_px = 0
-            extra_horizontal_px = 0
-        else:
-            extra_vertical_px = 140
-            extra_horizontal_px = 24
-
-        def make_plot(vw, vh):
-            if not vw or not vh:
-                return pn.pane.Markdown("Cargando dimensiones…")
-
-            w_max = max(200, int(vw - extra_horizontal_px))
-            h_max = max(200, int(vh - extra_vertical_px))
-
-            # Encaje dentro de ambas cotas manteniendo aspect ratio
-            w = min(w_max, int(h_max / aspect))
-            h = int(max(1, w * aspect))
-
-            # Ensure within bounds
-            if h > h_max:
-                h = h_max
-                w = max(200, int(h / aspect))
-
-            f = go.Figure(fig_base)
-            f.update_layout(
-                autosize=False,
-                width=w,
-                height=h,
-                margin=dict(l=0, r=0, t=0, b=0),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
-            f.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain", fixedrange=True)
-            f.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain", scaleanchor="x", scaleratio=1, fixedrange=True)
-            return pn.pane.Plotly(f, config={"responsive": True})
-
-        # Use the current container size (not global viewport) to size the image
-        container = pn.Column(sizing_mode=self._STRETCH_BOTH)
-        image_panel = pn.pane.Plotly(sizing_mode='stretch_both')
-
-        def update_from_container(*args, **kwargs):
-            vw = container.width or 1200
-            vh = container.height or 800
-            # apply same margin logic as before
-            extra_vertical = 0 if hasattr(pn.state, 'viewport_size') else 140
-            extra_horizontal = 0 if hasattr(pn.state, 'viewport_size') else 24
-            w_max = max(200, int(vw - extra_horizontal))
-            h_max = max(200, int(vh - extra_vertical))
-            w = min(w_max, int(h_max / aspect))
-            h = int(max(1, w * aspect))
-            if h > h_max:
-                h = h_max
-                w = max(200, int(h / aspect))
-
-            f = go.Figure(fig_base)
-            f.update_layout(
-                autosize=False,
-                width=w,
-                height=h,
-                margin=dict(l=0, r=0, t=0, b=0),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)'
-            )
-            f.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain", fixedrange=True)
-            f.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain", scaleanchor="x", scaleratio=1, fixedrange=True)
-            image_panel.object = f
-
-        # initial render and watch container size changes
-        update_from_container()
-        container.param.watch(update_from_container, ['width', 'height'])
-
-        container.append(image_panel)
-        plots = container
-
-        return plots
-
-=======
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)'
         )
@@ -190,7 +101,6 @@ class ImageVisualizer(AbstractEELSVisualizer):
             pass
         return obj
 
->>>>>>> andry
     @override
     def create_dataset_info(self):
        return super().create_dataset_info()
