@@ -12,3 +12,5 @@ scipy>=1.10.0
 plotly==5.19
 csscompressor==0.9.5
 rjsmin==1.2.4
+pywebview==6.0
+pyinstaller==6.16.0

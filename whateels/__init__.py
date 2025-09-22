@@ -19,7 +19,7 @@ class App:
     def __init__(self, title : str = _DEFAULT_TITLE):
         self._title = title
 
-    def run(self, port : int = _DEFAULT_PORT):
+    def run(self, port : int = _DEFAULT_PORT, show : bool = True):
         # Load custom CSS for the entire app
         CUSTOM_PAGE = str(CSS_ROOT / "custom_page.css")
         LoadCSS([CUSTOM_PAGE])
@@ -36,4 +36,5 @@ class App:
             pages,
             title=self._title,
             port=port,
+            show=show
         )

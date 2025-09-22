@@ -1,5 +1,28 @@
+
 from whateels import App
+import threading
+import time
+import webview
+
+APP_NAME = "WhatEELS"
+PORT = 5006
 
 if __name__ == "__main__":
-    # This line is for running with 'python main.py'
-    App(title='WhatEELS').run(port=5006)
+    try:
+        # Start Panel server in a background thread
+        t = threading.Thread(
+            target=lambda: App(title=APP_NAME).run(port=PORT, show=False),
+            daemon=True
+        )
+        t.start()
+        # Wait for server to start (adjust if needed)
+        time.sleep(2)
+        # Open PyWebView window to localhost
+        webview.create_window(
+            APP_NAME, 
+            f'http://localhost:{PORT}',
+        )
+        webview.start()
+    except KeyboardInterrupt:
+        print("Shutting down...")
+        webview.destroy_window()
