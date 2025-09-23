@@ -110,8 +110,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
-        # Range slider already used by earlier implementation
-        self.range_slider = pn.widgets.RangeSlider(
+        # Range slider ya usado por la implementación anterior
+        self.range_slider = pn.widgets.EditableRangeSlider(
             name="Range",
             start=float(self._e_axis[0]) if len(self._e_axis) > 0 else 0.0,
             end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
