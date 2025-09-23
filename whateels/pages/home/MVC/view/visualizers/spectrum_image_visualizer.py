@@ -14,6 +14,111 @@ from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import ResizableColumns
 
+# EditableRangeSlider styling to match app look-and-feel
+_RANGE_SLIDER_CSS = """
+/* Contenedor general del widget */
+.my-range {
+    --accent: #5b8def;            /* color acento reutilizable */
+    --track: #e6e9ef;             /* color de la pista */
+    --handle: #1f2a44;            /* color del "thumb" */
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* Nombre/título del widget */
+.my-range .bk-slider-title {
+    font-weight: 600;
+    letter-spacing: .2px;
+    margin-bottom: .35rem;
+}
+
+/* Pista del slider */
+.my-range .bk-slider-horizontal .bk-slider-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--track);
+}
+
+/* Rango seleccionado */
+.my-range .bk-slider-horizontal .bk-slider-range {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+}
+
+/* “Handles” (thumbs) */
+.my-range .bk-slider-handle {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid white;
+    background: var(--handle);
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+
+/* Hover/focus para feedback */
+.my-range .bk-slider-handle:hover,
+.my-range .bk-slider-handle:focus {
+    transform: scale(1.05);
+}
+
+/* Campos numéricos editables del EditableRangeSlider */
+.my-range input.bk-input {
+    height: 32px;
+    padding: 0 .6rem;
+    border-radius: 8px;
+    border: 1px solid #cfd6e4;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px transparent;
+    transition: box-shadow .15s ease, border-color .15s ease;
+}
+
+/* Tamaño y estilo de los números (start / end) dentro del EditableRangeSlider */
+.my-range .bk-input-group input.bk-input,
+.my-range .bk-input-wrapper input.bk-input {
+    font-size: 14px;          /* ajustar a gusto: 12px, 14px, 16px, ... */
+    font-weight: 600;         /* opcional: resaltar los números */
+    line-height: 1;           /* alinear verticalmente mejor */
+}
+
+/* Selector más específico para targetear start (primer input) / end (segundo input) */
+.my-range .bk-input-group input.bk-input:nth-of-type(1) {
+    /* start input */
+}
+.my-range .bk-input-group input.bk-input:nth-of-type(2) {
+    /* end input */
+}
+
+/* Hover/focus en inputs */
+.my-range input.bk-input:hover {
+    border-color: #b7c2d8;
+}
+.my-range input.bk-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(91,141,239,.25);
+}
+
+/* Espaciado entre slider e inputs */
+.my-range .bk-input-group,
+.my-range .bk-slider {
+    margin-top: .25rem;
+}
+
+/* Ajuste de alineación para el label externo del slider (Option 1) */
+.range-label-wrapper { /* fila contenedora */
+    padding-right: 40px; /* reserva 40px a la derecha del panel */
+}
+.range-label { 
+    margin: 0; 
+    line-height: 1; 
+    display: flex; 
+    align-items: center; 
+    font-weight: 600; 
+    transform: translateY(-4px); /* subir ligeramente para alinear con inputs */
+}
+
+"""
+
 if TYPE_CHECKING:
     from ...model import Model
     from xarray import Dataset
@@ -90,9 +195,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         )
         
         right_column = pn.Column(
-            self.paneB, 
-            self.fitting_button, 
-            self.range_slider, 
+            self.paneB,
+            self.fitting_button,
+            # Contenedor externo con label para el range slider (Option 1)
+            self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
             sizing_mode='stretch_both'
         )
         
@@ -110,20 +216,40 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
+        # Register Panel extension with our custom styles for the EditableRangeSlider.
+        try:
+            pn.extension(stylesheets=[_RANGE_SLIDER_CSS], sizing_mode="stretch_width")
+        except Exception:
+            # Older Panel versions accept raw_css instead of stylesheets
+            try:
+                pn.extension(raw_css=[_RANGE_SLIDER_CSS], sizing_mode="stretch_width")
+            except Exception:
+                # last resort: ignore extension errors (styles won't be applied)
+                pass
+
         # Range slider ya usado por la implementación anterior
         self.range_slider = pn.widgets.EditableRangeSlider(
-            name="Range",
+            name="",  # label externo controlado manualmente
             start=float(self._e_axis[0]) if len(self._e_axis) > 0 else 0.0,
             end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
             value=(float(self._e_axis[0]), float(self._e_axis[-1])),
             sizing_mode=self._STRETCH_WIDTH,
         )
+        # Apply our CSS class to style the widget
+        self.range_slider.css_classes = ["my-range"]
         self.range_slider.param.watch(self._on_range_changed, 'value')
 
         # Fitting toggle button
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
-        self.range_slider.visible = False
+        # Fila con label y slider para alineación limpia
+        self.range_slider_row = pn.Row(
+            pn.pane.Markdown("**Range:**", sizing_mode="fixed", width=60, css_classes=["range-label"]),
+            self.range_slider,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["range-label-wrapper"],
+        )
+        self.range_slider_row.visible = False
 
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):
@@ -513,7 +639,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self._fitting_active = not self._fitting_active
         self.fitting_button.name = f"Fitting: {'ON' if self._fitting_active else 'OFF'}"
         self.fitting_button.button_type = "danger" if self._fitting_active else "primary"
-        self.range_slider.visible = self._fitting_active
+        if hasattr(self, 'range_slider_row'):
+            self.range_slider_row.visible = self._fitting_active
+        else:
+            self.range_slider.visible = self._fitting_active
 
         # Refresh current view
         if self._region_pairs:
