@@ -1,4 +1,4 @@
-import panel as pn, holoviews as hv
+import panel as pn
 
 from whateels.components import FileDropper
 from typing import TYPE_CHECKING
@@ -6,9 +6,6 @@ from whateels.helpers import LoadCSS, CSS_ROOT
 
 if TYPE_CHECKING:
     from ..model import Model
-
-# Initialize HoloViews with Bokeh backend
-hv.extension("bokeh", logo=False)
 
 class View:
     """

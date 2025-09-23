@@ -1,205 +1,229 @@
 """
-Spectrum line visualization composer.
+Spectrum line visualization composer (Plotly version).
 """
 import panel as pn
-import holoviews as hv
 import numpy as np
-import xarray as xr
-
-from holoviews import streams
+import plotly.graph_objs as go
+import xarray as xr  # (se mantiene por zeros_like si hiciera falta en extensiones)
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...model import Model
 
-# Initialize HoloViews with Bokeh backend
-hv.extension("bokeh", logo=False)
-
 class SpectrumLineVisualizer(AbstractEELSVisualizer):
-    """Composes spectrum line visualizations from EELS data"""
-    
-    # Text and label constants (specific to each plot)
+    """Composes spectrum line visualizations from EELS data (Plotly)."""
+
     _IMAGE_X_LABEL = 'Position'
     _IMAGE_Y_LABEL = 'Energy Loss (eV)'
     _IMAGE_TITLE = 'EELS Spectrum Line'
-    # Axis titles for spectrum plot (match spectrum_image_visualizer)
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
-    _SPECTRUM_X_LABEL = _X_AXIS_SPECTRUM_TITLE
-    _SPECTRUM_Y_LABEL = _Y_AXIS_SPECTRUM_TITLE
     _SPECTRUM_TITLE = 'Selected Spectrum'
     _ERR_EMPTY_ELOSS = 'Energy loss coordinates are empty'
-    _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
-    _DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
-    _DATASET_INFO_CLASS = ["dataset-info", "animated"]
-    _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
-    _DATASET_DETAILS_NAME = "Dataset Details"
-    _DATASET_DETAILS_WIDTH = 350
-    _DATASET_DETAILS_HEIGHT = 250
-    _DATASET_DETAILS_POSITION = "center"
-    _DATASET_DETAILS_HEADER = "### More Dataset Details"
-    _DATASET_DETAILS_PLACEHOLDER = "(Add more details here as needed)"
-
-    # Constants for sizing modes and plot configuration
     _STRETCH_BOTH = 'stretch_both'
-    _STRETCH_WIDTH = 'stretch_width'
-
-    # Visualization configuration constants
-    _MAX_PLOT_SIZE = 600
     _FOCUS_RATIO = 0.5
-    _SPECTRUM_WIDTH = 600
-    _SPECTRUM_HEIGHT = 300
-    
+
     def __init__(self, model: "Model", dataset: "xr.Dataset"):
         super().__init__(model, dataset)
-
         self._model = model
         self._dataset = dataset
-
-        self._tap_stream = None
+        self._heatmap_pane = None
         self._spectrum_pane = None
-        
-        # For tap/click throttling
-        self._last_click_x = None
-        self._click_tolerance = 0.5  # Minimum distance to trigger update
+        self._selected_x_value = None
+        # Ranges for spectrum (preserva zoom)
+        self._current_x_range = None
+        self._current_y_range = None
+        self._current_x_autorange = None
+        self._current_y_autorange = None
 
-    # -- Public Methods --
     @override
     def create_plots(self):
-        """Create layout for spectrum line visualization with tap/click interaction."""
-        # Sum over y dimension to create image
-        image_data = self._dataset.ElectronCount.squeeze()
-        image_data = image_data.fillna(0.0)
-        image_data = image_data.where(np.isfinite(image_data), 0.0)
-        x_coords = self._dataset.coords[self._model.constants.AXIS_X]
-        eloss_coords = self._dataset.coords[self._model.constants.ELOSS]
-        x_coords = x_coords.where(np.isfinite(x_coords), 0.0)
-        eloss_coords = eloss_coords.where(np.isfinite(eloss_coords), 0.0)
-        clean_image_data = image_data.assign_coords({
-            self._model.constants.AXIS_X: x_coords,
-            self._model.constants.ELOSS: eloss_coords
-        })
-        image = self._create_image(clean_image_data, x_coords, eloss_coords)
-        empty_spectrum = self._create_empty_spectrum(eloss_coords)
-        # Setup tap interaction
-        self._tap_stream = streams.Tap(x=0, y=0, source=image)
-        self._tap_stream.add_subscriber(self._handle_tap_stream)
-        image_pane = pn.pane.HoloViews(image, sizing_mode=self._STRETCH_BOTH)
-        self._spectrum_pane = pn.pane.HoloViews(empty_spectrum, sizing_mode=self._STRETCH_BOTH)
-        self._trigger_refresh(image_pane)
-        
-        plots = pn.Column(
-            image_pane,
-            self._spectrum_pane,
-            sizing_mode=self._STRETCH_BOTH
+        # --- Datos base ---
+        img_da = self._dataset.ElectronCount.squeeze().fillna(0.0)
+        img_da = img_da.where(np.isfinite(img_da), 0.0)
+
+        x_name = self._model.constants.AXIS_X
+        e_name = self._model.constants.ELOSS
+
+        x_coords = self._dataset.coords[x_name].where(np.isfinite(self._dataset.coords[x_name]), 0.0)
+        e_coords = self._dataset.coords[e_name].where(np.isfinite(self._dataset.coords[e_name]), 0.0)
+
+        data2d = img_da.values  # shape (x, E) o (E, x); asumimos dims en orden (x, E)
+        # Asegurar orden esperado: y (energía) primero para Plotly Heatmap
+        if img_da.dims[0] == x_name and img_da.dims[1] == e_name:
+            z = data2d.T  # pasar a (E, x)
+        elif img_da.dims[0] == e_name and img_da.dims[1] == x_name:
+            z = data2d  # ya (E, x)
+        else:
+            # fallback: intentar transponer si encuentra ambos
+            z = data2d.T
+
+        # --- Rango focal de energía (como antes) ---
+        e_min = float(e_coords.min())
+        e_max = float(e_coords.max())
+        e_range = e_max - e_min if e_max > e_min else 1.0
+        focused = e_range * self._FOCUS_RATIO
+        e_center = 0.5 * (e_min + e_max)
+        focus_low = e_center - focused / 2
+        focus_high = e_center + focused / 2
+
+        # --- Heatmap inicial ---
+        heat = go.Heatmap(
+            z=z,
+            x=x_coords.values,
+            y=e_coords.values,
+            colorscale=self._model.colors.GREYS_R if hasattr(self._model.colors, "GREYS_R") else "Greys",
+            colorbar=dict(title=self._model.constants.ELECTRON_COUNT),
+            hovertemplate=f"{x_name}=%{{x}}<br>{e_name}=%{{y}}<br>I=%{{z}}<extra></extra>"
+        )
+        fig_hm = go.Figure(data=[heat])
+        fig_hm.update_layout(
+            title=self._IMAGE_TITLE,
+            margin=dict(l=40, r=20, t=50, b=40),
+            xaxis_title=self._IMAGE_X_LABEL,
+            yaxis_title=self._IMAGE_Y_LABEL,
+            yaxis=dict(autorange="reversed", range=[focus_high, focus_low]),  # invertir eje
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
         )
 
-        return plots
+        self._heatmap_pane = pn.pane.Plotly(fig_hm.to_plotly_json(), sizing_mode=self._STRETCH_BOTH, config={"responsive": True})
+        self._heatmap_pane.param.watch(self._on_heatmap_click, "click_data")
+
+        # --- Pane espectro vacío ---
+        spec_fig = self._empty_spectrum_figure()
+        self._spectrum_pane = pn.pane.Plotly(spec_fig.to_plotly_json(), sizing_mode=self._STRETCH_BOTH, config={"responsive": True})
+        self._spectrum_pane.param.watch(self._on_spectrum_relayout, "relayout_data")
+
+        return pn.Column(self._heatmap_pane, self._spectrum_pane, sizing_mode=self._STRETCH_BOTH)
 
     @override
     def create_dataset_info(self):
         return super().create_dataset_info()
 
-    # -- Private Methods --
-
-    def _handle_tap_stream(self, x=None, y=None, **kwargs):
-        """Handle tap events from HoloViews streams for spectrum line."""
-        # Only update if x is valid and changed significantly
-        if x is None:
+    # --- Callbacks ---
+    def _on_heatmap_click(self, event):
+        point = self._extract_point(event)
+        if not point:
             return
-        if self._last_click_x is not None and abs(x - self._last_click_x) < self._click_tolerance:
-            return
-        self._last_click_x = x
-        self._update_spectrum_display(x)
+        x_clicked = point["x"]
+        x_name = self._model.constants.AXIS_X
+        e_name = self._model.constants.ELOSS
 
-    def _update_spectrum_display(self, x):
-        """Update the spectrum pane with the spectrum at the tapped x position."""
-        # Get spectrum at tapped x position
+        # Seleccionar x más cercana
         try:
-            spectrum = self._dataset.ElectronCount.sel(
-                x=x, method='nearest'
-            )
-            # Ensure the spectrum is 1D by reducing over 'y' if present
-            if 'y' in spectrum.dims:
-                spectrum = spectrum.mean(dim='y')
+            spectrum = self._dataset.ElectronCount.sel({x_name: x_clicked}, method="nearest")
         except Exception:
             return
-        eloss_coords = self._dataset.coords[self._model.constants.ELOSS]
-        spectrum_curve = hv.Curve(
-            (eloss_coords, spectrum),
-            kdims=[self._model.constants.ELOSS],
-            vdims=[self._model.constants.ELECTRON_COUNT]
-        ).opts(
-            width=self._SPECTRUM_WIDTH,
-            height=self._SPECTRUM_HEIGHT,
-            color=self._model.colors.RED,
-            line_width=2,
-            xlabel=self._SPECTRUM_X_LABEL,
-            ylabel=self._SPECTRUM_Y_LABEL,
-            title=self._SPECTRUM_TITLE
-        )
-        if self._spectrum_pane is not None:
-            self._spectrum_pane.object = spectrum_curve
+        if 'y' in spectrum.dims:
+            spectrum = spectrum.mean('y')
 
-    def _create_image(self, clean_image_data, x_coords, eloss_coords):
-        """Create the spectrum line image"""
-        # Calculate dimensions
-        data_width = len(x_coords)
-        data_height = len(eloss_coords)
-        scale_factor = min(self._MAX_PLOT_SIZE / data_width, self._MAX_PLOT_SIZE / data_height)
-        plot_width = int(data_width * scale_factor)
-        plot_height = int(data_height * scale_factor)
+        energy = self._dataset.coords[e_name].values
+        values = spectrum.fillna(0.0).where(np.isfinite(spectrum), 0.0).values
+        self._selected_x_value = float(spectrum.coords[x_name]) if x_name in spectrum.coords else float(x_clicked)
 
-        # Focus on energy range
-        eloss_min, eloss_max = float(eloss_coords.min()), float(eloss_coords.max())
-        eloss_range = eloss_max - eloss_min
-        focused_range = eloss_range * self._FOCUS_RATIO
-        eloss_center = (eloss_min + eloss_max) / 2
-        focused_ylim = (eloss_center - focused_range/2, eloss_center + focused_range/2)
+        # Actualizar espectro
+        spec_fig = go.Figure()
+        spec_fig.add_trace(go.Scatter(
+            x=energy,
+            y=values,
+            mode="lines",
+            line=dict(color=self._model.colors.RED if hasattr(self._model.colors, "RED") else "crimson", width=2),
+            name=f"x={self._selected_x_value}"
+        ))
+        spec_fig.update_layout(
+            title=self._SPECTRUM_TITLE,
+            margin=dict(l=40, r=20, t=50, b=40),
+            xaxis_title=self._X_AXIS_SPECTRUM_TITLE,
+            yaxis_title=self._Y_AXIS_SPECTRUM_TITLE,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        self._apply_current_ranges(spec_fig)
+        self._spectrum_pane.object = spec_fig.to_plotly_json()
 
-        return hv.Image(
-            clean_image_data,
-            kdims=[self._model.constants.AXIS_X, self._model.constants.ELOSS]
-        ).opts(
-            width=plot_width,
-            height=plot_height,
-            ylim=focused_ylim,
-            cmap=self._model.colors.GREYS_R,
-            xlabel=self._IMAGE_X_LABEL,
-            ylabel=self._IMAGE_Y_LABEL,
-            title=self._IMAGE_TITLE,
-            invert_yaxis=True,
-            tools=['hover', 'tap'],
-            margin=0,
-            padding=0,
+        # Redibujar línea vertical de selección en heatmap
+        self._update_heatmap_selection_line()
+
+    def _on_spectrum_relayout(self, event):
+        try:
+            data = event.new or {}
+            if 'xaxis.range[0]' in data and 'xaxis.range[1]' in data:
+                self._current_x_range = (float(data['xaxis.range[0]']), float(data['xaxis.range[1]']))
+                self._current_x_autorange = False
+            elif 'xaxis.autorange' in data:
+                self._current_x_autorange = bool(data['xaxis.autorange'])
+                if self._current_x_autorange:
+                    self._current_x_range = None
+
+            if 'yaxis.range[0]' in data and 'yaxis.range[1]' in data:
+                self._current_y_range = (float(data['yaxis.range[0]']), float(data['yaxis.range[1]']))
+                self._current_y_autorange = False
+            elif 'yaxis.autorange' in data:
+                self._current_y_autorange = bool(data['yaxis.autorange'])
+                if self._current_y_autorange:
+                    self._current_y_range = None
+        except Exception:
+            pass
+
+    # --- Helpers ---
+    def _empty_spectrum_figure(self):
+        fig = go.Figure()
+        fig.update_layout(
+            title="Click on heatmap to extract spectrum",
+            xaxis_title=self._X_AXIS_SPECTRUM_TITLE,
+            yaxis_title=self._Y_AXIS_SPECTRUM_TITLE,
+            margin=dict(l=40, r=20, t=50, b=40),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
         )
-    
-    def _create_empty_spectrum(self, eloss_coords):
-        """Create empty spectrum for interaction"""
-        empty_data = xr.zeros_like(eloss_coords)
-        
-        if len(eloss_coords) == 0:
-            raise ValueError(self._ERR_EMPTY_ELOSS)
-        
-        return hv.Curve(
-            (eloss_coords, empty_data),
-            kdims=[self._model.constants.ELOSS],
-            vdims=[self._model.constants.ELECTRON_COUNT]
-        ).opts(
-            width=self._SPECTRUM_WIDTH,
-            height=self._SPECTRUM_HEIGHT,
-            color=self._model.colors.BLACK,
-            line_width=2,
-            xlabel=self._SPECTRUM_X_LABEL,
-            ylabel=self._SPECTRUM_Y_LABEL,
-            title=self._SPECTRUM_TITLE
-        )
-    
-    def _trigger_refresh(self, image_pane):
-        """Programmatically trigger refresh for square display"""
-        def trigger_refresh():
-            image_pane.param.watchers.clear()
-            image_pane._update_pane()
-        
-        pn.state.add_periodic_callback(trigger_refresh, period=0, count=1)
+        return fig
+
+    def _extract_point(self, event):
+        try:
+            cd = event.new
+            if not cd or 'points' not in cd or not cd['points']:
+                return None
+            p = cd['points'][0]
+            return {"x": p.get("x"), "y": p.get("y")}
+        except Exception:
+            return None
+
+    def _update_heatmap_selection_line(self):
+        if self._selected_x_value is None:
+            return
+        try:
+            fig = go.Figure(self._heatmap_pane.object)  # dict -> Figure
+        except Exception:
+            return
+        # Eliminar shapes previos tipo selección
+        shapes = [s for s in fig.layout.shapes] if fig.layout.shapes else []
+        shapes = [s for s in shapes if s.get("name") != "selection_line"]
+        # Añadir nueva línea
+        shapes.append(dict(
+            type="line",
+            x0=self._selected_x_value,
+            x1=self._selected_x_value,
+            yref="paper",
+            y0=0,
+            y1=1,
+            line=dict(color="red", width=2, dash="dash"),
+            name="selection_line"
+        ))
+        fig.update_layout(shapes=shapes)
+        self._heatmap_pane.object = fig.to_plotly_json()
+
+    def _apply_current_ranges(self, fig: go.Figure):
+        try:
+            if self._current_x_range is not None:
+                fig.update_xaxes(range=self._current_x_range)
+            elif self._current_x_autorange is not None:
+                fig.update_xaxes(autorange=bool(self._current_x_autorange))
+            if self._current_y_range is not None:
+                fig.update_yaxes(range=self._current_y_range)
+            elif self._current_y_autorange is not None:
+                fig.update_yaxes(autorange=bool(self._current_y_autorange))
+        except Exception:
+            pass
+        return fig
