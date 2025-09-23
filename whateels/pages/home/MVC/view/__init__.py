@@ -1,5 +1,8 @@
 import panel as pn
 
+# Register Plotly renderer for Panel so pn.pane.Plotly works correctly across the app
+pn.extension('plotly')
+
 from whateels.components import FileDropper
 from typing import TYPE_CHECKING
 from whateels.helpers import LoadCSS, CSS_ROOT
