@@ -12,7 +12,7 @@ a = Analysis(
         ('whateels/assets/css/*.css', 'whateels/assets/css'),
         ('whateels/assets/html/*.html', 'whateels/assets/html'),
         ('whateels/assets/js/*.js', 'whateels/assets/js'),
-    # ('whateels/assets/img/*', 'whateels/assets/img'),
+        ('whateels/assets/img/*', 'whateels/assets/img'),
         # Add other asset folders as needed
     ],
     hiddenimports=[],
@@ -31,7 +31,8 @@ exe = EXE(
     a.binaries,
     a.zipfiles,
     a.datas,
-    name='MyWhatEELS',
+    name='WhatEELS',
+    icon='whateels/assets/img/logo.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
