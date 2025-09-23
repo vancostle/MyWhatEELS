@@ -196,8 +196,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         
         right_column = pn.Column(
             self.paneB,
-            self.fitting_button,
-            # Contenedor externo con label para el range slider (Option 1)
+            # fila de botones (fitting + multifit + save)
+            self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
+            # slider/range debajo
             self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
             sizing_mode='stretch_both'
         )
@@ -216,16 +217,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
-        # Register Panel extension with our custom styles for the EditableRangeSlider.
-        try:
-            pn.extension(stylesheets=[_RANGE_SLIDER_CSS], sizing_mode="stretch_width")
-        except Exception:
-            # Older Panel versions accept raw_css instead of stylesheets
-            try:
-                pn.extension(raw_css=[_RANGE_SLIDER_CSS], sizing_mode="stretch_width")
-            except Exception:
-                # last resort: ignore extension errors (styles won't be applied)
-                pass
+        pn.extension('plotly', raw_css=[_RANGE_SLIDER_CSS], sizing_mode="stretch_width")
 
         # Range slider ya usado por la implementación anterior
         self.range_slider = pn.widgets.EditableRangeSlider(
@@ -242,6 +234,31 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Fitting toggle button
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
+
+        # Nuevo botón Multifit (solo visible con Fitting ON)
+        self.multifit_button = pn.widgets.Button(
+            name="Do Multifit",
+            button_type="warning",
+            visible=False
+        )
+        self.multifit_button.on_click(self._on_multifit_clicked)
+
+        # Botón Save (aparece tras pulsar Multifit, deshabilitado)
+        self.save_button = pn.widgets.Button(
+            name="Save on disk",
+            button_type="default",
+            disabled=True,
+            visible=False
+        )
+
+        # Fila de botones debajo de paneB
+        self.buttons_row = pn.Row(
+            self.fitting_button,
+            self.multifit_button,
+            self.save_button,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
         # Fila con label y slider para alineación limpia
         self.range_slider_row = pn.Row(
             pn.pane.Markdown("**Range:**", sizing_mode="fixed", width=60, css_classes=["range-label"]),
@@ -644,6 +661,11 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         else:
             self.range_slider.visible = self._fitting_active
 
+        # Control de visibilidad de nuevos botones
+        self.multifit_button.visible = self._fitting_active
+        if not self._fitting_active:
+            self.save_button.visible = False  # ocultar al apagar fitting
+
         # Refresh current view
         if self._region_pairs:
             fig = self._figB_region(self._region_pairs)
@@ -668,6 +690,15 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return
 
         self.paneB.object = self._set_ranges_and_convert(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
+
+    def _on_multifit_clicked(self, event):
+        """
+        Handler para el botón 'Do Multifit'.
+        (Aquí podrías disparar la lógica real de multifit; por ahora solo muestra el botón Save.)
+        """
+        # Mostrar botón deshabilitado "Save on disk"
+        self.save_button.visible = True
+        # (Lugar para futura lógica de multifit)
 
     def _on_range_changed(self, event):
         """Refresh paneB when the fit range slider changes (only when fitting is active)."""
