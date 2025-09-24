@@ -24,5 +24,5 @@ class Model:
         return self.Constants()
 
     class Constants:
-        TITLE = "Eels Metadata Details"
+        TITLE = "EELS Metadata Details"
         HEADER_BACKGROUND = "#0066cc"
