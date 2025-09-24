@@ -235,23 +235,16 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
 
-        # Multifit HTML button styled like Panel's Button; opens in new tab (client-side)
-        self.multifit_link = pn.pane.HTML(
-            """
-            <button class="bk-btn bk-btn-default bk-btn-primary" type="button"
-                    onclick="window.open('./multifit-details', '_blank')"
-                    title="Multifit Details" aria-label="Open Multifit details">
-                Multifit
-            </button>
-            """,
-            sizing_mode="fixed"
-        )
-        self.multifit_link.visible = False
+        # Multifit button (styled like fitting) with client-side JS open in new tab
+        self.multifit_button = pn.widgets.Button(name="Multifit", button_type="primary")
+        self.multifit_button.js_on_click(code="window.open('./multifit-details', '_blank');")  # fix: pass code as str
+        self.multifit_button.on_click(self._on_multifit_clicked)  # server-side fallback
+        self.multifit_button.visible = False
 
         # Fila de botones debajo de paneB (sin save_button)
         self.buttons_row = pn.Row(
             self.fitting_button,
-            self.multifit_link,
+            self.multifit_button,
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -657,8 +650,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         else:
             self.range_slider.visible = self._fitting_active
 
-        # Mostrar/ocultar el botón HTML de multifit (abre en nueva pestaña)
-        self.multifit_link.visible = self._fitting_active
+        # Mostrar/ocultar botón de multifit (coincide con fitting)
+        self.multifit_button.visible = self._fitting_active
 
         # Refresh current view
         if self._region_pairs:
@@ -687,8 +680,13 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     def _on_multifit_clicked(self, event):
         """
-        Ya no se usa (el botón HTML maneja el click en el cliente).
+        Fallback en servidor: navega en la misma pestaña si el JS del cliente está bloqueado.
         """
+        try:
+            # Prefer navigation via location (same tab) as a safe fallback
+            pn.state.location.href = "./multifit-details"
+        except Exception:
+            pass
         return
 
     def _on_range_changed(self, event):
