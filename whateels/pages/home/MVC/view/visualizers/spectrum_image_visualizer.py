@@ -235,9 +235,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
 
-        # Multifit button (styled like fitting) with client-side JS open in new tab
-        self.multifit_button = pn.widgets.Button(name="Multifit", button_type="primary")
-        self.multifit_button.js_on_click(code="window.open('./multifit-details', '_blank');")  # fix: pass code as str
+        # Multifit button (orange)
+        self.multifit_button = pn.widgets.Button(name="Multifit", button_type="warning")
+        self.multifit_button.js_on_click(code="window.open('./multifit-details', '_blank');")
         self.multifit_button.on_click(self._on_multifit_clicked)  # server-side fallback
         self.multifit_button.visible = False
 
