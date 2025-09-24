@@ -196,7 +196,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         
         right_column = pn.Column(
             self.paneB,
-            # fila de botones (fitting + multifit + save)
+            # fila de botones (fitting + multifit)
             self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
             # slider/range debajo
             self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
@@ -235,27 +235,21 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
 
-        # Nuevo botón Multifit (solo visible con Fitting ON)
-        self.multifit_button = pn.widgets.Button(
-            name="Do Multifit",
-            button_type="warning",
-            visible=False
+        # Nuevo enlace HTML Multifit (reemplaza el widget Button)
+        # - Abre ./multifitting en una nueva pestaña.
+        # - Se muestra/oculta usando la misma lógica que antes (visible=False por defecto).
+        self.multifit_link = pn.pane.HTML(
+            '<a href="./multifitting" target="_blank" rel="noopener noreferrer" '
+            'style="display:inline-block;padding:6px 12px;border-radius:6px;background:#f6c23e;color:#111;text-decoration:none;font-weight:600;">Do Multifit</a>',
+            sizing_mode="fixed", width=120
         )
-        self.multifit_button.on_click(self._on_multifit_clicked)
+        self.multifit_link.visible = False
 
-        # Botón Save (aparece tras pulsar Multifit, deshabilitado)
-        self.save_button = pn.widgets.Button(
-            name="Save on disk",
-            button_type="default",
-            disabled=True,
-            visible=False
-        )
-
-        # Fila de botones debajo de paneB
+        # Fila de botones debajo de paneB (sin save_button)
+        # Reemplazar multifit_button por multifit_link
         self.buttons_row = pn.Row(
             self.fitting_button,
-            self.multifit_button,
-            self.save_button,
+            self.multifit_link,
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -661,10 +655,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         else:
             self.range_slider.visible = self._fitting_active
 
-        # Control de visibilidad de nuevos botones
-        self.multifit_button.visible = self._fitting_active
-        if not self._fitting_active:
-            self.save_button.visible = False  # ocultar al apagar fitting
+        # Control de visibilidad del enlace multifit (antes era un Button)
+        self.multifit_link.visible = self._fitting_active
 
         # Refresh current view
         if self._region_pairs:
@@ -694,11 +686,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     def _on_multifit_clicked(self, event):
         """
         Handler para el botón 'Do Multifit'.
-        (Aquí podrías disparar la lógica real de multifit; por ahora solo muestra el botón Save.)
+        (Placeholder — la funcionalidad de multifit se implementa sin mostrar un botón de guardado en disco.)
         """
-        # Mostrar botón deshabilitado "Save on disk"
-        self.save_button.visible = True
-        # (Lugar para futura lógica de multifit)
+        # No action related to a removed save button; implementar lógica de multifit aquí cuando sea necesario.
+        return
 
     def _on_range_changed(self, event):
         """Refresh paneB when the fit range slider changes (only when fitting is active)."""
