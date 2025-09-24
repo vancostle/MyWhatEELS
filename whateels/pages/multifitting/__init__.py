@@ -1,10 +1,9 @@
 from whateels.components import CustomPage
 from .MVC import Model, Controller, View
 
-class Multifitting_Page(CustomPage):
+class MultiFitting(CustomPage):
     """
-    Multifitting_Page class for the WhatEELS application.
-    This class extends CustomPage to create a specific home page layout.
+    MultiFitting page for the WhatEELS application.
     """
 
     def __init__(self):
@@ -15,6 +14,6 @@ class Multifitting_Page(CustomPage):
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            header=[], # No header for metadata page, pass [] to avoid default header
+            header=[],  # No header for this page, pass [] to avoid default header
             header_background=model.constants.HEADER_BACKGROUND
         )

@@ -235,18 +235,20 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
 
-        # Nuevo enlace HTML Multifit (reemplaza el widget Button)
-        # - Abre ./multifitting en una nueva pestaña.
-        # - Se muestra/oculta usando la misma lógica que antes (visible=False por defecto).
+        # Multifit HTML button styled like Panel's Button; opens in new tab (client-side)
         self.multifit_link = pn.pane.HTML(
-            '<a href="./multifitting" target="_blank" rel="noopener noreferrer" '
-            'style="display:inline-block;padding:6px 12px;border-radius:6px;background:#f6c23e;color:#111;text-decoration:none;font-weight:600;">Do Multifit</a>',
-            sizing_mode="fixed", width=120
+            """
+            <button class="bk-btn bk-btn-default bk-btn-primary" type="button"
+                    onclick="window.open('./multifit-details', '_blank')"
+                    title="Multifit Details" aria-label="Open Multifit details">
+                Multifit
+            </button>
+            """,
+            sizing_mode="fixed"
         )
         self.multifit_link.visible = False
 
         # Fila de botones debajo de paneB (sin save_button)
-        # Reemplazar multifit_button por multifit_link
         self.buttons_row = pn.Row(
             self.fitting_button,
             self.multifit_link,
@@ -655,7 +657,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         else:
             self.range_slider.visible = self._fitting_active
 
-        # Control de visibilidad del enlace multifit (antes era un Button)
+        # Mostrar/ocultar el botón HTML de multifit (abre en nueva pestaña)
         self.multifit_link.visible = self._fitting_active
 
         # Refresh current view
@@ -685,10 +687,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     def _on_multifit_clicked(self, event):
         """
-        Handler para el botón 'Do Multifit'.
-        (Placeholder — la funcionalidad de multifit se implementa sin mostrar un botón de guardado en disco.)
+        Ya no se usa (el botón HTML maneja el click en el cliente).
         """
-        # No action related to a removed save button; implementar lógica de multifit aquí cuando sea necesario.
         return
 
     def _on_range_changed(self, event):

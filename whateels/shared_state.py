@@ -29,6 +29,10 @@ class AppState(param.Parameterized):
         Dictionary containing EELS metadata, None if no data loaded, 
         or {'error': str} if extraction failed.
     """)
+    # Reactive parameter for multifit results/state
+    multifit = param.Parameter(default=None, doc="""
+        Multifit results or state object. None if not available yet.
+    """)
 
     def __new__(cls):
         if cls._instance is None:
@@ -48,3 +52,11 @@ class AppState(param.Parameterized):
             _logger.info(f"Metadata updated via param")
         else:
             _logger.info("Metadata cleared via param")
+            
+    @param.depends('multifit', watch=True)
+    def _on_multifit_change(self):
+        """Called automatically when multifit parameter changes."""
+        if self.multifit is not None:
+            _logger.info(f"Multifit updated via param")
+        else:
+            _logger.info("Multifit cleared via param")

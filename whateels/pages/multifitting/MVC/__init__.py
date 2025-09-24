@@ -1,5 +1,5 @@
+from .controller import Controller
 from .model import Model
 from .view import View
-from .controller import Controller
 
-__all__ = ["Model", "View", "Controller"]
+__all__ = ["Model", "Controller", "View"]
