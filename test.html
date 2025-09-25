@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <style>
+        .error-message {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #fff4f4;
+            border: 2px solid #ffb3b3;
+            border-radius: 16px;
+            padding: 32px 24px;
+            margin: 32px auto;
+            max-width: 400px;
+            min-height: 180px;
+            box-shadow: 0 4px 16px rgba(200,0,0,0.09);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 1.15rem;
+            color: #a30000;
+            opacity: 0;
+            animation: fadeIn 0.8s forwards;
+        }
+
+        .error-icon {
+            font-size: 3rem;
+            margin-bottom: 18px;
+            color: #d32f2f;
+        }
+
+        .error-text strong {
+            color: #d32f2f;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+        </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        .error-message {
+            display: flex;
+            align-items: center;
+            background: #fff4f4;
+            border: 1px solid #ffb3b3;
+            border-radius: 8px;
+            padding: 16px 24px;
+            margin: 24px auto;
+            max-width: 400px;
+            box-shadow: 0 2px 8px rgba(200,0,0,0.07);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 1.1rem;
+            color: #a30000;
+            opacity: 0;
+            animation: fadeIn 0.8s forwards;
+            }
+
+            .error-icon {
+            font-size: 2rem;
+            margin-right: 12px;
+            color: #d32f2f;
+            }
+
+            .error-text strong {
+            color: #d32f2f;
+            }
+
+            @keyframes fadeIn {
+            to { opacity: 1; }
+            }
+    </style>
+</head>
+<body>
+        <div class="error-message">
+            <span class="error-icon">⚠️</span>
+            <span class="error-text">An error has occurred:<br><strong>File format not supported.</strong></span>
+        </div>
+    <div class="error-message">
+  <span class="error-icon">⚠️</span>
+  <span class="error-text">An error has occurred: <strong>File format not supported.</strong></span>
+</div>
+</body>
+</html>

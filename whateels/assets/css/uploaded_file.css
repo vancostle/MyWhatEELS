@@ -1,0 +1,49 @@
+.upload-message {
+    display: flex;
+    align-items: center;
+    background: #f0f6ff;
+    border: 1px solid #b3d1ff;
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin: 0;
+    width: 100%;
+    box-shadow: 0 2px 8px rgba(0,40,120,0.07);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 1.1rem;
+    color: #1a3a6b;
+    opacity: 0;
+    animation: fadeIn 0.8s forwards;
+}
+
+.upload-message > span {
+    display: flex;
+}
+
+.upload-message.animated .upload-icon {
+    font-size: 2rem;
+    margin-right: 12px;
+    color: #1976d2;
+    animation: bounce 1.2s 0.2s;
+}
+
+.upload-text strong {
+    color: #1976d2;
+    max-width: 18ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
+@keyframes bounce {
+    0%   { transform: translateY(0); }
+    20%  { transform: translateY(-8px); }
+    40%  { transform: translateY(0); }
+    60%  { transform: translateY(-4px); }
+    80%  { transform: translateY(0); }
+    100% { transform: translateY(0); }
+}

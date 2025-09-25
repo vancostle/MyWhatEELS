@@ -39,7 +39,10 @@ class View:
         self._file_dropper = None
         
         HOMEPAGE_CSS = str(CSS_ROOT / "home.css")
+        DATASET_INFO_CSS = str(CSS_ROOT / "dataset_info.css")
+
         LoadCSS([HOMEPAGE_CSS]) # CSS for the whole homepage
+        LoadCSS([DATASET_INFO_CSS]) # CSS for the dataset info component
 
         self._init_visualization_components()
 
