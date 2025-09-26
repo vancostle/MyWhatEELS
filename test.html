@@ -1,85 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-        <style>
-        .error-message {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: #fff4f4;
-            border: 2px solid #ffb3b3;
-            border-radius: 16px;
-            padding: 32px 24px;
-            margin: 32px auto;
-            max-width: 400px;
-            min-height: 180px;
-            box-shadow: 0 4px 16px rgba(200,0,0,0.09);
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 1.15rem;
-            color: #a30000;
-            opacity: 0;
-            animation: fadeIn 0.8s forwards;
-        }
-
-        .error-icon {
-            font-size: 3rem;
-            margin-bottom: 18px;
-            color: #d32f2f;
-        }
-
-        .error-text strong {
-            color: #d32f2f;
-        }
-
-        @keyframes fadeIn {
-            to { opacity: 1; }
-        }
-        </style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
     <style>
-        .error-message {
-            display: flex;
-            align-items: center;
-            background: #fff4f4;
-            border: 1px solid #ffb3b3;
-            border-radius: 8px;
-            padding: 16px 24px;
-            margin: 24px auto;
-            max-width: 400px;
-            box-shadow: 0 2px 8px rgba(200,0,0,0.07);
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 1.1rem;
-            color: #a30000;
-            opacity: 0;
-            animation: fadeIn 0.8s forwards;
-            }
+    .custom-widget {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 220px;
+        padding: 8px 16px;
+        background: #f8f8fa;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        font-family: 'Segoe UI', Arial, sans-serif;
+        }
 
-            .error-icon {
-            font-size: 2rem;
-            margin-right: 12px;
-            color: #d32f2f;
-            }
+        .custom-widget-label {
+        font-size: 1rem;
+        font-weight: 500;
+        color: #333;
+        padding: 0 8px;
+        background: none;
+        border-radius: 0;
+        box-shadow: none;
+        letter-spacing: 0.2px;
+        transition: color 0.3s;
+        }
 
-            .error-text strong {
-            color: #d32f2f;
-            }
+        .custom-switch {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 25px;
+        }
 
-            @keyframes fadeIn {
-            to { opacity: 1; }
-            }
+        .custom-switch-input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        }
+
+        .custom-switch-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(90deg, #ccc 0%, #e0e0e0 100%);
+        border-radius: 25px;
+        transition: background-color 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+
+        .custom-switch-slider:before {
+        content: "";
+        position: absolute;
+        left: 2px; top: 2px;
+        width: 21px; height: 21px;
+        background: #fff;
+        border-radius: 50%;
+        transition: left 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55), box-shadow 0.2s;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        .custom-switch-input:checked + .custom-switch-slider {
+        background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+        box-shadow: 0 0 8px #43e97b55;
+        }
+
+        .custom-switch-input:checked + .custom-switch-slider:before {
+        left: 27px;
+        }
+
+        .custom-switch-input:active + .custom-switch-slider:before {
+        box-shadow: 0 0 12px #43e97b88;
+        }
+
+        .custom-switch-input:checked ~ .custom-widget-label {
+        color: #4caf50;
+        }
     </style>
 </head>
 <body>
-        <div class="error-message">
-            <span class="error-icon">⚠️</span>
-            <span class="error-text">An error has occurred:<br><strong>File format not supported.</strong></span>
-        </div>
-    <div class="error-message">
-  <span class="error-icon">⚠️</span>
-  <span class="error-text">An error has occurred: <strong>File format not supported.</strong></span>
+    <div class="custom-widget">
+    <span class="custom-widget-label">Pre-normalization</span>
+    <label class="custom-switch">
+        <input type="checkbox" class="custom-switch-input">
+        <span class="custom-switch-slider"></span>
+    </label>
 </div>
 </body>
 </html>

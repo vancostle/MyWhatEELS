@@ -1,14 +1,13 @@
-from panel.custom import JSComponent
-import csscompressor, rjsmin
-import param
-import csscompressor
+import param, csscompressor, rjsmin
+
+from panel.custom import JSComponent 
 from whateels.helpers.constants import CSS_ROOT, JS_ROOT
 
-class UploadedFile(JSComponent):
+class ErrorPanel(JSComponent):
     """
-    A class representing an uploaded file with its name.
+    A class representing an error panel to display error messages.
     """
-    _FILE_NAME = "uploaded_file"
+    _FILE_NAME = "error_panel"
 
     _JS_PATH = JS_ROOT / (_FILE_NAME + '.js')
     _CSS_PATH = CSS_ROOT / (_FILE_NAME + '.css')
@@ -19,7 +18,7 @@ class UploadedFile(JSComponent):
     _esm = rjsmin.jsmin(_JS_FILE)
     _stylesheets = [csscompressor.compress(_CSS_FILE)]
 
-    filename = param.String(default="default.dm3")
+    message = param.String(default="An error has occurred.")
 
-    def __init__(self, filename: str = "default.dm3", **params):
-        super().__init__(filename=filename, **params)
+    def __init__(self, message: str = "An error has occurred.", **params):
+        super().__init__(message=message, **params)

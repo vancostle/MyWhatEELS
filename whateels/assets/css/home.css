@@ -28,7 +28,6 @@
     cursor: pointer;
 }
 
-
 @keyframes highlight-dropper {
     0% {
         box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.5); /* light blue */

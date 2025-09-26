@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 from whateels.helpers import HTML_ROOT, LoadCSS, CSS_ROOT
-from whateels.components import UploadedFile
+from whateels.components import UploadedFile, ErrorPanel
+from bokeh.models import Tooltip
 import panel as pn
 
 if TYPE_CHECKING:
@@ -20,7 +21,10 @@ class View:
         self._right_sidebar_container_layout = None
         self._error_container_layout = None
 
+        CLUSTERING_CSS = str(CSS_ROOT / "clustering.css")
         DATASET_INFO_CSS = str(CSS_ROOT / "dataset_info.css")
+        
+        LoadCSS([CLUSTERING_CSS])  # CSS for the clustering page
         LoadCSS([DATASET_INFO_CSS])  # CSS for the dataset info component
 
         self._init_visualization_components()
@@ -74,10 +78,9 @@ class View:
 
     def _sidebar_layout(self):
         uploaded_file = UploadedFile(
-            filename="STEM SI iwjediwedjwwid.dm4",
+            filename="This is a long file name that exceeds the usual length.dm4",
             sizing_mode=self._STRETCH_WIDTH
         )
-        
         
         self._sidebar_container_layout = pn.Column(
             uploaded_file,
@@ -91,19 +94,90 @@ class View:
         self._sidebar_container_layout.append(
             fake_dataset_info
         )
+        
+        fake_error_panel = ErrorPanel(
+            message="This is a sample error message to demonstrate the ErrorPanel component.",
+        )
+        self._sidebar_container_layout.append(
+            fake_error_panel
+        )
         return self._sidebar_container_layout
 
     def _main_layout(self):
+        fake_tabs = pn.Tabs(
+            ("EELS 0", pn.pane.Markdown("Content for EELS 0", sizing_mode=self._STRETCH_BOTH)),
+            ("EELS 1", pn.pane.Markdown("Content for EELS 1", sizing_mode=self._STRETCH_BOTH)),
+            sizing_mode=self._STRETCH_BOTH
+        )
+        
         self._main_container_layout = pn.Column(
-            pn.pane.Markdown("### Clustering Analysis", sizing_mode=self._STRETCH_WIDTH),
+            fake_tabs,
             sizing_mode=self._STRETCH_BOTH
         )
         return self._main_container_layout
     
     def _right_sidebar_layout(self):
-        self._right_sidebar_container_layout = pn.Column(
-            pn.pane.Markdown("### Additional Info", sizing_mode=self._STRETCH_WIDTH),
+        
+        pre_normalization_label = pn.pane.Markdown(
+            "### Pre-normalization", 
+        )
+        
+        pre_normalization_switch = pn.widgets.Switch(
+            name="Pre-normalization", 
+            value=False, 
+            sizing_mode='stretch_height',
+            css_classes=["pre-normalization-switch"]
+        )
+        pre_normalization_container = pn.Row(
+            pre_normalization_label,
+            pre_normalization_switch,
             sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        available_norms_select = pn.widgets.Select(name='Available norms', options=['I1', 'I2', 'MAX'])
+        
+        available_norms_container = pn.Row(
+            available_norms_select,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        k_means_tab = pn.pane.Markdown("Clustering controls go here.", sizing_mode=self._STRETCH_WIDTH)
+        agglomerative_tab = pn.pane.Markdown("Dimensionality reduction controls go here.", sizing_mode=self._STRETCH_WIDTH)
+        spectral_tab = pn.pane.Markdown("Density-based clustering controls go here.", sizing_mode=self._STRETCH_WIDTH)
+        
+        k_means_tab = pn.Column(
+            pn.widgets.IntInput(name="Number of Clusters", value=1, step=1, end=1000, sizing_mode=self._STRETCH_WIDTH),
+            pn.widgets.IntInput(name="Number of Initializations", value=1, step=1, end=1000, sizing_mode=self._STRETCH_WIDTH),
+            pn.widgets.IntInput(name="Max Iterations", value=300, step=1, end=10000, sizing_mode=self._STRETCH_WIDTH),
+            pn.widgets.Select(name='Initialization Method', options=['k-means++', 'random'], sizing_mode=self._STRETCH_WIDTH),
+            sizing_mode=self._STRETCH_BOTH
+        )
+        
+        clustering_hub = pn.Tabs(
+            ("K-Means", k_means_tab),
+            ("Agglomerative", agglomerative_tab),
+            ("Spectral", spectral_tab),
+            sizing_mode=self._STRETCH_BOTH
+        )
+        
+        buttons_container = pn.Column(
+            pn.Row(
+                pn.widgets.Button(name="RUN", button_type="success", height=130, sizing_mode=self._STRETCH_WIDTH),
+                pn.widgets.Button(name="STORE", button_type="primary", height=130, sizing_mode=self._STRETCH_WIDTH),
+                sizing_mode=self._STRETCH_BOTH
+            ),
+            pn.widgets.Button(name="STOP", button_type="danger", height=40, sizing_mode=self._STRETCH_WIDTH),
+            sizing_mode=self._STRETCH_BOTH
+        )
+
+        
+        
+        self._right_sidebar_container_layout = pn.Column(
+            pre_normalization_container,
+            available_norms_container,
+            clustering_hub,
+            buttons_container,
+            sizing_mode=self._STRETCH_BOTH
         )
         return self._right_sidebar_container_layout
     
