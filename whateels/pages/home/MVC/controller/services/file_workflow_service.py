@@ -58,28 +58,26 @@ class FileWorkflowService:
         Raises:
             DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
-        
-        print(f"File content received of length: {len(file_content) / (1024 * 1024):.2f} MB")
 
         try:
-            # Show loading state
-            self._controller.layout.show_loading_placeholder_in_main_layout()
-            
             all_datasets: list[Dataset] = []
             
-            # Process the file
-            all_datasets = self._file_processor.process_upload(filename, file_content)
-            
-            # Calculate total size of all datasets in MB
-            total_size_bytes = sum(dataset.nbytes for dataset in all_datasets)
-            total_size_mb = total_size_bytes / (1024 * 1024)
-            print(f"Processed {len(all_datasets)} dataset(s) with total size: {total_size_mb:.2f} MB")
-            
-            if not all_datasets:
-                self._handle_file_upload_error(filename)
-                return False
-            
-            self._controller.layout.create_tab_and_dataset_info(all_datasets)
+            if AppState().metadata is None:
+                # Show loading state
+                self._controller.layout.show_loading_placeholder_in_main_layout()
+                
+                # Process the file
+                all_datasets = self._file_processor.process_upload(filename, file_content)
+                
+                if not all_datasets:
+                    self._handle_file_upload_error(filename)
+                    return False
+                
+                self._controller.layout.create_tab_and_dataset_info(all_datasets)
+            else:
+                # If metadata already exists, just refresh the layout with existing datasets
+                all_datasets = AppState().metadata
+                self._controller.layout.create_tab_and_dataset_info(all_datasets)
             
             return True
 

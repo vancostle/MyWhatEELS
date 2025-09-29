@@ -56,9 +56,3 @@ class LoadCSS:
                     print(f"{WARNING_MESSAGE}: {css_file}")
             except Exception as e:
                 print(f"{ERROR_MESSAGE} {css_file}: {e}")
-
-
-# Usage example:
-# css_loader1 = LoadCSS()  # Loads CSS
-# css_loader2 = LoadCSS()  # Same instance, doesn't reload CSS
-# print(css_loader1 is css_loader2)  # True - same object

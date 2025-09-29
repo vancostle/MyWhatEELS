@@ -41,9 +41,9 @@ class View:
         HOMEPAGE_CSS = str(CSS_ROOT / "home.css")
         DATASET_INFO_CSS = str(CSS_ROOT / "dataset_info.css")
 
-        LoadCSS([HOMEPAGE_CSS]) # CSS for the whole homepage
-        LoadCSS([DATASET_INFO_CSS]) # CSS for the dataset info component
+        LoadCSS([HOMEPAGE_CSS, DATASET_INFO_CSS]) # CSS for the whole homepage and dataset info panels
 
+         # Initialize visualization components and layouts
         self._init_visualization_components()
 
     # --- Properties ---
@@ -52,42 +52,30 @@ class View:
     def sidebar(self) -> pn.viewable.Viewable:
         """Sidebar layout containing the file dropper and additional controls."""
         return self._sidebar_container_layout
-
-
     @property
     def main(self) -> pn.Column:
         """Main content area layout for displaying plots or placeholders."""
         return self._main_container_layout
-
-
     @property
     def loading_placeholder(self) -> pn.pane.HTML:
         """HTML placeholder shown while a file is being processed."""
         return self._loading_placeholder
-
-
     @property
     def no_file_placeholder(self) -> pn.pane.HTML:
         """HTML placeholder shown when no file is loaded."""
         return self._no_file_placeholder
-
-
     @property
     def error_placeholder(self) -> pn.pane.HTML:
         """HTML placeholder shown when an error occurs."""
         return self._error_placeholder
-
-
     @property
     def file_dropper(self) -> FileDropper:
         """FileDropper widget for file upload interactions."""
         return self._file_dropper
-
     @property
     def dataset_info(self) -> pn.viewable.Viewable:
         """Reference to the last dataset info component added to the sidebar."""
         return self._dataset_info_layout
-
 
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
@@ -132,7 +120,7 @@ class View:
             reject_message=self._model.file_dropper.REJECT_MESSAGE,
             success_message=self._model.file_dropper.SUCCESS_MESSAGE,
             feedback_message=self._model.file_dropper.FEEDBACK_MESSAGE,
-        )
+        )        
         self._file_dropper = file_dropper
         self._sidebar_container_layout = pn.Column(
             self._file_dropper,

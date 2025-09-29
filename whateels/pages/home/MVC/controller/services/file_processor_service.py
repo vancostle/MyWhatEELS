@@ -50,6 +50,9 @@ class FileProcessorService:
 
             # Load the DM3/DM4 file directly from memory
             all_datasets = self._load_dm_file(self._model.in_memory_file)
+            
+            # Update AppState with all loaded datasets for global access
+            AppState().all_datasets = all_datasets
 
             if not all_datasets:
                 raise DMFileLoadingError(filename)
@@ -58,7 +61,7 @@ class FileProcessorService:
             return all_datasets
             
         except DMFileLoadingError:
-            raise  # Re-raise DM-specific errors as-is
+            raise  DMFileLoadingError(f"Failed to load DM3/DM4 file: {filename}")
         except Exception as e:
             raise DMFileUploadError(e)
 
@@ -87,9 +90,6 @@ class FileProcessorService:
             # Extract raw spectral data and energy axes
             all_spectrum_images = eels_data.all_data
             all_energy_axes = eels_data.all_energy_axes
-
-            # Assess and log data quality issues (NaN/inf detection)
-            # self._log_all_data_quality(all_spectrum_images, all_energy_axes)
 
             # Clean data arrays by replacing NaN/inf values with zeros
             cleaned_all_energy_axes = self._clean_all_axes(all_energy_axes)
@@ -157,40 +157,6 @@ class FileProcessorService:
             print(FILE_SIZE_TOO_SMALL_MESSAGE)
             return False
         return True
-
-    # TODO - Check this functions. It seems incomplete
-    # def _log_all_data_quality(self, all_electron_count_data: list[np.ndarray], all_energy_axes: list[np.ndarray]) -> None:
-    #     """
-    #     Assess and log data quality information for all spectra.
-        
-    #     Analyzes each spectrum and energy axis for data quality issues including
-    #     NaN and infinity values. This information is useful for understanding
-    #     data integrity and potential processing issues.
-        
-    #     Args:
-    #         all_electron_count_data: List of electron count arrays to analyze
-    #         all_energy_axes: List of energy axis arrays to analyze
-            
-    #     Note:
-    #         Only logs warnings when quality issues are detected to avoid spam.
-    #     """
-        
-    #     RAW_DATA_QUALITY_ISSUES_MESSAGE = "Warning: Raw data has {} NaN values and {} Inf values"
-    #     ENERGY_AXIS_QUALITY_ISSUES_MESSAGE = "Warning: Energy axis has {} NaN values and {} Inf values"
-
-    #     for _, (electron_count_data, energy_axis) in enumerate(zip(all_electron_count_data, all_energy_axes)):
-    #         # Count invalid values for quality assessment
-    #         data_nan_count = np.isnan(electron_count_data).sum()
-    #         data_inf_count = np.isinf(electron_count_data).sum()
-            
-    #         # Only check energy axis quality if it exists (EELS data)
-    #         if energy_axis is not None:
-    #             energy_nan_count = np.isnan(energy_axis).sum()
-    #             energy_inf_count = np.isinf(energy_axis).sum()
-    #         else:
-    #             # Non-EELS data - no energy axis to check
-    #             energy_nan_count = 0
-    #             energy_inf_count = 0
 
     def _create_all_datasets_from_data(self, all_spectrum_images: list[np.ndarray], all_energy_axes: list[np.ndarray], eels_data: "DM_EELS_data", filepath: str) -> list[xr.Dataset]:
         """

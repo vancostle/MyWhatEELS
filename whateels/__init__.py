@@ -29,7 +29,7 @@ class App:
         pages = {
             "/": lambda: Home(),
             "/metadata-details": lambda: Metadata(),
-            # "/clustering": lambda: Clustering(),
+            "/clustering": lambda: Clustering(),
         }
 
         return pn.serve(

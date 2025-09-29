@@ -29,6 +29,10 @@ class AppState(param.Parameterized):
         Dictionary containing EELS metadata, None if no data loaded, 
         or {'error': str} if extraction failed.
     """)
+    
+    all_datasets = param.List(default=[], doc="""
+        List of all loaded EELS datasets (xarray.Dataset).
+    """)
 
     def __new__(cls):
         if cls._instance is None:
@@ -48,3 +52,8 @@ class AppState(param.Parameterized):
             _logger.info(f"Metadata updated via param")
         else:
             _logger.info("Metadata cleared via param")
+            
+    @param.depends('all_datasets', watch=True)
+    def _on_datasets_change(self):
+        """Called automatically when all_datasets parameter changes."""
+        _logger.info(f"All datasets updated via param, count: {len(self.all_datasets)}")

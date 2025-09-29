@@ -57,7 +57,7 @@ class FileDropper(pn.WidgetBox):
         self.feedback_message = feedback_message
         self._on_file_uploaded_callback = on_file_uploaded_callback
         self._on_file_removed_callback = on_file_removed_callback
-
+        
         # Track the currently uploaded filename for removal callback
         self._current_filename = None
 
