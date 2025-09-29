@@ -8,6 +8,7 @@ The AppState uses param for reactive updates across the application.
 """
 
 import param
+from xarray import Dataset
 from .helpers.logging import Logger
 
 _logger = Logger.get_logger("shared_state.log", __name__)
@@ -29,8 +30,8 @@ class AppState(param.Parameterized):
         Dictionary containing EELS metadata, None if no data loaded, 
         or {'error': str} if extraction failed.
     """)
-    
-    all_datasets = param.List(default=[], doc="""
+
+    all_datasets = param.List(default=list(), doc="""
         List of all loaded EELS datasets (xarray.Dataset).
     """)
 

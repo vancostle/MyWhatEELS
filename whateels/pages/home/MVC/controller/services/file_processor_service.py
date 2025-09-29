@@ -50,9 +50,6 @@ class FileProcessorService:
 
             # Load the DM3/DM4 file directly from memory
             all_datasets = self._load_dm_file(self._model.in_memory_file)
-            
-            # Update AppState with all loaded datasets for global access
-            AppState().all_datasets = all_datasets
 
             if not all_datasets:
                 raise DMFileLoadingError(filename)

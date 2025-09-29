@@ -60,24 +60,25 @@ class FileWorkflowService:
         """
 
         try:
+            # Clear previous dataset info panels to prevent caching old data
+            AppState().all_datasets = []
+
             all_datasets: list[Dataset] = []
             
-            if AppState().metadata is None:
-                # Show loading state
-                self._controller.layout.show_loading_placeholder_in_main_layout()
-                
-                # Process the file
-                all_datasets = self._file_processor.process_upload(filename, file_content)
-                
-                if not all_datasets:
-                    self._handle_file_upload_error(filename)
-                    return False
-                
-                self._controller.layout.create_tab_and_dataset_info(all_datasets)
-            else:
-                # If metadata already exists, just refresh the layout with existing datasets
-                all_datasets = AppState().metadata
-                self._controller.layout.create_tab_and_dataset_info(all_datasets)
+            # Show loading state
+            self._controller.layout.show_loading_placeholder_in_main_layout()
+            
+            # Process the file
+            all_datasets = self._file_processor.process_upload(filename, file_content)
+
+            # Update AppState with all loaded datasets for global access
+            AppState().all_datasets = all_datasets
+            
+            if not all_datasets:
+                self._handle_file_upload_error(filename)
+                return False
+            
+            self._controller.layout.create_tab_and_dataset_info(all_datasets)
             
             return True
 
@@ -118,6 +119,8 @@ class FileWorkflowService:
             
             # Reset AppState metadata
             AppState().metadata = None
+            # Reset AppState datasets
+            AppState().all_datasets = []
                 
         except Exception as e:
             raise DMFileRemovalError(e)
