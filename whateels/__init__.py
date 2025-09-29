@@ -36,5 +36,6 @@ class App:
             pages,
             title=self._title,
             port=port,
-            show=show
+            show=show,
+            allow_websocket_origin=["*"],
         )
