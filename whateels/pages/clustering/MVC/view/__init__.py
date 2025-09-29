@@ -172,6 +172,7 @@ class View:
 
         
         
+        
         self._right_sidebar_container_layout = pn.Column(
             pre_normalization_container,
             available_norms_container,

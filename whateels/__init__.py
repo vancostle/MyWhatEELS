@@ -27,7 +27,7 @@ class App:
         # Define the pages for the application
         # Use lambdas to avoid immediate instantiation
         pages = {
-            "/": lambda: Clustering(),
+            "/": lambda: Home(),
             "/metadata-details": lambda: Metadata(),
             # "/clustering": lambda: Clustering(),
         }

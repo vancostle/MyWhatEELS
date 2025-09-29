@@ -1,4 +1,6 @@
 from typing import TYPE_CHECKING
+from whateels.helpers.in_memory_file import InMemoryFile
+
 if TYPE_CHECKING:
     from xarray import Dataset
 
@@ -12,6 +14,7 @@ class Model:
     def __init__(self):
         # State attributes
         self._all_datasets: list["Dataset"] = []  # List of all loaded EELS datasets
+        self._in_memory_file: InMemoryFile | None = None  # Currently loaded file in memory (if any)
 
         # Shared configuration and constants
         self._constants = Constants()
@@ -34,8 +37,23 @@ class Model:
     @property
     def placeholders(self) -> Placeholders:
         return self._placeholders
+    @property
+    def in_memory_file(self) -> InMemoryFile | None:
+        return self._in_memory_file
 
     @all_datasets.setter
     def all_datasets(self, datasets: list["Dataset"]):
         """Set the list of all EELS datasets."""
         self._all_datasets = datasets
+        
+    @in_memory_file.setter
+    def in_memory_file(self, file: InMemoryFile | None):
+        """Set the in-memory file (or None to clear)."""
+        self._in_memory_file = file
+        
+    @in_memory_file.deleter
+    def in_memory_file(self):
+        """Delete the in-memory file to free resources."""
+        if self._in_memory_file:
+            self._in_memory_file.close()
+            self._in_memory_file = None

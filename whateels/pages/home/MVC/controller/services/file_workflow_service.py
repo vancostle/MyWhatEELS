@@ -115,6 +115,9 @@ class FileWorkflowService:
             # Clear previous dataset info panels to prevent caching old data
             self._model.all_datasets = []
             
+            # Clear in-memory file to free resources
+            del self._model.in_memory_file
+            
             # Reset AppState metadata
             AppState().metadata = None
                 
