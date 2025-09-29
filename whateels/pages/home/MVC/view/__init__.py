@@ -39,7 +39,8 @@ class View:
         self._file_dropper = None
         
         HOMEPAGE_CSS = str(CSS_ROOT / "home.css")
-        LoadCSS([HOMEPAGE_CSS]) # CSS for the whole homepage
+        RANGE_SLIDER_CSS = str(CSS_ROOT / "range_slider_spectrum.css")
+        LoadCSS([HOMEPAGE_CSS, RANGE_SLIDER_CSS]) # CSS for the whole homepage
 
         self._init_visualization_components()
 

@@ -1,0 +1,105 @@
+/* Contenedor general del widget */
+.my-range {
+    --accent: #5b8def;            /* color acento reutilizable */
+    --track: #e6e9ef;             /* color de la pista */
+    --handle: #1f2a44;            /* color del "thumb" */
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.bk-RangeSlider {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Nombre/título del widget */
+.my-range .bk-slider-title {
+    font-weight: 600;
+    letter-spacing: .2px;
+    margin-bottom: .35rem;
+}
+
+/* Pista del slider */
+.my-range .bk-slider-horizontal .bk-slider-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--track);
+}
+
+/* Rango seleccionado */
+.my-range .bk-slider-horizontal .bk-slider-range {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--accent);
+}
+
+/* “Handles” (thumbs) */
+.my-range .bk-slider-handle {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    border: 2px solid white;
+    background: var(--handle);
+    box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+
+/* Hover/focus para feedback */
+.my-range .bk-slider-handle:hover,
+.my-range .bk-slider-handle:focus {
+    transform: scale(1.05);
+}
+
+/* Campos numéricos editables del EditableRangeSlider */
+.my-range input.bk-input {
+    height: 32px;
+    padding: 0 .6rem;
+    border-radius: 8px;
+    border: 1px solid #cfd6e4;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px transparent;
+    transition: box-shadow .15s ease, border-color .15s ease;
+}
+
+/* Tamaño y estilo de los números (start / end) dentro del EditableRangeSlider */
+.my-range .bk-input-group input.bk-input,
+.my-range .bk-input-wrapper input.bk-input {
+    font-size: 14px;          /* ajustar a gusto: 12px, 14px, 16px, ... */
+    font-weight: 600;         /* opcional: resaltar los números */
+    line-height: 1;           /* alinear verticalmente mejor */
+}
+
+/* Selector más específico para targetear start (primer input) / end (segundo input) */
+.my-range .bk-input-group input.bk-input:nth-of-type(1) {
+    /* start input */
+}
+.my-range .bk-input-group input.bk-input:nth-of-type(2) {
+    /* end input */
+}
+
+/* Hover/focus en inputs */
+.my-range input.bk-input:hover {
+    border-color: #b7c2d8;
+}
+.my-range input.bk-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(91,141,239,.25);
+}
+
+/* Espaciado entre slider e inputs */
+.my-range .bk-input-group,
+.my-range .bk-slider {
+    margin-top: .25rem;
+}
+
+/* Ajuste de alineación para el label externo del slider (Option 1) */
+.range-label-wrapper { /* fila contenedora */
+    padding-right: 40px; /* reserva 40px a la derecha del panel */
+}
+.range-label { 
+    margin: 0; 
+    line-height: 1; 
+    display: flex; 
+    align-items: center; 
+    font-weight: 600; 
+    transform: translateY(-4px); /* subir ligeramente para alinear con inputs */
+}
