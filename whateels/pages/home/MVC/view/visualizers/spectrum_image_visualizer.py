@@ -575,12 +575,28 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     def _on_multifit_clicked(self, event):
         """
         Fallback en servidor: navega en la misma pestaña si el JS del cliente está bloqueado.
+        Ahora adjunta el rango actual del slider como query param `range=start,end`.
         """
         try:
-            # Prefer navigation via location (same tab) as a safe fallback
+            # Intentar leer el valor del slider y formatearlo como start,end
+            rng = getattr(self, "range_slider", None)
+            if rng is not None:
+                val = rng.value
+                # Asegurar tuple/list con 2 valores
+                if isinstance(val, (list, tuple)) and len(val) == 2:
+                    start = float(val[0])
+                    end = float(val[1])
+                    print(start, end)
+                    pn.state.location.href = f"./multifit-details?range={start},{end}"
+                    return
+            # Fallback simple si no hay slider o valor inesperado
             pn.state.location.href = "./multifit-details"
         except Exception:
-            pass
+            # En caso de error, navegar sin parámetros
+            try:
+                pn.state.location.href = "./multifit-details"
+            except Exception:
+                pass
         return
 
     def _on_range_changed(self, event):
