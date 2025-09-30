@@ -3,7 +3,7 @@ Processes DM3/DM4 files to xarray datasets for electron microscopy.
 Pipeline: validate → extract → clean → create dataset → attach metadata → output xarray Dataset
 """
 
-import os, numpy as np, xarray as xr, io
+import os, numpy as np, xarray as xr
 from whateels.errors.dm import (
     DMEmptyInfoDictionary, 
     DMNonEelsError, 

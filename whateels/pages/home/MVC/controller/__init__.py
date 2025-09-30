@@ -33,7 +33,6 @@ class Controller:
         all_datasets = AppState().all_datasets
         if all_datasets:
             self._layout_manager.create_tab_and_dataset_info(all_datasets)
-            print("Controller initialized with services and layout manager.")
 
     @property
     def layout(self) -> LayoutManager:

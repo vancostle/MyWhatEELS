@@ -31,6 +31,7 @@ class AppState(param.Parameterized):
         or {'error': str} if extraction failed.
     """)
 
+    # Reactive parameter for all loaded datasets
     all_datasets = param.List(default=list(), doc="""
         List of all loaded EELS datasets (xarray.Dataset).
     """)
