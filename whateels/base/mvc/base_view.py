@@ -1,17 +1,22 @@
+from whateels.helpers import LoadCSS
+
 import panel as pn
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from .base_model import BaseModel
-
 class BaseView:
-    def __init__(self, base_model: "BaseModel"):
-        self._base_model = base_model
-
+    
+    STRETCH_WIDTH = 'stretch_width'
+    STRETCH_BOTH = 'stretch_both'
+    STRETCH_HEIGHT = 'stretch_height'
+    
+    def __init__(self, css_files: list[str] | None = None):
         self._main = None  # Main content area
         self._sidebar = None  # Sidebar layout
         self._right_sidebar = None  # Right sidebar layout
         self._error = None  # Error layout
+        
+        # Load any provided CSS files
+        if css_files:
+            LoadCSS(css_files)
 
     @property
     def main(self) -> pn.Column:
