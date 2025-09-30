@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING
 from whateels.helpers import HTML_ROOT, LoadCSS, CSS_ROOT
 from whateels.components import UploadedFile, ErrorPanel
-from bokeh.models import Tooltip
 import panel as pn
 
 if TYPE_CHECKING:
@@ -23,9 +22,8 @@ class View:
 
         CLUSTERING_CSS = str(CSS_ROOT / "clustering.css")
         DATASET_INFO_CSS = str(CSS_ROOT / "dataset_info.css")
-        
-        LoadCSS([CLUSTERING_CSS])  # CSS for the clustering page
-        LoadCSS([DATASET_INFO_CSS])  # CSS for the dataset info component
+
+        LoadCSS([CLUSTERING_CSS, DATASET_INFO_CSS])  # CSS for the clustering page and dataset info component
 
         self._init_visualization_components()
 
@@ -50,11 +48,6 @@ class View:
     def main(self) -> pn.Column:
         """Main content area layout for displaying plots or placeholders."""
         return self._main_container_layout
-
-    @property
-    def error_placeholder(self) -> pn.pane.HTML:
-        """HTML placeholder shown when an error occurs."""
-        return self._error_placeholder
     
     @property
     def dataset_info(self) -> pn.viewable.Viewable:
@@ -170,9 +163,6 @@ class View:
             sizing_mode=self._STRETCH_BOTH
         )
 
-        
-        
-        
         self._right_sidebar_container_layout = pn.Column(
             pre_normalization_container,
             available_norms_container,
@@ -183,12 +173,12 @@ class View:
         return self._right_sidebar_container_layout
     
     def _error_layout(self):
-        self._error_placeholder = pn.pane.HTML(
+        error_placeholder = pn.pane.HTML(
             "<h3 style='color:red;'>An error occurred while loading the data.</h3>",
             sizing_mode=self._STRETCH_WIDTH
         )
         self._error_container_layout = pn.Column(
-            self._error_placeholder,
+            error_placeholder,
             sizing_mode=self._STRETCH_BOTH
         )
         return self._error_container_layout

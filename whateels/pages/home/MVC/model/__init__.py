@@ -45,7 +45,6 @@ class Model:
     def all_datasets(self, datasets: list["Dataset"]):
         """Set the list of all EELS datasets."""
         self._all_datasets = datasets
-        
     @in_memory_file.setter
     def in_memory_file(self, file: InMemoryFile | None):
         """Set the in-memory file (or None to clear)."""

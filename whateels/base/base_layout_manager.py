@@ -1,29 +1,14 @@
 import panel as pn
 from typing import TYPE_CHECKING
 
-from whateels.errors.dm.data import DMPlotCreationError
-from ..visualizer_factory import VisualizerFactory
-
 if TYPE_CHECKING:
-    from ...view import View
-    from ...model import Model
-    from ...controller import Controller
+    from whateels.base.mvc.base_view import BaseView
+    from whateels.base.mvc.base_model import BaseModel
+    from whateels.base.mvc.base_controller import BaseController
     from xarray import Dataset
 
-class LayoutManager:
-    """
-    Manager class responsible for handling all layout operations in the WhatEELS application.
-    
-    This class encapsulates all UI layout management functionality, including:
-    - Main layout state management (loading, error, content, placeholder states)
-    - Sidebar component management
-    - Float panel operations
-    
-    By separating layout concerns from the main Controller, we achieve better
-    code organization and single responsibility principle.
-    """
-    
-    def __init__(self, view: "View", controller: "Controller", model: "Model"):
+class BaseLayoutManager:
+    def __init__(self, view: "BaseView", controller: "BaseController", model: "BaseModel"):
         """
         Initialize the LayoutManager with a reference to the View.
         
