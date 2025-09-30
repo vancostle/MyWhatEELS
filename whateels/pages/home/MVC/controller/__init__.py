@@ -5,7 +5,7 @@ from whateels.shared_state import AppState
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import Model
-    from ..view.__init__OLD import View
+    from ..view.__init__NEW import HomePageView
 
 class Controller:
     """
@@ -17,7 +17,7 @@ class Controller:
     - Manage workflow and UI state transitions by instructing the View
     - Delegate business logic to specialized services
     """
-    def __init__(self, model: "Model", view: "View"):
+    def __init__(self, model: "Model", view: "HomePageView"):
         self.model = model
         self.view = view
 

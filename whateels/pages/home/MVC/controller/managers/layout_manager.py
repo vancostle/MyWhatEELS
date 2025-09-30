@@ -5,7 +5,7 @@ from whateels.errors.dm.data import DMPlotCreationError
 from ..visualizer_factory import VisualizerFactory
 
 if TYPE_CHECKING:
-    from ...view import View
+    from ...view import HomePageView
     from ...model import Model
     from ...controller import Controller
     from xarray import Dataset
@@ -23,12 +23,12 @@ class LayoutManager:
     code organization and single responsibility principle.
     """
     
-    def __init__(self, view: "View", controller: "Controller", model: "Model"):
+    def __init__(self, view: "HomePageView", controller: "Controller", model: "Model"):
         """
-        Initialize the LayoutManager with a reference to the View.
+        Initialize the LayoutManager with a reference to the HomePageView.
         
         Args:
-            view: The View instance that contains the UI components to manage
+            view: The HomePageView instance that contains the UI components to manage
         """
         self._view = view
         self._controller = controller

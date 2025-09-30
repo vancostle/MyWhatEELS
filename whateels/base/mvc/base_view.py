@@ -23,7 +23,7 @@ class BaseView:
         """Main content area layout for displaying plots or placeholders."""
         return self._main
     @property
-    def sidebar(self) -> pn.Column:
+    def sidebar(self) -> pn.viewable.Viewable:
         """Sidebar layout for displaying dataset info and controls."""
         return self._sidebar
     @property
@@ -39,7 +39,7 @@ class BaseView:
     def main(self, value: pn.Column):
         self._main = value
     @sidebar.setter
-    def sidebar(self, value: pn.Column):
+    def sidebar(self, value: pn.viewable.Viewable):
         self._sidebar = value
     @right_sidebar.setter
     def right_sidebar(self, value: pn.Column):
@@ -50,17 +50,13 @@ class BaseView:
         
     @main.deleter
     def main(self):
-        self._main.clear()
         self._main = None
     @sidebar.deleter
     def sidebar(self):
-        self._sidebar.clear()
         self._sidebar = None
     @right_sidebar.deleter
     def right_sidebar(self):
-        self._right_sidebar.clear()
         self._right_sidebar = None
     @error.deleter
     def error(self):
-        self._error.clear()
         self._error = None
