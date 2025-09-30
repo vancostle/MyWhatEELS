@@ -102,9 +102,11 @@ class FileProcessorService:
             )
 
             return all_datasets
-
         except Exception as exception:
             self._handle_file_error(exception)
+        finally:
+            # Clean up in-memory file reference
+            del self._model.in_memory_file
         
     def _clean_all_electron_count_data(self, all_electron_count_data: list[np.ndarray]) -> list[np.ndarray]:
         """
@@ -134,7 +136,6 @@ class FileProcessorService:
 
         if not infoDict:
             raise DMEmptyInfoDictionary(NOT_INFO_DICT_MESSAGE.format(infoDict))
-
         try:
             # Store metadata in AppState for application-wide access
             AppState().metadata = infoDict
