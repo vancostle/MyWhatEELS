@@ -17,6 +17,11 @@ class Controller(param.Parameterized):
         self._model = model
         self._view = view
         
+        values = pn.state.location.query_params['values'] if 'values' in pn.state.location.query_params else None
+        if values:
+            values = tuple(map(float, values.split(","))) # Convert to tuple of floats
+            print(f"Multifitting page opened with params: {values}")
+
         # Setup the reactive display in the view's container
         self._setup_reactive_display()
     
