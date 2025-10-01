@@ -1,5 +1,5 @@
 from whateels.components import CustomPage
-from .MVC import Model, Controller, HomePageView
+from .MVC import Model, HomePageController, HomePageView
 
 class Home(CustomPage):
     """
@@ -10,7 +10,7 @@ class Home(CustomPage):
     def __init__(self):
         model = Model()
         view = HomePageView(model)
-        Controller(model, view)
+        HomePageController(model, view)
 
         super().__init__(
             title=model.constants.TITLE,

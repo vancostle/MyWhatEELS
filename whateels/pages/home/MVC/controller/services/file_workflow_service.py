@@ -18,7 +18,7 @@ from whateels.errors.dm.data import (
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import Model
-    from .. import Controller
+    from .. import HomePageController
     from xarray import Dataset
 
 class FileWorkflowService:
@@ -29,7 +29,7 @@ class FileWorkflowService:
     Manages UI state transitions and error handling for the complete pipeline.
     """
 
-    def __init__(self, model: "Model", controller: "Controller"):
+    def __init__(self, model: "Model", controller: "HomePageController"):
         """
         Initialize with model and controller dependencies.
         

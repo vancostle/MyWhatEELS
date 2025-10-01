@@ -7,10 +7,10 @@ from ..visualizer_factory import VisualizerFactory
 if TYPE_CHECKING:
     from ...view import HomePageView
     from ...model import Model
-    from ...controller import Controller
+    from ...controller import HomePageController
     from xarray import Dataset
 
-class LayoutManager:
+class HomePageLayoutManager:
     """
     Manager class responsible for handling all layout operations in the WhatEELS application.
     
@@ -23,7 +23,7 @@ class LayoutManager:
     code organization and single responsibility principle.
     """
     
-    def __init__(self, view: "HomePageView", controller: "Controller", model: "Model"):
+    def __init__(self, view: "HomePageView", controller: "HomePageController", model: "Model"):
         """
         Initialize the LayoutManager with a reference to the HomePageView.
         
@@ -39,28 +39,28 @@ class LayoutManager:
             
     def show_loading_placeholder_in_main_layout(self):
         """Show the loading placeholder in the main layout."""
-        self._view.main.clear()
+        del self._view.main
         self._view.main.append(self._view.loading_placeholder)
         
     def reset_main_layout(self):
         """Reset the main layout to the no-file placeholder."""
-        self._view.main.clear()
+        del self._view.main
         self._view.main.append(self._view.no_file_placeholder)
 
     def update_main_layout(self, plot_component):
         """Update the main layout with a new plot component."""
-        self._view.main.clear()
+        del self._view.main
         self._view.main.append(plot_component)
         
     def show_error_placeholder_in_main_layout(self):
         """Show the error placeholder in the main layout."""
-        self._view.main.clear()
+        del self._view.main
         self._view.main.append(self._view.error_placeholder)
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
         self._view.sidebar.append(component)
-        self._view.dataset_info = component
+        self._view.dataset_info = component # Track the last added component
         
     def remove_dataset_info_from_sidebar(self):
         """Remove the last dataset info component from the sidebar, if present."""

@@ -1,5 +1,5 @@
 from .services import *
-from .managers import LayoutManager
+from .managers import HomePageLayoutManager
 from whateels.shared_state import AppState
 
 from typing import TYPE_CHECKING
@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from ..model import Model
     from ..view import HomePageView
 
-class Controller:
+class HomePageController:
     """
     Controller class for the home page of the WhatEELS application.
 
@@ -24,7 +24,7 @@ class Controller:
         # Initialize services
         self._file_workflow_service = FileWorkflowService(model, self)
         # Initialize manager
-        self._layout_manager = LayoutManager(view, self, model)
+        self._layout_manager = HomePageLayoutManager(view, self, model)
 
         # Set up callbacks for file dropper events directly
         self.view.file_dropper.on_file_uploaded_callback = self._file_workflow_service.handle_file_upload
@@ -36,6 +36,6 @@ class Controller:
             self._layout_manager.create_tab_and_dataset_info(all_datasets)
 
     @property
-    def layout(self) -> LayoutManager:
+    def layout(self) -> HomePageLayoutManager:
         """Expose the layout manager for external use."""
         return self._layout_manager

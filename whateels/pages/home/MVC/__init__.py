@@ -1,5 +1,5 @@
-from .controller import Controller
+from .controller import HomePageController
 from .model import Model
 from .view import HomePageView
 
-__all__ = ["Controller", "Model", "HomePageView"]
+__all__ = ["HomePageController", "Model", "HomePageView"]
