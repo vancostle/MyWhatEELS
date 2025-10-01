@@ -5,7 +5,7 @@ from whateels.shared_state import AppState
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import Model
-    from ..view.__init__NEW import HomePageView
+    from ..view import HomePageView
 
 class Controller:
     """
