@@ -1,13 +1,14 @@
 from .services import *
 from .managers import HomePageLayoutManager
 from whateels.shared_state import AppState
+from whateels.base.mvc.base_controller import BaseController
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..model import Model
+    from ..model import HomePageModel
     from ..view import HomePageView
 
-class HomePageController:
+class HomePageController(BaseController):
     """
     Controller class for the home page of the WhatEELS application.
 
@@ -17,9 +18,8 @@ class HomePageController:
     - Manage workflow and UI state transitions by instructing the View
     - Delegate business logic to specialized services
     """
-    def __init__(self, model: "Model", view: "HomePageView"):
-        self.model = model
-        self.view = view
+    def __init__(self, model: "HomePageModel", view: "HomePageView"):
+        super().__init__(model, view)
 
         # Initialize services
         self._file_workflow_service = FileDropperWorkflowService(model, self)

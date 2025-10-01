@@ -17,7 +17,7 @@ from whateels.errors.dm.data import (
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
     from .. import HomePageController
     from xarray import Dataset
 
@@ -29,7 +29,7 @@ class FileDropperWorkflowService:
     Manages UI state transitions and error handling for the complete pipeline.
     """
 
-    def __init__(self, model: "Model", controller: "HomePageController"):
+    def __init__(self, model: "HomePageModel", controller: "HomePageController"):
         """
         Initialize with model and controller dependencies.
         
@@ -61,12 +61,12 @@ class FileDropperWorkflowService:
 
         try:
             # Clear previous dataset info panels to prevent caching old data
-            AppState().all_datasets = []
+            AppState().clear_datasets()
 
             all_datasets: list[Dataset] = []
             
             # Show loading state
-            self._controller.layout.show_loading_placeholder_in_main_layout()
+            self._controller.base_layout.loading_main()
             
             # Process the file
             all_datasets = self._file_processor.process_upload(filename, file_content)
@@ -109,7 +109,7 @@ class FileDropperWorkflowService:
         try:
             # Clear UI components
             self._controller.layout.remove_dataset_info_from_sidebar()
-            self._controller.layout.reset_main_layout()
+            self._controller.base_layout.empty_main()
             
             # Clear previous dataset info panels to prevent caching old data
             self._model.all_datasets = []
@@ -125,7 +125,6 @@ class FileDropperWorkflowService:
         except Exception as e:
             raise DMFileRemovalError(e)
 
-    
     def _handle_file_upload_error(self, filename: str) -> None:
         """Handle file upload errors by showing error UI state."""
-        self._controller.layout.show_error_placeholder_in_main_layout()
+        self._controller.base_layout.error_main()

@@ -7,7 +7,7 @@ import xarray as xr
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
 
 class DataProcessorService:
     """
@@ -19,7 +19,7 @@ class DataProcessorService:
     _AXIS_Y = 'y'
     _ELOSS = 'Eloss'
 
-    def __init__(self, model: "Model"):
+    def __init__(self, model: "HomePageModel"):
         """Init with model config."""
         self._model = model
 

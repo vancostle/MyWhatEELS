@@ -20,14 +20,14 @@ from whateels.helpers.in_memory_file import InMemoryFile
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..dm_file_processing.readers.dm_eels_reader import DM_EELS_data
-    from ...model import Model
+    from ...model import HomePageModel
 
 class FileProcessorService:
     """
     Service for DM3/DM4 file to dataset conversion.
     """
     
-    def __init__(self, model: "Model"):
+    def __init__(self, model: "HomePageModel"):
         """
         Init with model config.
         """

@@ -12,7 +12,7 @@ from ..view.visualizers import SpectrumLineVisualizer, SpectrumImageVisualizer, 
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..model import Model
+    from ..model import HomePageModel
     from . import HomePageController
     from typing import TYPE_CHECKING
     from xarray import Dataset
@@ -28,7 +28,7 @@ class VisualizerFactory:
     - Raises exceptions for unknown types or plot creation errors.
     """
     
-    def __init__(self, model: "Model", controller: "HomePageController") -> None:
+    def __init__(self, model: "HomePageModel", controller: "HomePageController") -> None:
         self._model = model
         self._controller = controller
         

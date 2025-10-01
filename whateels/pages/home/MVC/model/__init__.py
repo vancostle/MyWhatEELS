@@ -1,12 +1,12 @@
-from typing import TYPE_CHECKING
 from whateels.helpers.in_memory_file import InMemoryFile
+from whateels.base.mvc.base_model import BaseModel
+from typing import TYPE_CHECKING
+from .constants import Constants, Colors, FileDropper, Placeholders
 
 if TYPE_CHECKING:
     from xarray import Dataset
 
-from .constants import Constants, Colors, FileDropper, Placeholders
-
-class Model:
+class HomePageModel(BaseModel):
     """
     Main application model for the WhatEELS home page.
     Stores the loaded EELS dataset, metadata, and shared configuration/state.
@@ -34,9 +34,6 @@ class Model:
     @property
     def file_dropper(self) -> FileDropper:
         return self._file_dropper
-    @property
-    def placeholders(self) -> Placeholders:
-        return self._placeholders
     @property
     def in_memory_file(self) -> InMemoryFile | None:
         return self._in_memory_file

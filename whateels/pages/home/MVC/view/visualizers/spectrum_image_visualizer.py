@@ -15,7 +15,7 @@ from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import ResizableColumns
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
     from xarray import Dataset
     from param.parameterized import Event
 
@@ -36,7 +36,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     
     _NOT_AVAILABLE = 'N/A'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         super().__init__(model, dataset)
 
         self._model = model

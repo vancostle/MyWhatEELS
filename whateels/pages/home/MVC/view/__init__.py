@@ -6,24 +6,21 @@ from whateels.helpers import CSS_ROOT
 import panel as pn
 
 if TYPE_CHECKING:
-    from ..model import Model
+    from ..model import HomePageModel
     
 class HomePageView(BaseView):
     
-    def __init__(self, model: "Model"):
+    def __init__(self, model: "HomePageModel"):
         super().__init__(
+            model,
             css_files=[
                 str(CSS_ROOT / "home.css"),
                 str(CSS_ROOT / "dataset_info.css")
             ],
         )
-        self._model = model
         
-        # Initialize layout components to None
+        # Initialize layout components
         self._dataset_info_layout = None
-        self._loading_placeholder = None
-        self._no_file_placeholder = None
-        self._error_placeholder = None
         self._file_dropper = None
         
         # Initialize visualization components and layouts
@@ -37,42 +34,14 @@ class HomePageView(BaseView):
     def file_dropper(self) -> FileDropper:
         """FileDropper widget for file upload interactions."""
         return self._file_dropper
-    @property
-    def error_placeholder(self) -> pn.pane.HTML:
-        """HTML placeholder shown when an error occurs."""
-        return self._error_placeholder
-    @property
-    def loading_placeholder(self) -> pn.pane.HTML:
-        """HTML placeholder shown while a file is being processed."""
-        return self._loading_placeholder
-    @property
-    def no_file_placeholder(self) -> pn.pane.HTML:
-        """HTML placeholder shown when no file is loaded."""
-        return self._no_file_placeholder
-    
+
+
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
-        """Set the last dataset info component (must be a Panel Viewable or None)."""
-        if component is not None and not isinstance(component, pn.viewable.Viewable):
-            raise ValueError("Component must be a Panel Viewable")
+        """Set the last dataset info component (must be a Panel Viewable)."""
         self._dataset_info_layout = component
         
     def _init_components(self):
-        self._no_file_placeholder = pn.pane.HTML(
-            self._model.placeholders.NO_FILE_LOADED,
-            sizing_mode=self.STRETCH_BOTH
-        )
-        self._loading_placeholder = pn.Column(
-            pn.pane.HTML(
-                self._model.placeholders.LOADING_FILE,
-                sizing_mode=self.STRETCH_BOTH
-            ),
-            sizing_mode=self.STRETCH_BOTH,
-        )
-        self._error_placeholder = pn.pane.HTML(
-            self._model.placeholders.ERROR_FILE,
-            sizing_mode=self.STRETCH_BOTH
-        )
         self.sidebar = self._sidebar_layout()
         self.main = self._main_layout()
         

@@ -12,7 +12,7 @@ from whateels.helpers import HTML_ROOT
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
     from xarray import Dataset
 
 # Initialize HoloViews with Bokeh backend
@@ -25,7 +25,7 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
     _STRETCH_BOTH = 'stretch_both'
     _NOT_AVAILABLE = 'N/A'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         self._model = model
         self._dataset = dataset
     
