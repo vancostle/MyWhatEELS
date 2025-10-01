@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .. import HomePageController
     from xarray import Dataset
 
-class FileWorkflowService:
+class FileDropperWorkflowService:
     """
     Orchestrates EELS dataset workflows from file upload to visualization.
     
@@ -117,11 +117,11 @@ class FileWorkflowService:
             # Clear in-memory file to free resources
             del self._model.in_memory_file
             
-            # Reset AppState metadata
-            AppState().metadata = None
-            # Reset AppState datasets
-            AppState().all_datasets = []
-                
+            app_state = AppState()
+            # Clear global AppState data
+            app_state.clear_datasets()
+            app_state.clear_metadata()
+
         except Exception as e:
             raise DMFileRemovalError(e)
 

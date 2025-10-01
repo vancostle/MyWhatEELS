@@ -46,7 +46,7 @@ class AppState(param.Parameterized):
         if not hasattr(self, '_initialized'):
             super().__init__()
             self._initialized = True
-    
+
     @param.depends('metadata', watch=True)
     def _on_metadata_change(self):
         """Called automatically when metadata parameter changes."""
@@ -59,3 +59,9 @@ class AppState(param.Parameterized):
     def _on_datasets_change(self):
         """Called automatically when all_datasets parameter changes."""
         _logger.info(f"All datasets updated via param, count: {len(self.all_datasets)}")
+        
+    def clear_metadata(self):
+        self.metadata = None
+        
+    def clear_datasets(self):
+        self.all_datasets = []

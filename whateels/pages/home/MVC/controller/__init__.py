@@ -22,7 +22,7 @@ class HomePageController:
         self.view = view
 
         # Initialize services
-        self._file_workflow_service = FileWorkflowService(model, self)
+        self._file_workflow_service = FileDropperWorkflowService(model, self)
         # Initialize manager
         self._layout_manager = HomePageLayoutManager(view, self, model)
 
