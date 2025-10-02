@@ -1,18 +1,28 @@
 from .managers import LayoutManager
+from whateels.base.mvc import BaseController
+from whateels.shared_state import AppState
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..model import Model
-    from ..view import View
+    from ..model import ClusteringModel
+    from ..view import ClusteringView
 
-class Controller:
+class ClusteringController(BaseController):
 
-    def __init__(self, model: "Model", view: "View"):
-        self.model = model
-        self.view = view
+    def __init__(self, model: "ClusteringModel", view: "ClusteringView"):
+        super().__init__(model, view)
         
-        self._layout_manager = LayoutManager(view, self, model)
+        self._layout = LayoutManager(view, self, model)
+        
+        app_state = AppState()
+        all_datasets = app_state.all_datasets
+        print("All datasets in AppState:", all_datasets)
+        
+        if not all_datasets:
+            self.base_layout.empty_main()
+            return
         
     @property
-    def layout_manager(self) -> LayoutManager:
+    def layout(self) -> LayoutManager:
         """Access the LayoutManager instance."""
-        return self._layout_manager
+        return self._layout

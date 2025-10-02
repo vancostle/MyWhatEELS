@@ -1,5 +1,4 @@
 from typing import TYPE_CHECKING
-from panel.viewable import Viewable
 
 if TYPE_CHECKING:
     from whateels.base.mvc.base_view import BaseView

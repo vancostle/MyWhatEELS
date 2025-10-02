@@ -7,25 +7,24 @@ import holoviews as hv
 import numpy as np
 
 from typing import override
-from .abstract_eels_visualizer import AbstractEELSVisualizer
-from whateels.helpers import HTML_ROOT
+from whateels.base.base_visualizer import BaseVisualizer
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import ClusteringModel
     from xarray import Dataset
 
 # Initialize HoloViews with Bokeh backend
 hv.extension("bokeh", logo=False)
 
-class SingleSpectrumVisualizer(AbstractEELSVisualizer):
+class SingleSpectrumVisualizer(BaseVisualizer):
     """Composes single spectrum visualizations from EELS data"""
     
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
     _NOT_AVAILABLE = 'N/A'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "ClusteringModel", dataset: "Dataset"):
         self._model = model
         self._dataset = dataset
     

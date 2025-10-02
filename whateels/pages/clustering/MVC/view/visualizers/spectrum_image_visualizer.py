@@ -9,17 +9,17 @@ import numpy as np
 import time
 import plotly.graph_objs as go
 
-from .abstract_eels_visualizer import AbstractEELSVisualizer
+from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import ResizableColumns
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import ClusteringModel
     from xarray import Dataset
     from param.parameterized import Event
 
-class SpectrumImageVisualizer(AbstractEELSVisualizer):
+class SpectrumImageVisualizer(BaseVisualizer):
     """
     Version Plotly / Panel del visualizador de Spectrum Image.
     Mantiene la lógica de datos del visualizador original y reemplaza
@@ -36,7 +36,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     
     _NOT_AVAILABLE = 'N/A'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "ClusteringModel", dataset: "Dataset"):
         super().__init__(model, dataset)
 
         self._model = model

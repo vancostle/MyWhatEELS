@@ -13,20 +13,20 @@ pn.extension(raw_css=[
     ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
 ])
 
-from .abstract_eels_visualizer import AbstractEELSVisualizer
+from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import ClusteringModel
 
-class ImageVisualizer(AbstractEELSVisualizer):
+class ImageVisualizer(BaseVisualizer):
     """Composes image visualizations from EELS data"""
 
     # Constants for sizing modes and plot configuration
     _STRETCH_BOTH = 'stretch_both'
     _STRETCH_WIDTH = 'stretch_width'
     
-    def __init__(self, model: "Model", dataset: "xr.Dataset"):
+    def __init__(self, model: "ClusteringModel", dataset: "xr.Dataset"):
         super().__init__(model, dataset)
 
         self._model = model
@@ -112,10 +112,6 @@ class ImageVisualizer(AbstractEELSVisualizer):
 
         Returns a plotly.graph_objects.Figure sized to data with preserved aspect ratio.
         """
-        IMAGE_X_LABEL = 'X Position'
-        IMAGE_Y_LABEL = 'Y Position'
-        IMAGE_TITLE = 'Image Data'
-
         MAX_PLOT_SIZE = 600
 
         # Calculate dimensions from the data itself
