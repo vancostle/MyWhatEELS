@@ -2,6 +2,8 @@ import param
 from typing import TYPE_CHECKING
 import panel as pn
 
+from whateels.shared_state import AppState
+
 if TYPE_CHECKING:
     from ..model import Model
     from ..view import View
@@ -17,24 +19,69 @@ class Controller(param.Parameterized):
         self._model = model
         self._view = view
         
-        values = pn.state.location.query_params['values'] if 'values' in pn.state.location.query_params else None
-        if values:
-            values = tuple(map(float, values.split(","))) # Convert to tuple of floats
-            print(f"Multifitting page opened with params: {values}")
+        fit_range = pn.state.location.query_params['values'] if 'values' in pn.state.location.query_params else None
+        if fit_range:
+            fit_range = tuple(map(float, fit_range.split(","))) # Convert to tuple of floats
+            self._model.set_fit_range=fit_range
+            print(f"Multifitting page opened with params: {fit_range}")
 
-        # Setup the reactive display in the view's container
-        self._setup_reactive_display()
-    
-    def _setup_reactive_display(self):
-        """Setup the reactive display component in the view's main container."""
+        # Mount the (non-reactive) multifit component into the view's container.
         main_container = self._view.get_main_container()
         if main_container is not None:
             main_container.clear()
-            main_container.append(self.get_multifit_component)
+            try:
+                component = self.get_dataset_component()
+            except Exception:
+                component = pn.pane.HTML("<p>Error rendering multifit component.</p>", sizing_mode="stretch_both")
+            main_container.append(component)
 
-    @param.depends("_model._app_state.multifit")
-    def get_multifit_component(self):
-        """Returns the multifitting component for display."""
+    def collect_dataset(self):
+        """Attempt to collect the xarray Dataset used for plotting.
+
+        Order of attempts:
+        AppState().plot_dataset (published by visualizers)
+
+        Returns the dataset object or None if not found.
+        """
+        try:
+            ds = AppState().plot_dataset
+            if ds is not None:
+                self.ds = ds
+                print('Dataset collected in collect_dataset found in AppState().plot_dataset')
+                return ds
+        except Exception:
+            pass
+
+        return None
+    
+    @param.depends("_model._app_state.metadata")
+    def get_dataset_component(self):
+        """Return a simple component describing the dataset available to multifit.
+
+        This is non-reactive helper retained for compatibility with callers that
+        expect a Panel component. It retrieves the dataset via `collect_dataset()`
+        and returns a simple HTML pane or the view's "no multifit" component.
+        """
+        ds = self.collect_dataset()
+        if ds is None:
+            # Prefer a view-provided fallback if available
+            if hasattr(self._view, 'create_no_multifit_component'):
+                return self._view.create_no_multifit_component()
+            return pn.pane.HTML("<p>No dataset available for multifitting :c .</p>", sizing_mode="stretch_both")
+        # Return a small informative pane (avoid dumping the full dataset)
+        try:
+            summary = getattr(ds, 'coords', None)
+            display = f"<p>Dataset available: {ds}</p>"
+            return pn.pane.HTML(display, sizing_mode="stretch_both")
+        except Exception:
+            return pn.pane.HTML("<p>Dataset available.</p>", sizing_mode="stretch_both")
+    
+    def build_multifit_component(self):
+        """Builds and returns the multifitting component for display.
+
+        This is a one-time builder (non-reactive). It checks availability and
+        returns an appropriate Pane or placeholder.
+        """
         if not self._model.is_multifit_available():
             return self._view.create_no_multifit_component()
         # If multifit data is available, try to render it with the view's plot component,

@@ -24,7 +24,19 @@ class View:
     # --- UI Component Creation Methods ---
     
     def create_plot_component(self, data):
-        """Creates interactive plot pane."""
+        """Creates interactive plot pane.
+
+        If `data` looks like an xarray Dataset (duck-typed via `coords`),
+        return a small HTML pane indicating a dataset is available so other
+        pages (e.g. multifitting) can detect it.
+        """
+        # Duck-typing: xarray Datasets usually have a `coords` attribute.
+        try:
+            if hasattr(data, 'coords'):
+                return self.create_dataset_component(data)
+        except Exception:
+            pass
+
         return pn.pane.Plot(
             data,
             depth=1,
@@ -32,9 +44,23 @@ class View:
             sizing_mode=self._STRETCH_BOTH
         )
 
-    def create_no_multifit_component(self):
-        """Fallback component when no multifit is available."""
-        return pn.pane.HTML("<p>No multifit data available.</p>", sizing_mode=self._STRETCH_BOTH)
+    def create_dataset_component(self, dataset):
+        """Return a small HTML pane announcing the presence of a dataset.
+
+        This avoids attempting to render the entire xarray Dataset as a Plot
+        and gives a clear indicator that a dataset is available for
+        multifitting or other downstream pages.
+        """
+        try:
+            name = type(dataset).__name__
+            print(f"Dataset type detected: {name}")
+        except Exception:
+            name = 'Dataset'
+        return pn.pane.HTML(f"<p>Dataset available: {name}</p>", sizing_mode=self._STRETCH_BOTH)
+
+    # def create_no_multifit_component(self):
+    #     """Fallback component when no multifit is available."""
+    #     return pn.pane.HTML("<p>No multifit data available.</p>", sizing_mode=self._STRETCH_BOTH)
 
     # --- Properties ---
     @property

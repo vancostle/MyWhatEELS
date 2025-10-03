@@ -2,12 +2,22 @@ from whateels.shared_state import AppState
 
 class Model:
     """
-    Model for the metadata page.
-    Handles data and business logic for metadata information.
+    Model for the multifitting page.
+    Handles data and business logic for multifitting and metadata information.
     """
+    set_fit_range = None
     
     def __init__(self):
         self._app_state = AppState()
+
+    def is_metadata_available(self) -> bool:
+        """Check if metadata is available."""
+        return self._app_state.metadata is not None
+    
+    @property
+    def metadata(self):
+        """Get raw metadata."""
+        return self._app_state.metadata
     
     def is_multifit_available(self) -> bool:
         """Check if multifit is available."""
