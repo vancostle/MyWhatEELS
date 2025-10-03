@@ -75,6 +75,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.paneA = None  # Plotly heatmap pane
         self.paneB = None  # Plotly spectrum pane
         self._pc = None    # periodic callback handle
+        self._js_executor = None  # invisible HTML pane to run JS
 
         # Setup widgets, plots and callbacks
         self._setup_widgets()
@@ -83,7 +84,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         
     # --- Public layout builders (used by controller) ---
     @override
-    def create_plots(self):
+    def create_plots(self):        
         left_column = pn.Column(
             self.paneA,
             sizing_mode='stretch_both'
@@ -131,14 +132,17 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         # Multifit button (orange)
         self.multifit_button = pn.widgets.Button(name="Multifit", button_type="warning")
-        self.multifit_button.js_on_click(code="window.open('./multifit-details', '_blank');")
         self.multifit_button.on_click(self._on_multifit_clicked)  # server-side fallback
         self.multifit_button.visible = False
+
+        # Invisible HTML pane to run JavaScript (Open new window with params)
+        self._js_executor = pn.pane.HTML("", width=0, height=0)
 
         # Fila de botones debajo de paneB (sin save_button)
         self.buttons_row = pn.Row(
             self.fitting_button,
             self.multifit_button,
+            self._js_executor,
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -150,6 +154,45 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             css_classes=["range-label-wrapper"],
         )
         self.range_slider_row.visible = False
+
+    def _on_multifit_clicked(self, event):
+        """Callback para el botón de multifit"""
+        
+        min_val, max_val = self.range_slider.value
+        
+        url_base = f"http://{pn.state.location.hostname}:{pn.state.location.port}"
+
+        values = f"{min_val},{max_val}"
+        url_with_params = f"{url_base}/multifit-details?values={values}"
+
+        self._js_executor.object = f"""
+            <script>
+                window.open('{url_with_params}', '_blank');
+            </script>
+        """
+
+    def _on_range_changed(self, event):
+        """Refresh paneB when the fit range slider changes (only when fitting is active)."""
+        if not self._fitting_active:
+            return
+        if self._region_pairs:
+            fig = self._figB_region(self._region_pairs)
+            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
+            if res is not None:
+                spec, _ = res
+                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
+                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
+            self.paneB.object = self._set_ranges_and_convert(fig)
+            return
+        if self._last_hover_point is not None:
+            fig = self._figB_hover(self._last_hover_point)
+            i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
+            spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+            if spec is not None:
+                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
+                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
+            self.paneB.object = self._set_ranges_and_convert(fig)
+
 
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):
@@ -571,52 +614,3 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return
 
         self.paneB.object = self._set_ranges_and_convert(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
-
-    def _on_multifit_clicked(self, event):
-        """
-        Fallback en servidor: navega en la misma pestaña si el JS del cliente está bloqueado.
-        Ahora adjunta el rango actual del slider como query param `range=start,end`.
-        """
-        try:
-            # Intentar leer el valor del slider y formatearlo como start,end
-            rng = getattr(self, "range_slider", None)
-            if rng is not None:
-                val = rng.value
-                # Asegurar tuple/list con 2 valores
-                if isinstance(val, (list, tuple)) and len(val) == 2:
-                    start = float(val[0])
-                    end = float(val[1])
-                    print(start, end)
-                    pn.state.location.href = f"./multifit-details?range={start},{end}"
-                    return
-            # Fallback simple si no hay slider o valor inesperado
-            pn.state.location.href = "./multifit-details"
-        except Exception:
-            # En caso de error, navegar sin parámetros
-            try:
-                pn.state.location.href = "./multifit-details"
-            except Exception:
-                pass
-        return
-
-    def _on_range_changed(self, event):
-        """Refresh paneB when the fit range slider changes (only when fitting is active)."""
-        if not self._fitting_active:
-            return
-        if self._region_pairs:
-            fig = self._figB_region(self._region_pairs)
-            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-            if res is not None:
-                spec, _ = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            return
-        if self._last_hover_point is not None:
-            fig = self._figB_hover(self._last_hover_point)
-            i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-            spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-            if spec is not None:
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
