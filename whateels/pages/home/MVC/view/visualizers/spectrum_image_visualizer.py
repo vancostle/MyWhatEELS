@@ -47,13 +47,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self._model = model
         self._dataset = dataset
 
-        # Publish the dataset to shared AppState so other pages can access it
-        try:
-            AppState().plot_dataset = self._dataset
-        except Exception:
-            # Avoid breaking the visualizer if AppState is unavailable for any reason
-            pass
-
         # Energy axis (eje de energía)
         self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
 
@@ -118,6 +111,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     @override
     def create_dataset_info(self):
         return super().create_dataset_info()
+    
 
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
@@ -146,7 +140,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Invisible HTML pane to run JavaScript (Open new window with params)
         self._js_executor = pn.pane.HTML("", width=0, height=0)
 
-        # Fila de botones debajo de paneB (sin save_button)
+        # Fila de botones debajo de paneB
         self.buttons_row = pn.Row(
             self.fitting_button,
             self.multifit_button,
@@ -165,6 +159,11 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     def _on_multifit_clicked(self, event):
         """Callback para el botón de multifit"""
+        # Publish the dataset now that multifit is requested.
+        try:
+            AppState().plot_dataset = self._dataset
+        except Exception:
+            pass
         
         min_val, max_val = self.range_slider.value
         
