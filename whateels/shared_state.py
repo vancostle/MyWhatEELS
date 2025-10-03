@@ -35,6 +35,10 @@ class AppState(param.Parameterized):
     all_datasets = param.List(default=list(), doc="""
         List of all loaded EELS datasets (xarray.Dataset).
     """)
+    
+    filename = param.String(default="", doc="""
+        Name of the currently loaded file.
+    """)
 
     def __new__(cls):
         if cls._instance is None:
@@ -60,8 +64,25 @@ class AppState(param.Parameterized):
         """Called automatically when all_datasets parameter changes."""
         _logger.info(f"All datasets updated via param, count: {len(self.all_datasets)}")
         
+    @param.depends('filename', watch=True)
+    def _on_filename_change(self):
+        """Called automatically when filename parameter changes."""
+        if self.filename:
+            _logger.info(f"Filename updated via param: {self.filename}")
+        else:
+            _logger.info("Filename cleared via param")
+        
     def clear_metadata(self):
         self.metadata = None
         
     def clear_datasets(self):
         self.all_datasets = []
+        
+    def clear_filename(self):
+        self.filename = ""
+        
+    def clear_all(self):
+        """Clear all shared state parameters."""
+        self.clear_metadata()
+        self.clear_datasets()
+        self.clear_filename()

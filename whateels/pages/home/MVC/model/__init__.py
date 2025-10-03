@@ -1,10 +1,6 @@
 from whateels.helpers.in_memory_file import InMemoryFile
 from whateels.base.mvc.base_model import BaseModel
-from typing import TYPE_CHECKING
 from .constants import Constants, Colors, FileDropper, Placeholders
-
-if TYPE_CHECKING:
-    from xarray import Dataset
 
 class HomePageModel(BaseModel):
     """
@@ -13,7 +9,6 @@ class HomePageModel(BaseModel):
     """
     def __init__(self):
         # State attributes
-        self._all_datasets: list["Dataset"] = []  # List of all loaded EELS datasets
         self._in_memory_file: InMemoryFile | None = None  # Currently loaded file in memory (if any)
 
         # Shared configuration and constants
@@ -22,9 +17,6 @@ class HomePageModel(BaseModel):
         self._file_dropper = FileDropper()
         self._placeholders = Placeholders()
 
-    @property
-    def all_datasets(self) -> list["Dataset"]:
-        return self._all_datasets
     @property
     def constants(self) -> Constants:
         return self._constants
@@ -38,10 +30,6 @@ class HomePageModel(BaseModel):
     def in_memory_file(self) -> InMemoryFile | None:
         return self._in_memory_file
 
-    @all_datasets.setter
-    def all_datasets(self, datasets: list["Dataset"]):
-        """Set the list of all EELS datasets."""
-        self._all_datasets = datasets
     @in_memory_file.setter
     def in_memory_file(self, file: InMemoryFile | None):
         """Set the in-memory file (or None to clear)."""

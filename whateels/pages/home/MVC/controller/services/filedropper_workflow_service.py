@@ -60,8 +60,9 @@ class FileDropperWorkflowService:
         """
 
         try:
-            # Clear previous dataset info panels to prevent caching old data
-            AppState().clear_datasets()
+            # Clear any existing datasets and metadata
+            app_state = AppState()
+            app_state.clear_all()
 
             all_datasets: list[Dataset] = []
             
@@ -72,7 +73,7 @@ class FileDropperWorkflowService:
             all_datasets = self._file_processor.process_upload(filename, file_content)
 
             # Update AppState with all loaded datasets for global access
-            AppState().all_datasets = all_datasets
+            app_state.all_datasets = all_datasets
             
             if not all_datasets:
                 self._handle_file_upload_error(filename)
@@ -111,16 +112,12 @@ class FileDropperWorkflowService:
             self._controller.layout.remove_dataset_info_from_sidebar()
             self._controller.base_layout.empty_main()
             
-            # Clear previous dataset info panels to prevent caching old data
-            self._model.all_datasets = []
-            
             # Clear in-memory file to free resources
             del self._model.in_memory_file
             
             app_state = AppState()
             # Clear global AppState data
-            app_state.clear_datasets()
-            app_state.clear_metadata()
+            app_state.clear_all()
 
         except Exception as e:
             raise DMFileRemovalError(e)
