@@ -33,6 +33,12 @@ class AppState(param.Parameterized):
     multifit = param.Parameter(default=None, doc="""
         Multifit results or state object. None if not available yet.
     """)
+    # Reactive parameter to hold the dataset currently plotted in the visualizer
+    plot_dataset = param.Parameter(default=None, doc="""
+        The xarray Dataset (or view) currently used to build figA/figB in the
+        SpectrumImageVisualizer. Stored here so other pages (e.g. multifitting)
+        can access the same dataset instance.
+    """)
 
     def __new__(cls):
         if cls._instance is None:
@@ -60,3 +66,11 @@ class AppState(param.Parameterized):
             _logger.info(f"Multifit updated via param")
         else:
             _logger.info("Multifit cleared via param")
+
+    @param.depends('plot_dataset', watch=True)
+    def _on_plot_dataset_change(self):
+        """Called when the shared plot dataset changes."""
+        if self.plot_dataset is not None:
+            _logger.info("plot_dataset published to AppState")
+        else:
+            _logger.info("plot_dataset cleared in AppState")

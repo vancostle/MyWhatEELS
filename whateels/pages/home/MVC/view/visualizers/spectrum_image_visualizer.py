@@ -13,6 +13,7 @@ from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import ResizableColumns
+from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
     from ...model import Model
@@ -45,6 +46,13 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         self._model = model
         self._dataset = dataset
+
+        # Publish the dataset to shared AppState so other pages can access it
+        try:
+            AppState().plot_dataset = self._dataset
+        except Exception:
+            # Avoid breaking the visualizer if AppState is unavailable for any reason
+            pass
 
         # Energy axis (eje de energía)
         self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
