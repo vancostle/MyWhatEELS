@@ -29,11 +29,37 @@ class Controller(param.Parameterized):
         main_container = self._view.get_main_container()
         if main_container is not None:
             main_container.clear()
-            try:
-                component = self.get_dataset_component()
-            except Exception:
-                component = pn.pane.HTML("<p>Error rendering multifit component.</p>", sizing_mode="stretch_both")
-            main_container.append(component)
+            # If a fit_range was provided in the URL, mount a quick demo plot so
+            # developers can verify plotting on the multifitting page.
+            if fit_range:
+                # try:
+                component = self.test_plot()
+                # except Exception:
+                    # component = pn.pane.HTML("<p>Error rendering demo plot.</p>", sizing_mode="stretch_both")
+                main_container.append(component)
+            else:
+                try:
+                    component = self.get_dataset_component()
+                except Exception:
+                    component = pn.pane.HTML("<p>Error rendering multifit component.</p>", sizing_mode="stretch_both")
+                main_container.append(component)
+
+    def test_plot(self):
+        """Test method to create a simple plot component for quick smoke testing.
+
+        Returns a Panel viewable produced by the view's create_plot_component
+        factory. This mirrors the example you provided: constructs an (x, y)
+        tuple and delegates creation to the view.
+        """
+        import numpy as np
+        xx = np.linspace(-3.5, 3.5, 100)
+        yy = np.linspace(-3.5, 3.5, 100)
+        x, y = np.meshgrid(xx, yy)
+        z = np.exp(-((x - 1) ** 2) - y**2) - (x**3 + y**4 - x / 5) * np.exp(-(x**2 + y**2))
+        # The view expects data that either looks like an xarray Dataset or a
+        # plotting-compatible object. We pass a simple (x, y) tuple.
+        data = self._view.create_plot_component((x, y, z))
+        return data
 
     def collect_dataset(self):
         """Attempt to collect the xarray Dataset used for plotting.

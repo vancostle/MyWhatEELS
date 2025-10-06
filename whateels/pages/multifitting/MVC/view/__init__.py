@@ -30,18 +30,14 @@ class View:
         return a small HTML pane indicating a dataset is available so other
         pages (e.g. multifitting) can detect it.
         """
-        # Duck-typing: xarray Datasets usually have a `coords` attribute.
-        try:
-            if hasattr(data, 'coords'):
-                return self.create_dataset_component(data)
-        except Exception:
-            pass
+        
+        import plotly.graph_objects as go
 
-        return pn.pane.Plot(
-            data,
-            depth=1,
-            hover_preview=True,
-            sizing_mode=self._STRETCH_BOTH
+        surface=go.Surface(z=data[2])
+        fig = go.Figure(data=[surface])
+
+        return pn.pane.Plotly(
+            fig
         )
 
     def create_dataset_component(self, dataset):

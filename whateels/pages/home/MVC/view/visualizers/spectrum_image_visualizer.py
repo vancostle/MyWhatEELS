@@ -46,6 +46,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         self._model = model
         self._dataset = dataset
+        
+        print('init',self._dataset)
 
         # Energy axis (eje de energía)
         self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
@@ -115,6 +117,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
+        
+        print('widgets',self._dataset)
 
         # Range slider ya usado por la implementación anterior
         self.range_slider = pn.widgets.EditableRangeSlider(
@@ -160,6 +164,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     def _on_multifit_clicked(self, event):
         """Callback para el botón de multifit"""
         # Publish the dataset now that multifit is requested.
+        print('on_multifit', self._dataset)
         try:
             AppState().plot_dataset = self._dataset
         except Exception:
