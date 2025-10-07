@@ -32,11 +32,4 @@ class ClusteringController(BaseController):
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""
-        eels = []
-        
-        for dataset in datasets:
-            coords = dataset.coords
-            if "Eloss" in coords:
-                eels.append(dataset)
-        
-        return eels
+        return [ds for ds in datasets if "Eloss" in ds.coords]
