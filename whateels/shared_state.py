@@ -62,12 +62,13 @@ class AppState(param.Parameterized):
     @param.depends('all_datasets', watch=True)
     def _on_datasets_change(self):
         """Called automatically when all_datasets parameter changes."""
-        _logger.info(f"All datasets updated via param, count: {len(self.all_datasets)}")
+        count = len(self.all_datasets) if isinstance(self.all_datasets, list) else 0
+        _logger.info(f"All datasets updated via param, count: {count}")
         
     @param.depends('filename', watch=True)
     def _on_filename_change(self):
         """Called automatically when filename parameter changes."""
-        if self.filename:
+        if self.filename is not None and self.filename != "":
             _logger.info(f"Filename updated via param: {self.filename}")
         else:
             _logger.info("Filename cleared via param")

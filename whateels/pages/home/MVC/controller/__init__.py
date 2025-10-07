@@ -26,13 +26,13 @@ class HomePageController(BaseController):
         # Initialize manager
         self._layout_manager = HomePageLayoutManager(view, self, model)
 
-        # Set up callbacks for file dropper events directly
-        self.view.file_dropper.on_file_uploaded_callback = self._file_workflow_service.handle_file_upload
-        self.view.file_dropper.on_file_removed_callback = self._file_workflow_service.handle_file_removal
+        if file_dropper := getattr(self.view, "file_dropper", None):
+            # Set up callbacks for file dropper events directly
+            file_dropper.on_file_uploaded_callback = self._file_workflow_service.handle_file_upload
+            file_dropper.on_file_removed_callback = self._file_workflow_service.handle_file_removal
         
-        # Initial layout setup based on existing datasets
-        all_datasets = AppState().all_datasets
-        if all_datasets:
+        if all_datasets := getattr(AppState(), "all_datasets", None):
+            # Initial layout setup based on existing datasets
             self._layout_manager.create_tab_and_dataset_info(all_datasets)
 
     @property

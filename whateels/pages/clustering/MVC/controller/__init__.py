@@ -18,9 +18,11 @@ class ClusteringController(BaseController):
         all_datasets = app_state.all_datasets
         print("All datasets in AppState:", all_datasets)
         
-        if not all_datasets:
+        if not isinstance(all_datasets, list) or not all_datasets:
             self.base_layout.empty_main()
             return
+        
+        self._layout.create_tab_and_dataset_info(all_datasets)
         
     @property
     def layout(self) -> LayoutManager:

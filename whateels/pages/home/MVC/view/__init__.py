@@ -1,5 +1,5 @@
 from whateels.base.mvc.base_view import BaseView
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from whateels.components import FileDropper
 from whateels.helpers import CSS_ROOT
 
@@ -20,18 +20,20 @@ class HomePageView(BaseView):
         )
         
         # Initialize layout components
-        self._dataset_info_layout = None
-        self._file_dropper = None
-        
+        self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
+        self._file_dropper: Optional[FileDropper] = None
+
         # Initialize visualization components and layouts
         self._init_components()
         
+    from typing import Optional
+
     @property
-    def dataset_info(self) -> pn.viewable.Viewable:
+    def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
         return self._dataset_info_layout
     @property
-    def file_dropper(self) -> FileDropper:
+    def file_dropper(self) -> Optional[FileDropper]:
         """FileDropper widget for file upload interactions."""
         return self._file_dropper
 
@@ -46,12 +48,16 @@ class HomePageView(BaseView):
         self.main = self._main_layout()
         
     def _sidebar_layout(self):
-        file_dropper = FileDropper(
-            valid_extensions=self._model.file_dropper.VALID_EXTENSIONS,
-            reject_message=self._model.file_dropper.REJECT_MESSAGE,
-            success_message=self._model.file_dropper.SUCCESS_MESSAGE,
-            feedback_message=self._model.file_dropper.FEEDBACK_MESSAGE,
-        )        
+        file_dropper: FileDropper = FileDropper()
+
+        if model_file_dropper := getattr(self._model, 'file_dropper', None):
+            file_dropper = FileDropper(
+                valid_extensions=model_file_dropper.VALID_EXTENSIONS,
+                reject_message=model_file_dropper.REJECT_MESSAGE,
+                success_message=model_file_dropper.SUCCESS_MESSAGE,
+                feedback_message=model_file_dropper.FEEDBACK_MESSAGE,
+            )      
+  
         self._file_dropper = file_dropper
         self._sidebar_container_layout = pn.Column(
             self._file_dropper,
