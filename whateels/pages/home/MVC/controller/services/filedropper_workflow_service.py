@@ -63,6 +63,8 @@ class FileDropperWorkflowService:
             # Clear any existing datasets and metadata
             app_state = AppState()
             app_state.clear_all()
+            
+            app_state.filename = filename
 
             all_datasets: list[Dataset] = []
             

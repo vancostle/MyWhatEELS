@@ -25,8 +25,6 @@ class HomePageView(BaseView):
 
         # Initialize visualization components and layouts
         self._init_components()
-        
-    from typing import Optional
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -36,7 +34,6 @@ class HomePageView(BaseView):
     def file_dropper(self) -> Optional[FileDropper]:
         """FileDropper widget for file upload interactions."""
         return self._file_dropper
-
 
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):

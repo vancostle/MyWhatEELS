@@ -1,6 +1,7 @@
 from .managers import LayoutManager
 from whateels.base.mvc import BaseController
 from whateels.shared_state import AppState
+from xarray import Dataset
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -16,15 +17,26 @@ class ClusteringController(BaseController):
         
         app_state = AppState()
         all_datasets = app_state.all_datasets
-        print("All datasets in AppState:", all_datasets)
         
         if not isinstance(all_datasets, list) or not all_datasets:
             self.base_layout.empty_main()
             return
         
-        self._layout.create_tab_and_dataset_info(all_datasets)
-        
+        eels = self._get_only_eels_datasets(all_datasets)
+        self._layout.create_tab_and_dataset_info(eels)
+
     @property
     def layout(self) -> LayoutManager:
         """Access the LayoutManager instance."""
         return self._layout
+    
+    def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
+        """Filter and return only EELS datasets from the provided list."""
+        eels = []
+        
+        for dataset in datasets:
+            coords = dataset.coords
+            if "Eloss" in coords:
+                eels.append(dataset)
+        
+        return eels

@@ -35,7 +35,7 @@ class LayoutManager:
         self._model = model
 
         # Store all dataset information
-        self._all_dataset_info = []
+        self._all_dataset_info: list[pn.viewable.Viewable] = []
             
     def show_loading_placeholder_in_main_layout(self):
         """Show the loading placeholder in the main layout."""
@@ -94,14 +94,14 @@ class LayoutManager:
             plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
 
             for dataset in all_datasets:
-                dataset_type = dataset.attrs.get(DATASET_TYPE, None)
+                dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
                 image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
 
                 # Create plots using the factory
-                chosen_visualizer = visualizer_factory.choose_visualizer(dataset_type, dataset)
+                chosen_visualizer = visualizer_factory.choose_visualizer(str(dataset_type), dataset)
                 
                 if chosen_visualizer is None:
-                    return False
+                    return
                 
                 visualizer_plots = chosen_visualizer.create_plots()
                 

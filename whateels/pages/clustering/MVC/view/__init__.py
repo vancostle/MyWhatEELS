@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from whateels.helpers import HTML_ROOT, CSS_ROOT
 from whateels.components import UploadedFile, ErrorPanel
 from whateels.base.mvc import BaseView
+from whateels.shared_state import AppState
 
 import panel as pn
 
@@ -18,37 +19,37 @@ class ClusteringView(BaseView):
             ]
         )
         self._error_container_layout = None
+        self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
         
-        # Add any additional, unique setup for ClusteringView below
-        self._main_layout()
-        self._right_sidebar_layout()
-        self._sidebar_layout()
+        self._init_components()
+        
+    def _init_components(self):
+        self.sidebar = self._sidebar_layout()
+        self.main = self._main_layout()
+        self.right_sidebar = self._right_sidebar_layout()
+
+    @property
+    def dataset_info(self) -> Optional[pn.viewable.Viewable]:
+        """Reference to the last dataset info component added to the sidebar."""
+        return self._dataset_info_layout
+    
+    @dataset_info.setter
+    def dataset_info(self, component: pn.viewable.Viewable):
+        """Set the last dataset info component (must be a Panel Viewable)."""
+        self._dataset_info_layout = component
 
     def _sidebar_layout(self):
-        uploaded_file = UploadedFile(filename="uploaded_file.dm4", sizing_mode=self.STRETCH_WIDTH)
-        self.sidebar = pn.Column(
+        app_state = AppState()
+        uploaded_file = UploadedFile(filename=str(app_state.filename), sizing_mode=self.STRETCH_WIDTH, margin=(0,0,10,0))
+        sidebar = pn.Column(
             uploaded_file,
             sizing_mode=self.STRETCH_WIDTH
         )
+                
+        # error_panel = ErrorPanel(sizing_mode=self.STRETCH_WIDTH)
+        # self.sidebar.append(error_panel)
         
-        fake_dataset_info = self._create_fake_dataset_info_layout()
-        self.sidebar.append(fake_dataset_info)
-        
-        error_panel = ErrorPanel(sizing_mode=self.STRETCH_WIDTH)
-        self.sidebar.append(error_panel)
-
-    def _main_layout(self):
-        fake_tabs = pn.Tabs(
-            ("EELS 0", pn.pane.Markdown("Content for EELS 0", sizing_mode=self.STRETCH_BOTH)),
-            ("EELS 1", pn.pane.Markdown("Content for EELS 1", sizing_mode=self.STRETCH_BOTH)),
-            sizing_mode=self.STRETCH_BOTH
-        )
-        
-        self.main = pn.Column(
-            fake_tabs,
-            sizing_mode=self.STRETCH_BOTH
-        )
-        return self.main
+        return sidebar
 
     def _right_sidebar_layout(self):
         
@@ -104,16 +105,16 @@ class ClusteringView(BaseView):
             sizing_mode=self.STRETCH_BOTH
         )
 
-        self.right_sidebar = pn.Column(
+        right_sidebar = pn.Column(
             pre_normalization_container,
             available_norms_container,
             clustering_hub,
             buttons_container,
             sizing_mode=self.STRETCH_BOTH
         )
-        return self.right_sidebar
+        return right_sidebar
     
-    def _create_fake_dataset_info_layout(self):
+    def create_tab_and_dataset_info(self):
         # File and encoding constants
         HTML_FILE = 'metadata_info.html'
         READ_MODE = 'r'
@@ -204,3 +205,10 @@ class ClusteringView(BaseView):
             css_classes=DATASET_INFO_CLASS
         )
         return dataset_info
+    
+    def _main_layout(self):
+        main = pn.Column(
+            self._no_file_placeholder,
+            sizing_mode=self.STRETCH_BOTH
+        )
+        return main

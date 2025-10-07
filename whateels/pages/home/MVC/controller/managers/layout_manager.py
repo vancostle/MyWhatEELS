@@ -82,7 +82,7 @@ class HomePageLayoutManager:
                 chosen_visualizer = visualizer_factory.choose_visualizer(dataset_type, dataset)
                 
                 if chosen_visualizer is None:
-                    return False
+                    return
                 
                 visualizer_plots = chosen_visualizer.create_plots()
                 

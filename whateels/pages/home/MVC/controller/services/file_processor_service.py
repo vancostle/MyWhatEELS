@@ -58,7 +58,7 @@ class FileProcessorService:
             return all_datasets
             
         except DMFileLoadingError:
-            raise  DMFileLoadingError(f"Failed to load DM3/DM4 file: {filename}")
+            raise DMFileLoadingError(f"Failed to load DM3/DM4 file: {filename}")
         except Exception as e:
             raise DMFileUploadError(e)
 
@@ -251,7 +251,7 @@ class FileProcessorService:
         IMAGE_TAGS = 'ImageTags'
         EELS = 'EELS'
         image_tags = list(metadata[IMAGE_TAGS].keys())
-        return EELS in image_tags
+        return EELS in image_tags   
 
     def _handle_file_error(self, exception: Exception) -> list:
         """

@@ -35,8 +35,8 @@ class AppState(param.Parameterized):
     all_datasets = param.List(default=list(), doc="""
         List of all loaded EELS datasets (xarray.Dataset).
     """)
-    
-    filename = param.String(default="", doc="""
+
+    filename = param.String(default="No file uploaded", doc="""
         Name of the currently loaded file.
     """)
 
