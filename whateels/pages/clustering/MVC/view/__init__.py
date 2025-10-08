@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from ..model import ClusteringModel
 
 class ClusteringView(BaseView):
+    
     def __init__(self, model: "ClusteringModel"):
         super().__init__(
             model, 
@@ -21,10 +22,23 @@ class ClusteringView(BaseView):
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
         
+        self._kmeans_input = None
+        self._run_button = None
+        
         self._init_components()
         
+    @property
+    def kmeans_input(self):
+        """Access the K-Means input widgets."""
+        return self._kmeans_input  
+    
+    @property
+    def run_button(self):
+        """Access the K-Means input widgets."""
+        return self._run_button         
+
     def _init_components(self):
-        self.sidebar = self._sidebar_layout()
+        self.sidebar = self._left_sidebar_layout()
         self.main = self._main_layout()
         self.right_sidebar = self._right_sidebar_layout()
 
@@ -38,10 +52,10 @@ class ClusteringView(BaseView):
         """Set the last dataset info component (must be a Panel Viewable)."""
         self._dataset_info_layout = component
 
-    def _sidebar_layout(self):
+    def _left_sidebar_layout(self):
         app_state = AppState()
         uploaded_file = UploadedFile(filename=str(app_state.filename), sizing_mode=self.STRETCH_WIDTH, margin=(0,0,10,0))
-        sidebar = pn.Column(
+        left_sidebar = pn.Column(
             uploaded_file,
             sizing_mode=self.STRETCH_WIDTH
         )
@@ -49,7 +63,7 @@ class ClusteringView(BaseView):
         # error_panel = ErrorPanel(sizing_mode=self.STRETCH_WIDTH)
         # self.sidebar.append(error_panel)
         
-        return sidebar
+        return left_sidebar
 
     def _right_sidebar_layout(self):
         
@@ -79,12 +93,17 @@ class ClusteringView(BaseView):
         k_means_tab = pn.pane.Markdown("Clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
         agglomerative_tab = pn.pane.Markdown("Dimensionality reduction controls go here.", sizing_mode=self.STRETCH_WIDTH)
         spectral_tab = pn.pane.Markdown("Density-based clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
-        
+
+
+        self._kmeans_input = {
+            "n_clusters": pn.widgets.IntInput(name="Number of Clusters", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
+            "n_init": pn.widgets.IntInput(name="Number of Initializations", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
+            "max_iter": pn.widgets.IntInput(name="Max Iterations", value=300, step=1, end=10000, sizing_mode=self.STRETCH_WIDTH),
+            "init_method": pn.widgets.Select(name='Initialization Method', options=['k-means++', 'random'], sizing_mode=self.STRETCH_WIDTH),
+        }
+
         k_means_tab = pn.Column(
-            pn.widgets.IntInput(name="Number of Clusters", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
-            pn.widgets.IntInput(name="Number of Initializations", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
-            pn.widgets.IntInput(name="Max Iterations", value=300, step=1, end=10000, sizing_mode=self.STRETCH_WIDTH),
-            pn.widgets.Select(name='Initialization Method', options=['k-means++', 'random'], sizing_mode=self.STRETCH_WIDTH),
+            *[widget for widget in self._kmeans_input.values()],
             sizing_mode=self.STRETCH_BOTH
         )
         
@@ -95,9 +114,11 @@ class ClusteringView(BaseView):
             sizing_mode=self.STRETCH_BOTH
         )
         
+        self._run_button = pn.widgets.Button(name="RUN", button_type="success", height=130, sizing_mode=self.STRETCH_WIDTH)
+        
         buttons_container = pn.Column(
             pn.Row(
-                pn.widgets.Button(name="RUN", button_type="success", height=130, sizing_mode=self.STRETCH_WIDTH),
+                self._run_button,
                 pn.widgets.Button(name="STORE", button_type="primary", height=130, sizing_mode=self.STRETCH_WIDTH),
                 sizing_mode=self.STRETCH_BOTH
             ),
