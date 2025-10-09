@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import ClusteringModel
     from . import ClusteringController
-    from typing import TYPE_CHECKING
     from xarray import Dataset
 
 import traceback

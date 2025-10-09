@@ -21,8 +21,7 @@ class App:
 
     def run(self, port : int = _DEFAULT_PORT, show : bool = True):
         # Load custom CSS for the entire app
-        CUSTOM_PAGE = str(CSS_ROOT / "custom_page.css")
-        LoadCSS([CUSTOM_PAGE])
+        LoadCSS([str(CSS_ROOT / "custom_page.css")])
 
         # Define the pages for the application
         # Use lambdas to avoid immediate instantiation

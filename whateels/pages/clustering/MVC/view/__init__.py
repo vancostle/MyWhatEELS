@@ -94,7 +94,6 @@ class ClusteringView(BaseView):
         agglomerative_tab = pn.pane.Markdown("Dimensionality reduction controls go here.", sizing_mode=self.STRETCH_WIDTH)
         spectral_tab = pn.pane.Markdown("Density-based clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
 
-
         self._kmeans_input = {
             "n_clusters": pn.widgets.IntInput(name="Number of Clusters", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
             "n_init": pn.widgets.IntInput(name="Number of Initializations", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
