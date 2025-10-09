@@ -36,26 +36,6 @@ class LayoutManager:
 
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
-            
-    def show_loading_placeholder_in_main_layout(self):
-        """Show the loading placeholder in the main layout."""
-        self._view.main.clear()
-        self._view.main.append(self._view.loading_placeholder)
-        
-    def reset_main_layout(self):
-        """Reset the main layout to the no-file placeholder."""
-        self._view.main.clear()
-        self._view.main.append(self._view.no_file_placeholder)
-
-    def update_main_layout(self, plot_component):
-        """Update the main layout with a new plot component."""
-        self._view.main.clear()
-        self._view.main.append(plot_component)
-        
-    def show_error_placeholder_in_main_layout(self):
-        """Show the error placeholder in the main layout."""
-        self._view.main.clear()
-        self._view.main.append(self._view.error_placeholder)
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
@@ -112,7 +92,7 @@ class LayoutManager:
             plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
                 
             # Update UI
-            self.update_main_layout(plots_tab)
+            self._controller.base_layout.update_main(plots_tab)
             self.remove_dataset_info_from_sidebar()
             self.add_component_to_sidebar_layout(self._all_dataset_info[0])
 

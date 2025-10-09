@@ -4,7 +4,7 @@ from whateels.shared_state import AppState
 from xarray import Dataset
 # from scikit-learn.cluster import KMeans
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ..model import ClusteringModel
     from ..view import ClusteringView
@@ -13,6 +13,9 @@ class ClusteringController(BaseController):
 
     def __init__(self, model: "ClusteringModel", view: "ClusteringView"):
         super().__init__(model, view)
+        
+        self._view = view
+        self._model = model
         
         self._layout = LayoutManager(view, self, model)
         
@@ -26,36 +29,55 @@ class ClusteringController(BaseController):
         eels = self._get_only_eels_datasets(all_datasets)
         self._layout.create_tab_and_dataset_info(eels)
         
-        self._change_kmeans(view)
+        # K-Means related attributes
+        self._current_init_method_value: Optional[str] = self._model.constants.DEFAULT_INIT_METHOD
+        self._current_n_clusters_value: Optional[int] = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
+        self._current_n_init_value: Optional[int] = self._model.constants.DEFAULT_NUMBER_OF_INIT
+        self._current_max_iter_value: Optional[int] = self._model.constants.DEFAULT_MAX_ITER
         
+        self._kmeans_user_update(view)
+        self._handle_run_button(view)
 
-    def on_click_run(self, view: "ClusteringView"):
+    def _handle_run_button(self, view: "ClusteringView"):
         """Handle the K-Means 'Run' button click event."""
         run_button = view.run_button
+
+        if run_button is not None:
+            run_button.on_click(lambda _: self._run_button_on_click_event())
+
+    def _run_button_on_click_event(self, ):
+        """Execute the K-Means clustering algorithm."""
+        print("Pre-normalization:", self._view.pre_normalization_switch.value if self._view.pre_normalization_switch else "N/A")
         
-        # KMeans(n_clusters=hhh).fit(x)
+        print("K-means parameters:")
+        print(f"\tn_clusters: {self._current_n_clusters_value}")
+        print(f"\tn_init: {self._current_n_init_value}")
+        print(f"\tmax_iter: {self._current_max_iter_value}")
+        print(f"\tinit_method: {self._current_init_method_value}")
         
-        print("[ClusteringController] K-Means clustering completed.")
+        print(f"----------------------------------------")
+        # Here you would implement the actual K-Means clustering logic
         
         
-    def _change_kmeans(self, view: "ClusteringView"):
+    def _kmeans_user_update(self, view: "ClusteringView"):
         """Debug method to print the K-Means input widgets."""
-        n_clusters = view.kmeans_input["n_clusters"].param.watch(self._n_cluster_watcher, 'value')
-        n_init = view.kmeans_input["n_init"].param.watch(self._n_init_watcher, 'value')
-        max_iter = view.kmeans_input["max_iter"].param.watch(self._max_iter_watcher, 'value')
-        init_method = view.kmeans_input["init_method"].param.watch(self._init_method_watcher, 'value')
-                
+        if view.kmeans_input is not None:
+            view.kmeans_input["n_clusters"].param.watch(self._n_cluster_watcher, 'value')
+            view.kmeans_input["n_init"].param.watch(self._n_init_watcher, 'value')
+            view.kmeans_input["max_iter"].param.watch(self._max_iter_watcher, 'value')
+            view.kmeans_input["init_method"].param.watch(self._init_method_watcher, 'value')
+
     def _n_cluster_watcher(self, event):
-        print("n_cluster ", event.new)
+        self._current_n_clusters_value = event.new
 
     def _n_init_watcher(self, event):
-        print("n_init ", event.new)
+        self._current_n_init_value = event.new
         
     def _max_iter_watcher(self, event):
-        print("max_iter ", event.new)
+        self._current_max_iter_value = event.new
         
     def _init_method_watcher(self, event):
-        print("init_method ", event.new)
+        self._current_init_method_value = event.new
         
     
     @property

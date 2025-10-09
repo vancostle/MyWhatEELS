@@ -18,7 +18,19 @@
     transition-timing-function: cubic-bezier(0.68, -0.55, 0.27, 1.55);
 }
 
+#right-sidebar {
+    height: 100%;
+}
+
 .pre-normalization-switch {
     display: grid;
     place-content: center;
+}
+
+.pre-normalization-container {
+    max-height: 65px;
+}
+
+.clustering-buttons-container {
+    background-color: aqua !important;
 }

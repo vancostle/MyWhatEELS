@@ -13,7 +13,7 @@ class Clustering(CustomPage):
         ClusteringController(model, view)
 
         super().__init__(
-            title="Clustering",
+            title=model.constants.TITLE,
             main=[view.main],
             sidebar=[view.sidebar],
             right_sidebar=[view.right_sidebar],

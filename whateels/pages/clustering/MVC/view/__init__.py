@@ -19,11 +19,16 @@ class ClusteringView(BaseView):
                 str(CSS_ROOT / "dataset_info.css")
             ]
         )
+        
+        self._model = model
+        
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
         
-        self._kmeans_input = None
-        self._run_button = None
+        self._kmeans_input = None # Dictionary to hold K-Means input widgets
+        self._run_button = None # Button to run K-Means clustering
+        self._pre_normalization_switch = None # Switch for pre-normalization option
+        self._store_button = None # Button to store clustering results
         
         self._init_components()
         
@@ -37,20 +42,30 @@ class ClusteringView(BaseView):
         """Access the K-Means input widgets."""
         return self._run_button         
 
-    def _init_components(self):
-        self.sidebar = self._left_sidebar_layout()
-        self.main = self._main_layout()
-        self.right_sidebar = self._right_sidebar_layout()
-
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
         return self._dataset_info_layout
     
+    @property
+    def pre_normalization_switch(self):
+        """Access the pre-normalization switch widget."""
+        return self._pre_normalization_switch
+    
+    @property
+    def store_button(self):
+        """Access the store button widget."""
+        return self._store_button
+    
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
         """Set the last dataset info component (must be a Panel Viewable)."""
         self._dataset_info_layout = component
+
+    def _init_components(self):
+        self.sidebar = self._left_sidebar_layout()
+        self.main = self._main_layout()
+        self.right_sidebar = self._right_sidebar_layout()
 
     def _left_sidebar_layout(self):
         app_state = AppState()
@@ -59,31 +74,32 @@ class ClusteringView(BaseView):
             uploaded_file,
             sizing_mode=self.STRETCH_WIDTH
         )
-                
-        # error_panel = ErrorPanel(sizing_mode=self.STRETCH_WIDTH)
-        # self.sidebar.append(error_panel)
         
         return left_sidebar
 
     def _right_sidebar_layout(self):
-        
         pre_normalization_label = pn.pane.Markdown(
             "### Pre-normalization", 
         )
         
-        pre_normalization_switch = pn.widgets.Switch(
+        self._pre_normalization_switch = pn.widgets.Switch(
             name="Pre-normalization", 
-            value=False, 
-            sizing_mode='stretch_height',
+            value=self._model.constants.DEFAULT_PRE_NORMALIZATION, 
+            sizing_mode='stretch_both',
             css_classes=["pre-normalization-switch"]
         )
         pre_normalization_container = pn.Row(
             pre_normalization_label,
-            pre_normalization_switch,
-            sizing_mode=self.STRETCH_WIDTH
+            self._pre_normalization_switch,
+            sizing_mode=self.STRETCH_WIDTH,
+            css_classes=["pre-normalization-container"]
         )
         
-        available_norms_select = pn.widgets.Select(name='Available norms', options=['I1', 'I2', 'MAX'])
+        available_norms_select = pn.widgets.Select(
+            name='Available norms', 
+            options=self._model.constants.AVAILABLE_NORMS,
+            value=self._model.constants.DEFAULT_SELECTED_NORM,
+        )
         
         available_norms_container = pn.Row(
             available_norms_select,
@@ -95,10 +111,33 @@ class ClusteringView(BaseView):
         spectral_tab = pn.pane.Markdown("Density-based clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
 
         self._kmeans_input = {
-            "n_clusters": pn.widgets.IntInput(name="Number of Clusters", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
-            "n_init": pn.widgets.IntInput(name="Number of Initializations", value=1, step=1, end=1000, sizing_mode=self.STRETCH_WIDTH),
-            "max_iter": pn.widgets.IntInput(name="Max Iterations", value=300, step=1, end=10000, sizing_mode=self.STRETCH_WIDTH),
-            "init_method": pn.widgets.Select(name='Initialization Method', options=['k-means++', 'random'], sizing_mode=self.STRETCH_WIDTH),
+            "n_clusters": pn.widgets.IntInput(
+                name="Number of Clusters", 
+                value=self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS, 
+                step=1, 
+                end=1000, 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "n_init": pn.widgets.IntInput(
+                name="Number of Initializations", 
+                value=self._model.constants.DEFAULT_NUMBER_OF_INIT, 
+                step=1, 
+                end=1000, 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "max_iter": pn.widgets.IntInput(
+                name="Max Iterations", 
+                value=self._model.constants.DEFAULT_MAX_ITER, 
+                step=1, 
+                end=10000, 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "init_method": pn.widgets.Select(
+                name='Initialization Method', 
+                options=self._model.constants.INITIALIZATION_METHODS, 
+                value=self._model.constants.DEFAULT_INIT_METHOD, 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
         }
 
         k_means_tab = pn.Column(
@@ -114,15 +153,15 @@ class ClusteringView(BaseView):
         )
         
         self._run_button = pn.widgets.Button(name="RUN", button_type="success", height=130, sizing_mode=self.STRETCH_WIDTH)
+        self._store_button = pn.widgets.Button(name="STORE", button_type="primary", height=130, sizing_mode=self.STRETCH_WIDTH)
         
         buttons_container = pn.Column(
             pn.Row(
                 self._run_button,
-                pn.widgets.Button(name="STORE", button_type="primary", height=130, sizing_mode=self.STRETCH_WIDTH),
-                sizing_mode=self.STRETCH_BOTH
+                self._store_button,
+                sizing_mode=self.STRETCH_BOTH,
+                css_classes=["clustering-buttons-container"]
             ),
-            pn.widgets.Button(name="STOP", button_type="danger", height=40, sizing_mode=self.STRETCH_WIDTH),
-            sizing_mode=self.STRETCH_BOTH
         )
 
         right_sidebar = pn.Column(
