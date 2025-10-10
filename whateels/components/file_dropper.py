@@ -129,39 +129,35 @@ class FileDropper(pn.WidgetBox):
     
     def _setup_event_handlers(self):
         """Set up event handlers for file upload events."""
-        def handle_file_upload(_):
+        def handle_file_upload(event):
             """
             Handle file upload events with validation and feedback.
-            
+
             This nested function has access to the instance's widgets
             and handles the complete upload workflow.
-            
+
             Args:
-                _: Panel parameter change event (unused, but required by Panel)
+                event: Panel parameter change event (unused, but required by Panel)
             """
-            
-            # If value is empty (cleared/deleted)
-            if not self.file_widget.value:
-                # Only call removal callback if this wasn't a programmatic clear
-                if self._current_filename:  # Only call if we had a file before
-                    self._on_file_removed_callback(self._current_filename)
-                    self._current_filename = None  # Clear the stored filename
-                self.clear_feedback() # Clear previous feedback
+            file_widget_value = self.file_widget.value
+
+            # If the value is None or not a dict, do nothing
+            if not isinstance(file_widget_value, dict) or not file_widget_value:
                 return
-            
+
             # Process each uploaded file (though we only allow single uploads)
-            for filename, file_content in self.file_widget.value.items():
+            for filename, file_content in file_widget_value.items():
                 if self._is_valid_file_extension(filename):
                     self._current_filename = filename  # Store current filename
                     self._show_success()
-                    # Call the required callback function
-                    self._on_file_uploaded_callback(filename, file_content)
+                    # Call the required callback function if set
+                    if callable(self._on_file_uploaded_callback):
+                        self._on_file_uploaded_callback(filename, file_content)
                 else:
                     self._reject_file_and_show_error()
-        
+
         # Connect the event handler to the file widget
         self.file_widget.param.watch(handle_file_upload, 'value')
-
     
     # === File Validation Methods ===
     
