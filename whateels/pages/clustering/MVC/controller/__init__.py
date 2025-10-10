@@ -43,20 +43,17 @@ class ClusteringController(BaseController):
         run_button = view.run_button
 
         if run_button is not None:
-            run_button.on_click(lambda _: self._run_button_on_click_event())
+            run_button.on_click_by_state(state=True, on_click=self._run_button_on_click_event)
+            run_button.on_click_by_state(state=False, on_click=self._run_button_off_click_event)
 
-    def _run_button_on_click_event(self, ):
+    def _run_button_on_click_event(self):
         """Execute the K-Means clustering algorithm."""
-        print("Pre-normalization:", self._view.pre_normalization_switch.value if self._view.pre_normalization_switch else "N/A")
+        print("START K-Means clustering.")
         
-        print("K-means parameters:")
-        print(f"\tn_clusters: {self._current_n_clusters_value}")
-        print(f"\tn_init: {self._current_n_init_value}")
-        print(f"\tmax_iter: {self._current_max_iter_value}")
-        print(f"\tinit_method: {self._current_init_method_value}")
-        
-        print(f"----------------------------------------")
-        # Here you would implement the actual K-Means clustering logic
+    def _run_button_off_click_event(self):
+        """Handle the K-Means 'Stop' button click event."""
+        print("STOP K-Means clustering.")
+        # Here you would implement logic to stop the K-Means process if it's running asynchronously
         
         
     def _kmeans_user_update(self, view: "ClusteringView"):

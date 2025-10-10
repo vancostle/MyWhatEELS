@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 from whateels.helpers import HTML_ROOT, CSS_ROOT
-from whateels.components import UploadedFile, ErrorPanel
+from whateels.components import UploadedFile, ErrorPanel, ToggleButton
 from whateels.base.mvc import BaseView
 from whateels.shared_state import AppState
 
@@ -152,8 +152,29 @@ class ClusteringView(BaseView):
             sizing_mode=self.STRETCH_BOTH
         )
         
-        self._run_button = pn.widgets.Button(name="RUN", button_type="success", height=130, sizing_mode=self.STRETCH_WIDTH)
-        self._store_button = pn.widgets.Button(name="STORE", button_type="primary", height=130, sizing_mode=self.STRETCH_WIDTH)
+        self._run_button = ToggleButton(
+            initial_state=True,
+            states={
+                'on': {
+                    'label': 'RUN',
+                    'on_click': lambda: print("Default clustering started..."),
+                    'button_type': 'success'
+                },
+                'off': {
+                    'label': 'STOP',
+                    'on_click': lambda: print("Default clustering stopped..."),
+                    'button_type': 'danger'
+                }
+            },
+            height=130,
+            sizing_mode=self.STRETCH_WIDTH
+        )
+        self._store_button = pn.widgets.Button(
+            name="STORE", 
+            button_type="primary", 
+            height=130, 
+            sizing_mode=self.STRETCH_WIDTH
+        )
         
         buttons_container = pn.Column(
             pn.Row(
