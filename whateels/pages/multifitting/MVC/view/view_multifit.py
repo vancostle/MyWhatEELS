@@ -73,8 +73,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self.paneB = None  # Plotly spectrum pane
         self._pc = None    # periodic callback handle
 
-        # Setup widgets, plots and callbacks
-        self._setup_widgets()
+        # Setup plots and callbacks
         self._setup_plots()
         self._setup_callbacks()
         

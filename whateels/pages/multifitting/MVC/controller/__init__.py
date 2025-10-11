@@ -19,67 +19,51 @@ class Controller(param.Parameterized):
         self._model = model
         self._view = view
         
-        fit_range = pn.state.location.query_params['values'] if 'values' in pn.state.location.query_params else None
+        # Parse fit_range from URL query parameters
+        fit_range = pn.state.location.query_params.get('values', None)
         if fit_range:
-            fit_range = tuple(map(float, fit_range.split(","))) # Convert to tuple of floats
-            self._model.set_fit_range=fit_range
-            print(f"Multifitting page opened with params: {fit_range}")
+            fit_range = tuple(map(float, fit_range.split(",")))
+            self._model.set_fit_range = fit_range
 
-        # Mount the (non-reactive) multifit component into the view's container.
+        # Mount the multifit component into the view's container
         main_container = self._view.get_main_container()
         if main_container is not None:
             main_container.clear()
-            # If a fit_range was provided in the URL, mount a quick demo plot so
-            # developers can verify plotting on the multifitting page.
             if fit_range:
-                # try:
-                component = self.test_plot()
-                # except Exception:
-                    # component = pn.pane.HTML("<p>Error rendering demo plot.</p>", sizing_mode="stretch_both")
-                main_container.append(component)
+                component = self.plot_multifit()
             else:
                 try:
                     component = self.get_dataset_component()
                 except Exception:
-                    component = pn.pane.HTML("<p>Error rendering multifit component.</p>", sizing_mode="stretch_both")
-                main_container.append(component)
-
-    def test_plot(self):
-        """Test method to create a simple plot component for quick smoke testing.
-
-        Returns a Panel viewable produced by the view's create_plot_component
-        factory. This mirrors the example you provided: constructs an (x, y)
-        tuple and delegates creation to the view.
-        """
-        import numpy as np
-        xx = np.linspace(-3.5, 3.5, 100)
-        yy = np.linspace(-3.5, 3.5, 100)
-        x, y = np.meshgrid(xx, yy)
-        z = np.exp(-((x - 1) ** 2) - y**2) - (x**3 + y**4 - x / 5) * np.exp(-(x**2 + y**2))
-        # The view expects data that either looks like an xarray Dataset or a
-        # plotting-compatible object. We pass a simple (x, y) tuple.
-        data = self._view.create_plot_component((x, y, z))
-        return data
+                    component = pn.pane.HTML(
+                        "<p>Error rendering multifit component.</p>", 
+                        sizing_mode="stretch_both"
+                    )
+            main_container.append(component)
+                
 
     def collect_dataset(self):
-        """Attempt to collect the xarray Dataset used for plotting.
+        """
+        Collect the xarray Dataset and perform multifitting.
 
-        Order of attempts:
-        AppState().plot_dataset (published by visualizers)
-
-        Returns the dataset object or None if not found.
+        Returns the background-subtracted dataset or None if not found.
         """
         try:
             ds = AppState().plot_dataset
             if ds is not None:
                 self.ds = ds
-                print('Dataset collected in collect_dataset found in AppState().plot_dataset')
-                return ds
+                multifit_data = self._model.perform_multifit(ds, fit_range=self._model.set_fit_range)
+                return multifit_data
         except Exception:
             pass
-
         return None
     
+    def plot_multifit(self):
+        """Create and return the multifit plot component."""
+        ds = self.collect_dataset()
+        data = self._view.create_plot_component(ds)
+        return data
+      
     @param.depends("_model._app_state.metadata")
     def get_dataset_component(self):
         """Return a simple component describing the dataset available to multifit.

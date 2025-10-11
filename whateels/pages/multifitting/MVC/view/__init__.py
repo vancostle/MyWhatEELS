@@ -1,6 +1,7 @@
 import panel as pn
 from typing import TYPE_CHECKING
 from whateels.helpers import HTML_ROOT
+from .view_multifit import SpectrumImageVisualizer
 
 if TYPE_CHECKING:
     from ..model import Model
@@ -30,15 +31,19 @@ class View:
         return a small HTML pane indicating a dataset is available so other
         pages (e.g. multifitting) can detect it.
         """
-        
-        import plotly.graph_objects as go
 
-        surface=go.Surface(z=data[2])
-        fig = go.Figure(data=[surface])
+        # Guard: no dataset available
+        if data is None:
+            return pn.pane.HTML("<p>No dataset available for multifitting.</p>", sizing_mode=self._STRETCH_BOTH)
 
-        return pn.pane.Plotly(
-            fig
-        )
+        # Instantiate the visualizer with the required (model, dataset) signature
+        # and return a Panel component (layout) to be embedded in the page.
+        try:
+            viz = SpectrumImageVisualizer(self._model, data)
+            return viz.create_plots()
+        except Exception as e:
+            # Fallback simple error pane to avoid crashing the route
+            return pn.pane.HTML(f"<p>Error creating multifit plot: {e}</p>", sizing_mode=self._STRETCH_BOTH)
 
     def create_dataset_component(self, dataset):
         """Return a small HTML pane announcing the presence of a dataset.
@@ -54,9 +59,9 @@ class View:
             name = 'Dataset'
         return pn.pane.HTML(f"<p>Dataset available: {name}</p>", sizing_mode=self._STRETCH_BOTH)
 
-    # def create_no_multifit_component(self):
-    #     """Fallback component when no multifit is available."""
-    #     return pn.pane.HTML("<p>No multifit data available.</p>", sizing_mode=self._STRETCH_BOTH)
+    def create_no_multifit_component(self):
+        """Fallback component when no multifit is available."""
+        return pn.pane.HTML("<p>No multifit data available.</p>", sizing_mode=self._STRETCH_BOTH)
 
     # --- Properties ---
     @property
