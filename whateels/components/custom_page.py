@@ -89,8 +89,10 @@ class CustomPage(pn.template.FastListTemplate):
         ]
         if is_metadata_loaded:
             navigation_links.append(('<a href="/clustering">Clustering</a>', "Clustering"))
+            navigation_links.append(('<a href="/quantification">Quantification</a>', "Quantification"))
         else:
             navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Clustering</a>', "Clustering"))
+            navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Quantification</a>', "Quantification"))
 
         return [
             pn.pane.Markdown(

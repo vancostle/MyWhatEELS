@@ -4,7 +4,7 @@ import panel as pn
 pn.extension('filedropper', 'floatpanel', 'plotly', theme='default')
 
 from whateels.helpers import LoadCSS, CSS_ROOT
-from whateels.pages import Home, Metadata, Clustering, MultiFitting
+from whateels.pages import Home, Metadata, Clustering, MultiFitting, Quantification
 
 class App:
     """
@@ -31,6 +31,7 @@ class App:
             "/metadata-details": lambda: Metadata(),
             "/clustering": lambda: Clustering(),
             "/multifit-details": lambda: MultiFitting(),
+            "/quantification": lambda: Quantification(),
         }
 
         return pn.serve(
