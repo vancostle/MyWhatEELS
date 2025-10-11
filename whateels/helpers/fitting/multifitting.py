@@ -192,7 +192,7 @@ class MultiFit:
       fitted = mf.get_fitted_data()
       mf.save()  # guarda en temp_data/fitted_data.npy por defecto
     """
-    def __init__(self, data, model, Eloss_x=None, fit_range=None, save_folder=None, filename="fitted_data"):
+    def __init__(self, data, model, Eloss_x=None, fit_range=None, save_folder=None, filename='fitted_data_{fit_range}'):
         """
         Initialize MultiFit object.
         
@@ -234,14 +234,7 @@ class MultiFit:
         self.Eloss_x = Eloss_x
         self.fit_range = fit_range
         self.save_folder = save_folder
-        # If filename is default and fit_range is provided, append fit_range to filename
-        if filename == "fitted_data" and fit_range is not None:
-            try:
-                self.filename = f"fitted_data_{fit_range[0]:.2f}_{fit_range[1]:.2f}"
-            except Exception:
-                self.filename = "fitted_data"
-        else:
-            self.filename = filename
+        self.filename = filename
         self.results = None
         self.fitted_data = None
         
