@@ -9,6 +9,7 @@ numba>=0.58.0
 scipy>=1.10.0
 plotly==5.19
 pyinstaller>=6.6.0
+lmfit>=1.1.0
 
 # clustering / manifold
 # scikit-learn>=1.2.0
