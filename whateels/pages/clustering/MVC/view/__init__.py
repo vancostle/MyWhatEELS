@@ -116,7 +116,7 @@ class ClusteringView(BaseView):
                 name="Number of Clusters", 
                 value=self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS, 
                 step=1, 
-                end=1000, 
+                end=20, 
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "n_init": pn.widgets.IntInput(

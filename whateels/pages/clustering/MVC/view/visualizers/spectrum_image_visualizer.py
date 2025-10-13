@@ -148,11 +148,10 @@ class SpectrumImageVisualizer(BaseVisualizer):
         )
         return fig
 
-    def apply_clustering(self, n_clusters=6, norma='l2'):
+    def apply_clustering_kmeans(self, n_clusters=6, norma='l2'):
         """
         Apply KMeans clustering to the spectrum image data and update visualization.
         """
-        print("DEBUG: apply_clustering started")
         try:
             # Get the 3D data cube (x, y, energy)
             data_cube = np.asarray(self._electron_count_data.fillna(0.0))
@@ -346,16 +345,10 @@ class SpectrumImageVisualizer(BaseVisualizer):
         if kmeans_input is not None:
             n_clusters = kmeans_input["n_clusters"].value
 
-        print("DEBUG: _on_run_clustering_clicked called")
-        print("DEBUG: hasattr(self, 'apply_clustering') =", hasattr(self, 'apply_clustering'))
-        print("DEBUG: About to call apply_clustering with n_clusters =", n_clusters)
-
-        self.apply_clustering(n_clusters=n_clusters, norma='l2')
-        print("DEBUG: apply_clustering completed")
+        self.apply_clustering_kmeans(n_clusters=n_clusters, norma='l2')
 
     def _on_stop_clustering_clicked(self):
         """Handle restore button click."""
-        print("DEBUG: _on_stop_clustering_clicked called")
         self._restore_original_view()
 
     # --- Plot / Pane Setup (Plotly) ---
