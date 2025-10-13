@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from whateels.helpers import HTML_ROOT
+from whateels.components import ResizableColumns
 import panel as pn
 
 from typing import TYPE_CHECKING
@@ -22,14 +23,14 @@ class BaseVisualizer(ABC):
         self._dataset = dataset
 
     @abstractmethod
-    def create_plots(self):
+    def create_plots(self) -> ResizableColumns:
         """
         Create the main layout for the EELS visualizer.
         
         This method should be implemented by subclasses to define how the plots
         and other UI components are arranged.
         """
-        pass
+        raise NotImplementedError("Subclasses should implement create_plots and return a layout object.")
 
     @abstractmethod
     def create_dataset_info(self):

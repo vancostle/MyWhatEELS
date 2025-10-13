@@ -41,13 +41,17 @@ class ToggleButton(Button):
 
     def _handle_click(self, event):
         """Handle button click events to toggle state and update label and button type."""
-        self.toggle()
-        state_key = self._ON if self._state else self._OFF
-        self.name = self._states[state_key][self._NAME]
-        self.button_type = self._states[state_key][self._BUTTON_TYPE]
-        on_click_fn = self._states[self._ON if not self._state else self._OFF].get(self._ON_CLICK)
+        # Call the function for the CURRENT state (before toggling)
+        current_state_key = self._ON if self._state else self._OFF
+        on_click_fn = self._states[current_state_key].get(self._ON_CLICK)
         if callable(on_click_fn):
             on_click_fn()
+        
+        # Then toggle and update the UI
+        self.toggle()
+        new_state_key = self._ON if self._state else self._OFF
+        self.name = self._states[new_state_key][self._NAME]
+        self.button_type = self._states[new_state_key][self._BUTTON_TYPE]
 
     def toggle(self):
         """Toggle the button's state."""

@@ -66,7 +66,11 @@ class VisualizerFactory:
         try:
             chosen_spectrum_visualizer = self._all_visualizers.get(dataset_type)
             if chosen_spectrum_visualizer:
-                chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)
+                # Pass controller only to SpectrumImageVisualizer, others get model and dataset only
+                if chosen_spectrum_visualizer == SpectrumImageVisualizer:
+                    chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, self._controller, dataset)
+                else:
+                    chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)
                 return chosen_spectrum_visualizer
             else:
                 chosen_spectrum_visualizer = None

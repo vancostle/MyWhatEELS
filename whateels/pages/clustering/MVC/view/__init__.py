@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 from whateels.helpers import HTML_ROOT, CSS_ROOT
-from whateels.components import UploadedFile, ErrorPanel, ToggleButton
+from whateels.components import UploadedFile, ToggleButton
 from whateels.base.mvc import BaseView
 from whateels.shared_state import AppState
 
@@ -26,6 +26,9 @@ class ClusteringView(BaseView):
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
         
         self._kmeans_input = None # Dictionary to hold K-Means input widgets
+        self._agglomerative_input = None # Dictionary to hold Agglomerative input widgets
+        self._spectral_input = None # Dictionary to hold Spectral input widgets
+
         self._run_button = None # Button to run K-Means clustering
         self._pre_normalization_switch = None # Switch for pre-normalization option
         self._store_button = None # Button to store clustering results
@@ -38,7 +41,7 @@ class ClusteringView(BaseView):
         return self._kmeans_input  
     
     @property
-    def run_button(self):
+    def run_button(self) -> Optional[ToggleButton]:
         """Access the K-Means input widgets."""
         return self._run_button         
 
@@ -107,8 +110,6 @@ class ClusteringView(BaseView):
         )
         
         k_means_tab = pn.pane.Markdown("Clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
-        agglomerative_tab = pn.pane.Markdown("Dimensionality reduction controls go here.", sizing_mode=self.STRETCH_WIDTH)
-        spectral_tab = pn.pane.Markdown("Density-based clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
 
         self._kmeans_input = {
             "n_clusters": pn.widgets.IntInput(
@@ -139,12 +140,120 @@ class ClusteringView(BaseView):
                 sizing_mode=self.STRETCH_WIDTH
             ),
         }
-
+        
         k_means_tab = pn.Column(
             *[widget for widget in self._kmeans_input.values()],
             sizing_mode=self.STRETCH_BOTH
         )
+                
+        self._agglomerative_input = {
+            "n_clusters": pn.widgets.IntInput(
+                name="Number of Clusters", 
+                value=5, 
+                step=1, 
+                end=1000, 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "linkage": pn.widgets.Select(
+                name='Linkage Method', 
+                options=['ward', 'complete', 'average', 'single'], 
+                value='ward', 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "affinity": pn.widgets.Select(
+                name='Affinity', 
+                options=['euclidean', 'l1', 'l2', 'manhattan', 'cosine'], 
+                value='euclidean', 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "connectivity": ToggleButton(
+                initial_state=False,
+                states={
+                    'on': {
+                        'label': 'Connectivity: On',
+                        'on_click': lambda: print("Connectivity enabled."),
+                        'button_type': 'success'
+                    },
+                    'off': {
+                        'label': 'Connectivity: Off',
+                        'on_click': lambda: print("Connectivity disabled."),
+                        'button_type': 'danger'
+                    }
+                },
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "Norm-matrix": ToggleButton(
+                initial_state=False,
+                states={
+                    'on': {
+                        'label': 'Norm-matrix: On',
+                        'on_click': lambda: print("Norm-matrix enabled."),
+                        'button_type': 'success'
+                    },
+                    'off': {
+                        'label': 'Norm-matrix: Off',
+                        'on_click': lambda: print("Norm-matrix disabled."),
+                        'button_type': 'danger'
+                    }
+                },
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+        }
         
+        
+        agglomerative_tab = pn.Column(
+            *[widget for widget in self._agglomerative_input.values()],
+            sizing_mode=self.STRETCH_BOTH
+        )
+        
+        self._spectral_input = {
+            "n_clusters": pn.widgets.IntInput(
+                name="Number of Clusters", 
+                value=5,
+                step=1,
+                end=100,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "n_init": pn.widgets.IntInput(
+                name="Number of Initializations",
+                value=10,
+                step=1,
+                end=100,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "labels_assign_method": pn.widgets.Select(
+                name='Labels Assignment Method',
+                options=['kmeans', 'spectral', 'agglomerative'],
+                value='kmeans',
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "spectral_affinity_metrics": pn.widgets.Select(
+                name='Spectral Affinity Metrics',
+                options=['nearest_neighbors', 'precomputed', 'rbf', 'poly', 'sigmoid'],
+                value='rbf',
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "n_neighbors": pn.widgets.IntInput(
+                name="Number of Neighbors",
+                value=10,
+                step=1,
+                end=100,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "gamma": pn.widgets.FloatInput(
+                name="Gamma",
+                value=1.0,
+                step=0.1,
+                end=10.0,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+        }
+
+        spectral_tab = pn.Column(
+            *[widget for widget in self._spectral_input.values()],
+            sizing_mode=self.STRETCH_BOTH
+        )
+
         clustering_hub = pn.Tabs(
             ("K-Means", k_means_tab),
             ("Agglomerative", agglomerative_tab),

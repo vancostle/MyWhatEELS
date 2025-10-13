@@ -1,29 +1,27 @@
 """
-Spectrum image (datacube) visualization composer.
-Se reemplaza HoloViews por Panel + Plotly usando la lógica de si_view.py,
-pero manteniendo la lógica de acceso a datos y widgets de SpectrumImageVisualizer.
+Spectrum image (datacube) visualization composer with KMeans clustering integration.
+Integrates Vanessa's KMeans clustering functionality using Plotly for visualization.
 """
 
 import panel as pn
 import numpy as np
-import time
 import plotly.graph_objs as go
+from sklearn.preprocessing import normalize
+from sklearn.cluster import KMeans
 
 from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING
-from whateels.helpers import SpectrumExtractor, SpectrumFitting
-from whateels.components import ResizableColumns
+from whateels.components import ResizableColumns, ToggleButton
 
 if TYPE_CHECKING:
     from ...model import ClusteringModel
+    from ...controller import ClusteringController
     from xarray import Dataset
-    from param.parameterized import Event
 
 class SpectrumImageVisualizer(BaseVisualizer):
     """
-    Version Plotly / Panel del visualizador de Spectrum Image.
-    Mantiene la lógica de datos del visualizador original y reemplaza
-    HoloViews por Plotly panes y callbacks (hover / click / select).
+    Enhanced Spectrum Image Visualizer with integrated KMeans clustering.
+    Combines the original visualizer functionality with Vanessa's clustering code.
     """
     
     # Panel sizing modes
@@ -36,11 +34,12 @@ class SpectrumImageVisualizer(BaseVisualizer):
     
     _NOT_AVAILABLE = 'N/A'
 
-    def __init__(self, model: "ClusteringModel", dataset: "Dataset"):
+    def __init__(self, model: "ClusteringModel", controller: "ClusteringController", dataset: "Dataset"):
         super().__init__(model, dataset)
 
         self._model = model
         self._dataset = dataset
+        self._controller = controller
 
         # Energy axis (eje de energía)
         self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
@@ -54,20 +53,26 @@ class SpectrumImageVisualizer(BaseVisualizer):
         # Range state for paneB (to preserve zoom/pan)
         self._current_x_range = None
         self._current_y_range = None
-        # None = unknown / leave Plotly default; True/False = explicitly requested autorange
         self._current_x_autorange = None
         self._current_y_autorange = None
 
-        # Selection / hover / fitting state (inspired by si_view.py)
-        self._region_pairs = []         # lista de (i,j) seleccionados por lasso/box
-        self._last_hover_point = None   # último hover {x,y,curve}
+        # Selection / hover / fitting state
+        self._region_pairs = []
+        self._last_hover_point = None
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
         self._fitting_active = False
 
+        # Clustering state (Vanessa's functionality)
+        self._clustering_results = None  # Will store (labels, centres) from clustering
+        self._original_heatmap_data = None  # Store original heatmap for restoration
+        self._clustering_active = False
+
         # Widgets / panes placeholders
         self.range_slider = None
         self.fitting_button = None
+        self.clustering_button = None  # New clustering button
+        self.restore_button = None     # Button to restore original view
         self.paneA = None  # Plotly heatmap pane
         self.paneB = None  # Plotly spectrum pane
         self._pc = None    # periodic callback handle
@@ -76,7 +81,179 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self._setup_widgets()
         self._setup_plots()
         self._setup_callbacks()
+
+    # --- Vanessa's KMeans Clustering Implementation ---
+    def kmeans_clustering(self, matrix, n_cluster, norma='l2'):
+        '''
+        Vanessa's KMeans clustering function adapted for the visualizer.
         
+        Parameters:
+        -----------
+        matrix: numpy array. (x,y,eloss)
+            Imagen de espectros.
+        n_cluster: int.
+            Número de clusters.
+        norma: string, optional. (default='l2')
+            Normalización que queremos aplicar. Opciones: 'l1', 'l2', 'max', 'None'.
+            
+        Returns:
+        --------
+        labels: numpy array. (x,y)
+            Matriz con las etiquetas de cada cluster. 
+        centres: numpy array. (n_cluster,eloss)
+            Matriz que contiene los centroides de cada cluster identificado.
+        '''
+        allowed_norms = ['l1', 'l2', 'max', None, 'None']
+        if norma not in allowed_norms:
+            raise ValueError(f"norma debe ser uno de {allowed_norms}")
+        
+        # Convert string 'None' to actual None
+        if norma == 'None' or norma is None:
+            norm_to_use = None
+        else:
+            # Ensure norma is exactly one of the allowed literals
+            if norma not in ('l1', 'l2', 'max'):
+                raise ValueError("norma must be 'l1', 'l2', 'max', or None")
+            norm_to_use = norma
+
+        matrix_norm = matrix.copy()
+        matrix_norm = matrix_norm.reshape(matrix.shape[0]*matrix.shape[1], matrix.shape[-1])
+        if norm_to_use is None:
+            sclust_norm = matrix_norm
+        else:
+            sclust_norm = normalize(matrix_norm, norm=norm_to_use, axis=1, copy=True)
+        
+        kmeans = KMeans(n_clusters=n_cluster, tol=1e-9, max_iter=700, random_state=13)
+        fitted = kmeans.fit(sclust_norm)
+        centres = fitted.cluster_centers_
+        labels = fitted.labels_.reshape(matrix.shape[:-1])
+        return labels, centres
+
+    def plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels", colorscale="Viridis"):
+        """
+        Plot the clustering labels using Plotly for interactive visualization.
+        Adapted from Vanessa's code for integration into the visualizer.
+        """
+        fig = go.Figure(go.Heatmap(
+            z=labels, 
+            colorscale=colorscale, 
+            colorbar=dict(title="Cluster"),
+            hovertemplate='x: %{x}<br>y: %{y}<br>Cluster: %{z}<extra></extra>'
+        ))
+        fig.update_layout(
+            title=title, 
+            xaxis_title="X", 
+            yaxis_title="Y", 
+            yaxis_autorange='reversed'
+        )
+        return fig
+
+    def apply_clustering(self, n_clusters=6, norma='l2'):
+        """
+        Apply KMeans clustering to the spectrum image data and update visualization.
+        """
+        print("DEBUG: apply_clustering started")
+        try:
+            # Get the 3D data cube (x, y, energy)
+            data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            print("DEBUG: data_cube shape:", data_cube.shape)
+            
+            # Store original heatmap data if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+                print("DEBUG: stored original heatmap data")
+            
+            # Apply clustering
+            print("DEBUG: calling kmeans_clustering")
+            labels, centres = self.kmeans_clustering(data_cube, n_clusters, norma)
+            print("DEBUG: kmeans_clustering completed, labels shape:", labels.shape, "centres shape:", centres.shape)
+            
+            self._clustering_results = (labels, centres)
+            
+            # Create clustering visualization
+            print("DEBUG: creating clustering visualization")
+            clustering_fig = self.plot_kmeans_labels_plotly(labels, f"KMeans Clustering (n={n_clusters})")
+            print("DEBUG: clustering figure created")
+            
+            # Update the heatmap pane with clustering results
+            if self.paneA is not None:
+                print("DEBUG: updating paneA with clustering results")
+                # Force the update by setting object and triggering param updates
+                self.paneA.object = clustering_fig
+                self.paneA.param.trigger('object')  # Force parameter update
+                print("DEBUG: paneA updated and triggered")
+                # Alternative: recreate the pane entirely if needed
+                # self.paneA = pn.pane.Plotly(clustering_fig, sizing_mode='stretch_both')
+            
+            # Update spectrum pane to show cluster centers
+            print("DEBUG: updating spectrum with clusters")
+            self._update_spectrum_with_clusters(centres)
+            
+            self._clustering_active = True
+            print("DEBUG: apply_clustering completed successfully")
+            
+        except Exception as e:
+            print(f"DEBUG: Error applying clustering: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _update_spectrum_with_clusters(self, centres):
+        """Update the spectrum pane to show cluster centers."""
+        if self.paneB is None:
+            return
+            
+        # Create traces for each cluster center
+        traces = []
+        colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        
+        for i, center in enumerate(centres):
+            color = colors[i % len(colors)]
+            traces.append(go.Scatter(
+                x=self._energy,
+                y=center,
+                mode='lines',
+                name=f'Cluster {i}',
+                line=dict(color=color, width=2)
+            ))
+        
+        fig = go.Figure(data=traces)
+        fig.update_layout(
+            title="Cluster Centers",
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (AU)",
+            showlegend=True
+        )
+        
+        self.paneB.object = fig
+        self.paneB.param.trigger('object')  # Force parameter update
+
+    def _restore_original_view(self):
+        """Restore the original heatmap view before clustering."""
+        if self._original_heatmap_data is not None and self.paneA is not None:
+            # Create original heatmap
+            ny, nx = self._original_heatmap_data.shape
+            heat = go.Heatmap(
+                z=self._original_heatmap_data,
+                x=np.arange(nx),
+                y=np.arange(ny),
+                colorscale="Greys_r",
+                showscale=False,
+                hovertemplate='x: %{x}<br>y: %{y}<br>Intensity: %{z}<extra></extra>'
+            )
+            
+            fig = go.Figure(data=[heat])
+            fig.update_layout(
+                title="Original Spectrum Image",
+                xaxis_title="X",
+                yaxis_title="Y",
+                yaxis_autorange='reversed'
+            )
+            
+            self.paneA.object = fig
+            self.paneA.param.trigger('object')  # Force parameter update
+            self._clustering_active = False
+            print("Restored original view")
+
     # --- Public layout builders (used by controller) ---
     @override
     def create_plots(self):
@@ -87,7 +264,9 @@ class SpectrumImageVisualizer(BaseVisualizer):
         
         right_column = pn.Column(
             self.paneB, 
-            self.fitting_button, 
+            self.fitting_button,
+            self.clustering_button,
+            self.restore_button,
             self.range_slider, 
             sizing_mode='stretch_both'
         )
@@ -104,9 +283,9 @@ class SpectrumImageVisualizer(BaseVisualizer):
     def create_dataset_info(self):
         return super().create_dataset_info()
 
-    # --- Widget Setup (kept from original, but range_slider reused) ---
+    # --- Widget Setup ---
     def _setup_widgets(self):
-        # Range slider already used by earlier implementation
+        # Range slider
         self.range_slider = pn.widgets.RangeSlider(
             name="Range",
             start=float(self._e_axis[0]) if len(self._e_axis) > 0 else 0.0,
@@ -119,19 +298,78 @@ class SpectrumImageVisualizer(BaseVisualizer):
         # Fitting toggle button
         self.fitting_button = pn.widgets.Button(name="fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
+        
+        # Clustering button
+        self.clustering_button = ToggleButton(
+            initial_state=True,
+            states={
+                'on': {'label': 'Clustering: ON', 'on_click': lambda: print("Clustering started"), 'button_type': 'success'},
+                'off': {'label': 'Cleaning clustering', 'on_click': lambda: print("Clustering stopped"), 'button_type': 'danger'}
+            },
+        )
+        
+        self.clustering_button.on_click_by_state(
+            state=True,
+            on_click=self._on_run_clustering_clicked
+        )
+        
+        self.clustering_button.on_click_by_state(
+            state=False,
+            on_click=self._on_stop_clustering_clicked
+        )
+        
+        # Restore button
+        # self.restore_button = pn.widgets.Button(
+        #     name="Restore Original", 
+        #     button_type="light",
+        #     sizing_mode=self._STRETCH_WIDTH
+        # )
+        # self.restore_button.on_click(self._on_stop_clustering_clicked)
+        
+        if self._controller.view.run_button is not None:
+            self._controller.view.run_button.on_click_by_state(
+                state=True, 
+                on_click=self._on_run_clustering_clicked
+            )
+            self._controller.view.run_button.on_click_by_state(
+                state=False, 
+                on_click=self._on_stop_clustering_clicked
+            )
+
         self.range_slider.visible = False
+
+    def _on_run_clustering_clicked(self):
+        """Handle clustering button click."""
+        kmeans_input = self._controller.view.kmeans_input
+        
+        n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
+        if kmeans_input is not None:
+            n_clusters = kmeans_input["n_clusters"].value
+
+        print("DEBUG: _on_run_clustering_clicked called")
+        print("DEBUG: hasattr(self, 'apply_clustering') =", hasattr(self, 'apply_clustering'))
+        print("DEBUG: About to call apply_clustering with n_clusters =", n_clusters)
+
+        self.apply_clustering(n_clusters=n_clusters, norma='l2')
+        print("DEBUG: apply_clustering completed")
+
+    def _on_stop_clustering_clicked(self):
+        """Handle restore button click."""
+        print("DEBUG: _on_stop_clustering_clicked called")
+        self._restore_original_view()
 
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):
-        # Build image (m_image) from data cube in the canonical way used in this class
-        # ElectronCount dims assumed (y, x, E)
-        # Use self._electron_count_data from constructor
+        # Build image (m_image) from data cube
         m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
         m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
         if m_image.ndim != 2:
             raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
 
         ny, nx = m_image.shape
+        # Store original data
+        self._original_heatmap_data = m_image
+        
         # energy axis
         try:
             energy = np.asarray(self._e_axis)
@@ -141,419 +379,92 @@ class SpectrumImageVisualizer(BaseVisualizer):
             energy = np.arange(self._electron_count_data.shape[-1])
         self._energy = energy
 
-        # Build Plotly heatmap (figA) and selectors scatter for box/lasso selections
+        # Build Plotly heatmap (figA)
         heat = go.Heatmap(
             z=m_image,
             x=np.arange(nx),
             y=np.arange(ny),
             colorscale="Greys_r",
             showscale=False,
-            name="m_image",
-            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+            hovertemplate='x: %{x}<br>y: %{y}<br>Intensity: %{z}<extra></extra>'
         )
 
-        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
-        selectors = go.Scattergl(
-            x=XX.ravel(),
-            y=YY.ravel(),
-            mode="markers",
-            name="selectors",
-            marker=dict(size=6, opacity=0.01),
-            hoverinfo="skip",
-            selected=dict(marker=dict(opacity=0.3, size=8)),
-            unselected=dict(marker=dict(opacity=0.01)),
-        )
-
-        # Create figure with default size but lock aspect ratio so it doesn't deform
-        figA = go.Figure(data=[heat, selectors])
+        figA = go.Figure(data=[heat])
         figA.update_layout(
-            title="m_image (hover) + lasso/box para sumar",
-            height=400,  # default initial height as in the original copy
-            margin=dict(l=16, r=16, t=50, b=20),
-            dragmode="lasso",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
-        figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
-                           showgrid=False, zeroline=False, showticklabels=False)
-        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
-
-        # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
-        self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
-
-        # Pane B initial message (apply stored ranges if any)
-        self.paneB = pn.pane.Plotly(
-            self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona")),
-            sizing_mode='stretch_both', config={"responsive": True}
+            title="Spectrum Image",
+            xaxis_title="X",
+            yaxis_title="Y",
+            yaxis_autorange='reversed',
+            dragmode='select'
         )
 
-    # --- Callbacks setup (connect pane watchers & periodic callback) ---
+        # Initial spectrum (center pixel)
+        center_x, center_y = nx // 2, ny // 2
+        initial_spectrum = self._electron_count_data.isel(x=center_x, y=center_y)
+        spectrum_data = np.asarray(initial_spectrum.fillna(0.0))
+
+        trace = go.Scatter(
+            x=energy,
+            y=spectrum_data,
+            mode='lines',
+            name='Spectrum',
+            line=dict(color='blue', width=2)
+        )
+
+        figB = go.Figure(data=[trace])
+        figB.update_layout(
+            title="Spectrum at Selected Pixel",
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (AU)"
+        )
+
+        # Create Panel panes
+        self.paneA = pn.pane.Plotly(figA, sizing_mode='stretch_both')
+        self.paneB = pn.pane.Plotly(figB, sizing_mode='stretch_both')
+
     def _setup_callbacks(self):
-        # Attach panel watchers to figA and paneB
-        self.paneA.param.watch(self._on_paneA_hover, "hover_data")
-        self.paneA.param.watch(self._on_paneA_click, "click_data")
-        self.paneA.param.watch(self._on_paneA_selected, "selected_data")
-
-        # relayout_data is emitted by pn.pane.Plotly on axis changes
-        self.paneB.param.watch(self._on_paneB_relayout, "relayout_data")
-
-        # Periodic callback for inactivity logic (stopped by default)
-        self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
-
-    # --- Helpers / utilities (from si_view.py adapted) ---
-    def _to_plotly(self, obj):
-        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
-        try:
-            if isinstance(obj, go.Figure):
-                return obj.to_plotly_json()
-        except Exception:
-            pass
-        try:
-            if isinstance(obj, dict):
-                return obj
-        except Exception:
-            pass
-        return obj
-
-    def _figB_message(self, title, subtitle):
-        fig = go.Figure()
-        fig.update_xaxes(visible=False)
-        fig.update_yaxes(visible=False)
-        fig.update_layout(title=title, margin=dict(l=16, r=16, t=48, b=16))
-        fig.add_annotation(
-            x=0.5, y=0.6, xref="paper", yref="paper",
-            text=subtitle, showarrow=False,
-            font=dict(size=22), align="center",
-        )
-        return fig
-
-    def _figB_hover(self, point):
-        if not point:
-            return self._figB_message("figura_B_hover", "hover sobre un píxel…")
-        i, j = int(point["y"]), int(point["x"])
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"(i={i}, j={j})"))
-        fig.update_layout(title="figura_B_hover", margin=dict(l=16, r=16, t=48, b=16),
-                          xaxis_title="Energía", yaxis_title="Intensidad")
-        return fig
-
-    def _figB_region(self, pairs):
-        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
-        if res is None:
-            return self._figB_message("figura_B_region", "selecciona con lasso/box…")
-        spec, N = res
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"suma (N={N})"))
-        fig.update_layout(
-            title=f"figura_B_region — suma (N={N})",
-            margin=dict(l=16, r=16, t=48, b=16), 
-            xaxis_title="Energía", 
-            yaxis_title="Intensidad"
-        )
-        return fig
-
-    # --- Inactivity logic (restaurar selección tras inactivity) ---
-    def _now_ms(self):
-        return int(time.time() * 1000)
-
-    def _check_inactivity(self):
-        # No selection -> nothing to do
-        if not self._region_pairs:
-            if self._pc.running:
-                self._pc.stop()
-            return
-
-        # If there is no hover timestamp, ensure selection is shown and timer stopped
-        if self._last_hover_ts is None:
-            if self._pc.running:
-                self._pc.stop()
-            fig = self._figB_region(self._region_pairs)
-            if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _N = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            return
-
-        if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
-            fig = self._figB_region(self._region_pairs)
-            if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _N = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            if self._pc.running:
-                self._pc.stop()
-                
-    def _plot_fit_traces(self, fig, x, y, y_fit):
-        """
-        Add fit and background subtraction traces to a Plotly figure.
-
-        Parameters:
-            fig (plotly.graph_objs.Figure): The Plotly figure to add traces to.
-            x (array-like): Independent variable data.
-            y (array-like): Dependent variable data.
-            y_fit (array-like): Fitted curve values for all x.
-
-        Returns:
-            plotly.graph_objs.Figure: The figure with added fit and subtraction traces.
-        """
-        # Local constants for Plotly and fitting
-        POWERLAW_FIT_NAME = 'PowerLaw Fit'
-        BG_SUBTRACTION_NAME = 'Background Subtraction'
-        CRIMSON = 'crimson'
-        BG_LINE_COLOR = 'rgba(255,160,122,0.2)'
-        BG_FILL_COLOR = 'rgba(255,160,122,0.6)'
-        LEGEND_X = 0.98
-        LEGEND_Y = 0.98
-        LEGEND_XANCHOR = 'right'
-        LEGEND_YANCHOR = 'top'
-        LEGEND_BGCOLOR = 'rgba(255,255,255,0.6)'
-        LEGEND_BORDER_COLOR = 'rgba(0,0,0,0.1)'
-        LEGEND_BORDER_WIDTH = 1
-        FILL_TO_ZEROY = 'tozeroy'
-
-        if y_fit is None:
-            return fig
-        newfig = go.Figure(fig)
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=y_fit,
-            line=dict(color=CRIMSON),
-            name=POWERLAW_FIT_NAME
-        ))
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=(y - y_fit),
-            fill=FILL_TO_ZEROY,
-            line=dict(color=BG_LINE_COLOR),
-            fillcolor=BG_FILL_COLOR,
-            name=BG_SUBTRACTION_NAME
-        ))
-        newfig.update_layout(
-            legend=dict(
-                x=LEGEND_X,
-                y=LEGEND_Y,
-                xanchor=LEGEND_XANCHOR,
-                yanchor=LEGEND_YANCHOR,
-                bgcolor=LEGEND_BGCOLOR,
-                bordercolor=LEGEND_BORDER_COLOR,
-                borderwidth=LEGEND_BORDER_WIDTH,
-            )
-        )
-        return newfig
-
-    # --- Pane A event handlers (hover / click / selected) ---
-    def _on_paneA_hover(self, event: "Event"):
-        point = SpectrumExtractor.extract_point(event)
-        if point is None:
-            return
-        self._last_hover_point = point
-        if self._region_pairs:
-            # Temporary hover while a selection exists: show hover spectrum and start/renew timer
-            fig = self._figB_hover(self._last_hover_point)
-            if self._fitting_active:
-                i, j = int(point["y"]), int(point["x"])
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-                if spec is not None:
-                    y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                    fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)  
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            self._last_hover_ts = self._now_ms()
-            if not self._pc.running:
-                self._pc.start()
-        else:
-            # No selection: persistent hover view, no inactivity timer
-            fig = self._figB_hover(self._last_hover_point)
-            if self._fitting_active:
-                i, j = int(point["y"]), int(point["x"])
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-                if spec is not None:
-                    y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                    fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            if self._pc.running:
-                self._pc.stop()
-            self._last_hover_ts = None
+        """Setup callbacks for interactive functionality."""
+        if self.paneA is not None:
+            self.paneA.param.watch(self._on_paneA_click, "click_data")
 
     def _on_paneA_click(self, event):
-        point = SpectrumExtractor.extract_point(event)
-        if point is None:
+        """Handle clicks on the heatmap to update spectrum."""
+        if event.new is None or not self._clustering_active:
             return
-        self._last_hover_point = point
-        fig = self._figB_hover(self._last_hover_point)
-        if self._fitting_active:
-            i, j = int(point["y"]), int(point["x"])
-            spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-            if spec is not None:
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-        if self._region_pairs:
-            self._last_hover_ts = self._now_ms()
-            if not self._pc.running:
-                self._pc.start()
-        else:
-            if self._pc.running:
-                self._pc.stop()
-            self._last_hover_ts = None
-
-    def _on_paneA_selected(self, event: "Event"):
-        pairs = SpectrumExtractor.extract_region(event)
-        self._region_pairs = pairs
-        if not pairs:
-            if self._pc.running:
-                self._pc.stop()
-            self._last_hover_ts = None
-            if self._last_hover_point is not None:
-                fig = self._figB_hover(self._last_hover_point)
-                if self._fitting_active:
-                    y, x = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                    spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, y, x)
-                    if spec is not None:
-                        y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                        fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-                    self.paneB.object = self._set_ranges_and_convert(fig)
-            else:
-                self.paneB.object = self._set_ranges_and_convert(self._figB_message("figura_B", "mueve el ratón o selecciona"))
-            return
-
-        fig = self._figB_region(self._region_pairs)
-        if self._fitting_active:
-            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-            if res is not None:
-                spec, N = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-        self.paneB.object = self._set_ranges_and_convert(fig)
-
-        # prepare inactivity behaviour: stop periodic callback until next hover
-        if self._pc.running:
-            self._pc.stop()
-        self._last_hover_ts = None
-
-    # --- Pane B relayout (preserve zoom/pan ranges) ---
-    def _on_paneB_relayout(self, event):
-        # Robustly extract ranges/autorange from relayout payloads emitted by Plotly
+            
         try:
-            data = event.new or {}
-
-            # X axis: support 'xaxis.range', 'xaxis.range[0/1]', 'xaxis.autorange'
-            if 'xaxis.range[0]' in data and 'xaxis.range[1]' in data:
-                self._current_x_range = (float(data['xaxis.range[0]']), float(data['xaxis.range[1]']))
-                self._current_x_autorange = False
-            elif 'xaxis.range' in data:
-                rng = data.get('xaxis.range')
-                if isinstance(rng, (list, tuple)) and len(rng) == 2:
-                    self._current_x_range = (float(rng[0]), float(rng[1]))
-                    self._current_x_autorange = False
-            elif 'xaxis.autorange' in data:
-                # autorange True means clear explicit range
-                self._current_x_autorange = bool(data.get('xaxis.autorange'))
-                if self._current_x_autorange:
-                    self._current_x_range = None
-
-            # Y axis: same logic
-            if 'yaxis.range[0]' in data and 'yaxis.range[1]' in data:
-                self._current_y_range = (float(data['yaxis.range[0]']), float(data['yaxis.range[1]']))
-                self._current_y_autorange = False
-            elif 'yaxis.range' in data:
-                rng = data.get('yaxis.range')
-                if isinstance(rng, (list, tuple)) and len(rng) == 2:
-                    self._current_y_range = (float(rng[0]), float(rng[1]))
-                    self._current_y_autorange = False
-            elif 'yaxis.autorange' in data:
-                self._current_y_autorange = bool(data.get('yaxis.autorange'))
-                if self._current_y_autorange:
-                    self._current_y_range = None
-
-            # Some Plotly versions emit nested keys or different payload shapes; handled permissively above.
-        except Exception:
-            # Ignore noisy relayout payloads
-            pass
-
-    def _apply_current_ranges(self, fig):
-        """Apply stored ranges to fig if present."""
-        try:
-            # Only set explicit ranges when available. Only set autorange when explicitly known.
-            if self._current_x_range is not None:
-                fig.update_xaxes(range=self._current_x_range)
-            elif self._current_x_autorange is not None:
-                fig.update_xaxes(autorange=bool(self._current_x_autorange))
-            if self._current_y_range is not None:
-                fig.update_yaxes(range=self._current_y_range)
-            elif self._current_y_autorange is not None:
-                fig.update_yaxes(autorange=bool(self._current_y_autorange))
-        except Exception:
-            pass
-        return fig
-
-    def _set_ranges_and_convert(self, fig):
-        # Ensure we operate on a go.Figure to apply ranges reliably
-        try:
-            fig_obj = fig if isinstance(fig, go.Figure) else go.Figure(fig)
-        except Exception:
-            # fallback: empty figure
-            fig_obj = go.Figure()
-        self._apply_current_ranges(fig_obj)
-        return self._to_plotly(fig_obj)
-
-    # --- Fitting and range behaviour ---
-    def _on_fitting_clicked(self, event):
-        self._fitting_active = not self._fitting_active
-        self.fitting_button.name = f"fitting: {'ON' if self._fitting_active else 'OFF'}"
-        self.fitting_button.button_type = "danger" if self._fitting_active else "primary"
-        self.range_slider.visible = self._fitting_active
-
-        # Refresh current view
-        if self._region_pairs:
-            fig = self._figB_region(self._region_pairs)
-            if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _ = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            return
-
-        if self._last_hover_point is not None:
-            fig = self._figB_hover(self._last_hover_point)
-            if self._fitting_active:
-                i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-                if spec is not None:
-                    y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                    fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            return
-
-        self.paneB.object = self._set_ranges_and_convert(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
+            point = event.new['points'][0]
+            x, y = int(point['x']), int(point['y'])
+            
+            # Update spectrum for selected pixel
+            spectrum = self._electron_count_data.isel(x=x, y=y)
+            spectrum_data = np.asarray(spectrum.fillna(0.0))
+            
+            trace = go.Scatter(
+                x=self._energy,
+                y=spectrum_data,
+                mode='lines',
+                name=f'Spectrum at ({x},{y})',
+                line=dict(color='red', width=2)
+            )
+            
+            fig = go.Figure(data=[trace])
+            fig.update_layout(
+                title=f"Spectrum at Pixel ({x}, {y})",
+                xaxis_title="Energy Loss (eV)",
+                yaxis_title="Intensity (AU)"
+            )
+            
+            if hasattr(self, 'paneB') and self.paneB is not None:
+                self.paneB.object = fig
+            
+        except Exception as e:
+            print(f"Error updating spectrum: {e}")
 
     def _on_range_changed(self, event):
-        """Refresh paneB when the fit range slider changes (only when fitting is active)."""
-        if not self._fitting_active:
-            return
-        if self._region_pairs:
-            fig = self._figB_region(self._region_pairs)
-            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-            if res is not None:
-                spec, _ = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            return
-        if self._last_hover_point is not None:
-            fig = self._figB_hover(self._last_hover_point)
-            i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-            spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-            if spec is not None:
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
+        """Handle range slider changes."""
+        pass  # Placeholder for range functionality
+
+    def _on_fitting_clicked(self, event):
+        """Handle fitting button clicks."""
+        pass  # Placeholder for fitting functionality

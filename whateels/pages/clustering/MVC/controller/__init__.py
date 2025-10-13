@@ -21,7 +21,7 @@ class ClusteringController(BaseController):
         
         app_state = AppState()
         all_datasets = app_state.all_datasets
-        
+
         if not isinstance(all_datasets, list) or not all_datasets:
             self.base_layout.empty_main()
             return
@@ -36,25 +36,32 @@ class ClusteringController(BaseController):
         self._current_max_iter_value: Optional[int] = self._model.constants.DEFAULT_MAX_ITER
         
         self._kmeans_user_update(view)
-        self._handle_run_button(view)
+        # self._handle_run_button(view)
 
-    def _handle_run_button(self, view: "ClusteringView"):
-        """Handle the K-Means 'Run' button click event."""
-        run_button = view.run_button
+    @property
+    def view(self) -> "ClusteringView":
+        """Access the ClusteringView instance."""
+        return self._view
+    @property
+    def layout(self) -> LayoutManager:
+        """Access the LayoutManager instance."""
+        return self._layout
 
-        if run_button is not None:
-            run_button.on_click_by_state(state=True, on_click=self._run_button_on_click_event)
-            run_button.on_click_by_state(state=False, on_click=self._run_button_off_click_event)
+    # def _handle_run_button(self, view: "ClusteringView"):
+    #     """Handle the K-Means 'Run' button click event."""
+    #     run_button = view.run_button
 
-    def _run_button_on_click_event(self):
-        """Execute the K-Means clustering algorithm."""
-        print("START K-Means clustering.")
+    #     if run_button is not None:
+    #         run_button.on_click_by_state(state=True, callback=self._run_button_on_click_event)
+    #         run_button.on_click_by_state(state=False, callback=self._run_button_off_click_event)
+
+    # def _run_button_on_click_event(self):
+    #     """Execute the K-Means clustering algorithm."""
+    #     print("START K-Means clustering.")
         
-    def _run_button_off_click_event(self):
-        """Handle the K-Means 'Stop' button click event."""
-        print("STOP K-Means clustering.")
-        # Here you would implement logic to stop the K-Means process if it's running asynchronously
-        
+    # def _run_button_off_click_event(self):
+    #     """Handle the K-Means 'Stop' button click event."""
+    #     print("STOP K-Means clustering.")
         
     def _kmeans_user_update(self, view: "ClusteringView"):
         """Debug method to print the K-Means input widgets."""
@@ -75,12 +82,6 @@ class ClusteringController(BaseController):
         
     def _init_method_watcher(self, event):
         self._current_init_method_value = event.new
-        
-    
-    @property
-    def layout(self) -> LayoutManager:
-        """Access the LayoutManager instance."""
-        return self._layout
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""
