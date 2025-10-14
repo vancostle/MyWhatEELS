@@ -188,10 +188,11 @@ class SpectrumImageVisualizer(BaseVisualizer):
         )
         return fig
 
-    def apply_clustering_kmeans(self, n_clusters=6, norma='l2'):
+    def apply_kmeans_clustering(self, n_clusters=6, norma='l2'):
         """
         Apply KMeans clustering to the spectrum image data and update visualization.
         """
+
         try:
             # Get the 3D data cube (x, y, energy)
             data_cube = np.asarray(self._electron_count_data.fillna(0.0))
@@ -327,25 +328,6 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self.fitting_button = pn.widgets.Button(name="fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
         
-        # Clustering button
-        self.clustering_button = ToggleButton(
-            initial_state=True,
-            states={
-                'on': {'label': 'Clustering: ON', 'on_click': lambda: print("Clustering started"), 'button_type': 'success'},
-                'off': {'label': 'Cleaning clustering', 'on_click': lambda: print("Clustering stopped"), 'button_type': 'danger'}
-            },
-        )
-        
-        self.clustering_button.on_click_by_state(
-            state=True,
-            on_click=self._on_run_clustering_clicked
-        )
-        
-        self.clustering_button.on_click_by_state(
-            state=False,
-            on_click=self._on_stop_clustering_clicked
-        )
-        
         # Restore button
         # self.restore_button = pn.widgets.Button(
         #     name="Restore Original", 
@@ -354,13 +336,13 @@ class SpectrumImageVisualizer(BaseVisualizer):
         # )
         # self.restore_button.on_click(self._on_stop_clustering_clicked)
         
-        if self._controller.view.run_button is not None:
-            self._controller.view.run_button.on_click_by_state(
+        if kmeans_run_button := getattr(self._controller.view, "kmeans_run_button", None):
+            kmeans_run_button.on_click_by_state(
                 state=True, 
                 on_click=self._on_run_clustering_clicked
             )
-            self._controller.view.run_button.on_click_by_state(
-                state=False, 
+            kmeans_run_button.on_click_by_state(
+                state=False,
                 on_click=self._on_stop_clustering_clicked
             )
 
@@ -374,7 +356,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         if kmeans_input is not None:
             n_clusters = kmeans_input["n_clusters"].value
 
-        self.apply_clustering_kmeans(n_clusters=n_clusters, norma='l2')
+        self.apply_kmeans_clustering(n_clusters=n_clusters, norma='l2')
 
     def _on_stop_clustering_clicked(self):
         """Handle restore button click."""

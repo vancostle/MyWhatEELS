@@ -29,7 +29,7 @@ class ClusteringView(BaseView):
         self._agglomerative_input = None # Dictionary to hold Agglomerative input widgets
         self._spectral_input = None # Dictionary to hold Spectral input widgets
 
-        self._run_button = None # Button to run K-Means clustering
+        self._kmeans_run_button = None # Button to run K-Means clustering
         self._pre_normalization_switch = None # Switch for pre-normalization option
         self._store_button = None # Button to store clustering results
         
@@ -41,9 +41,9 @@ class ClusteringView(BaseView):
         return self._kmeans_input  
     
     @property
-    def run_button(self) -> Optional[ToggleButton]:
+    def kmeans_run_button(self) -> Optional[ToggleButton]:
         """Access the K-Means input widgets."""
-        return self._run_button         
+        return self._kmeans_run_button         
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -98,20 +98,15 @@ class ClusteringView(BaseView):
             css_classes=["pre-normalization-container"]
         )
         
-        available_norms_select = pn.widgets.Select(
-            name='Available norms', 
-            options=self._model.constants.AVAILABLE_NORMS,
-            value=self._model.constants.DEFAULT_SELECTED_NORM,
-        )
-        
-        available_norms_container = pn.Row(
-            available_norms_select,
-            sizing_mode=self.STRETCH_WIDTH
-        )
-        
         k_means_tab = pn.pane.Markdown("Clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
 
         self._kmeans_input = {
+            "available_norms": pn.widgets.Select(
+                name='Available norms', 
+                options=self._model.constants.AVAILABLE_NORMS,
+                value=self._model.constants.DEFAULT_SELECTED_NORM,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
                 value=self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS, 
@@ -124,26 +119,34 @@ class ClusteringView(BaseView):
                 value=self._model.constants.DEFAULT_NUMBER_OF_INIT, 
                 step=1, 
                 end=1000, 
-                sizing_mode=self.STRETCH_WIDTH
-            ),
-            "max_iter": pn.widgets.IntInput(
-                name="Max Iterations", 
-                value=self._model.constants.DEFAULT_MAX_ITER, 
-                step=1, 
-                end=10000, 
-                sizing_mode=self.STRETCH_WIDTH
-            ),
-            "init_method": pn.widgets.Select(
-                name='Initialization Method', 
-                options=self._model.constants.INITIALIZATION_METHODS, 
-                value=self._model.constants.DEFAULT_INIT_METHOD, 
-                sizing_mode=self.STRETCH_WIDTH
+                sizing_mode=self.STRETCH_WIDTH,
             ),
         }
         
+        self._kmeans_run_button = ToggleButton(
+            initial_state=True,
+            states={
+                'on': {
+                    'label': 'Run K-Means',
+                    'on_click': lambda: print("Default clustering started..."),
+                    'button_type': 'success'
+                },
+                'off': {
+                    'label': 'STOP',
+                    'on_click': lambda: print("Default clustering stopped..."),
+                    'button_type': 'danger'
+                }
+            },
+            height=55,
+            margin=(20,0,0,0),
+            sizing_mode=self.STRETCH_WIDTH
+        )
+        
         k_means_tab = pn.Column(
             *[widget for widget in self._kmeans_input.values()],
-            sizing_mode=self.STRETCH_BOTH
+            self._kmeans_run_button,
+            sizing_mode=self.STRETCH_BOTH,
+            css_classes=["kmeans-tab"]
         )
                 
         self._agglomerative_input = {
@@ -203,7 +206,8 @@ class ClusteringView(BaseView):
         
         agglomerative_tab = pn.Column(
             *[widget for widget in self._agglomerative_input.values()],
-            sizing_mode=self.STRETCH_BOTH
+            sizing_mode=self.STRETCH_BOTH,
+            css_classes=["agglomerative-tab"]
         )
         
         self._spectral_input = {
@@ -251,54 +255,30 @@ class ClusteringView(BaseView):
 
         spectral_tab = pn.Column(
             *[widget for widget in self._spectral_input.values()],
-            sizing_mode=self.STRETCH_BOTH
+            sizing_mode=self.STRETCH_BOTH,
+            css_classes=["spectral-tab"]
         )
 
         clustering_hub = pn.Tabs(
             ("K-Means", k_means_tab),
             ("Agglomerative", agglomerative_tab),
             ("Spectral", spectral_tab),
-            sizing_mode=self.STRETCH_BOTH
+            sizing_mode=self.STRETCH_BOTH,
+            css_classes=["clustering-tabs"]
         )
         
-        self._run_button = ToggleButton(
-            initial_state=True,
-            states={
-                'on': {
-                    'label': 'RUN',
-                    'on_click': lambda: print("Default clustering started..."),
-                    'button_type': 'success'
-                },
-                'off': {
-                    'label': 'STOP',
-                    'on_click': lambda: print("Default clustering stopped..."),
-                    'button_type': 'danger'
-                }
-            },
-            height=130,
-            sizing_mode=self.STRETCH_WIDTH
-        )
         self._store_button = pn.widgets.Button(
-            name="STORE", 
+            name="Store", 
             button_type="primary", 
             height=130, 
-            sizing_mode=self.STRETCH_WIDTH
-        )
-        
-        buttons_container = pn.Column(
-            pn.Row(
-                self._run_button,
-                self._store_button,
-                sizing_mode=self.STRETCH_BOTH,
-                css_classes=["clustering-buttons-container"]
-            ),
+            sizing_mode=self.STRETCH_WIDTH,
+            margin=0
         )
 
         right_sidebar = pn.Column(
             pre_normalization_container,
-            available_norms_container,
             clustering_hub,
-            buttons_container,
+            self._store_button,
             sizing_mode=self.STRETCH_BOTH
         )
         return right_sidebar

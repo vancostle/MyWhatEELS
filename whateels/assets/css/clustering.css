@@ -19,6 +19,22 @@
 }
 
 #right-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+
+    box-sizing: border-box;
+
+    & > .nav.flex-column {
+        flex: 1;
+    }
+}
+
+.clustering-tabs {
+    flex: 1;
+}
+
+.kmeans-tab, .agglomerative-tab, .spectral-tab {
     height: 100%;
 }
 
@@ -29,8 +45,4 @@
 
 .pre-normalization-container {
     max-height: 65px;
-}
-
-.clustering-buttons-container {
-    background-color: aqua !important;
 }
