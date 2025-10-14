@@ -39,6 +39,8 @@ class CustomPage(pn.template.FastListTemplate):
         right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None,
         header_background: str = _DEFAULT_HEADER_BACKGROUND,
         sidebar_width: int = 275,
+        collapsed_sidebar: bool = False,
+        collapsed_right_sidebar: bool = False,
     ):
         """
         Initialize CustomPage with enhanced FastListTemplate.
@@ -75,6 +77,8 @@ class CustomPage(pn.template.FastListTemplate):
             'theme': 'default',  # Default theme
             'header_background': header_background,
             'sidebar_width': sidebar_width,  # Set sidebar width
+            'collapsed_sidebar': collapsed_sidebar,
+            'collapsed_right_sidebar': collapsed_right_sidebar,
         }
         
         # Only add sidebar parameters if they have content

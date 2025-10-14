@@ -39,6 +39,10 @@ class AppState(param.Parameterized):
     filename = param.String(default="No file uploaded", doc="""
         Name of the currently loaded file.
     """)
+    
+    selected_dataset = param.Parameter(default=None, doc="""
+        Currently selected dataset (xarray.Dataset) for operations.
+    """)
 
     def __new__(cls):
         if cls._instance is None:
@@ -81,9 +85,13 @@ class AppState(param.Parameterized):
         
     def clear_filename(self):
         self.filename = ""
-        
+
+    def clear_selected_dataset(self):
+        self.selected_dataset = None
+
     def clear_all(self):
         """Clear all shared state parameters."""
         self.clear_metadata()
         self.clear_datasets()
         self.clear_filename()
+        self.clear_selected_dataset()

@@ -104,5 +104,6 @@ class HomePageLayoutManager:
         """Handle tab changes by updating sidebar with selected dataset info."""
 
         new_tab = event.new
+        print(new_tab)
         self._controller.layout.remove_dataset_info_from_sidebar()
         self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[new_tab])
