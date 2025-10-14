@@ -31,7 +31,6 @@ class ClusteringController(BaseController):
         
         # K-Means related attributes
         self._current_available_norms_value: Optional[str] = self._model.constants.DEFAULT_SELECTED_NORM
-        self._current_init_method_value: Optional[str] = self._model.constants.DEFAULT_INIT_METHOD
         self._current_n_clusters_value: Optional[int] = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
         
         self._kmeans_user_update(view)
@@ -51,16 +50,12 @@ class ClusteringController(BaseController):
         if view.kmeans_input is not None:
             view.kmeans_input["available_norms"].param.watch(self._available_norms_watcher, 'value')
             view.kmeans_input["n_clusters"].param.watch(self._n_cluster_watcher, 'value')
-            view.kmeans_input["n_init"].param.watch(self._n_init_watcher, 'value')
 
     def _available_norms_watcher(self, event):
         self._current_available_norms_value = event.new
 
     def _n_cluster_watcher(self, event):
         self._current_n_clusters_value = event.new
-
-    def _n_init_watcher(self, event):
-        self._current_n_init_value = event.new
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""

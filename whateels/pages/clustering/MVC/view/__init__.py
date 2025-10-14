@@ -114,13 +114,6 @@ class ClusteringView(BaseView):
                 end=20, 
                 sizing_mode=self.STRETCH_WIDTH
             ),
-            "n_init": pn.widgets.IntInput(
-                name="Number of Initializations", 
-                value=self._model.constants.DEFAULT_NUMBER_OF_INIT, 
-                step=1, 
-                end=1000, 
-                sizing_mode=self.STRETCH_WIDTH,
-            ),
         }
         
         self._kmeans_run_button = ToggleButton(
@@ -138,12 +131,16 @@ class ClusteringView(BaseView):
                 }
             },
             height=55,
-            margin=(20,0,0,0),
+            margin=(20,0,10,0),
             sizing_mode=self.STRETCH_WIDTH
         )
         
         k_means_tab = pn.Column(
-            *[widget for widget in self._kmeans_input.values()],
+            pn.Column(
+                *[widget for widget in self._kmeans_input.values()],
+                sizing_mode=self.STRETCH_BOTH,
+                css_classes=["kmeans-input-container"]
+            ),
             self._kmeans_run_button,
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["kmeans-tab"]
@@ -259,7 +256,7 @@ class ClusteringView(BaseView):
             css_classes=["spectral-tab"]
         )
 
-        clustering_hub = pn.Tabs(
+        clustering_tabs = pn.Tabs(
             ("K-Means", k_means_tab),
             ("Agglomerative", agglomerative_tab),
             ("Spectral", spectral_tab),
@@ -270,14 +267,14 @@ class ClusteringView(BaseView):
         self._store_button = pn.widgets.Button(
             name="Store", 
             button_type="primary", 
-            height=130, 
+            height=55, 
             sizing_mode=self.STRETCH_WIDTH,
             margin=0
         )
 
         right_sidebar = pn.Column(
             pre_normalization_container,
-            clustering_hub,
+            clustering_tabs,
             self._store_button,
             sizing_mode=self.STRETCH_BOTH
         )

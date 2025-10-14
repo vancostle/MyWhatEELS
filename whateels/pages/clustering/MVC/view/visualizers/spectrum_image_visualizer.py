@@ -11,7 +11,7 @@ from sklearn.cluster import KMeans
 
 from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING
-from whateels.components import ResizableColumns, ToggleButton
+from whateels.components import ResizableColumns
 
 if TYPE_CHECKING:
     from ...model import ClusteringModel
@@ -107,7 +107,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self._setup_callbacks()
 
     # --- Vanessa's KMeans Clustering Implementation ---
-    def kmeans_clustering(self, matrix, n_cluster, norma='l2'):
+    def kmeans_clustering(self, matrix, n_cluster, available_norm):
         '''
         Vanessa's KMeans clustering function adapted for the visualizer.
         
@@ -127,33 +127,22 @@ class SpectrumImageVisualizer(BaseVisualizer):
         centres: numpy array. (n_cluster,eloss)
             Matriz que contiene los centroides de cada cluster identificado.
         '''
-        allowed_norms = ['l1', 'l2', 'max', None, 'None']
-        if norma not in allowed_norms:
+        allowed_norms = self._model.constants.AVAILABLE_NORMS
+        if available_norm not in allowed_norms:
             raise ValueError(f"norma debe ser uno de {allowed_norms}")
-        
-        # Convert string 'None' to actual None
-        if norma == 'None' or norma is None:
-            norm_to_use = None
-        else:
-            # Ensure norma is exactly one of the allowed literals
-            if norma not in ('l1', 'l2', 'max'):
-                raise ValueError("norma must be 'l1', 'l2', 'max', or None")
-            norm_to_use = norma
 
         matrix_norm = matrix.copy()
         matrix_norm = matrix_norm.reshape(matrix.shape[0]*matrix.shape[1], matrix.shape[-1])
-        if norm_to_use is None:
-            sclust_norm = matrix_norm
-        else:
-            sclust_norm = normalize(matrix_norm, norm=norm_to_use, axis=1, copy=True)
-        
+
+        sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
+
         kmeans = KMeans(n_clusters=n_cluster, tol=1e-9, max_iter=700, random_state=13)
         fitted = kmeans.fit(sclust_norm)
         centres = fitted.cluster_centers_
         labels = fitted.labels_.reshape(matrix.shape[:-1])
         return labels, centres
 
-    def plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels", colorscale="Viridis"):
+    def plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
         """
         Plot the clustering labels using Plotly for interactive visualization.
         Adapted from Vanessa's code for integration into the visualizer.
@@ -188,7 +177,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         )
         return fig
 
-    def apply_kmeans_clustering(self, n_clusters=6, norma='l2'):
+    def apply_kmeans_clustering(self, n_clusters=6, available_norm='l2'):
         """
         Apply KMeans clustering to the spectrum image data and update visualization.
         """
@@ -202,7 +191,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
                 self._original_heatmap_data = data_cube.sum(axis=-1)
             
             # Apply clustering
-            labels, centres = self.kmeans_clustering(data_cube, n_clusters, norma)
+            labels, centres = self.kmeans_clustering(data_cube, n_clusters, available_norm)
             
             self._clustering_results = (labels, centres)
             
@@ -353,10 +342,12 @@ class SpectrumImageVisualizer(BaseVisualizer):
         kmeans_input = self._controller.view.kmeans_input
         
         n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
+        available_norm = self._model.constants.DEFAULT_SELECTED_NORM
         if kmeans_input is not None:
             n_clusters = kmeans_input["n_clusters"].value
+            available_norm = kmeans_input["available_norms"].value
 
-        self.apply_kmeans_clustering(n_clusters=n_clusters, norma='l2')
+        self.apply_kmeans_clustering(n_clusters=n_clusters, available_norm=available_norm)
 
     def _on_stop_clustering_clicked(self):
         """Handle restore button click."""
