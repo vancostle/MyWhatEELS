@@ -10,14 +10,17 @@
     }
 }
 
-#right-sidebar-button {
-    display: none; /* Hide the default button */
-}
-
 .custom-nav-link.markdown {
     margin: 0 !important;
     padding: 0 !important;
 }
+
+/* 
+#right-sidebar-button {
+    display: none;
+}
+
+
 
 #custom-right-sidebar-button {
     background: #4CAF50;
@@ -42,4 +45,4 @@
     background: #388e3c;
     border: 2px solid #43e97b;
     box-shadow: 0 6px 20px rgba(34, 139, 34, 0.22);
-}
+} */

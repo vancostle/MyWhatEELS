@@ -9,15 +9,15 @@ import panel as pn
 from typing import Optional, List, Union
 from whateels.shared_state import AppState
 
-pn.extension(raw_js={
-    """
-        const toggleSidebar = () => {
-            const sidebar = document.getElementById("sidebar");
-            sidebar.classList.toggle("hidden");
-            console.log("Sidebar toggled");
-        };
-    """
-})
+# pn.extension(raw_js={
+#     """
+#         const toggleSidebar = () => {
+#             const sidebar = document.getElementById("sidebar");
+#             sidebar.classList.toggle("hidden");
+#             console.log("Sidebar toggled");
+#         };
+#     """
+# })
 
 class CustomPage(pn.template.FastListTemplate):
     """
@@ -39,8 +39,7 @@ class CustomPage(pn.template.FastListTemplate):
         right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None,
         header_background: str = _DEFAULT_HEADER_BACKGROUND,
         sidebar_width: int = 275,
-        collapsed_sidebar: bool = False,
-        collapsed_right_sidebar: bool = False,
+        **kwargs,
     ):
         """
         Initialize CustomPage with enhanced FastListTemplate.
@@ -77,8 +76,6 @@ class CustomPage(pn.template.FastListTemplate):
             'theme': 'default',  # Default theme
             'header_background': header_background,
             'sidebar_width': sidebar_width,  # Set sidebar width
-            'collapsed_sidebar': collapsed_sidebar,
-            'collapsed_right_sidebar': collapsed_right_sidebar,
         }
         
         # Only add sidebar parameters if they have content
@@ -89,7 +86,7 @@ class CustomPage(pn.template.FastListTemplate):
             init_params['right_sidebar'] = right_sidebar
         
         # Initialize parent template with dynamic parameters
-        super().__init__(**init_params)
+        super().__init__(**init_params, **kwargs)
 
     def _create_navigation_header(self, is_metadata_loaded: bool = False, right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None) -> list:
         """
@@ -106,8 +103,8 @@ class CustomPage(pn.template.FastListTemplate):
         else:
             navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Clustering</a>', "Clustering"))
         
-        if right_sidebar is not None:
-            navigation_links.append(('<button id="custom-right-sidebar-button" onclick="document.getElementById(\'right-sidebar\').classList.toggle(\'hidden\');">Methods</button>', 'Methods'))
+        # if right_sidebar is not None:
+        #     navigation_links.append(('<button id="custom-right-sidebar-button" onclick="document.getElementById(\'right-sidebar\').classList.toggle(\'hidden\');">Methods</button>', 'Methods'))
 
         top_menu = [
             pn.pane.Markdown(

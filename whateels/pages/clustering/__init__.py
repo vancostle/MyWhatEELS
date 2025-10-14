@@ -18,5 +18,4 @@ class Clustering(CustomPage):
             sidebar=[view.sidebar],
             right_sidebar=[view.right_sidebar],
             collapsed_sidebar=True,
-            collapsed_right_sidebar=True,
         )
