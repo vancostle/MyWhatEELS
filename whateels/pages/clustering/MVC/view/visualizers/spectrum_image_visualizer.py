@@ -26,7 +26,6 @@ class SpectrumImageVisualizer(BaseVisualizer):
     
     # Panel sizing modes
     _STRETCH_WIDTH = "stretch_width"
-    _STRETCH_BOTH = "stretch_both"
     
     # CSS classes and constants for dataset info panel
     _DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
@@ -34,6 +33,30 @@ class SpectrumImageVisualizer(BaseVisualizer):
     _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
     
     _NOT_AVAILABLE = 'N/A'
+    
+    # Define a shared color palette for clusters (max 20 colors)
+    _CLUSTER_COLORS = [
+        "rgb(255, 0, 0)",      # red
+        "rgb(0, 0, 255)",      # blue
+        "rgb(0, 255, 0)",      # green
+        "rgb(255, 165, 0)",    # orange
+        "rgb(128, 0, 128)",    # purple
+        "rgb(165, 42, 42)",    # brown
+        "rgb(255, 192, 203)",  # pink
+        "rgb(128, 128, 128)",  # gray
+        "rgb(128, 128, 0)",    # olive
+        "rgb(0, 255, 255)",    # cyan
+        "rgb(255, 0, 255)",    # magenta
+        "rgb(0, 255, 0)",      # lime
+        "rgb(0, 0, 128)",      # navy
+        "rgb(0, 128, 128)",    # teal
+        "rgb(128, 0, 0)",      # maroon
+        "rgb(255, 215, 0)",    # gold
+        "rgb(75, 0, 130)",     # indigo
+        "rgb(255, 127, 80)",   # coral
+        "rgb(220, 20, 60)",    # crimson
+        "rgb(238, 130, 238)"   # violet
+    ]
 
     def __init__(self, model: "ClusteringModel", controller: "ClusteringController", dataset: "Dataset"):
         super().__init__(model, dataset)
@@ -135,12 +158,27 @@ class SpectrumImageVisualizer(BaseVisualizer):
         Plot the clustering labels using Plotly for interactive visualization.
         Adapted from Vanessa's code for integration into the visualizer.
         """
-
+        n_clusters = len(np.unique(labels))
+        # Create discrete colorscale by repeating each color at start and end of its range
+        discrete_colorscale = []
+        for i in range(n_clusters):
+            color = self._CLUSTER_COLORS[i % len(self._CLUSTER_COLORS)]
+            if i == 0:
+                discrete_colorscale.append([0.0, color])
+            else:
+                prev_boundary = i / n_clusters
+                discrete_colorscale.append([prev_boundary, discrete_colorscale[-1][1]])
+                discrete_colorscale.append([prev_boundary, color])
+            if i == n_clusters - 1:
+                discrete_colorscale.append([1.0, color])
+        
         fig = go.Figure(go.Heatmap(
             z=labels, 
-            colorscale=colorscale, 
-            colorbar=dict(title="Cluster"),
-            hovertemplate='x: %{x}<br>y: %{y}<br>Cluster: %{z}<extra></extra>'
+            colorscale=discrete_colorscale, 
+            colorbar=dict(title="Cluster", tickmode='linear', tick0=0, dtick=1),
+            hovertemplate='x: %{x}<br>y: %{y}<br>Cluster: %{z}<extra></extra>',
+            zmin=0,
+            zmax=n_clusters-1
         ))
         fig.update_layout(
             title=title, 
@@ -154,32 +192,38 @@ class SpectrumImageVisualizer(BaseVisualizer):
         """
         Apply KMeans clustering to the spectrum image data and update visualization.
         """
-        # Get the 3D data cube (x, y, energy)
-        data_cube = np.asarray(self._electron_count_data.fillna(0.0))
-        
-        # Store original heatmap data if not already stored
-        if self._original_heatmap_data is None:
-            self._original_heatmap_data = data_cube.sum(axis=-1)
-        
-        # Apply clustering
-        labels, centres = self.kmeans_clustering(data_cube, n_clusters, norma)
-        
-        self._clustering_results = (labels, centres)
-        
-        # Create clustering visualization
-        clustering_fig = self.plot_kmeans_labels_plotly(labels, f"KMeans Clustering (n={n_clusters})")
-        # Update the heatmap pane with clustering results
-        if self.paneA is not None:
-            # Force the update by setting object and triggering param updates
-            self.paneA.object = clustering_fig
-            self.paneA.param.trigger('object')  # Force parameter update
-            # Alternative: recreate the pane entirely if needed
-            # self.paneA = pn.pane.Plotly(clustering_fig, sizing_mode=self._STRETCH_BOTH)
-        
-        # Update spectrum pane to show cluster centers
-        self._update_spectrum_with_clusters(centres)
-        
-        self._clustering_active = True
+        try:
+            # Get the 3D data cube (x, y, energy)
+            data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            
+            # Store original heatmap data if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Apply clustering
+            labels, centres = self.kmeans_clustering(data_cube, n_clusters, norma)
+            
+            self._clustering_results = (labels, centres)
+            
+            # Create clustering visualization
+            clustering_fig = self.plot_kmeans_labels_plotly(labels, f"KMeans Clustering (n={n_clusters})")
+            # Update the heatmap pane with clustering results
+            if self.paneA is not None:
+                # Force the update by setting object and triggering param updates
+                self.paneA.object = clustering_fig
+                self.paneA.param.trigger('object')  # Force parameter update
+                # Alternative: recreate the pane entirely if needed
+                # self.paneA = pn.pane.Plotly(clustering_fig, sizing_mode='stretch_both')
+            
+            # Update spectrum pane to show cluster centers
+            self._update_spectrum_with_clusters(centres)
+            
+            self._clustering_active = True
+            
+        except Exception as e:
+            print(f"DEBUG: Error applying clustering: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _update_spectrum_with_clusters(self, centres):
         """Update the spectrum pane to show cluster centers."""
@@ -243,7 +287,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
     def create_plots(self):
         left_column = pn.Column(
             self.paneA,
-            sizing_mode=self._STRETCH_BOTH
+            sizing_mode='stretch_both'
         )
         
         right_column = pn.Column(
@@ -252,13 +296,13 @@ class SpectrumImageVisualizer(BaseVisualizer):
             self.clustering_button,
             self.restore_button,
             self.range_slider, 
-            sizing_mode=self._STRETCH_BOTH
+            sizing_mode='stretch_both'
         )
         
         resizable_columns = ResizableColumns(
             left_column=left_column,
             right_column=right_column,
-            sizing_mode=self._STRETCH_BOTH,
+            sizing_mode='stretch_both',
         )
  
         return resizable_columns
@@ -296,7 +340,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
             state=True,
             on_click=self._on_run_clustering_clicked
         )
-
+        
         self.clustering_button.on_click_by_state(
             state=False,
             on_click=self._on_stop_clustering_clicked
@@ -309,7 +353,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         #     sizing_mode=self._STRETCH_WIDTH
         # )
         # self.restore_button.on_click(self._on_stop_clustering_clicked)
-
+        
         if self._controller.view.run_button is not None:
             self._controller.view.run_button.on_click_by_state(
                 state=True, 
@@ -397,8 +441,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
         )
 
         # Create Panel panes
-        self.paneA = pn.pane.Plotly(figA, sizing_mode=self._STRETCH_BOTH)
-        self.paneB = pn.pane.Plotly(figB, sizing_mode=self._STRETCH_BOTH)
+        self.paneA = pn.pane.Plotly(figA, sizing_mode='stretch_both')
+        self.paneB = pn.pane.Plotly(figB, sizing_mode='stretch_both')
 
     def _setup_callbacks(self):
         """Setup callbacks for interactive functionality."""
