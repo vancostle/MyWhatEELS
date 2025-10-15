@@ -8,6 +8,7 @@ import numpy as np
 import plotly.graph_objs as go
 from sklearn.preprocessing import normalize
 from sklearn.cluster import KMeans
+import threading
 
 from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING
@@ -100,6 +101,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self.paneA = None  # Plotly heatmap pane
         self.paneB = None  # Plotly spectrum pane
         self._pc = None    # periodic callback handle
+        self._kmeans_run_button = None  # KMeans run button
 
         # Setup widgets, plots and callbacks
         self._setup_widgets()
@@ -107,7 +109,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self._setup_callbacks()
 
     # --- Vanessa's KMeans Clustering Implementation ---
-    def kmeans_clustering(self, matrix, n_cluster, available_norm):
+    def _kmeans_clustering(self, matrix, n_cluster, available_norm):
         '''
         Vanessa's KMeans clustering function adapted for the visualizer.
         
@@ -142,7 +144,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         labels = fitted.labels_.reshape(matrix.shape[:-1])
         return labels, centres
 
-    def plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
+    def _plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
         """
         Plot the clustering labels using Plotly for interactive visualization.
         Adapted from Vanessa's code for integration into the visualizer.
@@ -177,7 +179,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         )
         return fig
 
-    def apply_kmeans_clustering(self, n_clusters=6, available_norm='l2'):
+    def _apply_kmeans_clustering(self, n_clusters=6, available_norm='l2'):
         """
         Apply KMeans clustering to the spectrum image data and update visualization.
         """
@@ -191,12 +193,12 @@ class SpectrumImageVisualizer(BaseVisualizer):
                 self._original_heatmap_data = data_cube.sum(axis=-1)
             
             # Apply clustering
-            labels, centres = self.kmeans_clustering(data_cube, n_clusters, available_norm)
+            labels, centres = self._kmeans_clustering(data_cube, n_clusters, available_norm)
             
             self._clustering_results = (labels, centres)
             
             # Create clustering visualization
-            clustering_fig = self.plot_kmeans_labels_plotly(labels, f"KMeans Clustering (n={n_clusters})")
+            clustering_fig = self._plot_kmeans_labels_plotly(labels, f"KMeans Clustering (n={n_clusters})")
             # Update the heatmap pane with clustering results
             if self.paneA is not None:
                 # Force the update by setting object and triggering param updates
@@ -326,19 +328,17 @@ class SpectrumImageVisualizer(BaseVisualizer):
         # self.restore_button.on_click(self._on_stop_clustering_clicked)
         
         if kmeans_run_button := getattr(self._controller.view, "kmeans_run_button", None):
-            kmeans_run_button.on_click_by_state(
-                state=True, 
-                on_click=self._on_run_clustering_clicked
-            )
-            kmeans_run_button.on_click_by_state(
-                state=False,
-                on_click=self._on_stop_clustering_clicked
-            )
+            self._kmeans_clustering_button = kmeans_run_button # Store reference
+            kmeans_run_button.on_click(self._on_run_clustering_clicked)
 
         self.range_slider.visible = False
 
-    def _on_run_clustering_clicked(self):
+    def _on_run_clustering_clicked(self, event):
         """Handle clustering button click."""
+        
+        if self._kmeans_clustering_button is not None:
+            self._kmeans_clustering_button.disabled = True  # Disable to prevent multiple clicks
+        
         kmeans_input = self._controller.view.kmeans_input
         
         n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
@@ -347,7 +347,12 @@ class SpectrumImageVisualizer(BaseVisualizer):
             n_clusters = kmeans_input["n_clusters"].value
             available_norm = kmeans_input["available_norms"].value
 
-        self.apply_kmeans_clustering(n_clusters=n_clusters, available_norm=available_norm)
+        try:
+            self._apply_kmeans_clustering(n_clusters=n_clusters, available_norm=available_norm)
+        finally:
+            if self._kmeans_clustering_button is not None:
+                self._kmeans_clustering_button.disabled = False  # Re-enable button after processing
+        
 
     def _on_stop_clustering_clicked(self):
         """Handle restore button click."""

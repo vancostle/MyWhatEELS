@@ -41,7 +41,7 @@ class ClusteringView(BaseView):
         return self._kmeans_input  
     
     @property
-    def kmeans_run_button(self) -> Optional[ToggleButton]:
+    def kmeans_run_button(self) -> Optional[pn.widgets.Button]:
         """Access the K-Means input widgets."""
         return self._kmeans_run_button         
 
@@ -136,18 +136,9 @@ class ClusteringView(BaseView):
             ),
         }
         
-        self._kmeans_run_button = ToggleButton(
-            initial_state=True,
-            states={
-                'on': {
-                    'label': 'Run K-Means',
-                    'button_type': 'success'
-                },
-                'off': {
-                    'label': 'Loading K-Means...',
-                    'button_type': 'danger'
-                }
-            },
+        self._kmeans_run_button = pn.widgets.Button(
+            name='Run K-Means',
+            button_type='success',
             height=55,
             margin=(20,0,10,0),
             sizing_mode=self.STRETCH_WIDTH

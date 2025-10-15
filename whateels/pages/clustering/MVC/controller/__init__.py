@@ -34,7 +34,6 @@ class ClusteringController(BaseController):
         self._current_n_clusters_value: Optional[int] = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
         
         self._kmeans_user_update(view)
-        # self._handle_run_button(view)
 
     @property
     def view(self) -> "ClusteringView":
