@@ -16,7 +16,7 @@ from whateels.components import ResizableColumns
 from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
-    from ...model import HomePageModel
+    from ...model import Model
     from xarray import Dataset
     from param.parameterized import Event
 
@@ -41,7 +41,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
-    def __init__(self, model: "HomePageModel", dataset: "Dataset"):
+    def __init__(self, model: "Model", dataset: "Dataset"):
         super().__init__(model, dataset)
 
         self._model = model

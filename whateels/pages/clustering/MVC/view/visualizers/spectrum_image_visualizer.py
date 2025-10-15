@@ -8,6 +8,11 @@ import numpy as np
 import plotly.graph_objs as go
 
 from whateels.helpers import SpectrumExtractor
+from whateels.helpers.colormaps import (
+    get_nclusters_cmap,
+    build_discrete_colorscale,
+    to_plotly_color,
+)
 
 from sklearn.preprocessing import normalize
 from sklearn.cluster import KMeans
@@ -36,29 +41,15 @@ class SpectrumImageVisualizer(BaseVisualizer):
     
     _NOT_AVAILABLE = 'N/A'
     
-    # Define a shared color palette for clusters (max 20 colors)
-    _CLUSTER_COLORS = [
-        "rgb(255, 0, 0)",      # red
-        "rgb(0, 0, 255)",      # blue
-        "rgb(0, 255, 0)",      # green
-        "rgb(255, 165, 0)",    # orange
-        "rgb(128, 0, 128)",    # purple
-        "rgb(165, 42, 42)",    # brown
-        "rgb(255, 192, 203)",  # pink
-        "rgb(128, 128, 128)",  # gray
-        "rgb(128, 128, 0)",    # olive
-        "rgb(0, 255, 255)",    # cyan
-        "rgb(255, 0, 255)",    # magenta
-        "rgb(0, 255, 0)",      # lime
-        "rgb(0, 0, 128)",      # navy
-        "rgb(0, 128, 128)",    # teal
-        "rgb(128, 0, 0)",      # maroon
-        "rgb(255, 215, 0)",    # gold
-        "rgb(75, 0, 130)",     # indigo
-        "rgb(255, 127, 80)",   # coral
-        "rgb(220, 20, 60)",    # crimson
-        "rgb(238, 130, 238)"   # violet
-    ]
+    # Colormap name used to build discrete Plotly colorscales for clustering.
+    # We generate the actual discrete colorscale on demand using the
+    # helper `whateels.helpers.colormaps.listed` so the visualizer
+    # can produce exactly `n_clusters` distinct colors.
+    _CLUSTER_COLORS = 'tab20b'
+    _ORDER_COLORS = [3, 7, 15, 11, 19, 
+                     2, 6, 14, 10, 18, 
+                     1, 5, 13, 9, 17, 
+                     0, 4, 12, 8, 16]
 
     def __init__(self, model: "ClusteringModel", controller: "ClusteringController", dataset: "Dataset"):
         super().__init__(model, dataset)
@@ -165,32 +156,34 @@ class SpectrumImageVisualizer(BaseVisualizer):
         Adapted from Vanessa's code for integration into the visualizer.
         """
         n_clusters = len(np.unique(labels))
-        # Create discrete colorscale by repeating each color at start and end of its range
-        discrete_colorscale = []
-        for i in range(n_clusters):
-            color = self._CLUSTER_COLORS[i % len(self._CLUSTER_COLORS)]
-            if i == 0:
-                discrete_colorscale.append([0.0, color])
-            else:
-                prev_boundary = i / n_clusters
-                discrete_colorscale.append([prev_boundary, discrete_colorscale[-1][1]])
-                discrete_colorscale.append([prev_boundary, color])
-            if i == n_clusters - 1:
-                discrete_colorscale.append([1.0, color])
-        
+
+        # Build colors (one per cluster) and the stepped Plotly colorscale
+        cluster_colors, discrete_colorscale = self._build_cluster_colors_and_scale(n_clusters)
+        self.cluster_colors = cluster_colors
+        self.discrete_colorscale = discrete_colorscale
+
+        # Decide colorbar placement and margin
+        try:
+            ny, nx = labels.shape[-2], labels.shape[-1]
+        except Exception:
+            ny, nx = 1, 1
+
+        colorbar, margin = self._build_colorbar(n_clusters, ny, nx)
+
         fig = go.Figure(go.Heatmap(
             z=labels,
-            colorscale=discrete_colorscale,
-            colorbar=dict(title="Cluster", tickmode='linear', tick0=0, dtick=1),
+            colorscale=self.discrete_colorscale,
+            colorbar=colorbar,
             hovertemplate='x: %{x}<br>y: %{y}<br>Cluster: %{z}<extra></extra>',
-            zmin=0,
-            zmax=n_clusters-1
+            zmin=-0.5,
+            zmax=n_clusters-0.5
         ))
-        # Keep same layout and aspect locking as the unclustered figA
+
+        # Keep same layout and aspect locking as the unclustered figA but adjust margins
         fig.update_layout(
             title=title,
             height=400,
-            margin=dict(l=16, r=16, t=50, b=20),
+            margin=margin,
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)'
         )
@@ -198,6 +191,61 @@ class SpectrumImageVisualizer(BaseVisualizer):
                          showgrid=False, zeroline=False, showticklabels=False)
         fig.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain='domain')
         return fig
+
+    def _build_cluster_colors_and_scale(self, n_clusters: int):
+        """Return (cluster_colors, discrete_colorscale) for n_clusters.
+
+        Centralises the logic that samples the matplotlib colormap, converts
+        colors to Plotly strings and builds the stepped colorscale.
+        """
+        # Use a preferred ordering for tab20-like palettes if available
+        preferred = None
+        if isinstance(self._CLUSTER_COLORS, str) and 'tab20' in self._CLUSTER_COLORS:
+            preferred = list(self._ORDER_COLORS)
+
+        listed = get_nclusters_cmap(self._CLUSTER_COLORS, n_clusters, index_order=preferred)
+        cluster_colors = [to_plotly_color(c) for c in listed]
+        discrete = build_discrete_colorscale(cluster_colors)
+        return cluster_colors, discrete
+
+    def _build_colorbar(self, n_clusters: int, ny: int, nx: int):
+        """Construct colorbar dict and corresponding margin based on aspect.
+
+        Returns (colorbar, margin).
+        """
+        tickvals = list(np.arange(n_clusters))
+        ticktext = [str(i) for i in range(n_clusters)]
+
+        if ny > nx:
+            colorbar = dict(
+                tickmode='array',
+                tickvals=tickvals,
+                ticktext=ticktext,
+                orientation='v',
+                x=1.02,
+                y=0.5,
+                xanchor='left',
+                yanchor='middle',
+                len=1.0,
+                thickness=24,
+            )
+            margin = dict(l=16, r=80, t=50, b=20)
+        else:
+            colorbar = dict(
+                tickmode='array',
+                tickvals=tickvals,
+                ticktext=ticktext,
+                orientation='h',
+                x=0.5,
+                y=-0.18,
+                xanchor='center',
+                yanchor='top',
+                len=1.0,
+                thickness=20,
+            )
+            margin = dict(l=16, r=16, t=50, b=80)
+
+        return colorbar, margin
 
     def _apply_kmeans_clustering(self, n_clusters=6, available_norm='l2', n_init=10, max_iter=300, init_method='k-means++'):
         """
@@ -278,8 +326,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
             
         # Create traces for each cluster center
         traces = []
-        colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
-        
+        colors = self.cluster_colors  # Use the plain color list (one per cluster)
+
         for i, center in enumerate(centres):
             color = colors[i % len(colors)]
             traces.append(go.Scatter(
