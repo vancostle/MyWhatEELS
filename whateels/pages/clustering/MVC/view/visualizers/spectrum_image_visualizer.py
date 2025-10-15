@@ -185,6 +185,53 @@ class SpectrumImageVisualizer(BaseVisualizer):
 
         return matrix_norm, sclust_norm
 
+    def _should_use_multifit_data(self) -> bool:
+        """
+        Check if multifit data should be used for clustering.
+        
+        Delegates to the model to determine if background-subtracted data
+        should be used based on switch state and data availability.
+        
+        Returns:
+            bool: True if multifit data should be used, False otherwise
+        """
+        try:
+            # Get switch state from view
+            switch = self._controller.view.background_subtraction_switch
+            if switch is None:
+                return False
+            
+            # Delegate decision to model
+            return self._model.should_use_background_subtraction(switch.value)
+            
+        except Exception as e:
+            print(f"Error checking if multifit should be used: {e}")
+            return False
+    
+    def _get_multifit_data(self):
+        """
+        Retrieve background-subtracted data from the model.
+        
+        Delegates to the model to retrieve multifit results.
+        
+        Returns:
+            numpy.ndarray: 3D array (y, x, energy) with background-subtracted data,
+                          or None if data cannot be retrieved
+        """
+        try:
+            data_cube = self._model.get_multifit_data()
+            
+            if data_cube is not None:
+                print(f"Using multifit data for clustering, shape: {data_cube.shape}")
+            
+            return data_cube
+                
+        except Exception as e:
+            print(f"Error retrieving multifit data from model: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     def _plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
         """
         Plot the clustering labels using Plotly for interactive visualization.
@@ -285,11 +332,25 @@ class SpectrumImageVisualizer(BaseVisualizer):
     def _apply_kmeans_clustering(self, n_clusters=6, available_norm='l2', n_init=10, max_iter=300, init_method='k-means++'):
         """
         Apply KMeans clustering to the spectrum image data and update visualization.
+        
+        If background-subtraction switch is active and multifit results are available,
+        uses the background-subtracted data from multifit instead of raw data.
         """
 
         try:
-            # Get the 3D data cube (x, y, energy)
-            data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            # Check if background-subtraction is enabled and multifit data is available
+            use_multifit_data = self._should_use_multifit_data()
+            
+            if use_multifit_data:
+                # Get background-subtracted data from multifit
+                data_cube = self._get_multifit_data()
+                if data_cube is None:
+                    # Fallback to original data if multifit retrieval fails
+                    print("Warning: Could not retrieve multifit data, using original data")
+                    data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            else:
+                # Get the 3D data cube (x, y, energy) from original dataset
+                data_cube = np.asarray(self._electron_count_data.fillna(0.0))
             
             # Store original heatmap data if not already stored
             if self._original_heatmap_data is None:
