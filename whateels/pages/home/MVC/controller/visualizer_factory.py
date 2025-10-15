@@ -12,8 +12,8 @@ from ..view.visualizers import SpectrumLineVisualizer, SpectrumImageVisualizer, 
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..model import Model
-    from . import Controller
+    from ..model import HomePageModel
+    from . import HomePageController
     from typing import TYPE_CHECKING
     from xarray import Dataset
 
@@ -28,13 +28,13 @@ class VisualizerFactory:
     - Raises exceptions for unknown types or plot creation errors.
     """
     
-    def __init__(self, model: "Model", controller: "Controller") -> None:
+    def __init__(self, model: "HomePageModel", controller: "HomePageController") -> None:
         self._model = model
         self._controller = controller
         
         # Mapping of dataset types to visualizer classes
         # This can be extended with more visualizers as needed
-        self._all_spectrum_visualizer = {
+        self._all_visualizers = {
             model.constants.SPECTRUM_LINE: SpectrumLineVisualizer,
             model.constants.SPECTRUM_IMAGE: SpectrumImageVisualizer,
             model.constants.SINGLE_SPECTRUM: SingleSpectrumVisualizer,
@@ -65,13 +65,13 @@ class VisualizerFactory:
         EXCEPTION_ERROR = "[VisualizerFactory] Exception while creating plot for dataset type '{}': {}"
 
         try:
-            chosen_spectrum_visualizer = self._all_spectrum_visualizer.get(dataset_type)
+            chosen_spectrum_visualizer = self._all_visualizers.get(dataset_type)
             if chosen_spectrum_visualizer:
                 chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)
                 return chosen_spectrum_visualizer
             else:
                 chosen_spectrum_visualizer = None
-                error_msg = UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_spectrum_visualizer.keys()))
+                error_msg = UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_visualizers.keys()))
                 raise ValueError(error_msg)
         except Exception as e:
             chosen_spectrum_visualizer = None

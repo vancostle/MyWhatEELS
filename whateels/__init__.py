@@ -4,7 +4,7 @@ import panel as pn
 pn.extension('filedropper', 'floatpanel', 'plotly', theme='default')
 
 from whateels.helpers import LoadCSS, CSS_ROOT
-from whateels.pages import Home, Metadata, Clustering, MultiFitting, Quantification
+from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification
 
 class App:
     """
@@ -19,15 +19,14 @@ class App:
     def __init__(self, title : str = _DEFAULT_TITLE):
         self._title = title
 
-    def run(self, port : int = _DEFAULT_PORT):
+    def run(self, port : int = _DEFAULT_PORT, show : bool = True):
         # Load custom CSS for the entire app
-        CUSTOM_PAGE = str(CSS_ROOT / "custom_page.css")
-        LoadCSS([CUSTOM_PAGE])
+        LoadCSS([str(CSS_ROOT / "custom_page.css")])
 
         # Define the pages for the application
         # Use lambdas to avoid immediate instantiation
         pages = {
-            "/": lambda: Home(),
+            "/": lambda: HomePage(),
             "/metadata-details": lambda: Metadata(),
             "/clustering": lambda: Clustering(),
             "/multifit-details": lambda: MultiFitting(),
@@ -38,4 +37,6 @@ class App:
             pages,
             title=self._title,
             port=port,
+            show=show,
+            allow_websocket_origin=["*"],
         )

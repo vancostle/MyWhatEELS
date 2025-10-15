@@ -7,6 +7,6 @@ operations, keeping the main controller focused on orchestration.
 
 from .file_processor_service import FileProcessorService
 from .data_processor_service import DataProcessorService
-from .file_workflow_service import FileWorkflowService
+from .filedropper_workflow_service import FileDropperWorkflowService
 
-__all__ = ['FileProcessorService', 'DataProcessorService', 'FileWorkflowService']
+__all__ = ['FileProcessorService', 'DataProcessorService', 'FileDropperWorkflowService']

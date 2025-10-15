@@ -34,7 +34,7 @@ class LoadCSS:
         
         self._load_css(css_files)
     
-    def _load_css(self, css_files=None):
+    def _load_css(self, css_files=[]):
         """
         Load CSS files for the application.
         
@@ -45,6 +45,10 @@ class LoadCSS:
         ENCODING = "utf-8"
         ERROR_MESSAGE = "❌ Error loading CSS file"
         WARNING_MESSAGE = "⚠️ CSS file not found"
+        NO_CSS_LOADED_MESSAGE = "No CSS files loaded."
+        
+        if len(css_files) == 0:
+            raise ValueError(NO_CSS_LOADED_MESSAGE)
         
         for css_file in css_files:
             try:
@@ -56,9 +60,3 @@ class LoadCSS:
                     print(f"{WARNING_MESSAGE}: {css_file}")
             except Exception as e:
                 print(f"{ERROR_MESSAGE} {css_file}: {e}")
-
-
-# Usage example:
-# css_loader1 = LoadCSS()  # Loads CSS
-# css_loader2 = LoadCSS()  # Same instance, doesn't reload CSS
-# print(css_loader1 is css_loader2)  # True - same object

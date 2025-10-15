@@ -3,3 +3,4 @@ from .temp_file import TempFile
 from .constants import *
 from .spectrum_extractor import SpectrumExtractor
 from .spectrum_fitting import SpectrumFitting
+from .in_memory_file import InMemoryFile

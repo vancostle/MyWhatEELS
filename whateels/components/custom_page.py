@@ -9,6 +9,16 @@ import panel as pn
 from typing import Optional, List, Union
 from whateels.shared_state import AppState
 
+# pn.extension(raw_js={
+#     """
+#         const toggleSidebar = () => {
+#             const sidebar = document.getElementById("sidebar");
+#             sidebar.classList.toggle("hidden");
+#             console.log("Sidebar toggled");
+#         };
+#     """
+# })
+
 class CustomPage(pn.template.FastListTemplate):
     """
     Custom page template extending Panel's FastListTemplate.
@@ -29,6 +39,7 @@ class CustomPage(pn.template.FastListTemplate):
         right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None,
         header_background: str = _DEFAULT_HEADER_BACKGROUND,
         sidebar_width: int = 275,
+        **kwargs,
     ):
         """
         Initialize CustomPage with enhanced FastListTemplate.
@@ -44,10 +55,10 @@ class CustomPage(pn.template.FastListTemplate):
         """
         app_state = AppState()
         app_state.param.watch(self.on_metadata_available_changed, 'metadata')
-        is_metadata_loaded = True if app_state.metadata and 'error' not in app_state.metadata else False
+        is_metadata_loaded = True if isinstance(app_state.metadata, dict) and 'error' not in app_state.metadata else False
         
         # Create a reactive header container
-        self._header_container = pn.Row(*self._create_navigation_header(is_metadata_loaded))
+        self._header_container = pn.Row(*self._create_navigation_header(is_metadata_loaded, right_sidebar))
         # Set default header if none provided (but not if empty list is explicitly passed)
         if header is None:
             header = [self._header_container]
@@ -75,9 +86,9 @@ class CustomPage(pn.template.FastListTemplate):
             init_params['right_sidebar'] = right_sidebar
         
         # Initialize parent template with dynamic parameters
-        super().__init__(**init_params)
+        super().__init__(**init_params, **kwargs)
 
-    def _create_navigation_header(self, is_metadata_loaded: bool = False) -> List[pn.pane.Markdown]:
+    def _create_navigation_header(self, is_metadata_loaded: bool = False, right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None) -> list:
         """
         Create the default navigation header with links to main application sections.
         
@@ -94,18 +105,20 @@ class CustomPage(pn.template.FastListTemplate):
             navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Clustering</a>', "Clustering"))
             navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Quantification</a>', "Quantification"))
 
-        return [
+        top_menu = [
             pn.pane.Markdown(
                 link_text, 
-                css_classes=["fast-list-header"],
-                name=description  # For accessibility
+                css_classes=["custom-nav-link"],
+                name=description,  # For accessibility
             )
             for link_text, description in navigation_links
         ]
         
+        return top_menu
+        
     def on_metadata_available_changed(self, _):
         app_state = AppState()
-        is_metadata_loaded = True if app_state.metadata and 'error' not in app_state.metadata else False
+        is_metadata_loaded = True if isinstance(app_state.metadata, dict) and 'error' not in app_state.metadata else False
         
         # Rebuild navigation header visually
         self._header_container.objects = self._create_navigation_header(is_metadata_loaded)

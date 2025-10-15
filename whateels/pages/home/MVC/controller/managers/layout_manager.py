@@ -1,16 +1,16 @@
 import panel as pn
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from whateels.errors.dm.data import DMPlotCreationError
 from ..visualizer_factory import VisualizerFactory
-
+from panel.viewable import Viewable
 if TYPE_CHECKING:
-    from ...view import View
-    from ...model import Model
-    from ...controller import Controller
+    from ...view import HomePageView
+    from ...model import HomePageModel
+    from ...controller import HomePageController
     from xarray import Dataset
 
-class LayoutManager:
+class HomePageLayoutManager:
     """
     Manager class responsible for handling all layout operations in the WhatEELS application.
     
@@ -23,45 +23,26 @@ class LayoutManager:
     code organization and single responsibility principle.
     """
     
-    def __init__(self, view: "View", controller: "Controller", model: "Model"):
+    def __init__(self, view: "HomePageView", controller: "HomePageController", model: "HomePageModel"):
         """
-        Initialize the LayoutManager with a reference to the View.
+        Initialize the LayoutManager with a reference to the HomePageView.
         
         Args:
-            view: The View instance that contains the UI components to manage
-        """
+            view: The HomePageView instance that contains the UI components to manage
+        """        
         self._view = view
         self._controller = controller
         self._model = model
 
         # Store all dataset information
-        self._all_dataset_info = []
-            
-    def show_loading_placeholder_in_main_layout(self):
-        """Show the loading placeholder in the main layout."""
-        self._view.main.clear()
-        self._view.main.append(self._view.loading_placeholder)
-        
-    def reset_main_layout(self):
-        """Reset the main layout to the no-file placeholder."""
-        self._view.main.clear()
-        self._view.main.append(self._view.no_file_placeholder)
-
-    def update_main_layout(self, plot_component):
-        """Update the main layout with a new plot component."""
-        self._view.main.clear()
-        self._view.main.append(plot_component)
-        
-    def show_error_placeholder_in_main_layout(self):
-        """Show the error placeholder in the main layout."""
-        self._view.main.clear()
-        self._view.main.append(self._view.error_placeholder)
-        
-    def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
+        self._all_dataset_info: list[Viewable] = []
+    
+    @override
+    def add_component_to_sidebar_layout(self, component: Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
         self._view.sidebar.append(component)
         self._view.dataset_info = component
-        
+    
     def remove_dataset_info_from_sidebar(self):
         """Remove the last dataset info component from the sidebar, if present."""
         if self._view.dataset_info is None:
@@ -101,7 +82,7 @@ class LayoutManager:
                 chosen_visualizer = visualizer_factory.choose_visualizer(dataset_type, dataset)
                 
                 if chosen_visualizer is None:
-                    return False
+                    return
                 
                 visualizer_plots = chosen_visualizer.create_plots()
                 
@@ -112,9 +93,9 @@ class LayoutManager:
             plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
                 
             # Update UI
-            self._controller.layout.update_main_layout(plots_tab)
-            self._controller.layout.remove_dataset_info_from_sidebar()
-            self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[0])
+            self._controller.base_layout.update_main(plots_tab)
+            self.remove_dataset_info_from_sidebar()
+            self.add_component_to_sidebar_layout(self._all_dataset_info[0])
 
         except Exception as e:
             raise DMPlotCreationError(e)
@@ -123,5 +104,6 @@ class LayoutManager:
         """Handle tab changes by updating sidebar with selected dataset info."""
 
         new_tab = event.new
+        print(new_tab)
         self._controller.layout.remove_dataset_info_from_sidebar()
         self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[new_tab])

@@ -1,3 +1,3 @@
-from .layout_manager import LayoutManager
+from .layout_manager import HomePageLayoutManager
 
-__all__ = ['LayoutManager']
+__all__ = ['HomePageLayoutManager']

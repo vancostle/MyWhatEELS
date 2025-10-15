@@ -3,7 +3,7 @@ import time
 import threading
 import tempfile
 
-
+# TODO: Consider deleting this file if not needed in favor of using FileCompatibleBytesIO for in-memory file handling.
 class TempFile:
     """
     A class to handle temporary file creation and cleanup with optional delayed deletion.

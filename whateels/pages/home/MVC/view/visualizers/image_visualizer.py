@@ -17,7 +17,7 @@ from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
 
 class ImageVisualizer(AbstractEELSVisualizer):
     """Composes image visualizations from EELS data"""
@@ -26,7 +26,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
     _STRETCH_BOTH = 'stretch_both'
     _STRETCH_WIDTH = 'stretch_width'
     
-    def __init__(self, model: "Model", dataset: "xr.Dataset"):
+    def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
         super().__init__(model, dataset)
 
         self._model = model

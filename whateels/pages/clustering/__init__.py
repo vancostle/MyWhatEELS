@@ -1,5 +1,5 @@
 from whateels.components import CustomPage
-from .MVC import Model, Controller, View
+from .MVC import ClusteringModel, ClusteringController, ClusteringView
 
 class Clustering(CustomPage):
     """
@@ -8,12 +8,14 @@ class Clustering(CustomPage):
     """
 
     def __init__(self):
-        model = Model()
-        view = View(model)
-        Controller(model, view)
+        model = ClusteringModel()
+        view = ClusteringView(model)
+        ClusteringController(model, view)
 
         super().__init__(
-            title="Clustering",
+            title=model.constants.TITLE,
             main=[view.main],
             sidebar=[view.sidebar],
+            right_sidebar=[view.right_sidebar],
+            collapsed_sidebar=True,
         )

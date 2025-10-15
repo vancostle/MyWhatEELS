@@ -9,7 +9,7 @@ from typing import override, TYPE_CHECKING
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
     from xarray import Dataset
 
 class SingleSpectrumVisualizer(AbstractEELSVisualizer):
@@ -19,8 +19,7 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
-        super().__init__(model, dataset)
+    def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         self._model = model
         self._dataset = dataset
 

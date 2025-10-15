@@ -8,6 +8,7 @@ The AppState uses param for reactive updates across the application.
 """
 
 import param
+from xarray import Dataset
 from .helpers.logging import Logger
 
 _logger = Logger.get_logger("shared_state.log", __name__)
@@ -40,6 +41,19 @@ class AppState(param.Parameterized):
         can access the same dataset instance.
     """)
 
+    # Reactive parameter for all loaded datasets
+    all_datasets = param.List(default=list(), doc="""
+        List of all loaded EELS datasets (xarray.Dataset).
+    """)
+
+    filename = param.String(default="No file uploaded", doc="""
+        Name of the currently loaded file.
+    """)
+    
+    selected_dataset = param.Parameter(default=None, doc="""
+        Currently selected dataset (xarray.Dataset) for operations.
+    """)
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -50,7 +64,7 @@ class AppState(param.Parameterized):
         if not hasattr(self, '_initialized'):
             super().__init__()
             self._initialized = True
-    
+
     @param.depends('metadata', watch=True)
     def _on_metadata_change(self):
         """Called automatically when metadata parameter changes."""
@@ -74,3 +88,35 @@ class AppState(param.Parameterized):
             _logger.info("plot_dataset published to AppState")
         else:
             _logger.info("plot_dataset cleared in AppState")
+    @param.depends('all_datasets', watch=True)
+    def _on_datasets_change(self):
+        """Called automatically when all_datasets parameter changes."""
+        count = len(self.all_datasets) if isinstance(self.all_datasets, list) else 0
+        _logger.info(f"All datasets updated via param, count: {count}")
+        
+    @param.depends('filename', watch=True)
+    def _on_filename_change(self):
+        """Called automatically when filename parameter changes."""
+        if self.filename is not None and self.filename != "":
+            _logger.info(f"Filename updated via param: {self.filename}")
+        else:
+            _logger.info("Filename cleared via param")
+        
+    def clear_metadata(self):
+        self.metadata = None
+        
+    def clear_datasets(self):
+        self.all_datasets = []
+        
+    def clear_filename(self):
+        self.filename = ""
+
+    def clear_selected_dataset(self):
+        self.selected_dataset = None
+
+    def clear_all(self):
+        """Clear all shared state parameters."""
+        self.clear_metadata()
+        self.clear_datasets()
+        self.clear_filename()
+        self.clear_selected_dataset()

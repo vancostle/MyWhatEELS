@@ -17,11 +17,11 @@ from whateels.errors.dm.data import (
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...model import Model
-    from .. import Controller
+    from ...model import HomePageModel
+    from .. import HomePageController
     from xarray import Dataset
 
-class FileWorkflowService:
+class FileDropperWorkflowService:
     """
     Orchestrates EELS dataset workflows from file upload to visualization.
     
@@ -29,7 +29,7 @@ class FileWorkflowService:
     Manages UI state transitions and error handling for the complete pipeline.
     """
 
-    def __init__(self, model: "Model", controller: "Controller"):
+    def __init__(self, model: "HomePageModel", controller: "HomePageController"):
         """
         Initialize with model and controller dependencies.
         
@@ -58,22 +58,24 @@ class FileWorkflowService:
         Raises:
             DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
-        
-        print(f"File content received of length: {len(file_content) / (1024 * 1024):.2f} MB")
 
         try:
-            # Show loading state
-            self._controller.layout.show_loading_placeholder_in_main_layout()
+            # Clear any existing datasets and metadata
+            app_state = AppState()
+            app_state.clear_all()
             
+            app_state.filename = filename
+
             all_datasets: list[Dataset] = []
+            
+            # Show loading state
+            self._controller.base_layout.loading_main()
             
             # Process the file
             all_datasets = self._file_processor.process_upload(filename, file_content)
-            
-            # Calculate total size of all datasets in MB
-            total_size_bytes = sum(dataset.nbytes for dataset in all_datasets)
-            total_size_mb = total_size_bytes / (1024 * 1024)
-            print(f"Processed {len(all_datasets)} dataset(s) with total size: {total_size_mb:.2f} MB")
+
+            # Update AppState with all loaded datasets for global access
+            app_state.all_datasets = all_datasets
             
             if not all_datasets:
                 self._handle_file_upload_error(filename)
@@ -110,18 +112,18 @@ class FileWorkflowService:
         try:
             # Clear UI components
             self._controller.layout.remove_dataset_info_from_sidebar()
-            self._controller.layout.reset_main_layout()
+            self._controller.base_layout.empty_main()
             
-            # Clear previous dataset info panels to prevent caching old data
-            self._model.all_datasets = []
+            # Clear in-memory file to free resources
+            del self._model.in_memory_file
             
-            # Reset AppState metadata
-            AppState().metadata = None
-                
+            app_state = AppState()
+            # Clear global AppState data
+            app_state.clear_all()
+
         except Exception as e:
             raise DMFileRemovalError(e)
 
-    
     def _handle_file_upload_error(self, filename: str) -> None:
         """Handle file upload errors by showing error UI state."""
-        self._controller.layout.show_error_placeholder_in_main_layout()
+        self._controller.base_layout.error_main()

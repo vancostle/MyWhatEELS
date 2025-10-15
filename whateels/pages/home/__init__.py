@@ -1,16 +1,16 @@
 from whateels.components import CustomPage
-from .MVC import Model, Controller, View
+from .MVC import HomePageModel, HomePageController, HomePageView
 
-class Home(CustomPage):
+class HomePage(CustomPage):
     """
     HomePage class for the WhatEELS application.
     This class extends CustomPage to create a specific home page layout.
     """
 
     def __init__(self):
-        model = Model()
-        view = View(model)
-        Controller(model, view)
+        model = HomePageModel()
+        view = HomePageView(model)
+        HomePageController(model, view)
 
         super().__init__(
             title=model.constants.TITLE,

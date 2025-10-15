@@ -5,7 +5,7 @@ import panel as pn
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
     from xarray import Dataset
 
 class AbstractEELSVisualizer(ABC):
@@ -15,7 +15,7 @@ class AbstractEELSVisualizer(ABC):
     including methods for creating plots and handling dataset information.
     """
     
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         super().__init__()
 
         self._model = model

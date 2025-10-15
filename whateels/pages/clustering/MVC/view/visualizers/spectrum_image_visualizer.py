@@ -1,0 +1,505 @@
+"""
+Spectrum image (datacube) visualization composer with KMeans clustering integration.
+Integrates Vanessa's KMeans clustering functionality using Plotly for visualization.
+"""
+
+import panel as pn
+import numpy as np
+import plotly.graph_objs as go
+
+from sklearn.preprocessing import normalize
+from sklearn.cluster import KMeans
+from whateels.base.base_visualizer import BaseVisualizer
+from typing import override, TYPE_CHECKING, Literal
+from whateels.components import ResizableColumns
+
+if TYPE_CHECKING:
+    from ...model import ClusteringModel
+    from ...controller import ClusteringController
+    from xarray import Dataset
+
+class SpectrumImageVisualizer(BaseVisualizer):
+    """
+    Enhanced Spectrum Image Visualizer with integrated KMeans clustering.
+    Combines the original visualizer functionality with Vanessa's clustering code.
+    """
+    
+    # Panel sizing modes
+    _STRETCH_WIDTH = "stretch_width"
+    
+    # CSS classes and constants for dataset info panel
+    _DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
+    _DATASET_INFO_CLASS = ["dataset-info", "animated"]
+    _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
+    
+    _NOT_AVAILABLE = 'N/A'
+    
+    # Define a shared color palette for clusters (max 20 colors)
+    _CLUSTER_COLORS = [
+        "rgb(255, 0, 0)",      # red
+        "rgb(0, 0, 255)",      # blue
+        "rgb(0, 255, 0)",      # green
+        "rgb(255, 165, 0)",    # orange
+        "rgb(128, 0, 128)",    # purple
+        "rgb(165, 42, 42)",    # brown
+        "rgb(255, 192, 203)",  # pink
+        "rgb(128, 128, 128)",  # gray
+        "rgb(128, 128, 0)",    # olive
+        "rgb(0, 255, 255)",    # cyan
+        "rgb(255, 0, 255)",    # magenta
+        "rgb(0, 255, 0)",      # lime
+        "rgb(0, 0, 128)",      # navy
+        "rgb(0, 128, 128)",    # teal
+        "rgb(128, 0, 0)",      # maroon
+        "rgb(255, 215, 0)",    # gold
+        "rgb(75, 0, 130)",     # indigo
+        "rgb(255, 127, 80)",   # coral
+        "rgb(220, 20, 60)",    # crimson
+        "rgb(238, 130, 238)"   # violet
+    ]
+
+    def __init__(self, model: "ClusteringModel", controller: "ClusteringController", dataset: "Dataset"):
+        super().__init__(model, dataset)
+
+        self._model = model
+        self._dataset = dataset
+        self._controller = controller
+
+        # Energy axis (eje de energía)
+        self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
+
+        # ElectronCount data cube
+        self._electron_count_data: "Dataset" = self._dataset.ElectronCount
+
+        # Last selected pixel (x,y)
+        self._last_selected = {"x": 0, "y": 0}
+
+        # Range state for paneB (to preserve zoom/pan)
+        self._current_x_range = None
+        self._current_y_range = None
+        self._current_x_autorange = None
+        self._current_y_autorange = None
+
+        # Selection / hover / fitting state
+        self._region_pairs = []
+        self._last_hover_point = None
+        self._last_hover_ts = None
+        self._INACTIVITY_MS = 700
+        self._fitting_active = False
+
+        # Clustering state (Vanessa's functionality)
+        self._clustering_results = None  # Will store (labels, centres) from clustering
+        self._original_heatmap_data = None  # Store original heatmap for restoration
+        self._clustering_active = False
+
+        # Widgets / panes placeholders
+        self.range_slider = None
+        self.fitting_button = None
+        self.clustering_button = None  # New clustering button
+        self.restore_button = None     # Button to restore original view
+        self.paneA = None  # Plotly heatmap pane
+        self.paneB = None  # Plotly spectrum pane
+        self._pc = None    # periodic callback handle
+        self._kmeans_run_button = None  # KMeans run button
+
+        # Setup widgets, plots and callbacks
+        self._setup_widgets()
+        self._setup_plots()
+        self._setup_callbacks()
+
+    # --- Vanessa's KMeans Clustering Implementation ---
+    def _kmeans_clustering(self, matrix, n_cluster, available_norm, n_init=10, max_iter=300, init_method='k-means++'):
+        '''
+        Vanessa's KMeans clustering function adapted for the visualizer.
+        
+        Parameters:
+        -----------
+        matrix: numpy array. (x,y,eloss)
+            Imagen de espectros.
+        n_cluster: int.
+            Número de clusters.
+        available_norm: string, optional. (default='l2')
+            Normalización que queremos aplicar. Opciones: 'l1', 'l2', 'max'.
+        n_init: int, optional. (default=10)
+            Number of times the k-means algorithm is run with different centroid seeds.
+        max_iter: int, optional. (default=300)
+            Maximum number of iterations of the k-means algorithm for a single run.
+        init_method: string, optional. (default='k-means++')
+            Method for initialization: 'k-means++', 'random', or an ndarray.
+            
+        Returns:
+        --------
+        labels: numpy array. (x,y)
+            Matriz con las etiquetas de cada cluster. 
+        centres: numpy array. (n_cluster,eloss)
+            Matriz que contiene los centroides de cada cluster identificado.
+        '''
+        allowed_norms = self._model.constants.AVAILABLE_NORMS
+        if available_norm not in allowed_norms:
+            raise ValueError(f"norma debe ser uno de {allowed_norms}")
+
+        matrix_norm = matrix.copy()
+        matrix_norm = matrix_norm.reshape(matrix.shape[0]*matrix.shape[1], matrix.shape[-1])
+
+        sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
+
+        # Determine initialization method
+        init_value: Literal['k-means++', 'random'] = init_method if init_method in self._model.constants.AVAILABLE_INIT_METHODS else 'k-means++'
+
+        kmeans = KMeans(
+            n_clusters=n_cluster, 
+            init=init_value,
+            n_init=n_init,
+            max_iter=max_iter,
+            tol=1e-9, 
+            random_state=13
+        )
+        fitted = kmeans.fit(sclust_norm)
+        centres = fitted.cluster_centers_
+        labels = fitted.labels_.reshape(matrix.shape[:-1])
+        return labels, centres
+
+    def _plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
+        """
+        Plot the clustering labels using Plotly for interactive visualization.
+        Adapted from Vanessa's code for integration into the visualizer.
+        """
+        n_clusters = len(np.unique(labels))
+        # Create discrete colorscale by repeating each color at start and end of its range
+        discrete_colorscale = []
+        for i in range(n_clusters):
+            color = self._CLUSTER_COLORS[i % len(self._CLUSTER_COLORS)]
+            if i == 0:
+                discrete_colorscale.append([0.0, color])
+            else:
+                prev_boundary = i / n_clusters
+                discrete_colorscale.append([prev_boundary, discrete_colorscale[-1][1]])
+                discrete_colorscale.append([prev_boundary, color])
+            if i == n_clusters - 1:
+                discrete_colorscale.append([1.0, color])
+        
+        fig = go.Figure(go.Heatmap(
+            z=labels, 
+            colorscale=discrete_colorscale, 
+            colorbar=dict(title="Cluster", tickmode='linear', tick0=0, dtick=1),
+            hovertemplate='x: %{x}<br>y: %{y}<br>Cluster: %{z}<extra></extra>',
+            zmin=0,
+            zmax=n_clusters-1
+        ))
+        fig.update_layout(
+            title=title, 
+            xaxis_title="X", 
+            yaxis_title="Y", 
+            yaxis_autorange='reversed'
+        )
+        return fig
+
+    def _apply_kmeans_clustering(self, n_clusters=6, available_norm='l2', n_init=10, max_iter=300, init_method='k-means++'):
+        """
+        Apply KMeans clustering to the spectrum image data and update visualization.
+        """
+
+        try:
+            # Get the 3D data cube (x, y, energy)
+            data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            
+            # Store original heatmap data if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Apply clustering with all parameters
+            labels, centres = self._kmeans_clustering(
+                data_cube, 
+                n_clusters, 
+                available_norm,
+                n_init=n_init,
+                max_iter=max_iter,
+                init_method=init_method
+            )
+            
+            self._clustering_results = (labels, centres)
+            
+            # Create clustering visualization
+            clustering_fig = self._plot_kmeans_labels_plotly(labels, f"KMeans Clustering (n={n_clusters})")
+            # Update the heatmap pane with clustering results
+            if self.paneA is not None:
+                # Force the update by setting object and triggering param updates
+                self.paneA.object = clustering_fig
+                self.paneA.param.trigger('object')  # Force parameter update
+                # Alternative: recreate the pane entirely if needed
+                # self.paneA = pn.pane.Plotly(clustering_fig, sizing_mode='stretch_both')
+            
+            # Update spectrum pane to show cluster centers
+            self._update_spectrum_with_clusters(centres)
+            
+            self._clustering_active = True
+            
+        except Exception as e:
+            print(f"DEBUG: Error applying clustering: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _update_spectrum_with_clusters(self, centres):
+        """Update the spectrum pane to show cluster centers."""
+        if self.paneB is None:
+            return
+            
+        # Create traces for each cluster center
+        traces = []
+        colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        
+        for i, center in enumerate(centres):
+            color = colors[i % len(colors)]
+            traces.append(go.Scatter(
+                x=self._energy,
+                y=center,
+                mode='lines',
+                name=f'Cluster {i}',
+                line=dict(color=color, width=2)
+            ))
+        
+        fig = go.Figure(data=traces)
+        fig.update_layout(
+            title="Cluster Centers",
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (AU)",
+            showlegend=True
+        )
+        
+        self.paneB.object = fig
+        self.paneB.param.trigger('object')  # Force parameter update
+
+    def _restore_original_view(self):
+        """Restore the original heatmap view before clustering."""
+        if self._original_heatmap_data is not None and self.paneA is not None:
+            # Create original heatmap
+            ny, nx = self._original_heatmap_data.shape
+            heat = go.Heatmap(
+                z=self._original_heatmap_data,
+                x=np.arange(nx),
+                y=np.arange(ny),
+                colorscale="Greys_r",
+                showscale=False,
+                hovertemplate='x: %{x}<br>y: %{y}<br>Intensity: %{z}<extra></extra>'
+            )
+            
+            fig = go.Figure(data=[heat])
+            fig.update_layout(
+                title="Original Spectrum Image",
+                xaxis_title="X",
+                yaxis_title="Y",
+                yaxis_autorange='reversed'
+            )
+            
+            self.paneA.object = fig
+            self.paneA.param.trigger('object')  # Force parameter update
+            self._clustering_active = False
+            print("Restored original view")
+
+    # --- Public layout builders (used by controller) ---
+    @override
+    def create_plots(self):
+        left_column = pn.Column(
+            self.paneA,
+            sizing_mode='stretch_both'
+        )
+        
+        right_column = pn.Column(
+            self.paneB, 
+            self.fitting_button,
+            self.clustering_button,
+            self.restore_button,
+            self.range_slider, 
+            sizing_mode='stretch_both'
+        )
+        
+        resizable_columns = ResizableColumns(
+            left_column=left_column,
+            right_column=right_column,
+            sizing_mode='stretch_both',
+        )
+ 
+        return resizable_columns
+
+    @override
+    def create_dataset_info(self):
+        return super().create_dataset_info()
+
+    # --- Widget Setup ---
+    def _setup_widgets(self):
+        # Range slider
+        self.range_slider = pn.widgets.RangeSlider(
+            name="Range",
+            start=float(self._e_axis[0]) if len(self._e_axis) > 0 else 0.0,
+            end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
+            value=(float(self._e_axis[0]), float(self._e_axis[-1])),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        self.range_slider.param.watch(self._on_range_changed, 'value')
+
+        # Fitting toggle button
+        self.fitting_button = pn.widgets.Button(name="fitting: OFF", button_type="primary")
+        self.fitting_button.on_click(self._on_fitting_clicked)
+        
+        # Restore button
+        # self.restore_button = pn.widgets.Button(
+        #     name="Restore Original", 
+        #     button_type="light",
+        #     sizing_mode=self._STRETCH_WIDTH
+        # )
+        # self.restore_button.on_click(self._on_stop_clustering_clicked)
+        
+        if kmeans_run_button := getattr(self._controller.view, "kmeans_run_button", None):
+            self._kmeans_clustering_button = kmeans_run_button # Store reference
+            kmeans_run_button.on_click(self._on_run_clustering_clicked)
+
+        self.range_slider.visible = False
+
+    def _on_run_clustering_clicked(self, event):
+        """Handle clustering button click."""
+        
+        if self._kmeans_clustering_button is not None:
+            self._kmeans_clustering_button.disabled = True  # Disable to prevent multiple clicks
+        
+        kmeans_input = self._controller.view.kmeans_input
+        
+        n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
+        available_norm = self._model.constants.DEFAULT_SELECTED_NORM
+        n_init = self._model.constants.DEFAULT_NUMBER_OF_INIT
+        max_iter = self._model.constants.DEFAULT_MAX_ITER
+        init_method = self._model.constants.DEFAULT_INIT_METHOD
+
+        if kmeans_input is not None:
+            n_clusters = kmeans_input["n_clusters"].value
+            available_norm = kmeans_input["available_norms"].value
+            n_init = kmeans_input["n_init"].value
+            max_iter = kmeans_input["max_iter"].value
+            init_method = kmeans_input["init_method"].value
+
+        try:
+            self._apply_kmeans_clustering(
+                n_clusters=n_clusters, 
+                available_norm=available_norm, 
+                n_init=n_init, 
+                max_iter=max_iter, 
+                init_method=init_method
+            )
+        finally:
+            if self._kmeans_clustering_button is not None:
+                self._kmeans_clustering_button.disabled = False  # Re-enable button after processing
+        
+
+    def _on_stop_clustering_clicked(self):
+        """Handle restore button click."""
+        self._restore_original_view()
+
+    # --- Plot / Pane Setup (Plotly) ---
+    def _setup_plots(self):
+        # Build image (m_image) from data cube
+        m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
+        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        if m_image.ndim != 2:
+            raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
+
+        ny, nx = m_image.shape
+        # Store original data
+        self._original_heatmap_data = m_image
+        
+        # energy axis
+        try:
+            energy = np.asarray(self._e_axis)
+            if energy.shape[0] != self._electron_count_data.shape[-1]:
+                energy = np.arange(self._electron_count_data.shape[-1])
+        except Exception:
+            energy = np.arange(self._electron_count_data.shape[-1])
+        self._energy = energy
+
+        # Build Plotly heatmap (figA)
+        heat = go.Heatmap(
+            z=m_image,
+            x=np.arange(nx),
+            y=np.arange(ny),
+            colorscale="Greys_r",
+            showscale=False,
+            hovertemplate='x: %{x}<br>y: %{y}<br>Intensity: %{z}<extra></extra>'
+        )
+
+        figA = go.Figure(data=[heat])
+        figA.update_layout(
+            title="Spectrum Image",
+            xaxis_title="X",
+            yaxis_title="Y",
+            yaxis_autorange='reversed',
+            dragmode='select'
+        )
+
+        # Initial spectrum (center pixel)
+        center_x, center_y = nx // 2, ny // 2
+        initial_spectrum = self._electron_count_data.isel(x=center_x, y=center_y)
+        spectrum_data = np.asarray(initial_spectrum.fillna(0.0))
+
+        trace = go.Scatter(
+            x=energy,
+            y=spectrum_data,
+            mode='lines',
+            name='Spectrum',
+            line=dict(color='blue', width=2)
+        )
+
+        figB = go.Figure(data=[trace])
+        figB.update_layout(
+            title="Spectrum at Selected Pixel",
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (AU)"
+        )
+
+        # Create Panel panes
+        self.paneA = pn.pane.Plotly(figA, sizing_mode='stretch_both')
+        self.paneB = pn.pane.Plotly(figB, sizing_mode='stretch_both')
+
+    def _setup_callbacks(self):
+        """Setup callbacks for interactive functionality."""
+        if self.paneA is not None:
+            self.paneA.param.watch(self._on_paneA_click, "click_data")
+
+    def _on_paneA_click(self, event):
+        """Handle clicks on the heatmap to update spectrum."""
+        if event.new is None or not self._clustering_active:
+            return
+            
+        try:
+            point = event.new['points'][0]
+            x, y = int(point['x']), int(point['y'])
+            
+            # Update spectrum for selected pixel
+            spectrum = self._electron_count_data.isel(x=x, y=y)
+            spectrum_data = np.asarray(spectrum.fillna(0.0))
+            
+            trace = go.Scatter(
+                x=self._energy,
+                y=spectrum_data,
+                mode='lines',
+                name=f'Spectrum at ({x},{y})',
+                line=dict(color='red', width=2)
+            )
+            
+            fig = go.Figure(data=[trace])
+            fig.update_layout(
+                title=f"Spectrum at Pixel ({x}, {y})",
+                xaxis_title="Energy Loss (eV)",
+                yaxis_title="Intensity (AU)"
+            )
+            
+            if hasattr(self, 'paneB') and self.paneB is not None:
+                self.paneB.object = fig
+            
+        except Exception as e:
+            print(f"Error updating spectrum: {e}")
+
+    def _on_range_changed(self, event):
+        """Handle range slider changes."""
+        pass  # Placeholder for range functionality
+
+    def _on_fitting_clicked(self, event):
+        """Handle fitting button clicks."""
+        pass  # Placeholder for fitting functionality

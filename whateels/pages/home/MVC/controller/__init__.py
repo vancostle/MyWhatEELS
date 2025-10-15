@@ -1,12 +1,14 @@
 from .services import *
-from .managers import LayoutManager
+from .managers import HomePageLayoutManager
+from whateels.shared_state import AppState
+from whateels.base.mvc.base_controller import BaseController
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..model import Model
-    from ..view import View
+    from ..model import HomePageModel
+    from ..view import HomePageView
 
-class Controller:
+class HomePageController(BaseController):
     """
     Controller class for the home page of the WhatEELS application.
 
@@ -16,25 +18,24 @@ class Controller:
     - Manage workflow and UI state transitions by instructing the View
     - Delegate business logic to specialized services
     """
-    def __init__(self, model: "Model", view: "View"):
-        self.model = model
-        self.view = view
-        # Initialize services
-        # self._data_service = DataProcessorService(self.model)
-        self._file_workflow_service = FileWorkflowService(model, self)
-        # Initialize manager
-        self._layout_manager = LayoutManager(view, self, model)
+    def __init__(self, model: "HomePageModel", view: "HomePageView"):
+        super().__init__(model, view)
 
-        # Set up callbacks for file dropper events directly
-        self.view.file_dropper.on_file_uploaded_callback = self._file_workflow_service.handle_file_upload
-        self.view.file_dropper.on_file_removed_callback = self._file_workflow_service.handle_file_removal
+        # Initialize services
+        self._filedorpper_workflow_service = FileDropperWorkflowService(model, self)
+        # Initialize manager
+        self._layout_manager = HomePageLayoutManager(view, self, model)
+
+        if file_dropper := getattr(self.view, "file_dropper", None):
+            # Set up callbacks for file dropper events directly
+            file_dropper.on_file_uploaded_callback = self._filedorpper_workflow_service.handle_file_upload
+            file_dropper.on_file_removed_callback = self._filedorpper_workflow_service.handle_file_removal
+        
+        if all_datasets := getattr(AppState(), "all_datasets", None):
+            # Initial layout setup based on existing datasets
+            self._layout_manager.create_tab_and_dataset_info(all_datasets)
 
     @property
-    def layout(self) -> LayoutManager:
+    def layout(self) -> HomePageLayoutManager:
         """Expose the layout manager for external use."""
         return self._layout_manager
-    
-    def testing(self):
-        """Method for testing purposes."""
-        print("Controller testing method called.")
-
