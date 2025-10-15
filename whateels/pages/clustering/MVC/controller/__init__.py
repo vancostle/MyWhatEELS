@@ -34,6 +34,12 @@ class ClusteringController(BaseController):
         self._current_n_clusters_value: Optional[int] = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
         
         self._kmeans_user_update(view)
+        
+        # Setup background-subtraction switch based on multifit availability
+        self._update_background_subtraction_switch_state()
+        
+        # Watch for changes in multifit availability
+        app_state.param.watch(self._on_multifit_change, 'multifit')
 
     @property
     def view(self) -> "ClusteringView":
@@ -72,6 +78,33 @@ class ClusteringController(BaseController):
     def _init_method_watcher(self, event):
         """Watcher for changes in the initialization method selection."""
         self._current_init_method_value = event.new
+    
+    def _update_background_subtraction_switch_state(self):
+        """
+        Update the background-subtraction switch enabled/disabled state
+        based on multifit data availability.
+        
+        The switch is enabled only when multifit data is available.
+        """
+        if self._view.background_subtraction_switch is None:
+            return
+        
+        is_available = self._model.is_multifit_available()
+        
+        # Enable switch only if multifit data is available
+        self._view.background_subtraction_switch.disabled = not is_available
+        
+        # If multifit becomes unavailable, turn off the switch
+        if not is_available and self._view.background_subtraction_switch.value:
+            self._view.background_subtraction_switch.value = False
+    
+    def _on_multifit_change(self, event):
+        """
+        Callback triggered when multifit data changes in AppState.
+        
+        Updates the background-subtraction switch state accordingly.
+        """
+        self._update_background_subtraction_switch_state()
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""
