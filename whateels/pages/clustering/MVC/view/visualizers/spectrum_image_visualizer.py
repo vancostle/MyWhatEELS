@@ -78,11 +78,16 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self._last_hover_point = None
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
+        self._frozen_pixel = None  # Store frozen pixel from single click
+        self._last_click_time = 0  # Track double-click timing
+        self._DOUBLE_CLICK_MS = 400  # Double-click threshold in milliseconds
+        self._hover_disabled = False  # Disable hover after showing all clusters
 
         # Clustering state (Vanessa's functionality)
         self._clustering_results = None  # Will store (labels, centres) from clustering
         self._original_heatmap_data = None  # Store original heatmap for restoration
         self._clustering_active = False
+        self._current_norm = None  # Store the normalization method used in clustering
 
         # Widgets / panes placeholders
         self.clustering_button = None  # New clustering button
@@ -124,14 +129,10 @@ class SpectrumImageVisualizer(BaseVisualizer):
         centres: numpy array. (n_cluster,eloss)
             Matriz que contiene los centroides de cada cluster identificado.
         '''
-        allowed_norms = self._model.constants.AVAILABLE_NORMS
-        if available_norm not in allowed_norms:
-            raise ValueError(f"norma debe ser uno de {allowed_norms}")
-
-        matrix_norm = matrix.copy()
-        matrix_norm = matrix_norm.reshape(matrix.shape[0]*matrix.shape[1], matrix.shape[-1])
-
-        sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
+        # Prepare and (optionally) normalize the matrix. The helper returns
+        # both the reshaped matrix and the one used for clustering so other
+        # methods can access them if needed.
+        matrix_norm, sclust_norm = self._prepare_clustering_matrix(matrix, available_norm)
 
         # Determine initialization method
         allowed_init_methods: tuple[Literal['k-means++'], Literal['random']] = ('k-means++', 'random')
@@ -149,6 +150,40 @@ class SpectrumImageVisualizer(BaseVisualizer):
         centres = fitted.cluster_centers_
         labels = fitted.labels_.reshape(matrix.shape[:-1])
         return labels, centres
+
+    def _prepare_clustering_matrix(self, matrix, available_norm: str):
+        """Validate, reshape and optionally normalize the input 3D matrix.
+
+        Returns a tuple (matrix_norm, sclust_norm) where:
+        - matrix_norm: reshaped copy of the original data with shape (n_pixels, n_energy)
+        - sclust_norm: the array to feed into clustering (normalized or raw)
+
+        The method also stores the reshaped matrix on the instance as
+        `self._last_clustering_matrix` so other parts of the code can access
+        the preprocessed data.
+        """
+        allowed_norms = self._model.constants.AVAILABLE_NORMS
+        if available_norm not in allowed_norms:
+            raise ValueError(f"norma debe ser uno de {allowed_norms}")
+
+        matrix_norm = matrix.copy()
+        matrix_norm = matrix_norm.reshape(matrix.shape[0]*matrix.shape[1], matrix.shape[-1])
+
+        # Si la norma es 'none', no normalizar los datos
+        if isinstance(available_norm, str) and available_norm.lower() == 'none':
+            sclust_norm = matrix_norm
+        else:
+            sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
+
+        # Store for later access
+        try:
+            self._last_clustering_matrix = matrix_norm
+            self._last_clustering_input = sclust_norm
+        except Exception:
+            # Best-effort; don't fail if instance attributes can't be set
+            pass
+
+        return matrix_norm, sclust_norm
 
     def _plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
         """
@@ -271,6 +306,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
             )
             
             self._clustering_results = (labels, centres)
+            self._current_norm = available_norm  # Store for later use in hover/click
             
             # Try to preserve the current paneB height so the clustering view
             # initially appears with the same vertical size as the current spectrum figure.
@@ -315,7 +351,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
             self._clustering_active = True
             
         except Exception as e:
-            print(f"DEBUG: Error applying clustering: {e}")
+            print(f"Error applying clustering: {e}")
             import traceback
             traceback.print_exc()
 
@@ -553,7 +589,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
     def _setup_callbacks(self):
         """Setup callbacks for interactive functionality."""
         if self.paneA is not None:
-            # Watch click, hover and selection so lasso/box selection works
+            # Watch click (freeze pixel or show all clusters on double-click), hover and selection
             self.paneA.param.watch(self._on_paneA_click, "click_data")
             self.paneA.param.watch(self._on_paneA_hover, "hover_data")
             self.paneA.param.watch(self._on_paneA_selected, "selected_data")
@@ -572,74 +608,253 @@ class SpectrumImageVisualizer(BaseVisualizer):
             pass
         return obj
 
-    def _on_paneA_click(self, event):
-        """Handle clicks on the heatmap to update spectrum."""
-        if event.new is None:
-            return
-            
-        try:
-            point = event.new['points'][0]
-            x, y = int(point['x']), int(point['y'])
-            
-            # Update spectrum for selected pixel
-            spectrum = self._electron_count_data.isel(x=x, y=y)
-            spectrum_data = np.asarray(spectrum.fillna(0.0))
-            
-            trace = go.Scatter(
-                x=self._energy,
-                y=spectrum_data,
-                mode='lines',
-                name=f'Spectrum at ({x},{y})',
-                line=dict(color='red', width=2)
-            )
-            
-            fig = go.Figure(data=[trace])
-            fig.update_layout(
-                title=f"Spectrum at Pixel ({x}, {y})",
-                xaxis_title="Energy Loss (eV)",
-                yaxis_title="Intensity (AU)"
-            )
-            
-            if hasattr(self, 'paneB') and self.paneB is not None:
-                self.paneB.object = fig
-            
-        except Exception as e:
-            print(f"Error updating spectrum: {e}")
-
     def _on_range_changed(self, event):
         """Handle range slider changes."""
         pass  # Placeholder for range functionality
 
     def _on_paneA_hover(self, event):
-        """Handle hover on the heatmap to show single-pixel spectrum."""
+        """Handle hover on the heatmap to show single-pixel spectrum.
+        
+        Shows:
+        1. Original pixel spectrum
+        2. Normalized pixel spectrum if available_norm != 'none'
+        3. Corresponding cluster center if clustering is active
+        
+        Note: If a pixel is frozen (via single click) or hover is disabled 
+        (after double-click to show all clusters), hover is ignored.
+        """
         point = SpectrumExtractor.extract_point(event)
         if point is None:
             return
         self._last_hover_point = point
-        # If a region is selected, don't override the region spectrum
-        if self._region_pairs:
+        
+        # If a region is selected, pixel is frozen, or hover is disabled, don't override
+        if self._region_pairs or self._frozen_pixel is not None or self._hover_disabled:
             return
+        
         i, j = int(point['y']), int(point['x'])
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-        if spec is None:
-            return
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode='lines', name=f"(i={i}, j={j})"))
-        fig.update_layout(
-            title="Hover",
-            margin=dict(l=16, r=16, t=48, b=16),
-            xaxis_title="Energy Loss (eV)",
-            yaxis_title="Intensity (AU)"
-        )
-        if self.paneB is not None:
+        
+        # Use the helper method to plot the spectrum
+        fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
+        if fig is not None and self.paneB is not None:
             self.paneB.object = fig
 
+    def _plot_pixel_spectrum(self, i, j, title_prefix="Hover"):
+        """Plot spectrum for a specific pixel (i, j) with original, normalized, and cluster data.
+        
+        Parameters:
+        -----------
+        i, j : int
+            Pixel coordinates
+        title_prefix : str
+            Prefix for the plot title (e.g., "Hover", "Click")
+            
+        Returns:
+        --------
+        fig : go.Figure or None
+            Plotly figure or None if spectrum cannot be retrieved
+        """
+        # Get original spectrum
+        spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+        if spec is None:
+            return None
+        
+        fig = go.Figure()
+        
+        # 1. Plot original spectrum unless a normalization is active
+        should_plot_original = True
+        if hasattr(self, '_current_norm') and isinstance(self._current_norm, str) and self._current_norm.lower() != 'none':
+            should_plot_original = False
+
+        if should_plot_original:
+            fig.add_trace(go.Scatter(
+                x=self._energy,
+                y=spec,
+                mode='lines',
+                name=f"Original (i={i}, j={j})",
+                opacity=0.2
+            ))
+        
+        # 2. Plot normalized spectrum if norm != 'none' and clustering has been run
+        if (hasattr(self, '_current_norm') and 
+            isinstance(self._current_norm, str) and 
+            self._current_norm.lower() != 'none' and
+            hasattr(self, '_last_clustering_input')):
+            
+            # Get the linear index for the pixel
+            try:
+                data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+                ny, nx = data_cube.shape[0], data_cube.shape[1]
+                linear_idx = i * nx + j
+                
+                if linear_idx < len(self._last_clustering_input):
+                    normalized_spec = self._last_clustering_input[linear_idx]
+                    fig.add_trace(go.Scatter(
+                        x=self._energy,
+                        y=normalized_spec,
+                        mode='lines',
+                        name=f"Normalized ({self._current_norm})",
+                        line=dict(color='orange', width=2),
+                        opacity=0.2 # Transparencia
+                    ))
+            except Exception as e:
+                print(f"Error plotting normalized spectrum: {e}")
+        
+        # 3. Plot cluster center if clustering is active
+        if self._clustering_active and self._clustering_results is not None:
+            try:
+                labels, centres = self._clustering_results
+                cluster_label = labels[i, j]
+                cluster_center = centres[cluster_label]
+                
+                # Get the color for this cluster
+                color = self.cluster_colors[cluster_label % len(self.cluster_colors)]
+                
+                fig.add_trace(go.Scatter(
+                    x=self._energy,
+                    y=cluster_center,
+                    mode='lines',
+                    name=f"Cluster {cluster_label} center",
+                    line=dict(color=color, width=3)
+                ))
+            except Exception as e:
+                print(f"Error plotting cluster center: {e}")
+        
+        fig.update_layout(
+            title=f"{title_prefix} at (i={i}, j={j})",
+            margin=dict(l=16, r=16, t=48, b=16),
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (AU)",
+            legend=dict(
+                x=0.98,
+                y=0.98,
+                xanchor='right',
+                yanchor='top',
+                bgcolor='rgba(255,255,255,0.8)',
+                bordercolor='rgba(0,0,0,0.2)',
+                borderwidth=1,
+            )
+        )
+        
+        return fig
+
+    def _on_paneA_click(self, event):
+        """Handle single/double clicks on the heatmap.
+        
+        Single click: Freezes the current pixel so hovering doesn't change the view.
+        Double click: Toggles between showing all cluster centers and re-enabling hover mode.
+        """
+        if event.new is None:
+            return
+        
+        try:
+            import time
+            current_time = time.time() * 1000  # Convert to milliseconds
+            time_since_last_click = current_time - self._last_click_time
+            
+            # click timing debug removed
+            
+            # Check if this is a double-click
+            if time_since_last_click < self._DOUBLE_CLICK_MS:
+                # double-click detected
+                # DOUBLE CLICK: Toggle between showing all clusters and re-enabling hover
+                self._frozen_pixel = None  # Unfreeze
+                
+                if self._hover_disabled:
+                    # Re-enable hover mode
+                    self._hover_disabled = False
+                    
+                    # Trigger hover for current mouse position if available
+                    if self._last_hover_point is not None:
+                        i, j = int(self._last_hover_point['y']), int(self._last_hover_point['x'])
+                        fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
+                        if fig is not None and self.paneB is not None:
+                            self.paneB.object = fig
+                    else:
+                        pass
+                else:
+                    # Show all clusters and disable hover
+                    # show all clusters and disable hover
+                    if self._clustering_active and self._clustering_results is not None:
+                        self._hover_disabled = True  # Disable hover
+                        
+                        labels, centres = self._clustering_results
+                        
+                        # Create traces for each cluster center
+                        fig = go.Figure()
+                        
+                        for i, center in enumerate(centres):
+                            color = self.cluster_colors[i % len(self.cluster_colors)]
+                            fig.add_trace(go.Scatter(
+                                x=self._energy,
+                                y=center,
+                                mode='lines',
+                                name=f'Cluster {i}',
+                                line=dict(color=color, width=2)
+                            ))
+                        
+                        fig.update_layout(
+                            title="All Cluster Centers (Double Click again to re-enable hover)",
+                            xaxis_title="Energy Loss (eV)",
+                            yaxis_title="Intensity (AU)",
+                            showlegend=True,
+                            legend=dict(
+                                x=0.98,
+                                y=0.98,
+                                xanchor='right',
+                                yanchor='top',
+                                bgcolor='rgba(255,255,255,0.8)',
+                                bordercolor='rgba(0,0,0,0.2)',
+                                borderwidth=1,
+                            )
+                        )
+                        
+                        if self.paneB is not None:
+                            self.paneB.object = fig
+                
+                # Reset timer to a very old time to prevent treating next click as double-click
+                # but not 0 which would make ALL future clicks have huge time_since_last
+                self._last_click_time = current_time - 1000  # 1 second ago
+                
+                # Important: Return here to prevent single-click processing
+                return
+                
+            else:
+                # SINGLE CLICK: Freeze pixel
+                point = event.new['points'][0]
+                i, j = int(point['y']), int(point['x'])
+                # Just freeze the pixel (do not toggle hover state)
+                self._frozen_pixel = (i, j)
+                
+                # Plot the frozen pixel spectrum
+                fig = self._plot_pixel_spectrum(i, j, title_prefix="Click (Frozen)")
+                if fig is not None and self.paneB is not None:
+                    self.paneB.object = fig
+                
+                # Update last click time
+                self._last_click_time = current_time
+                
+        except Exception as e:
+            print(f"Error handling click: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _on_range_changed(self, event):
+        """Handle range slider changes."""
+        pass  # Placeholder for range functionality
+
     def _on_paneA_selected(self, event):
-        """Handle lasso/box selection and show summed spectrum for selected pixels."""
+        """Handle lasso/box selection and show summed spectrum for selected pixels.
+        
+        Unfreezes any frozen pixel and re-enables hover when a region is selected.
+        """
         pairs = SpectrumExtractor.extract_region(event)
         self._region_pairs = pairs
+        
         if not pairs:
-            # no selection: show hover or default
+            # no selection: unfreeze pixel, re-enable hover, and return to hover mode
+            self._frozen_pixel = None
+            self._hover_disabled = False
             if self._last_hover_point is not None:
                 i, j = int(self._last_hover_point['y']), int(self._last_hover_point['x'])
                 spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
@@ -652,6 +867,10 @@ class SpectrumImageVisualizer(BaseVisualizer):
                         self.paneB.object = fig
             return
 
+        # Unfreeze pixel and re-enable hover when a region is selected
+        self._frozen_pixel = None
+        self._hover_disabled = False
+        
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
         if res is None:
             return
