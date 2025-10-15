@@ -6,12 +6,11 @@ Integrates Vanessa's KMeans clustering functionality using Plotly for visualizat
 import panel as pn
 import numpy as np
 import plotly.graph_objs as go
+
 from sklearn.preprocessing import normalize
 from sklearn.cluster import KMeans
-import threading
-
 from whateels.base.base_visualizer import BaseVisualizer
-from typing import override, TYPE_CHECKING
+from typing import override, TYPE_CHECKING, Literal
 from whateels.components import ResizableColumns
 
 if TYPE_CHECKING:
@@ -109,7 +108,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self._setup_callbacks()
 
     # --- Vanessa's KMeans Clustering Implementation ---
-    def _kmeans_clustering(self, matrix, n_cluster, available_norm):
+    def _kmeans_clustering(self, matrix, n_cluster, available_norm, n_init=10, max_iter=300, init_method='k-means++'):
         '''
         Vanessa's KMeans clustering function adapted for the visualizer.
         
@@ -119,8 +118,14 @@ class SpectrumImageVisualizer(BaseVisualizer):
             Imagen de espectros.
         n_cluster: int.
             Número de clusters.
-        norma: string, optional. (default='l2')
-            Normalización que queremos aplicar. Opciones: 'l1', 'l2', 'max', 'None'.
+        available_norm: string, optional. (default='l2')
+            Normalización que queremos aplicar. Opciones: 'l1', 'l2', 'max'.
+        n_init: int, optional. (default=10)
+            Number of times the k-means algorithm is run with different centroid seeds.
+        max_iter: int, optional. (default=300)
+            Maximum number of iterations of the k-means algorithm for a single run.
+        init_method: string, optional. (default='k-means++')
+            Method for initialization: 'k-means++', 'random', or an ndarray.
             
         Returns:
         --------
@@ -138,7 +143,17 @@ class SpectrumImageVisualizer(BaseVisualizer):
 
         sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
 
-        kmeans = KMeans(n_clusters=n_cluster, tol=1e-9, max_iter=700, random_state=13)
+        # Determine initialization method
+        init_value: Literal['k-means++', 'random'] = init_method if init_method in self._model.constants.AVAILABLE_INIT_METHODS else 'k-means++'
+
+        kmeans = KMeans(
+            n_clusters=n_cluster, 
+            init=init_value,
+            n_init=n_init,
+            max_iter=max_iter,
+            tol=1e-9, 
+            random_state=13
+        )
         fitted = kmeans.fit(sclust_norm)
         centres = fitted.cluster_centers_
         labels = fitted.labels_.reshape(matrix.shape[:-1])
@@ -179,7 +194,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         )
         return fig
 
-    def _apply_kmeans_clustering(self, n_clusters=6, available_norm='l2'):
+    def _apply_kmeans_clustering(self, n_clusters=6, available_norm='l2', n_init=10, max_iter=300, init_method='k-means++'):
         """
         Apply KMeans clustering to the spectrum image data and update visualization.
         """
@@ -192,8 +207,15 @@ class SpectrumImageVisualizer(BaseVisualizer):
             if self._original_heatmap_data is None:
                 self._original_heatmap_data = data_cube.sum(axis=-1)
             
-            # Apply clustering
-            labels, centres = self._kmeans_clustering(data_cube, n_clusters, available_norm)
+            # Apply clustering with all parameters
+            labels, centres = self._kmeans_clustering(
+                data_cube, 
+                n_clusters, 
+                available_norm,
+                n_init=n_init,
+                max_iter=max_iter,
+                init_method=init_method
+            )
             
             self._clustering_results = (labels, centres)
             
@@ -343,12 +365,25 @@ class SpectrumImageVisualizer(BaseVisualizer):
         
         n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
         available_norm = self._model.constants.DEFAULT_SELECTED_NORM
+        n_init = self._model.constants.DEFAULT_NUMBER_OF_INIT
+        max_iter = self._model.constants.DEFAULT_MAX_ITER
+        init_method = self._model.constants.DEFAULT_INIT_METHOD
+
         if kmeans_input is not None:
             n_clusters = kmeans_input["n_clusters"].value
             available_norm = kmeans_input["available_norms"].value
+            n_init = kmeans_input["n_init"].value
+            max_iter = kmeans_input["max_iter"].value
+            init_method = kmeans_input["init_method"].value
 
         try:
-            self._apply_kmeans_clustering(n_clusters=n_clusters, available_norm=available_norm)
+            self._apply_kmeans_clustering(
+                n_clusters=n_clusters, 
+                available_norm=available_norm, 
+                n_init=n_init, 
+                max_iter=max_iter, 
+                init_method=init_method
+            )
         finally:
             if self._kmeans_clustering_button is not None:
                 self._kmeans_clustering_button.disabled = False  # Re-enable button after processing
