@@ -15,10 +15,11 @@ class Constants:
     
     DEFAULT_PRE_NORMALIZATION = False
     
+    # K-Means defaults
     DEFAULT_SELECTED_NORM = 'l1'
     AVAILABLE_NORMS = [DEFAULT_SELECTED_NORM, 'l2', 'max']
-
-    # K-Means defaults
     DEFAULT_NUMBER_OF_CLUSTERS = 3
-    DEFAULT_NUMBER_OF_INIT = 10    
-    
+    DEFAULT_NUMBER_OF_INIT = 10
+    DEFAULT_MAX_ITER = 100
+    DEFAULT_INIT_METHOD = 'k-means++'
+    AVAILABLE_INIT_METHODS = [DEFAULT_INIT_METHOD, 'random']

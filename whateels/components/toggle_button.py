@@ -16,7 +16,7 @@ class ToggleButton(Button):
     def __init__(
         self, 
         initial_state: bool = False, 
-        states: Optional[dict[str, dict[str, str | Callable[..., None]]]] = None,
+        states: Optional[dict[str, dict[str, str | Optional[Callable[..., None]]]]] = None,
         **kwargs
     ):
         # Default states if none provided

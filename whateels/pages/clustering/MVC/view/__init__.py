@@ -114,6 +114,26 @@ class ClusteringView(BaseView):
                 end=20, 
                 sizing_mode=self.STRETCH_WIDTH
             ),
+            "n_init": pn.widgets.IntInput(
+                name="Number of Initializations", 
+                value=self._model.constants.DEFAULT_NUMBER_OF_INIT, 
+                step=1, 
+                end=50, 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "max_iter": pn.widgets.IntInput(
+                name="Max Iterations", 
+                value=self._model.constants.DEFAULT_MAX_ITER, 
+                step=10, 
+                end=500, 
+                sizing_mode=self.STRETCH_WIDTH
+            ),
+            "init_method": pn.widgets.Select(
+                name='Initialization Method', 
+                options=self._model.constants.AVAILABLE_INIT_METHODS,
+                value=self._model.constants.DEFAULT_INIT_METHOD,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
         }
         
         self._kmeans_run_button = ToggleButton(
@@ -121,12 +141,10 @@ class ClusteringView(BaseView):
             states={
                 'on': {
                     'label': 'Run K-Means',
-                    'on_click': lambda: print("Default clustering started..."),
                     'button_type': 'success'
                 },
                 'off': {
-                    'label': 'STOP',
-                    'on_click': lambda: print("Default clustering stopped..."),
+                    'label': 'Loading K-Means...',
                     'button_type': 'danger'
                 }
             },
