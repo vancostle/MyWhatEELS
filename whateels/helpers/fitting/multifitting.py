@@ -1,4 +1,6 @@
 import numpy as np
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
 import plotly.graph_objs as go
 import os
 from typing import Tuple, Optional
@@ -57,6 +59,8 @@ def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=
 
     results = []
     progress = 0
+
+    # Default: serial execution (preserve original behavior)
     for i in range(dimx):
         for j in range(dimy):
             y = _np.asarray(data_arr[i, j, :])
@@ -69,7 +73,7 @@ def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=
                 y_fit = y[mask]
                 pars = model_instance.guess(y_fit, x=x_fit)
                 res = model_instance.fit(data=y_fit, params=pars, x=x_fit)
-                
+
                 # Evaluate the fitted model on the FULL energy axis
                 # so that best_fit_full has the same length as the original spectrum
                 try:
@@ -83,12 +87,98 @@ def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=
                 except Exception:
                     # Fallback: just keep original res.best_fit (subset)
                     res.best_fit_full = None
-                
+
                 results.append(res)
 
             progress += 1
             if progress_every and (progress % progress_every == 0):
                 print(f"  Processed {progress}/{dimx*dimy} pixels")
+
+    return results
+
+
+def _fit_worker(args):
+    """
+    Worker function for parallel fitting. Receives a tuple with
+    (y, x, model_class, fit_range)
+
+    Returns a dict with keys: 'best_fit_full' (numpy array or None) and
+    'best_fit' (subset fit) or None on failure.
+    """
+    import numpy as _np
+    from inspect import isclass as _isclass
+    y, x_full, model, fit_range = args
+    try:
+        # Build model instance locally in worker process
+        model_instance = model() if _isclass(model) else model
+        x = _np.asarray(x_full)
+        # Build mask similar to main function
+        mask_x = _np.isfinite(x) & (x > 0)
+        if fit_range is not None:
+            xmin, xmax = fit_range
+            mask_x &= (x >= float(xmin)) & (x <= float(xmax))
+
+        mask = mask_x & _np.isfinite(y) & (y > 0)
+        if _np.count_nonzero(mask) < 3:
+            return None
+
+        x_fit = x[mask]
+        y_fit = _np.asarray(y)[mask]
+        pars = model_instance.guess(y_fit, x=x_fit)
+        res = model_instance.fit(data=y_fit, params=pars, x=x_fit)
+
+        # Evaluate on full axis
+        try:
+            x_valid_mask = _np.isfinite(x) & (x > 0)
+            x_valid = x[x_valid_mask]
+            best_fit_full = _np.zeros_like(x)
+            best_fit_full[x_valid_mask] = res.eval(params=res.params, x=x_valid)
+        except Exception:
+            best_fit_full = None
+
+        # best_fit may be subset
+        best_fit = getattr(res, 'best_fit', None)
+        return {'best_fit_full': best_fit_full, 'best_fit': best_fit}
+    except Exception:
+        return None
+
+
+def multifit_parallel(data, model, Eloss_x=None, fit_range=None, workers=None, progress_every=1000):
+    """
+    Parallel implementation of multifit that uses ProcessPoolExecutor.
+    Returns a list of dict results (or None) in the same order as the pixels.
+    """
+    import numpy as _np
+    data_arr = _np.asarray(data)
+    if data_arr.ndim != 3:
+        raise ValueError("data must be a 3D array shaped (dimx, dimy, spectrum_length).")
+    dimx, dimy, spectrum_length = data_arr.shape
+
+    x = _np.asarray(Eloss_x)
+    # Prepare args for each pixel
+    tasks = []
+    for i in range(dimx):
+        for j in range(dimy):
+            y = _np.asarray(data_arr[i, j, :])
+            tasks.append((y, x, model, fit_range))
+
+    results = [None] * (dimx * dimy)
+    # Use a reasonable default for workers
+    max_workers = workers if workers is not None else max(1, (os.cpu_count() or 1) - 1)
+
+    with ProcessPoolExecutor(max_workers=max_workers) as exe:
+        future_to_index = {exe.submit(_fit_worker, tasks[idx]): idx for idx in range(len(tasks))}
+        processed = 0
+        for fut in as_completed(future_to_index):
+            idx = future_to_index[fut]
+            try:
+                res = fut.result()
+            except Exception:
+                res = None
+            results[idx] = res
+            processed += 1
+            if progress_every and (processed % progress_every == 0):
+                print(f"  Processed {processed}/{len(tasks)} pixels (parallel)")
 
     return results
 
@@ -116,8 +206,14 @@ def create_data_from_multifit(results, original_data, mode='subtracted'):
             if res is not None:
                 try:
                     # Try to use best_fit_full (full spectrum) first
+                    # Support both lmfit.Result objects and simple dict-like results
+                    fit_spectrum = None
                     if hasattr(res, 'best_fit_full') and res.best_fit_full is not None:
                         fit_spectrum = res.best_fit_full
+                    elif isinstance(res, dict) and res.get('best_fit_full') is not None:
+                        fit_spectrum = res.get('best_fit_full')
+
+                    if fit_spectrum is not None:
                         original_spectrum = original_data[x_i, y_i, :]
                         
                         if mode == 'subtracted':
@@ -127,11 +223,16 @@ def create_data_from_multifit(results, original_data, mode='subtracted'):
                         else:  # mode == 'original'
                             processed_data[x_i, y_i, :] = original_spectrum
                     else:
-                        # Fallback to res.best_fit (may be subset)
-                        best_fit = res.best_fit
-                        if len(best_fit) == spectrum_length:
+                        # Fallback to res.best_fit (may be subset) or dict entry
+                        best_fit = None
+                        if hasattr(res, 'best_fit'):
+                            best_fit = res.best_fit
+                        elif isinstance(res, dict):
+                            best_fit = res.get('best_fit')
+
+                        if best_fit is not None and len(best_fit) == spectrum_length:
                             original_spectrum = original_data[x_i, y_i, :]
-                            
+
                             if mode == 'subtracted':
                                 processed_data[x_i, y_i, :] = original_spectrum - best_fit
                             elif mode == 'fitted':
@@ -139,7 +240,7 @@ def create_data_from_multifit(results, original_data, mode='subtracted'):
                             else:
                                 processed_data[x_i, y_i, :] = original_spectrum
                         else:
-                            # Size mismatch - keep original data
+                            # Size mismatch or no best_fit - keep original data
                             processed_data[x_i, y_i, :] = original_data[x_i, y_i, :]
                 except Exception:
                     # Fallback to original data if error
@@ -245,19 +346,40 @@ class MultiFit:
             eloss_values = np.array([])
         self._coords = {'Eloss': AxisArray(eloss_values)}
 
-    def run(self, mode='subtracted'):
+    def run(self, mode='subtracted', use_parallel=True, workers=None):
         """
         Execute the multifit and generate fitted_data.
         
-        Parameters:
-        - mode: 'subtracted' (default): returns original - fit (background removal)
-                'fitted' - returns the fit itself
-                'original' - returns original data unchanged
+    Parameters:
+    - mode: 'subtracted' (default): returns original - fit (background removal)
+        'fitted' - returns the fit itself
+        'original' - returns original data unchanged
+    - use_parallel: if True, use multiple processes to fit pixels in parallel.
+        Note: lmfit model classes are constructed in worker processes, and
+        only minimal result dicts are returned to the parent process to
+        avoid pickling issues.
+    - workers: number of worker processes to use when use_parallel=True. If None,
+        uses (cpu_count - 1) or 1.
+
+        Recommended workers:
+
+        Usually: workers = max(1, os.cpu_count() - 1)
+
+        Quick rules:
+
+        - If you have many pixels and each fit is expensive → cpu_count()-1 (or cpu_count()).
+        - If memory is limited (Windows may duplicate memory) or each process uses lots of RAM → use 2–4 workers.
+        - If few pixels (< ~100) or fits are very fast → do not parallelize (workers=1).
                 
         Returns:
         - self (for method chaining)
         """
-        self.results = multifit_modified(self.data, self.model, Eloss_x=self.Eloss_x, fit_range=self.fit_range)
+        # By default run serial implementation for compatibility
+        if use_parallel:
+            # Use parallel implementation that returns lightweight dicts
+            self.results = multifit_parallel(self.data, self.model, Eloss_x=self.Eloss_x, fit_range=self.fit_range, workers=workers)
+        else:
+            self.results = multifit_modified(self.data, self.model, Eloss_x=self.Eloss_x, fit_range=self.fit_range)
         self.fitted_data = create_data_from_multifit(self.results, self.data, mode=mode)
         return self
 
