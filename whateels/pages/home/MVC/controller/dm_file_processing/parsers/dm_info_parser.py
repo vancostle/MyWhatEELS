@@ -9,7 +9,7 @@ from whateels.errors.dm.parsing import (
     DMIdentifierError
 )
 from typing import List, Tuple, TextIO, Callable, Optional, Dict, Any
-from whateels.helpers.logging import Logger
+from whateels.helpers.logging_utils import Logger
 
 _logger = Logger.get_logger("dm_infoparser.log", __name__)
 

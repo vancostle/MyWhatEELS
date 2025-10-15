@@ -14,7 +14,7 @@ Example
 """
 
 from ..parsers import DM_InfoParser, DM_EELS_data
-from whateels.helpers.logging import Logger
+from whateels.helpers.logging_utils import Logger
 
 _logger = Logger.get_logger("dm_file_reader.log", __name__)
 

@@ -12,7 +12,7 @@ from whateels.errors.dm import (
     DMFileUploadError
 )
 from whateels.shared_state import AppState
-from whateels.helpers.logging import Logger
+from whateels.helpers.logging_utils import Logger
 from ..dm_file_processing import DM_EELS_Reader
 from .data_processor_service import DataProcessorService
 from whateels.helpers.in_memory_file import InMemoryFile

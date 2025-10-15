@@ -1,6 +1,6 @@
 
 import numpy as np
-from whateels.helpers.logging import Logger
+from whateels.helpers.logging_utils import Logger
 from whateels.errors import *
 
 _logger = Logger.get_logger("dm_eels_data.log", __name__)

@@ -1,5 +1,5 @@
 import io
-from whateels.helpers.logging import Logger
+from whateels.helpers.logging_utils import Logger
 
 _logger = Logger.get_logger("in_memory_file.log", __name__)
 
