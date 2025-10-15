@@ -44,11 +44,11 @@
     padding: 0.5rem 0;
 }
 
-.pre-normalization-switch {
-    display: grid;
-    place-content: center;
-}
+    .background-subtraction-switch {
+        display: grid;
+        place-content: center;
+    }
 
-.pre-normalization-container {
-    max-height: 65px;
-}
+    .background-subtraction-container {
+        max-height: 65px;
+    }

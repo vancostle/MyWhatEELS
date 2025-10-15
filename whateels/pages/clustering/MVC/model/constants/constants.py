@@ -13,7 +13,7 @@ class Constants:
     SINGLE_SPECTRUM = 'SSp'
     IMAGE = 'Img'
     
-    DEFAULT_PRE_NORMALIZATION = False
+    DEFAULT_BACKGROUND_SUBTRACTION = False
     
     # K-Means defaults
     DEFAULT_SELECTED_NORM = 'none'

@@ -30,9 +30,9 @@ class ClusteringView(BaseView):
         self._spectral_input = None # Dictionary to hold Spectral input widgets
 
         self._kmeans_run_button = None # Button to run K-Means clustering
-        self._pre_normalization_switch = None # Switch for pre-normalization option
+        self._background_subtraction_switch = None # Switch for background-subtraction option
         self._store_button = None # Button to store clustering results
-        
+
         self._init_components()
         
     @property
@@ -51,9 +51,9 @@ class ClusteringView(BaseView):
         return self._dataset_info_layout
     
     @property
-    def pre_normalization_switch(self):
-        """Access the pre-normalization switch widget."""
-        return self._pre_normalization_switch
+    def background_subtraction_switch(self):
+        """Access the background-subtraction switch widget."""
+        return self._background_subtraction_switch
     
     @property
     def store_button(self):
@@ -81,21 +81,21 @@ class ClusteringView(BaseView):
         return left_sidebar
 
     def _right_sidebar_layout(self):
-        pre_normalization_label = pn.pane.Markdown(
-            "### Pre-normalization", 
+        background_subtraction_label = pn.pane.Markdown(
+            "### Background-subtraction", 
         )
-        
-        self._pre_normalization_switch = pn.widgets.Switch(
-            name="Pre-normalization", 
-            value=self._model.constants.DEFAULT_PRE_NORMALIZATION, 
+
+        self._background_subtraction_switch = pn.widgets.Switch(
+            name="Background-subtraction", 
+            value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
-            css_classes=["pre-normalization-switch"]
+            css_classes=["background-subtraction-switch"]
         )
-        pre_normalization_container = pn.Row(
-            pre_normalization_label,
-            self._pre_normalization_switch,
+        background_subtraction_container = pn.Row(
+            background_subtraction_label,
+            self._background_subtraction_switch,
             sizing_mode=self.STRETCH_WIDTH,
-            css_classes=["pre-normalization-container"]
+            css_classes=["background-subtraction-container"]
         )
         
         k_means_tab = pn.pane.Markdown("Clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
@@ -282,7 +282,7 @@ class ClusteringView(BaseView):
         )
 
         right_sidebar = pn.Column(
-            pre_normalization_container,
+            background_subtraction_container,
             clustering_tabs,
             self._store_button,
             sizing_mode=self.STRETCH_BOTH
