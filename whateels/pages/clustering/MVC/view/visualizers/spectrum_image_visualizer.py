@@ -7,6 +7,8 @@ import panel as pn
 import numpy as np
 import plotly.graph_objs as go
 
+from whateels.helpers import SpectrumExtractor
+
 from sklearn.preprocessing import normalize
 from sklearn.cluster import KMeans
 from whateels.base.base_visualizer import BaseVisualizer
@@ -80,12 +82,11 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self._current_x_autorange = None
         self._current_y_autorange = None
 
-        # Selection / hover / fitting state
+        # Selection / hover / state
         self._region_pairs = []
         self._last_hover_point = None
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
-        self._fitting_active = False
 
         # Clustering state (Vanessa's functionality)
         self._clustering_results = None  # Will store (labels, centres) from clustering
@@ -93,8 +94,6 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self._clustering_active = False
 
         # Widgets / panes placeholders
-        self.range_slider = None
-        self.fitting_button = None
         self.clustering_button = None  # New clustering button
         self.restore_button = None     # Button to restore original view
         self.paneA = None  # Plotly heatmap pane
@@ -144,7 +143,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
         sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
 
         # Determine initialization method
-        init_value: Literal['k-means++', 'random'] = init_method if init_method in self._model.constants.AVAILABLE_INIT_METHODS else 'k-means++'
+        allowed_init_methods: tuple[Literal['k-means++'], Literal['random']] = ('k-means++', 'random')
+        init_value: Literal['k-means++', 'random'] = init_method if init_method in allowed_init_methods else 'k-means++'
 
         kmeans = KMeans(
             n_clusters=n_cluster, 
@@ -179,19 +179,24 @@ class SpectrumImageVisualizer(BaseVisualizer):
                 discrete_colorscale.append([1.0, color])
         
         fig = go.Figure(go.Heatmap(
-            z=labels, 
-            colorscale=discrete_colorscale, 
+            z=labels,
+            colorscale=discrete_colorscale,
             colorbar=dict(title="Cluster", tickmode='linear', tick0=0, dtick=1),
             hovertemplate='x: %{x}<br>y: %{y}<br>Cluster: %{z}<extra></extra>',
             zmin=0,
             zmax=n_clusters-1
         ))
+        # Keep same layout and aspect locking as the unclustered figA
         fig.update_layout(
-            title=title, 
-            xaxis_title="X", 
-            yaxis_title="Y", 
-            yaxis_autorange='reversed'
+            title=title,
+            height=400,
+            margin=dict(l=16, r=16, t=50, b=20),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
         )
+        fig.update_yaxes(autorange='reversed', scaleanchor='x', scaleratio=1, constrain='domain',
+                         showgrid=False, zeroline=False, showticklabels=False)
+        fig.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain='domain')
         return fig
 
     def _apply_kmeans_clustering(self, n_clusters=6, available_norm='l2', n_init=10, max_iter=300, init_method='k-means++'):
@@ -219,15 +224,42 @@ class SpectrumImageVisualizer(BaseVisualizer):
             
             self._clustering_results = (labels, centres)
             
+            # Try to preserve the current paneB height so the clustering view
+            # initially appears with the same vertical size as the current spectrum figure.
+            current_b_height = None
+            try:
+                if self.paneB is not None and getattr(self.paneB, 'object', None) is not None:
+                    obj = self.paneB.object
+                    # obj can be a go.Figure or a dict (plotly json). Read layout.height if available.
+                    if isinstance(obj, go.Figure):
+                        current_b_height = obj.layout.height
+                    elif isinstance(obj, dict):
+                        current_b_height = obj.get('layout', {}).get('height')
+                    if current_b_height is not None:
+                        try:
+                            current_b_height = int(current_b_height)
+                        except Exception:
+                            pass
+            except Exception:
+                current_b_height = None
+
             # Create clustering visualization
             clustering_fig = self._plot_kmeans_labels_plotly(labels, f"KMeans Clustering (n={n_clusters})")
-            # Update the heatmap pane with clustering results
+            # If we were able to capture the current paneB height, apply it to the
+            # clustering figure so it doesn't jump to a different vertical size.
+            try:
+                if current_b_height is not None:
+                    clustering_fig.update_layout(height=current_b_height)
+            except Exception:
+                # best-effort only; do not fail clustering because of layout setting
+                pass
+
+            # Update the heatmap pane with clustering results (convert to plotly json)
             if self.paneA is not None:
-                # Force the update by setting object and triggering param updates
-                self.paneA.object = clustering_fig
+                self.paneA.object = self._to_plotly(clustering_fig)
                 self.paneA.param.trigger('object')  # Force parameter update
                 # Alternative: recreate the pane entirely if needed
-                # self.paneA = pn.pane.Plotly(clustering_fig, sizing_mode='stretch_both')
+                # self.paneA = pn.pane.Plotly(self._to_plotly(clustering_fig), sizing_mode='stretch_both')
             
             # Update spectrum pane to show cluster centers
             self._update_spectrum_with_clusters(centres)
@@ -263,7 +295,16 @@ class SpectrumImageVisualizer(BaseVisualizer):
             title="Cluster Centers",
             xaxis_title="Energy Loss (eV)",
             yaxis_title="Intensity (AU)",
-            showlegend=True
+            showlegend=True,
+            legend=dict(
+                x=0.98,
+                y=0.98,
+                xanchor='right',
+                yanchor='top',
+                bgcolor='rgba(255,255,255,0.6)',
+                bordercolor='rgba(0,0,0,0.1)',
+                borderwidth=1,
+            )
         )
         
         self.paneB.object = fig
@@ -306,10 +347,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
         
         right_column = pn.Column(
             self.paneB, 
-            self.fitting_button,
             self.clustering_button,
             self.restore_button,
-            self.range_slider, 
             sizing_mode='stretch_both'
         )
         
@@ -327,33 +366,11 @@ class SpectrumImageVisualizer(BaseVisualizer):
 
     # --- Widget Setup ---
     def _setup_widgets(self):
-        # Range slider
-        self.range_slider = pn.widgets.RangeSlider(
-            name="Range",
-            start=float(self._e_axis[0]) if len(self._e_axis) > 0 else 0.0,
-            end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
-            value=(float(self._e_axis[0]), float(self._e_axis[-1])),
-            sizing_mode=self._STRETCH_WIDTH,
-        )
-        self.range_slider.param.watch(self._on_range_changed, 'value')
-
-        # Fitting toggle button
-        self.fitting_button = pn.widgets.Button(name="fitting: OFF", button_type="primary")
-        self.fitting_button.on_click(self._on_fitting_clicked)
-        
-        # Restore button
-        # self.restore_button = pn.widgets.Button(
-        #     name="Restore Original", 
-        #     button_type="light",
-        #     sizing_mode=self._STRETCH_WIDTH
-        # )
-        # self.restore_button.on_click(self._on_stop_clustering_clicked)
-        
+       
         if kmeans_run_button := getattr(self._controller.view, "kmeans_run_button", None):
             self._kmeans_clustering_button = kmeans_run_button # Store reference
             kmeans_run_button.on_click(self._on_run_clustering_clicked)
 
-        self.range_slider.visible = False
 
     def _on_run_clustering_clicked(self, event):
         """Handle clustering button click."""
@@ -414,24 +431,43 @@ class SpectrumImageVisualizer(BaseVisualizer):
             energy = np.arange(self._electron_count_data.shape[-1])
         self._energy = energy
 
-        # Build Plotly heatmap (figA)
+        # Build Plotly heatmap (figA) and selectors to enable lasso/box selection
         heat = go.Heatmap(
             z=m_image,
             x=np.arange(nx),
             y=np.arange(ny),
             colorscale="Greys_r",
             showscale=False,
-            hovertemplate='x: %{x}<br>y: %{y}<br>Intensity: %{z}<extra></extra>'
+            name="m_image",
+            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )
 
-        figA = go.Figure(data=[heat])
-        figA.update_layout(
-            title="Spectrum Image",
-            xaxis_title="X",
-            yaxis_title="Y",
-            yaxis_autorange='reversed',
-            dragmode='select'
+        # Create an invisible selectors layer (Scattergl) so Plotly emits selected/hover points
+        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
+        selectors = go.Scattergl(
+            x=XX.ravel(),
+            y=YY.ravel(),
+            mode="markers",
+            name="selectors",
+            marker=dict(size=6, opacity=0.01),
+            hoverinfo="skip",
+            selected=dict(marker=dict(opacity=0.3, size=8)),
+            unselected=dict(marker=dict(opacity=0.01)),
         )
+
+        figA = go.Figure(data=[heat, selectors])
+        figA.update_layout(
+            title=" ",
+            height=400,
+            margin=dict(l=16, r=16, t=50, b=20),
+            dragmode="lasso",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
+        figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
+                           showgrid=False, zeroline=False, showticklabels=False)
+        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
         # Initial spectrum (center pixel)
         center_x, center_y = nx // 2, ny // 2
@@ -443,28 +479,54 @@ class SpectrumImageVisualizer(BaseVisualizer):
             y=spectrum_data,
             mode='lines',
             name='Spectrum',
-            line=dict(color='blue', width=2)
         )
 
         figB = go.Figure(data=[trace])
         figB.update_layout(
             title="Spectrum at Selected Pixel",
             xaxis_title="Energy Loss (eV)",
-            yaxis_title="Intensity (AU)"
+            yaxis_title="Intensity (AU)",
+            legend=dict(
+                x=0.98,
+                y=0.98,
+                xanchor='right',
+                yanchor='top',
+                bgcolor='rgba(255,255,255,0.6)',
+                bordercolor='rgba(0,0,0,0.1)',
+                borderwidth=1,
+            )
         )
 
-        # Create Panel panes
-        self.paneA = pn.pane.Plotly(figA, sizing_mode='stretch_both')
-        self.paneB = pn.pane.Plotly(figB, sizing_mode='stretch_both')
+        # Create Panel panes (use _to_plotly to avoid Panel<->Plotly relayout issues)
+        self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
+        # Pane B initial message: use the center-spectrum figure but keep responsive config
+        self.paneB = pn.pane.Plotly(self._to_plotly(figB), config={"responsive": True}, sizing_mode='stretch_both')
 
     def _setup_callbacks(self):
         """Setup callbacks for interactive functionality."""
         if self.paneA is not None:
+            # Watch click, hover and selection so lasso/box selection works
             self.paneA.param.watch(self._on_paneA_click, "click_data")
+            self.paneA.param.watch(self._on_paneA_hover, "hover_data")
+            self.paneA.param.watch(self._on_paneA_selected, "selected_data")
+
+    def _to_plotly(self, obj):
+        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
+        try:
+            if isinstance(obj, go.Figure):
+                return obj.to_plotly_json()
+        except Exception:
+            pass
+        try:
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+        return obj
 
     def _on_paneA_click(self, event):
         """Handle clicks on the heatmap to update spectrum."""
-        if event.new is None or not self._clustering_active:
+        if event.new is None:
             return
             
         try:
@@ -500,6 +562,67 @@ class SpectrumImageVisualizer(BaseVisualizer):
         """Handle range slider changes."""
         pass  # Placeholder for range functionality
 
-    def _on_fitting_clicked(self, event):
-        """Handle fitting button clicks."""
-        pass  # Placeholder for fitting functionality
+    def _on_paneA_hover(self, event):
+        """Handle hover on the heatmap to show single-pixel spectrum."""
+        point = SpectrumExtractor.extract_point(event)
+        if point is None:
+            return
+        self._last_hover_point = point
+        # If a region is selected, don't override the region spectrum
+        if self._region_pairs:
+            return
+        i, j = int(point['y']), int(point['x'])
+        spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+        if spec is None:
+            return
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode='lines', name=f"(i={i}, j={j})"))
+        fig.update_layout(
+            title="Hover",
+            margin=dict(l=16, r=16, t=48, b=16),
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (AU)"
+        )
+        if self.paneB is not None:
+            self.paneB.object = fig
+
+    def _on_paneA_selected(self, event):
+        """Handle lasso/box selection and show summed spectrum for selected pixels."""
+        pairs = SpectrumExtractor.extract_region(event)
+        self._region_pairs = pairs
+        if not pairs:
+            # no selection: show hover or default
+            if self._last_hover_point is not None:
+                i, j = int(self._last_hover_point['y']), int(self._last_hover_point['x'])
+                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+                if spec is not None:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=self._energy, y=spec, mode='lines', name=f"(i={i}, j={j})"))
+                    fig.update_layout(title="Hover", xaxis_title="Energy Loss (eV)", yaxis_title="Intensity (AU)",
+                                      legend=dict(x=0.98, y=0.98, xanchor='right', yanchor='top', bgcolor='rgba(255,255,255,0.6)', bordercolor='rgba(0,0,0,0.1)', borderwidth=1))
+                    if self.paneB is not None:
+                        self.paneB.object = fig
+            return
+
+        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
+        if res is None:
+            return
+        spec, n_points = res
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode='lines', name=f"sum (points={n_points})"))
+        fig.update_layout(
+            title=f"ROI — sum (points={n_points})",
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (AU)",
+            legend=dict(
+                x=0.98,
+                y=0.98,
+                xanchor='right',
+                yanchor='top',
+                bgcolor='rgba(255,255,255,0.6)',
+                bordercolor='rgba(0,0,0,0.1)',
+                borderwidth=1,
+            )
+        )
+        if self.paneB is not None:
+            self.paneB.object = fig
