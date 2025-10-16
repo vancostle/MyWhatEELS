@@ -15,7 +15,8 @@ from whateels.helpers.colormaps import (
 )
 
 from sklearn.preprocessing import normalize
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.feature_extraction.image import grid_to_graph
 from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING, Literal
 from whateels.components import ResizableColumns
@@ -233,6 +234,162 @@ class SpectrumImageVisualizer(BaseVisualizer):
             import traceback
             traceback.print_exc()
             return None
+
+    # --- Agglomerative Clustering Implementation ---
+    def _agglomerative_clustering(self, matrix, n_clusters, linkage='ward', affinity='euclidean', 
+                                   norm_matrix=False, use_connectivity=False):
+        """
+        Apply Agglomerative Hierarchical Clustering to the spectrum image data.
+        
+        Parameters:
+        -----------
+        matrix: numpy array (x, y, eloss)
+            Spectrum image data cube.
+        n_clusters: int
+            Number of clusters to form.
+        linkage: string, optional (default='ward')
+            Linkage criterion: 'ward', 'complete', 'average', 'single'.
+            Note: 'ward' only works with 'euclidean' affinity.
+        affinity: string, optional (default='euclidean')
+            Distance metric: 'euclidean', 'l1', 'l2', 'manhattan', 'cosine', etc.
+        norm_matrix: bool, optional (default=False)
+            Whether to normalize the data before clustering.
+        use_connectivity: bool, optional (default=False)
+            Whether to use spatial connectivity constraints (pixels cluster with neighbors).
+            
+        Returns:
+        --------
+        labels: numpy array (x, y)
+            Cluster labels for each pixel.
+        centres: numpy array (n_clusters, eloss)
+            Mean spectrum for each cluster (computed after clustering).
+        """
+        # Reshape matrix to 2D: (n_pixels, n_energy)
+        original_shape = matrix.shape
+        matrix_2d = matrix.reshape(matrix.shape[0] * matrix.shape[1], matrix.shape[-1])
+        
+        # Normalize if requested
+        if norm_matrix:
+            matrix_2d = normalize(matrix_2d, norm='l2', axis=1, copy=True)
+        
+        # Handle 'ward' linkage constraint (only works with euclidean)
+        if linkage == 'ward' and affinity != 'euclidean':
+            print(f"Warning: 'ward' linkage requires 'euclidean' affinity. Changing affinity to 'euclidean'.")
+            affinity = 'euclidean'
+        
+        # Validate linkage parameter
+        allowed_linkages: tuple[Literal['ward'], Literal['complete'], Literal['average'], Literal['single']] = ('ward', 'complete', 'average', 'single')
+        linkage_value: Literal['ward', 'complete', 'average', 'single'] = linkage if linkage in allowed_linkages else 'ward'
+        
+        # Build connectivity matrix if requested
+        connectivity_matrix = None
+        if use_connectivity:
+            # Create spatial connectivity based on image structure
+            # This ensures pixels cluster with their spatial neighbors
+            ny, nx = original_shape[0], original_shape[1]
+            connectivity_matrix = grid_to_graph(ny, nx)
+        
+        # Create and fit AgglomerativeClustering
+        agglomerative = AgglomerativeClustering(
+            n_clusters=n_clusters,
+            linkage=linkage_value,
+            metric=affinity,
+            connectivity=connectivity_matrix  # type: ignore
+        )
+        
+        labels_1d = agglomerative.fit_predict(matrix_2d)
+        labels = labels_1d.reshape(original_shape[:-1])
+        
+        # Compute cluster centers (mean spectrum for each cluster)
+        centres = np.zeros((n_clusters, matrix.shape[-1]))
+        for i in range(n_clusters):
+            cluster_mask = labels_1d == i
+            if np.any(cluster_mask):
+                centres[i] = matrix_2d[cluster_mask].mean(axis=0)
+        
+        return labels, centres
+
+    def _apply_agglomerative_clustering(self, n_clusters=5, linkage='ward', affinity='euclidean',
+                                       norm_matrix=False, use_connectivity=False):
+        """
+        Apply Agglomerative clustering to the spectrum image data and update visualization.
+        
+        If background-subtraction switch is active and multifit results are available,
+        uses the background-subtracted data from multifit instead of raw data.
+        """
+        try:
+            # Check if background-subtraction is enabled and multifit data is available
+            use_multifit_data = self._should_use_multifit_data()
+            
+            if use_multifit_data:
+                # Get background-subtracted data from multifit
+                data_cube = self._get_multifit_data()
+                if data_cube is None:
+                    # Fallback to original data if multifit retrieval fails
+                    print("Warning: Could not retrieve multifit data, using original data")
+                    data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            else:
+                # Get the 3D data cube (x, y, energy) from original dataset
+                data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            
+            # Store original heatmap data if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Apply agglomerative clustering
+            labels, centres = self._agglomerative_clustering(
+                data_cube,
+                n_clusters=n_clusters,
+                linkage=linkage,
+                affinity=affinity,
+                norm_matrix=norm_matrix,
+                use_connectivity=use_connectivity
+            )
+            
+            self._clustering_results = (labels, centres)
+            self._current_norm = 'l2' if norm_matrix else 'none'  # Store for later use
+            
+            # Try to preserve the current paneB height
+            current_b_height = None
+            try:
+                if self.paneB is not None and getattr(self.paneB, 'object', None) is not None:
+                    obj = self.paneB.object
+                    if isinstance(obj, go.Figure):
+                        current_b_height = obj.layout.height
+                    elif isinstance(obj, dict):
+                        current_b_height = obj.get('layout', {}).get('height')
+                    if current_b_height is not None:
+                        try:
+                            current_b_height = int(current_b_height)
+                        except Exception:
+                            pass
+            except Exception:
+                current_b_height = None
+
+            # Create clustering visualization
+            clustering_fig = self._plot_kmeans_labels_plotly(labels, f"Agglomerative Clustering (n={n_clusters})")
+            
+            # Apply preserved height if available
+            try:
+                if current_b_height is not None:
+                    clustering_fig.update_layout(height=current_b_height)
+            except Exception:
+                pass
+
+            # Update the heatmap pane with clustering results
+            if self.paneA is not None:
+                self.paneA.object = self._to_plotly(clustering_fig)
+                self.paneA.param.trigger('object')
+            
+            # Update spectrum pane to show cluster centers
+            self._update_spectrum_with_clusters(centres)
+            
+            self._clustering_active = True
+            
+        except Exception as e:
+            print(f"Error applying agglomerative clustering: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
         """
@@ -559,8 +716,37 @@ class SpectrumImageVisualizer(BaseVisualizer):
 
     def _run_agglomerative_clustering(self, event):
         """Handle agglomerative clustering button click."""
-        # Placeholder for agglomerative clustering implementation
-        print("Agglomerative clustering not yet implemented.")
+        
+        if self._agglomerative_run_button is not None:
+            self._agglomerative_run_button.disabled = True  # Disable to prevent multiple clicks
+        
+        agglomerative_input = self._controller.view.agglomerative_input
+        
+        # Default values
+        n_clusters = 5
+        linkage = 'ward'
+        affinity = 'euclidean'
+        norm_matrix = False
+        connectivity = False
+
+        if agglomerative_input is not None:
+            n_clusters = agglomerative_input["n_clusters"].value
+            linkage = agglomerative_input["linkage"].value
+            affinity = agglomerative_input["affinity"].value
+            norm_matrix = agglomerative_input["Norm-matrix"].value
+            connectivity = agglomerative_input["Connectivity"].value
+
+        try:
+            self._apply_agglomerative_clustering(
+                n_clusters=n_clusters,
+                linkage=linkage,
+                affinity=affinity,
+                norm_matrix=norm_matrix,
+                use_connectivity=connectivity
+            )
+        finally:
+            if self._agglomerative_run_button is not None:
+                self._agglomerative_run_button.disabled = False
 
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):
