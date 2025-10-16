@@ -46,8 +46,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
     # helper `whateels.helpers.colormaps.listed` so the visualizer
     # can produce exactly `n_clusters` distinct colors.
     _CLUSTER_COLORS = 'tab20b'
-    _ORDER_COLORS = [3, 7, 15, 11, 19, 
-                     2, 6, 14, 10, 18, 
+    _ORDER_COLORS = [2, 6, 14, 10, 18, 
+                     3, 7, 15, 11, 19, 
                      1, 5, 13, 9, 17, 
                      0, 4, 12, 8, 16]
 
