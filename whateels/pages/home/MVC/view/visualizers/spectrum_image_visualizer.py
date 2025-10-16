@@ -162,7 +162,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         try:
             AppState().plot_dataset = self._dataset
         except Exception:
-            pass
+            print("Error publishing dataset to AppState for multifit.")
         
         min_val, max_val = self.range_slider.value
         
