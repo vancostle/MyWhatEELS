@@ -32,18 +32,30 @@ class ClusteringView(BaseView):
         self._kmeans_run_button = None # Button to run K-Means clustering
         self._background_subtraction_switch = None # Switch for background-subtraction option
         self._store_button = None # Button to store clustering results
+        
+        self._agglomerative_run_button = None # Button to run Agglomerative clustering
+        
+        self._spectral_run_button = None # Button to run Spectral clustering
 
         self._init_components()
         
     @property
     def kmeans_input(self):
         """Access the K-Means input widgets."""
-        return self._kmeans_input  
-    
+        return self._kmeans_input
     @property
     def kmeans_run_button(self) -> Optional[pn.widgets.Button]:
         """Access the K-Means input widgets."""
-        return self._kmeans_run_button         
+        return self._kmeans_run_button      
+    
+    @property
+    def agglomerative_input(self):
+        """Access the Agglomerative input widgets."""
+        return self._agglomerative_input   
+    @property
+    def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
+        """Access the Agglomerative run button."""
+        return self._agglomerative_run_button
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -98,8 +110,35 @@ class ClusteringView(BaseView):
             css_classes=["background-subtraction-container"]
         )
         
-        k_means_tab = pn.pane.Markdown("Clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
+        k_means_tab = self._create_k_means_tab()
+        agglomerative_tab = self._create_agglomerative_tab()
+        spectral_tab = self._create_spectral_tab()
 
+        clustering_tabs = pn.Tabs(
+            ("K-Means", k_means_tab),
+            ("Agglomerative", agglomerative_tab),
+            ("Spectral", spectral_tab),
+            sizing_mode=self.STRETCH_BOTH,
+            css_classes=["clustering-tabs"]
+        )
+        
+        self._store_button = pn.widgets.Button(
+            name="Store", 
+            button_type="primary", 
+            height=55, 
+            sizing_mode=self.STRETCH_WIDTH,
+            margin=0
+        )
+
+        right_sidebar = pn.Column(
+            background_subtraction_container,
+            clustering_tabs,
+            self._store_button,
+            sizing_mode=self.STRETCH_BOTH
+        )
+        return right_sidebar
+    
+    def _create_k_means_tab(self) -> pn.Column:
         self._kmeans_input = {
             "available_norms": pn.widgets.Select(
                 name='Available norms', 
@@ -154,7 +193,10 @@ class ClusteringView(BaseView):
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["kmeans-tab"]
         )
-                
+        
+        return k_means_tab
+    
+    def _create_agglomerative_tab(self) -> pn.Column:
         self._agglomerative_input = {
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
@@ -175,47 +217,40 @@ class ClusteringView(BaseView):
                 value='euclidean', 
                 sizing_mode=self.STRETCH_WIDTH
             ),
-            "connectivity": ToggleButton(
-                initial_state=False,
-                states={
-                    'on': {
-                        'label': 'Connectivity: On',
-                        'on_click': lambda: print("Connectivity enabled."),
-                        'button_type': 'success'
-                    },
-                    'off': {
-                        'label': 'Connectivity: Off',
-                        'on_click': lambda: print("Connectivity disabled."),
-                        'button_type': 'danger'
-                    }
-                },
-                sizing_mode=self.STRETCH_WIDTH
+            "Norm-matrix": pn.widgets.Checkbox(
+                name='Norm-matrix',
+                value=False,
+                sizing_mode=self.STRETCH_WIDTH,
             ),
-            "Norm-matrix": ToggleButton(
-                initial_state=False,
-                states={
-                    'on': {
-                        'label': 'Norm-matrix: On',
-                        'on_click': lambda: print("Norm-matrix enabled."),
-                        'button_type': 'success'
-                    },
-                    'off': {
-                        'label': 'Norm-matrix: Off',
-                        'on_click': lambda: print("Norm-matrix disabled."),
-                        'button_type': 'danger'
-                    }
-                },
+            "Connectivity": pn.widgets.Checkbox(
+                name='Connectivity',
+                value=False,
                 sizing_mode=self.STRETCH_WIDTH
-            ),
+            )
         }
         
+        self._agglomerative_run_button = pn.widgets.Button(
+            name='Run Agglomerative',
+            button_type='success',
+            height=55,
+            margin=(20,0,10,0),
+            sizing_mode=self.STRETCH_WIDTH
+        )
         
         agglomerative_tab = pn.Column(
-            *[widget for widget in self._agglomerative_input.values()],
+            pn.Column(
+                *[widget for widget in self._agglomerative_input.values()],
+                sizing_mode=self.STRETCH_BOTH,
+                css_classes=["kmeans-input-container"]
+            ),
+            self._agglomerative_run_button,
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["agglomerative-tab"]
         )
         
+        return agglomerative_tab
+    
+    def _create_spectral_tab(self) -> pn.Column:
         self._spectral_input = {
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
@@ -264,30 +299,8 @@ class ClusteringView(BaseView):
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["spectral-tab"]
         )
-
-        clustering_tabs = pn.Tabs(
-            ("K-Means", k_means_tab),
-            ("Agglomerative", agglomerative_tab),
-            ("Spectral", spectral_tab),
-            sizing_mode=self.STRETCH_BOTH,
-            css_classes=["clustering-tabs"]
-        )
         
-        self._store_button = pn.widgets.Button(
-            name="Store", 
-            button_type="primary", 
-            height=55, 
-            sizing_mode=self.STRETCH_WIDTH,
-            margin=0
-        )
-
-        right_sidebar = pn.Column(
-            background_subtraction_container,
-            clustering_tabs,
-            self._store_button,
-            sizing_mode=self.STRETCH_BOTH
-        )
-        return right_sidebar
+        return spectral_tab
     
     def create_tab_and_dataset_info(self):
         # File and encoding constants

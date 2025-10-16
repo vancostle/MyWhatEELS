@@ -95,7 +95,9 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self.paneA = None  # Plotly heatmap pane
         self.paneB = None  # Plotly spectrum pane
         self._pc = None    # periodic callback handle
+        
         self._kmeans_run_button = None  # KMeans run button
+        self._agglomerative_run_button = None  # Agglomerative clustering button
 
         # Setup widgets, plots and callbacks
         self._setup_widgets()
@@ -513,15 +515,20 @@ class SpectrumImageVisualizer(BaseVisualizer):
     def _setup_widgets(self):
        
         if kmeans_run_button := getattr(self._controller.view, "kmeans_run_button", None):
-            self._kmeans_clustering_button = kmeans_run_button # Store reference
-            kmeans_run_button.on_click(self._on_run_clustering_clicked)
+            self._kmeans_run_button = kmeans_run_button # Store reference
+            kmeans_run_button.on_click(self._run_kmeans_clustering)
+            
+        if agglomerative_run_button := getattr(self._controller.view, "agglomerative_run_button", None):
+            self._agglomerative_run_button = agglomerative_run_button # Store reference
+            agglomerative_run_button.on_click(self._run_agglomerative_clustering)
 
-
-    def _on_run_clustering_clicked(self, event):
+    def _run_kmeans_clustering(self, event):
         """Handle clustering button click."""
         
-        if self._kmeans_clustering_button is not None:
-            self._kmeans_clustering_button.disabled = True  # Disable to prevent multiple clicks
+        # self._restore_original_view()
+        
+        if self._kmeans_run_button is not None:
+            self._kmeans_run_button.disabled = True  # Disable to prevent multiple clicks
         
         kmeans_input = self._controller.view.kmeans_input
         
@@ -547,13 +554,13 @@ class SpectrumImageVisualizer(BaseVisualizer):
                 init_method=init_method
             )
         finally:
-            if self._kmeans_clustering_button is not None:
-                self._kmeans_clustering_button.disabled = False  # Re-enable button after processing
-        
+            if self._kmeans_run_button is not None:
+                self._kmeans_run_button.disabled = False  # Re-enable button after processing
 
-    def _on_stop_clustering_clicked(self):
-        """Handle restore button click."""
-        self._restore_original_view()
+    def _run_agglomerative_clustering(self, event):
+        """Handle agglomerative clustering button click."""
+        # Placeholder for agglomerative clustering implementation
+        print("Agglomerative clustering not yet implemented.")
 
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):
