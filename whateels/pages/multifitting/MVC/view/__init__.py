@@ -2,7 +2,6 @@ import panel as pn
 from typing import TYPE_CHECKING
 from whateels.helpers import HTML_ROOT
 from .view_multifit import SpectrumImageVisualizer
-from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
     from ..model import Model
