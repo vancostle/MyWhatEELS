@@ -34,7 +34,6 @@ class AppState(param.Parameterized):
     multifit = param.Parameter(default=None, doc="""
         Multifit results or state object. None if not available yet.
     """)
-    
     # Reactive parameter to hold the dataset currently plotted in the visualizer
     plot_dataset = param.Parameter(default=None, doc="""
         The xarray Dataset (or view) currently used to build figA/figB in the
@@ -89,7 +88,6 @@ class AppState(param.Parameterized):
             _logger.info("plot_dataset published to AppState")
         else:
             _logger.info("plot_dataset cleared in AppState")
-            
     @param.depends('all_datasets', watch=True)
     def _on_datasets_change(self):
         """Called automatically when all_datasets parameter changes."""
