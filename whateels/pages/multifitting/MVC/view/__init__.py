@@ -33,6 +33,10 @@ class View:
         """
 
         # Guard: no dataset available
+        
+        data = AppState().plot_dataset
+        print("data", data)
+
         if data is None:
             return pn.pane.HTML("<p>No dataset available for multifitting.</p>", sizing_mode=self._STRETCH_BOTH)
 
