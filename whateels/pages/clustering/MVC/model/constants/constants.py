@@ -28,4 +28,4 @@ class Constants:
     DEFAULT_LINKAGE = 'ward'
     AVAILABLE_LINKAGE_METHODS = [DEFAULT_LINKAGE, 'complete', 'average', 'single']
     DEFAULT_AFFINITY = 'euclidean'
-    AVAILABLE_AFFINITIES = [DEFAULT_AFFINITY, 'manhattan', 'cosine', 'precomputed']
+    AVAILABLE_AFFINITIES = [DEFAULT_AFFINITY, 'manhattan', 'cosine']

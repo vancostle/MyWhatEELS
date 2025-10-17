@@ -388,6 +388,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
             print(f"Error applying agglomerative clustering: {e}")
             import traceback
             traceback.print_exc()
+            
+
 
     def _plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
         """
@@ -732,7 +734,6 @@ class SpectrumImageVisualizer(BaseVisualizer):
             linkage = agglomerative_input["linkage"].value
             affinity = agglomerative_input["affinity"].value
             available_norm = agglomerative_input["available_norms"].value
-            connectivity = agglomerative_input["Connectivity"].value
 
         try:
             self._apply_agglomerative_clustering(

@@ -197,7 +197,7 @@ class ClusteringView(BaseView):
         return k_means_tab
     
     def _create_agglomerative_tab(self) -> pn.Column:
-        self._agglomerative_input = {
+        agglomerative_input = {
             "available_norms": pn.widgets.Select(
                 name='Available norms', 
                 options=self._model.constants.AVAILABLE_NORMS,
@@ -221,19 +221,25 @@ class ClusteringView(BaseView):
                 name='Affinity', 
                 options=self._model.constants.AVAILABLE_AFFINITIES, 
                 value=self._model.constants.DEFAULT_AFFINITY,
-                sizing_mode=self.STRETCH_WIDTH
-            ),
-            "Norm-matrix": pn.widgets.Checkbox(
-                name='Norm-matrix',
-                value=False,
                 sizing_mode=self.STRETCH_WIDTH,
-            ),
-            "Connectivity": pn.widgets.Checkbox(
-                name='Connectivity',
-                value=False,
-                sizing_mode=self.STRETCH_WIDTH
+                disabled=self._model.constants.DEFAULT_LINKAGE == 'ward',
             )
         }
+
+        # store local reference and on-instance reference to avoid "None" typing issues
+        self._agglomerative_input = agglomerative_input
+
+        # --- Linkage/Affinity interaction: force affinity to 'euclidean' and disable if linkage is 'ward' ---
+        def _on_linkage_change(event):
+            linkage_value = event.new
+            affinity_widget = agglomerative_input["affinity"]
+            if linkage_value == 'ward':
+                affinity_widget.value = 'euclidean'
+                affinity_widget.disabled = True
+            else:
+                affinity_widget.disabled = False
+
+        agglomerative_input["linkage"].param.watch(_on_linkage_change, 'value')
         
         self._agglomerative_run_button = pn.widgets.Button(
             name='Run Agglomerative',
@@ -245,7 +251,7 @@ class ClusteringView(BaseView):
         
         agglomerative_tab = pn.Column(
             pn.Column(
-                *[widget for widget in self._agglomerative_input.values()],
+                *[widget for widget in agglomerative_input.values()],
                 sizing_mode=self.STRETCH_BOTH,
                 css_classes=["agglomerative-input-container"]
             ),
@@ -297,12 +303,14 @@ class ClusteringView(BaseView):
                 end=100,
                 sizing_mode=self.STRETCH_WIDTH
             ),
-            "gamma": pn.widgets.FloatInput(
+            "gamma": pn.widgets.EditableFloatSlider(
                 name="Gamma",
-                value=1.0,
-                step=0.1,
+                value=0.5,
+                start=0.5,
+                step=0.5,
                 end=10.0,
-                sizing_mode=self.STRETCH_WIDTH
+                sizing_mode=self.STRETCH_WIDTH,
+                margin=(10,18,0,18)
             ),
         }
         
