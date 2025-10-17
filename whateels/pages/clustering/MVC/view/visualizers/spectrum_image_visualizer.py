@@ -176,7 +176,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         if isinstance(available_norm, str) and available_norm.lower() == 'none':
             sclust_norm = matrix_norm
         else:
-            sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
+            sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)  # type: ignore
 
         # Store for later access
         try:
@@ -237,7 +237,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
 
     # --- Agglomerative Clustering Implementation ---
     def _agglomerative_clustering(self, matrix, n_clusters, linkage='ward', affinity='euclidean', 
-                                   norm_matrix=False, use_connectivity=False):
+                                   available_norm='none', use_connectivity=False):
         """
         Apply Agglomerative Hierarchical Clustering to the spectrum image data.
         
@@ -252,8 +252,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
             Note: 'ward' only works with 'euclidean' affinity.
         affinity: string, optional (default='euclidean')
             Distance metric: 'euclidean', 'l1', 'l2', 'manhattan', 'cosine', etc.
-        norm_matrix: bool, optional (default=False)
-            Whether to normalize the data before clustering.
+        available_norm: string, optional (default='none')
+            Normalization to apply before clustering. Options: 'l1', 'l2', 'max', 'none'.
         use_connectivity: bool, optional (default=False)
             Whether to use spatial connectivity constraints (pixels cluster with neighbors).
             
@@ -264,13 +264,11 @@ class SpectrumImageVisualizer(BaseVisualizer):
         centres: numpy array (n_clusters, eloss)
             Mean spectrum for each cluster (computed after clustering).
         """
-        # Reshape matrix to 2D: (n_pixels, n_energy)
-        original_shape = matrix.shape
-        matrix_2d = matrix.reshape(matrix.shape[0] * matrix.shape[1], matrix.shape[-1])
+        # Prepare and (optionally) normalize the matrix using the same helper as KMeans
+        matrix_norm, sclust_norm = self._prepare_clustering_matrix(matrix, available_norm)
         
-        # Normalize if requested
-        if norm_matrix:
-            matrix_2d = normalize(matrix_2d, norm='l2', axis=1, copy=True)
+        # Store original shape for reshaping labels later
+        original_shape = matrix.shape
         
         # Handle 'ward' linkage constraint (only works with euclidean)
         if linkage == 'ward' and affinity != 'euclidean':
@@ -289,7 +287,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
             ny, nx = original_shape[0], original_shape[1]
             connectivity_matrix = grid_to_graph(ny, nx)
         
-        # Create and fit AgglomerativeClustering
+        # Create and fit AgglomerativeClustering using the normalized data
         agglomerative = AgglomerativeClustering(
             n_clusters=n_clusters,
             linkage=linkage_value,
@@ -297,7 +295,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
             connectivity=connectivity_matrix  # type: ignore
         )
         
-        labels_1d = agglomerative.fit_predict(matrix_2d)
+        labels_1d = agglomerative.fit_predict(sclust_norm)
         labels = labels_1d.reshape(original_shape[:-1])
         
         # Compute cluster centers (mean spectrum for each cluster)
@@ -305,12 +303,12 @@ class SpectrumImageVisualizer(BaseVisualizer):
         for i in range(n_clusters):
             cluster_mask = labels_1d == i
             if np.any(cluster_mask):
-                centres[i] = matrix_2d[cluster_mask].mean(axis=0)
+                centres[i] = matrix_norm[cluster_mask].mean(axis=0)
         
         return labels, centres
 
     def _apply_agglomerative_clustering(self, n_clusters=5, linkage='ward', affinity='euclidean',
-                                       norm_matrix=False, use_connectivity=False):
+                                       available_norm='none', use_connectivity=False):
         """
         Apply Agglomerative clustering to the spectrum image data and update visualization.
         
@@ -342,12 +340,12 @@ class SpectrumImageVisualizer(BaseVisualizer):
                 n_clusters=n_clusters,
                 linkage=linkage,
                 affinity=affinity,
-                norm_matrix=norm_matrix,
+                available_norm=available_norm,
                 use_connectivity=use_connectivity
             )
             
             self._clustering_results = (labels, centres)
-            self._current_norm = 'l2' if norm_matrix else 'none'  # Store for later use
+            self._current_norm = available_norm  # Store for later use
             
             # Try to preserve the current paneB height
             current_b_height = None
@@ -726,14 +724,14 @@ class SpectrumImageVisualizer(BaseVisualizer):
         n_clusters = 5
         linkage = 'ward'
         affinity = 'euclidean'
-        norm_matrix = False
+        available_norm = 'none'
         connectivity = False
 
         if agglomerative_input is not None:
             n_clusters = agglomerative_input["n_clusters"].value
             linkage = agglomerative_input["linkage"].value
             affinity = agglomerative_input["affinity"].value
-            norm_matrix = agglomerative_input["Norm-matrix"].value
+            available_norm = agglomerative_input["available_norms"].value
             connectivity = agglomerative_input["Connectivity"].value
 
         try:
@@ -741,7 +739,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
                 n_clusters=n_clusters,
                 linkage=linkage,
                 affinity=affinity,
-                norm_matrix=norm_matrix,
+                available_norm=available_norm,
                 use_connectivity=connectivity
             )
         finally:

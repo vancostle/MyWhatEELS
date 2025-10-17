@@ -23,3 +23,9 @@ class Constants:
     DEFAULT_MAX_ITER = 100
     DEFAULT_INIT_METHOD = 'k-means++'
     AVAILABLE_INIT_METHODS = [DEFAULT_INIT_METHOD, 'random']
+    
+    # Agglomerative defaults
+    DEFAULT_LINKAGE = 'ward'
+    AVAILABLE_LINKAGE_METHODS = [DEFAULT_LINKAGE, 'complete', 'average', 'single']
+    DEFAULT_AFFINITY = 'euclidean'
+    AVAILABLE_AFFINITIES = [DEFAULT_AFFINITY, 'manhattan', 'cosine', 'precomputed']

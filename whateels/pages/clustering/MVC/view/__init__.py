@@ -213,14 +213,14 @@ class ClusteringView(BaseView):
             ),
             "linkage": pn.widgets.Select(
                 name='Linkage Method', 
-                options=['ward', 'complete', 'average', 'single'], 
-                value='ward', 
+                options=self._model.constants.AVAILABLE_LINKAGE_METHODS, 
+                value=self._model.constants.DEFAULT_LINKAGE,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "affinity": pn.widgets.Select(
                 name='Affinity', 
-                options=['euclidean', 'l1', 'l2', 'manhattan', 'cosine'], 
-                value='euclidean', 
+                options=self._model.constants.AVAILABLE_AFFINITIES, 
+                value=self._model.constants.DEFAULT_AFFINITY,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "Norm-matrix": pn.widgets.Checkbox(
@@ -305,6 +305,14 @@ class ClusteringView(BaseView):
                 sizing_mode=self.STRETCH_WIDTH
             ),
         }
+        
+        self._spectral_run_button = pn.widgets.Button(
+            name='Run Spectral',
+            button_type='success',
+            height=55,
+            margin=(20,0,10,0),
+            sizing_mode=self.STRETCH_WIDTH
+        )
 
         spectral_tab = pn.Column(
             pn.Column(
@@ -312,6 +320,7 @@ class ClusteringView(BaseView):
                 sizing_mode=self.STRETCH_BOTH,
                 css_classes=["spectral-input-container"]
             ),
+            self._spectral_run_button,
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["spectral-tab"]
         )
