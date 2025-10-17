@@ -56,6 +56,15 @@ class ClusteringView(BaseView):
     def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
         """Access the Agglomerative run button."""
         return self._agglomerative_run_button
+    
+    @property
+    def spectral_input(self):
+        """Access the Spectral input widgets."""
+        return self._spectral_input
+    @property
+    def spectral_run_button(self) -> Optional[pn.widgets.Button]:
+        """Access the Spectral run button."""
+        return self._spectral_run_button
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
