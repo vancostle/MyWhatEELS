@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 from whateels.helpers import HTML_ROOT, CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton
+from whateels.components import UploadedFile
 from whateels.base.mvc import BaseView
 from whateels.shared_state import AppState
 
@@ -198,6 +198,12 @@ class ClusteringView(BaseView):
     
     def _create_agglomerative_tab(self) -> pn.Column:
         self._agglomerative_input = {
+            "available_norms": pn.widgets.Select(
+                name='Available norms', 
+                options=self._model.constants.AVAILABLE_NORMS,
+                value=self._model.constants.DEFAULT_SELECTED_NORM,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
                 value=5, 
@@ -241,7 +247,7 @@ class ClusteringView(BaseView):
             pn.Column(
                 *[widget for widget in self._agglomerative_input.values()],
                 sizing_mode=self.STRETCH_BOTH,
-                css_classes=["kmeans-input-container"]
+                css_classes=["agglomerative-input-container"]
             ),
             self._agglomerative_run_button,
             sizing_mode=self.STRETCH_BOTH,
@@ -252,6 +258,12 @@ class ClusteringView(BaseView):
     
     def _create_spectral_tab(self) -> pn.Column:
         self._spectral_input = {
+            "available_norms": pn.widgets.Select(
+                name='Available norms', 
+                options=self._model.constants.AVAILABLE_NORMS,
+                value=self._model.constants.DEFAULT_SELECTED_NORM,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
                 value=5,
@@ -295,7 +307,11 @@ class ClusteringView(BaseView):
         }
 
         spectral_tab = pn.Column(
-            *[widget for widget in self._spectral_input.values()],
+            pn.Column(
+                *[widget for widget in self._spectral_input.values()],
+                sizing_mode=self.STRETCH_BOTH,
+                css_classes=["spectral-input-container"]
+            ),
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["spectral-tab"]
         )
