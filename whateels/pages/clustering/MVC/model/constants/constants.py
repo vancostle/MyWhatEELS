@@ -29,3 +29,11 @@ class Constants:
     AVAILABLE_LINKAGE_METHODS = [DEFAULT_LINKAGE, 'complete', 'average', 'single']
     DEFAULT_AFFINITY = 'euclidean'
     AVAILABLE_AFFINITIES = [DEFAULT_AFFINITY, 'manhattan', 'cosine']
+    
+    # Spectral defaults
+    DEFAULT_SPECTRAL_AFFINITY = 'rbf'
+    AVAILABLE_SPECTRAL_AFFINITIES = [DEFAULT_SPECTRAL_AFFINITY, 'nearest_neighbors']
+    DEFAULT_SPECTRAL_N_NEIGHBORS = 20
+    DEFAULT_SPECTRAL_GAMMA = 1.0
+    DEFAULT_SPECTRAL_ASSIGN_LABELS = 'kmeans'
+    AVAILABLE_SPECTRAL_ASSIGN_LABELS = [DEFAULT_SPECTRAL_ASSIGN_LABELS, 'discretize', 'cluster_qr']

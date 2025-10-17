@@ -281,41 +281,41 @@ class ClusteringView(BaseView):
             ),
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
-                value=5,
+                value=self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS,
                 step=1,
                 end=100,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "n_init": pn.widgets.IntInput(
                 name="Number of Initializations",
-                value=10,
+                value=self._model.constants.DEFAULT_NUMBER_OF_INIT,
                 step=1,
                 end=100,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "labels_assign_method": pn.widgets.Select(
                 name='Labels Assignment Method',
-                options=['kmeans', 'spectral', 'agglomerative'],
-                value='kmeans',
+                options=self._model.constants.AVAILABLE_SPECTRAL_ASSIGN_LABELS,
+                value=self._model.constants.DEFAULT_SPECTRAL_ASSIGN_LABELS,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "spectral_affinity_metrics": pn.widgets.Select(
                 name='Spectral Affinity Metrics',
-                options=['nearest_neighbors', 'precomputed', 'rbf', 'poly', 'sigmoid'],
-                value='rbf',
+                options=self._model.constants.AVAILABLE_SPECTRAL_AFFINITIES,
+                value=self._model.constants.DEFAULT_SPECTRAL_AFFINITY,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "n_neighbors": pn.widgets.IntInput(
                 name="Number of Neighbors",
-                value=10,
+                value=self._model.constants.DEFAULT_SPECTRAL_N_NEIGHBORS,
                 step=1,
-                end=100,
+                end=1000,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "gamma": pn.widgets.EditableFloatSlider(
                 name="Gamma",
-                value=0.5,
-                start=0.5,
+                value=self._model.constants.DEFAULT_SPECTRAL_GAMMA,
+                start=self._model.constants.DEFAULT_SPECTRAL_GAMMA,
                 step=0.5,
                 end=10.0,
                 sizing_mode=self.STRETCH_WIDTH,

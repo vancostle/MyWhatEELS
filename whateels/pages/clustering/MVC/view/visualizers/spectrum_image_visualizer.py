@@ -391,8 +391,17 @@ class SpectrumImageVisualizer(BaseVisualizer):
             traceback.print_exc()
 
     # --- Spectral Clustering Implementation ---
-    def _spectral_clustering(self, matrix, n_clusters, available_norm='none', n_init=10,
-                            assign_labels='kmeans', affinity='rbf', n_neighbors=10, gamma=1.0):
+    def _spectral_clustering(
+        self, 
+        matrix, 
+        n_clusters, 
+        available_norm='none', 
+        n_init=10,
+        assign_labels='kmeans', 
+        affinity='rbf', 
+        n_neighbors=10, 
+        gamma=1.0
+    ):
         """
         Apply Spectral Clustering to the spectrum image data.
         
@@ -460,8 +469,16 @@ class SpectrumImageVisualizer(BaseVisualizer):
         
         return labels, centres
 
-    def _apply_spectral_clustering(self, n_clusters=5, available_norm='none', n_init=10,
-                                   assign_labels='kmeans', affinity='rbf', n_neighbors=10, gamma=1.0):
+    def _apply_spectral_clustering(
+        self, 
+        n_clusters=5, 
+        available_norm='none', 
+        n_init=10,
+        assign_labels='kmeans', 
+        affinity='rbf', 
+        n_neighbors=10, 
+        gamma=1.0
+    ):
         """
         Apply Spectral clustering to the spectrum image data and update visualization.
         
