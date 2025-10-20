@@ -179,11 +179,7 @@ class FileProcessorService:
         all_datasets = []
 
         for image, metadata, energy_axis in zip(all_spectrum_images, all_spectrum_metadata, all_energy_axes):            
-            is_eels = self._is_metadata_eels(metadata)
-
-            if len(image.shape) == 3:
-                is_eels = True
-            print(f"Processing dataset. Is EELS: {is_eels} ----------------------------------------------------")
+            is_eels = self._is_metadata_eels(metadata, image)
 
             # Process raw data into xarray-compatible format
             processed_data = eels_data_processor.process_data_for_xarray(image, energy_axis, is_eels)

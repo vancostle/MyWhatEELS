@@ -76,37 +76,11 @@ class DM_EELS_data:
         )
         return dims[::-1]
 
-    def get_image_name(self, image: np.ndarray) -> str:
+    def get_image_name(self, image: dict) -> str:
         """Get the name of a specific spectrum image from its metadata dictionary."""
         NAME = "Name"
         NO_NAME = "Unnamed Image"
         return image.get(NAME, NO_NAME)
-    
-    # def get_beam_energy(self, image) -> float:
-    #     """Get beam energy for a specific spectrum image."""
-
-    #     MICROSCOPE_INFO = "Microscope Info"
-    #     VOLTAGE = "Voltage"
-    #     E0 = 0.0  # Default value in keV
-        
-    #     microscope_voltage = 0.0 # Default value in V
-
-    #     try:
-    #         microscope_voltage = image[self._IMAGE_TAGS][MICROSCOPE_INFO][VOLTAGE]
-    #         E0 = self._volt_to_kilovolt(microscope_voltage)
-    #     except KeyError as e:
-    #         msg = "Expected a value for the beam energy. No such value in the parsed dictionary found"
-    #         _logger.warning(msg)
-    #         _logger.warning(e)
-    #         self._recursively_add_key(
-    #             self._spectral_info, [self._IMAGE_TAGS, MICROSCOPE_INFO]
-    #         )
-    #         _logger.info(
-    #             f"Added Route to the dictionary -> [{self._IMAGE_TAGS}][{MICROSCOPE_INFO}]"
-    #         )
-    #         _logger.info(f"Acceleration voltage V0 value updated to {microscope_voltage} V")
-
-    #     return E0
     
     def get_beam_energy(self, image) -> float:
         """
@@ -211,11 +185,6 @@ class DM_EELS_data:
         return self._all_spectral_info
 
     # ==================== PRIVATE METHODS ====================
-    
-    def _volt_to_kilovolt(self, voltage: float) -> float:
-        """Convert voltage from volts to kilovolts."""
-        VOLT_TO_KILOVOLT = 1000
-        return voltage / VOLT_TO_KILOVOLT
 
     def _filter_spectrum_images(self, infoDict):
         """
