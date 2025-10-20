@@ -1,5 +1,5 @@
 from whateels.components import CustomPage
-from .MVC import Model, Controller, View
+from .MVC import QuantificationModel, QuantificationController, QuantificationView
 
 class Quantification(CustomPage):
     """
@@ -8,12 +8,14 @@ class Quantification(CustomPage):
     """
 
     def __init__(self):
-        model = Model()
-        view = View(model)
-        Controller(model, view)
+        model = QuantificationModel()
+        view = QuantificationView(model)
+        QuantificationController(model, view)
 
         super().__init__(
             title="Quantification",
             main=[view.main],
             sidebar=[view.sidebar],
+            right_sidebar=[view.right_sidebar],
+            collapsed_sidebar=True,
         )
