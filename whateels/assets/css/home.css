@@ -46,3 +46,15 @@
     padding: 10px;
     background-color: #f5f5f5;
 }
+
+.my-range {
+    border: 1px solid red !important;
+}
+
+.range-label-wrapper {
+    background-color: cyan !important;
+}
+
+.range-label {
+    border: 1px solid magenta !important;
+}

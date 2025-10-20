@@ -331,6 +331,22 @@ class DM_EELS_data:
                 el[UNITS] = "a.u."
             units.append(el[UNITS])
         return tuple(units[::-1])
+    
+    def _get_units(self):
+        """Units for the scales involved, one per each dimension"""
+        
+        UNITS = 'Units'
+        
+        # TODO safeguard for the cases where the dimensions cannot be read from file
+        units = []
+        for k, el in self._spectral_info[self._IMAGE_DATA][self._CALIBRATIONS][
+            self._DIMENSION
+        ].items():
+            if not el[UNITS]:
+                # self.spectralInfo['ImageData']['Calibrations']['Dimension'][k]['Units'] = 'a.u.'
+                el[UNITS] = "a.u."
+            units.append(el[UNITS])
+        return tuple(units[::-1])
 
     # TODO - CHECK IF WE NEED THIS BECAUSE IT'S NOT USED ANYWHERE
     # IF WE DO, UNCOMMENT AND UPDATE DUE TO THIS FUNCTIONS WAS DESIGN FOR A SINGLE IMAGE AND CODE WAS REMAKE TO HANDLE MULTIPLE IMAGES.

@@ -12,11 +12,11 @@ import plotly.graph_objs as go
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
-from whateels.components import ResizableColumns
+from whateels.components import ResizableColumns, Link
 from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import HomePageModel
     from xarray import Dataset
     from param.parameterized import Event
 
@@ -41,7 +41,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         super().__init__(model, dataset)
 
         self._model = model
@@ -111,7 +111,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     @override
     def create_dataset_info(self):
         return super().create_dataset_info()
-    
 
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
@@ -122,9 +121,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
             value=(float(self._e_axis[0]), float(self._e_axis[-1])),
             sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["my-range"]
         )
         # Apply our CSS class to style the widget
-        self.range_slider.css_classes = ["my-range"]
         self.range_slider.param.watch(self._on_range_changed, 'value')
 
         # Fitting toggle button
@@ -139,8 +138,16 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Invisible HTML pane to run JavaScript (Open new window with params)
         self._js_executor = pn.pane.HTML("", width=0, height=0)
 
+        testing_link = Link(
+            relative_url="/multifit-details",
+            query_params={"values": "test1,test2"},
+            name="Testing Link",
+            on_click=lambda: print("Link clicked!"),
+        )
+
         # Fila de botones debajo de paneB
         self.buttons_row = pn.Row(
+            testing_link,
             self.fitting_button,
             self.multifit_button,
             self._js_executor,
@@ -149,7 +156,12 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         # Fila con label y slider para alineación limpia
         self.range_slider_row = pn.Row(
-            pn.pane.Markdown("**Range:**", sizing_mode="fixed", width=60, css_classes=["range-label"]),
+            pn.pane.Markdown(
+                "**Range:**", 
+                sizing_mode="fixed", 
+                width=60, 
+                css_classes=["range-label"],
+            ),
             self.range_slider,
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["range-label-wrapper"],
@@ -159,6 +171,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     def _on_multifit_clicked(self, event):
         """Callback para el botón de multifit"""
         # Publish the dataset now that multifit is requested.
+        
         try:
             AppState().plot_dataset = self._dataset
         except Exception:
@@ -170,10 +183,14 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         values = f"{min_val},{max_val}"
         url_with_params = f"{url_base}/multifit-details?values={values}"
-
+        
         self._js_executor.object = f"""
             <script>
-                window.open('{url_with_params}', '_blank');
+                const timeout = setTimeout(() => {{
+                    window.open('{url_with_params}', '_blank');
+                    
+                    clearTimeout(timeout);
+                }}, 0);
             </script>
         """
 
