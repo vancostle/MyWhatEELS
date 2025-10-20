@@ -104,6 +104,7 @@ class FileProcessorService:
             return all_datasets
         except Exception as exception:
             self._handle_file_error(exception)
+            return []
         finally:
             # Clean up in-memory file reference
             del self._model.in_memory_file
@@ -180,6 +181,10 @@ class FileProcessorService:
         for image, metadata, energy_axis in zip(all_spectrum_images, all_spectrum_metadata, all_energy_axes):            
             is_eels = self._is_metadata_eels(metadata)
 
+            if len(image.shape) == 3:
+                is_eels = True
+            print(f"Processing dataset. Is EELS: {is_eels} ----------------------------------------------------")
+
             # Process raw data into xarray-compatible format
             processed_data = eels_data_processor.process_data_for_xarray(image, energy_axis, is_eels)
             if processed_data is None:
@@ -244,14 +249,19 @@ class FileProcessorService:
 
         return all_datasets
     
-    def _is_metadata_eels(self, metadata: list) -> bool:
+    def _is_metadata_eels(self, metadata: dict, image: np.ndarray | None = None) -> bool:
         """
-        Determine if metadata indicates EELS data.
+        Determine if metadata or image shape indicates EELS data.
         """
         IMAGE_TAGS = 'ImageTags'
         EELS = 'EELS'
-        image_tags = list(metadata[IMAGE_TAGS].keys())
-        return EELS in image_tags   
+        # Check for EELS tag in metadata
+        if IMAGE_TAGS in metadata and EELS in metadata[IMAGE_TAGS]:
+            return True
+        # If image is provided, check for 3D shape (EELS spectrum image)
+        if image is not None and len(image.shape) == 3:
+            return True
+        return False
 
     def _handle_file_error(self, exception: Exception) -> list:
         """
