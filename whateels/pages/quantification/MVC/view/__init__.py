@@ -19,7 +19,7 @@ class QuantificationView(BaseView):
         super().__init__(
             model, 
             css_files=[
-                str(CSS_ROOT / "clustering.css"),
+                str(CSS_ROOT / "quantification.css"),
                 str(CSS_ROOT / "dataset_info.css")
             ]
         )
@@ -29,12 +29,31 @@ class QuantificationView(BaseView):
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
 
+        self._quanti_add_element_button = None
+
+        self._element_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH)
+
         self._init_components()
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
         return self._dataset_info_layout
+    
+    @property
+    def quanti_input(self):
+        """Access the K-Means input widgets."""
+        return self._quanti_input
+
+    @property
+    def quanti_add_element_button(self):
+        """Access the K-Means 'Add Element' button."""
+        return self._quanti_add_element_button
+    
+    @property
+    def element_item_view_container(self):
+        """Access the container for element item views."""
+        return self._element_item_view_container
 
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
@@ -45,6 +64,32 @@ class QuantificationView(BaseView):
         self.left_sidebar = self._left_sidebar_layout()
         self.main = self._main_layout()
         self.right_sidebar = self._right_sidebar_layout()
+
+    def get_new_element_item_view(self, element_item, energy) -> pn.Column:
+        element_item.set_fit_range([energy[0], energy[-1]])
+        element_item.set_quant_range([energy[0], energy[-1]])
+
+        element_item_view = pn.Column(
+            pn.pane.Markdown(element_item.__str__()),
+            pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[-1], 
+                value=(640,680), step=1, disabled=False),
+            pn.widgets.EditableRangeSlider(name='quant range', start=energy[0], end=energy[-1], 
+                value=(640,680), step=1, disabled=False),
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
+        def _fit_range_watcher(event):
+            element_item.set_fit_range(event.new)
+
+        def _quant_range_watcher(event):   
+            element_item.set_quant_range(event.new)
+
+        element_item_view[1].param.watch(_fit_range_watcher, 'value')
+        element_item_view[2].param.watch(_quant_range_watcher, 'value')
+
+        #m.axes_manager['energy_loss'].scale
+        
+        return element_item_view, element_item
 
     def _left_sidebar_layout(self):
  
@@ -66,12 +111,12 @@ class QuantificationView(BaseView):
 
         return self._main_container_layout
     
-    def _right_sidebar_layout(self):
+    def _right_sidebar_layout(self) -> pn.Column:
         quantification_input_label = pn.pane.Markdown(
             "### Quantification Input", 
         )
 
-        self._quantification_input = {
+        self._quanti_input = {
             "element_num": pn.widgets.IntInput(
                 name='Element Numbering Scheme',
                 sizing_mode=self.STRETCH_WIDTH
@@ -91,10 +136,14 @@ class QuantificationView(BaseView):
             sizing_mode=self.STRETCH_WIDTH
         )
 
-        _quanti_element_item = pn.Column(
-            self._quantification_input["element_num"],
-            self._quantification_input["shells_multiselect"],
+        self._quanti_element_item = pn.Column(
+            *[widget for widget in self._quanti_input.values()],
             sizing_mode=self.STRETCH_WIDTH
+        )
+
+        self._element_item_view_container = pn.Column(
+            sizing_mode=self.STRETCH_BOTH,
+            css_classes=["element-container"]
         )
         
         self._quanti_run_button = pn.widgets.Button(
@@ -105,10 +154,23 @@ class QuantificationView(BaseView):
             sizing_mode=self.STRETCH_WIDTH
         )
 
+        self._plot_elements_button = pn.widgets.Button(
+            name='Plot Elements',
+            button_type='success',
+            height=55,
+            margin=(20,0,10,0),
+            sizing_mode=self.STRETCH_WIDTH
+        )
+
         right_sidebar = pn.Column(
             quantification_input_label,
-            _quanti_element_item,
+            self._quanti_element_item,
+            self._quanti_add_element_button,
+            self._element_item_view_container,
+            self._plot_elements_button,
+            self._quanti_run_button,
             sizing_mode=self.STRETCH_BOTH
         )
+        
         return right_sidebar
     

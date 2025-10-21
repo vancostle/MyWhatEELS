@@ -82,6 +82,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self._setup_widgets()
         self._setup_plots()
         self._setup_callbacks()
+
+    def get_e_axis(self):
+        return self._e_axis
         
     # --- Public layout builders (used by controller) ---
     @override

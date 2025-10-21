@@ -36,6 +36,7 @@ class LayoutManager:
 
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
+        self._max_energy_range = [float('inf'), float('-inf')]
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
@@ -72,7 +73,7 @@ class LayoutManager:
             
             visualizer_factory = VisualizerFactory(self._model, self._controller)
             plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
-
+            self._max_energy_range = [float('inf'), float('-inf')]
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
                 image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
@@ -82,7 +83,10 @@ class LayoutManager:
                 
                 if chosen_visualizer is None:
                     return
-                
+                if dataset_type == 'SIm':
+                    energy_axis = chosen_visualizer.get_e_axis()
+                    self._max_energy_range[0] = min(self._max_energy_range[0], energy_axis[0])
+                    self._max_energy_range[1] = max(self._max_energy_range[1], energy_axis[-1])
                 visualizer_plots = chosen_visualizer.create_plots()
                 
                 plots_tab.append((image_name, visualizer_plots))
@@ -98,6 +102,9 @@ class LayoutManager:
 
         except Exception as e:
             raise DMPlotCreationError(e)
+    def get_max_energy_range(self) -> list[float]:
+        """Get the maximum energy range across all datasets."""
+        return self._max_energy_range
 
     def _on_tab_with_visualizers_change(self, event):
         """Handle tab changes by updating sidebar with selected dataset info."""
@@ -105,3 +112,7 @@ class LayoutManager:
         new_tab = event.new
         self._controller.layout.remove_dataset_info_from_sidebar()
         self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[new_tab])
+
+    def add_new_element_input(self, element_input_view: pn.viewable.Viewable):
+        """Add a new element input component to the sidebar."""
+        self._view.element_item_view_container.append(element_input_view)

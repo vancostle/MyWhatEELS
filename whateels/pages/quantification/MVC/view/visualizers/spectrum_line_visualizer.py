@@ -101,6 +101,13 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
     @override
     def create_dataset_info(self):
         return super().create_dataset_info()
+    
+    def get_energy_axis(self):
+        """Get energy loss axis from dataset."""
+        e_name = self._model.constants.ELOSS
+        if e_name not in self._dataset.coords:
+            raise ValueError(self._ERR_EMPTY_ELOSS)
+        return self._dataset.coords[e_name].values
 
     # --- Callbacks ---
     def _on_heatmap_click(self, event):
