@@ -54,6 +54,16 @@ class QuantificationView(BaseView):
     def element_item_view_container(self):
         """Access the container for element item views."""
         return self._element_item_view_container
+    
+    @property
+    def quanti_run_button(self):
+        """Access the 'Run Quantification' button."""
+        return self._quanti_run_button
+    
+    @property
+    def plot_elements_button(self):
+        """Access the 'Plot Elements' button."""
+        return self._plot_elements_button
 
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
@@ -69,8 +79,16 @@ class QuantificationView(BaseView):
         element_item.set_fit_range([energy[0], energy[-1]])
         element_item.set_quant_range([energy[0], energy[-1]])
 
+        delete_button = pn.widgets.Button(
+            name= 'Delete Element',
+            button_type='danger',
+            height=30,
+            margin=(0,0,10,0),
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
         element_item_view = pn.Column(
-            pn.pane.Markdown(element_item.__str__()),
+            pn.Row(pn.pane.Markdown(element_item.__str__()), delete_button, sizing_mode=self._STRETCH_WIDTH),
             pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[-1], 
                 value=(640,680), step=1, disabled=False),
             pn.widgets.EditableRangeSlider(name='quant range', start=energy[0], end=energy[-1], 
@@ -84,8 +102,14 @@ class QuantificationView(BaseView):
         def _quant_range_watcher(event):   
             element_item.set_quant_range(event.new)
 
+        def _delete_element_watcher(event):
+            self._element_item_view_container.remove(element_item_view)
+            self._model.app_state.quantification_elements.remove(element_item)
+            print(self._model.app_state.quantification_elements)
+
         element_item_view[1].param.watch(_fit_range_watcher, 'value')
         element_item_view[2].param.watch(_quant_range_watcher, 'value')
+        delete_button.on_click(_delete_element_watcher)
 
         #m.axes_manager['energy_loss'].scale
         

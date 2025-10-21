@@ -12,3 +12,7 @@ class QuantificationModel(BaseModel):
     @property
     def constants(self) -> Constants:
         return self._constants
+    
+    @property
+    def app_state(self) -> AppState:
+        return self._app_state

@@ -54,6 +54,10 @@ class AppState(param.Parameterized):
         Currently selected dataset (xarray.Dataset) for operations.
     """)
 
+    quantification_elements = param.List(default=list(), doc="""
+        List of quantification elements selected for quantification.
+    """)
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -113,6 +117,9 @@ class AppState(param.Parameterized):
 
     def clear_selected_dataset(self):
         self.selected_dataset = None
+    
+    def clear_elements_selected(self):
+        self.quantification_elements = []
 
     def clear_all(self):
         """Clear all shared state parameters."""
@@ -120,3 +127,4 @@ class AppState(param.Parameterized):
         self.clear_datasets()
         self.clear_filename()
         self.clear_selected_dataset()
+        self.clear_elements_selected()
