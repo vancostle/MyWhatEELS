@@ -12,7 +12,7 @@ import plotly.graph_objs as go
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
-from whateels.components import ResizableColumns, Link
+from whateels.components import ResizableColumns
 from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
@@ -138,16 +138,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Invisible HTML pane to run JavaScript (Open new window with params)
         self._js_executor = pn.pane.HTML("", width=0, height=0)
 
-        testing_link = Link(
-            relative_url="/multifit-details",
-            query_params={"values": "test1,test2"},
-            name="Testing Link",
-            on_click=lambda: print("Link clicked!"),
-        )
-
         # Fila de botones debajo de paneB
         self.buttons_row = pn.Row(
-            testing_link,
             self.fitting_button,
             self.multifit_button,
             self._js_executor,

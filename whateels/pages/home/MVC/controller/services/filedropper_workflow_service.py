@@ -108,7 +108,6 @@ class FileDropperWorkflowService:
         Raises:
             DMFileRemovalError: When cleanup operations fail
         """
-
         try:
             # Clear UI components
             self._controller.layout.remove_dataset_info_from_sidebar()
@@ -117,9 +116,8 @@ class FileDropperWorkflowService:
             # Clear in-memory file to free resources
             del self._model.in_memory_file
             
-            app_state = AppState()
             # Clear global AppState data
-            app_state.clear_all()
+            AppState().clear_all()
 
         except Exception as e:
             raise DMFileRemovalError(e)

@@ -8,6 +8,7 @@ and CSS styling for the WhatEELS scientific web application.
 import panel as pn
 from typing import Optional, List, Union
 from whateels.shared_state import AppState
+from whateels.helpers.safe_converter import SafeConverter
 
 # pn.extension(raw_js={
 #     """
@@ -52,13 +53,20 @@ class CustomPage(pn.template.FastListTemplate):
             right_sidebar: Right sidebar components (optional)
             header_background: Background color for the header (default: green)
             sidebar_width: Width of the left sidebar in pixels (default: 275)
-        """
+        """        
         app_state = AppState()
-        app_state.param.watch(self.on_metadata_available_changed, 'metadata')
-        is_metadata_loaded = True if isinstance(app_state.metadata, dict) and 'error' not in app_state.metadata else False
-        
+
+        # Set up reactive watchers to update header on metadata or tab index changes
+        app_state.param.watch(self._update_navigation_header, 'metadata', onlychanged=True)
+        app_state.param.watch(self._update_navigation_header, 'selected_tab_index_dataset', onlychanged=True)
+
         # Create a reactive header container
-        self._header_container = pn.Row(*self._create_navigation_header(is_metadata_loaded, right_sidebar))
+        self._header_container = pn.Row(
+            *self._create_navigation_header(
+                self._is_metadata_loaded(app_state.metadata),
+                self._get_selected_tab_index(app_state.selected_tab_index_dataset)
+            )
+        )
         # Set default header if none provided (but not if empty list is explicitly passed)
         if header is None:
             header = [self._header_container]
@@ -88,7 +96,11 @@ class CustomPage(pn.template.FastListTemplate):
         # Initialize parent template with dynamic parameters
         super().__init__(**init_params, **kwargs)
 
-    def _create_navigation_header(self, is_metadata_loaded: bool = False, right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None) -> list:
+    def _create_navigation_header(
+        self, 
+        is_metadata_loaded: bool, 
+        selected_tab_index: int, 
+    ) -> list:
         """
         Create the default navigation header with links to main application sections.
         
@@ -98,8 +110,9 @@ class CustomPage(pn.template.FastListTemplate):
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
         ]
+        
         if is_metadata_loaded:
-            navigation_links.append(('<a href="/clustering">Clustering</a>', "Clustering"))
+            navigation_links.append((f'<a href="/clustering?tab={selected_tab_index}">Clustering</a>', "Clustering"))
             navigation_links.append(('<a href="/quantification">Quantification</a>', "Quantification"))
         else:
             navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Clustering</a>', "Clustering"))
@@ -116,9 +129,19 @@ class CustomPage(pn.template.FastListTemplate):
         
         return top_menu
         
-    def on_metadata_available_changed(self, _):
+    def _update_navigation_header(self, _):        
         app_state = AppState()
-        is_metadata_loaded = True if isinstance(app_state.metadata, dict) and 'error' not in app_state.metadata else False
+
+        """ Update the navigation header based on shared state changes."""
+        self._header_container.objects = self._create_navigation_header(
+            self._is_metadata_loaded(app_state.metadata),
+            self._get_selected_tab_index(app_state.selected_tab_index_dataset),
+        )
         
-        # Rebuild navigation header visually
-        self._header_container.objects = self._create_navigation_header(is_metadata_loaded)
+    def _is_metadata_loaded(self, metadata) -> bool:
+        """Check if metadata is a valid dict and does not contain 'error'."""
+        return isinstance(metadata, dict) and 'error' not in metadata
+    
+    def _get_selected_tab_index(self, selected_tab_index_dataset) -> int:
+        """Get the selected tab index from shared state, safely converted to int."""
+        return SafeConverter.to_int(selected_tab_index_dataset, default=-1)

@@ -158,6 +158,19 @@ class FileDropper(pn.WidgetBox):
 
         # Connect the event handler to the file widget
         self.file_widget.param.watch(handle_file_upload, 'value')
+
+        def handle_file_removal(event):
+            # Detect file removal (value changed to None or empty dict)
+            file_widget_value = self.file_widget.value
+            if (file_widget_value is None or file_widget_value == {}) and self._current_filename:
+                # Call the removal callback if set
+                if callable(self._on_file_removed_callback):
+                    self._on_file_removed_callback(self._current_filename)
+                self._current_filename = None
+                # Reset feedback message to default
+                self.clear_feedback()
+        # Watch for file removal (value cleared)
+        self.file_widget.param.watch(handle_file_removal, 'value')
     
     # === File Validation Methods ===
     
