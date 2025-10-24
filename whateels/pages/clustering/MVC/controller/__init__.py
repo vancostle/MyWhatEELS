@@ -2,7 +2,6 @@ from .managers import LayoutManager
 from whateels.base.mvc import BaseController
 from whateels.shared_state import AppState
 from xarray import Dataset
-# from scikit-learn.cluster import KMeans
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -19,9 +18,8 @@ class ClusteringController(BaseController):
         
         self._layout = LayoutManager(view, self, model)
         
-        app_state = AppState()
-        all_datasets = app_state.all_datasets
-
+        all_datasets = AppState().all_datasets
+        
         if not isinstance(all_datasets, list) or not all_datasets:
             self.base_layout.empty_main()
             return
