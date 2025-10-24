@@ -10,16 +10,6 @@ from typing import Optional, List, Union
 from whateels.shared_state import AppState
 from whateels.helpers.safe_converter import SafeConverter
 
-# pn.extension(raw_js={
-#     """
-#         const toggleSidebar = () => {
-#             const sidebar = document.getElementById("sidebar");
-#             sidebar.classList.toggle("hidden");
-#             console.log("Sidebar toggled");
-#         };
-#     """
-# })
-
 class CustomPage(pn.template.FastListTemplate):
     """
     Custom page template extending Panel's FastListTemplate.
@@ -57,14 +47,14 @@ class CustomPage(pn.template.FastListTemplate):
         app_state = AppState()
 
         # Set up reactive watchers to update header on metadata or tab index changes
-        app_state.param.watch(self._update_navigation_header, 'metadata', onlychanged=True)
-        app_state.param.watch(self._update_navigation_header, 'selected_tab_index_dataset', onlychanged=True)
+        app_state.param.watch(self._update_navigation_header, 'metadata')
+        app_state.param.watch(self._update_navigation_header, 'selected_tab_index_dataset', onlychanged=False)
 
         # Create a reactive header container
         self._header_container = pn.Row(
             *self._create_navigation_header(
                 self._is_metadata_loaded(app_state.metadata),
-                self._get_selected_tab_index(app_state.selected_tab_index_dataset)
+                self._get_selected_tab_index(app_state.selected_tab_index_dataset),
             )
         )
         # Set default header if none provided (but not if empty list is explicitly passed)
@@ -107,16 +97,24 @@ class CustomPage(pn.template.FastListTemplate):
         Returns:
             List of Markdown panes configured as navigation links
         """
+        
+        LINK_DISABLE_CLASS = "disable-link"
+        LINK_ENABLE_CLASS = "enable-link"
+                
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
         ]
         
-        if is_metadata_loaded:
-            navigation_links.append((f'<a href="/clustering?tab={selected_tab_index}">Clustering</a>', "Clustering"))
-            navigation_links.append(('<a href="/quantification">Quantification</a>', "Quantification"))
-        else:
-            navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Clustering</a>', "Clustering"))
-            navigation_links.append(('<a href="#" style="pointer-events: none; opacity: .5;">Quantification</a>', "Quantification"))
+        is_eels_tab = self._is_selected_tab_eels(selected_tab_index)
+
+        clustering_href = f'/clustering?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
+        clustering_class = LINK_ENABLE_CLASS if is_eels_tab else LINK_DISABLE_CLASS
+        clustering_a_element = f'<a href="{clustering_href}" class="{clustering_class}">Clustering</a>'
+        
+        navigation_links.append((clustering_a_element,"Clustering"))
+        
+        navigation_href = '/quantification' if is_metadata_loaded else '/#'
+        # navigation_links.append((f'<a href="{navigation_href}" class="{"enable-link" if is_metadata_loaded else "disable-link"}">Quantification</a>', "Quantification"))
 
         top_menu = [
             pn.pane.Markdown(
@@ -132,10 +130,13 @@ class CustomPage(pn.template.FastListTemplate):
     def _update_navigation_header(self, _):        
         app_state = AppState()
 
+        print("CustomPage: Updating navigation header due to shared state change.", app_state.selected_tab_index_dataset)
+        selected_tab_index = self._get_selected_tab_index(app_state.selected_tab_index_dataset)
+
         """ Update the navigation header based on shared state changes."""
         self._header_container.objects = self._create_navigation_header(
             self._is_metadata_loaded(app_state.metadata),
-            self._get_selected_tab_index(app_state.selected_tab_index_dataset),
+            selected_tab_index,
         )
         
     def _is_metadata_loaded(self, metadata) -> bool:
@@ -145,3 +146,20 @@ class CustomPage(pn.template.FastListTemplate):
     def _get_selected_tab_index(self, selected_tab_index_dataset) -> int:
         """Get the selected tab index from shared state, safely converted to int."""
         return SafeConverter.to_int(selected_tab_index_dataset, default=-1)
+
+    def _is_selected_tab_eels(self, selected_tab_index):
+        """
+        Returns True if the dataset at selected_tab_index in all_datasets is EELS, else False.
+        Uses 'Eloss' in dataset.coords for EELS detection.
+        """
+        all_datasets = AppState().all_datasets
+        if not isinstance(all_datasets, list):
+            return False
+        if not all_datasets or selected_tab_index < 0 or selected_tab_index >= len(all_datasets):
+            return False
+        dataset = all_datasets[selected_tab_index]
+        
+        # EELS detection: 'Eloss' in coords OR ElectronCount data is 3D
+        has_eloss = hasattr(dataset, 'coords') and 'Eloss' in getattr(dataset, 'coords', {})
+        has_3d = hasattr(dataset, 'ElectronCount') and hasattr(dataset.ElectronCount, 'shape') and len(dataset.ElectronCount.shape) == 3
+        return has_eloss or has_3d

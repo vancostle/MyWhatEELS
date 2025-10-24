@@ -8,7 +8,6 @@ The AppState uses param for reactive updates across the application.
 """
 
 import param
-from xarray import Dataset
 from .helpers.logging import Logger
 
 _logger = Logger.get_logger("shared_state.log", __name__)

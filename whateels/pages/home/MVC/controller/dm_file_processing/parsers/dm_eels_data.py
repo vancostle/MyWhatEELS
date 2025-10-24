@@ -97,7 +97,7 @@ class DM_EELS_data:
             # Return a default value if not found
             return 0.0
     
-    def get_convergence_angle(self, image: np.ndarray) -> float:
+    def get_convergence_angle(self, image: dict) -> float:
         """Get convergence angle for a specific spectrum image."""
         
         EELS = "EELS"
@@ -122,7 +122,7 @@ class DM_EELS_data:
 
         return alpha
 
-    def get_collection_angle(self, image: np.ndarray) -> float:
+    def get_collection_angle(self, image: dict) -> float:
         """"Get collection angle for a specific spectrum image."""
 
         EELS = "EELS"

@@ -95,9 +95,10 @@ class HomePageLayoutManager:
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
 
-            app_state.selected_tab_index_dataset = DEFAULT_TAB_INDEX  # Reset to first tab
-            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
-                
+            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            # Set the active tab based on shared state or default
+            plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
+            
             # Update UI
             self._controller.base_layout.update_main(plots_tab)
             self.remove_dataset_info_from_sidebar()
@@ -111,9 +112,9 @@ class HomePageLayoutManager:
 
         # Get the selected tab index
         selected_tab_index = event.new
-        
-        AppState().selected_tab_index_dataset = selected_tab_index # Update shared state
-        
+
+        AppState().selected_tab_index_dataset = selected_tab_index  # Update shared state
+
         # Update sidebar with the corresponding dataset info
         self._controller.layout.remove_dataset_info_from_sidebar()
         self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[selected_tab_index])
