@@ -100,6 +100,7 @@ class CustomPage(pn.template.FastListTemplate):
         
         LINK_DISABLE_CLASS = "disable-link"
         LINK_ENABLE_CLASS = "enable-link"
+        LINK_ENABLE_ANIMATION_CLASS = "enable-link-animation"
                 
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
@@ -108,13 +109,16 @@ class CustomPage(pn.template.FastListTemplate):
         is_eels_tab = self._is_selected_tab_eels(selected_tab_index)
 
         clustering_href = f'/clustering?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
-        clustering_class = LINK_ENABLE_CLASS if is_eels_tab else LINK_DISABLE_CLASS
+        clustering_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
         clustering_a_element = f'<a href="{clustering_href}" class="{clustering_class}">Clustering</a>'
         
         navigation_links.append((clustering_a_element,"Clustering"))
         
-        navigation_href = '/quantification' if is_metadata_loaded else '/#'
-        # navigation_links.append((f'<a href="{navigation_href}" class="{"enable-link" if is_metadata_loaded else "disable-link"}">Quantification</a>', "Quantification"))
+        quantification_href = '/quantification' if is_metadata_loaded else '/#'
+        quantification_class = LINK_ENABLE_CLASS if is_metadata_loaded else LINK_DISABLE_CLASS
+        quantification_a_element = f'<a href="{quantification_href}" class="{quantification_class}">Quantification</a>'
+
+        navigation_links.append((quantification_a_element, "Quantification"))
 
         top_menu = [
             pn.pane.Markdown(
@@ -130,7 +134,6 @@ class CustomPage(pn.template.FastListTemplate):
     def _update_navigation_header(self, _):        
         app_state = AppState()
 
-        print("CustomPage: Updating navigation header due to shared state change.", app_state.selected_tab_index_dataset)
         selected_tab_index = self._get_selected_tab_index(app_state.selected_tab_index_dataset)
 
         """ Update the navigation header based on shared state changes."""
