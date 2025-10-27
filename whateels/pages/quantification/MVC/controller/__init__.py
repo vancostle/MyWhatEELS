@@ -67,7 +67,7 @@ class QuantificationController(BaseController):
         view.quanti_input["element_num"].param.watch(self._element_num_watcher, 'value')
         view.quanti_add_element_button.on_click(self._add_element_item_button_callback)
         view.quanti_run_button.on_click(self._run_quantification)
-        view.plot_elements_button.on_click(self._plot_elements)
+        view.plot_elements_button.on_click(self.plot_elements)
 
     def _element_num_watcher(self, event):
         """Watcher for changes in the element number selection."""
@@ -91,8 +91,9 @@ class QuantificationController(BaseController):
     def _run_quantification(self, event):
         pass
 
-    def _plot_elements(self, event):
-        pass
+    def plot_elements(self, event):
+        self._layout.plot_quantification_elements(self._model.app_state.quantification_elements, self.loader_oos)
+        return
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""

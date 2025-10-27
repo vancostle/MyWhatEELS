@@ -14,11 +14,90 @@ from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import ResizableColumns
 from whateels.shared_state import AppState
+from ...controller.services.oos_loader_service import Loader_OOS
 
 if TYPE_CHECKING:
     from ...model import Model
     from xarray import Dataset
     from param.parameterized import Event
+
+class add_cs:
+    """
+    Class to calculate and normalize cross-sections for a given element and shell.
+    """
+    def __init__(self, element, ishell, selected_slice, y_extrapolated, chemical_shift=0, quant_range_values=None, eaxis=None, eaxis_cs=None, counts=None, onset=None, cross_section=None):
+        """
+        Initializes the add_cs object.
+
+        Parameters:
+            element: The element name (e.g., "Fe").
+            ishell: The shell name (e.g., "K").
+            selected_slice: The selected slice of data.
+            y_extrapolated: The extrapolated background values.
+            chemical_shift: The chemical shift to apply (default is 0).
+            quant_range_values: The range of energy for quantification.
+            eaxis: The energy axis for the experimental data.
+            eaxis_cs: The energy axis for the cross-section data.
+            counts: The counts data.
+            onset: The onset energy.
+            cross_section: The cross-section data.
+        """
+        self.eaxis, self.counts, self.onset = eaxis, counts, onset
+        self.cross_section = cross_section
+        self.element = element
+        self.ishell = ishell
+        self.chemical_shift = chemical_shift
+        self.quant_range_values = quant_range_values
+        self.eaxis_cs = eaxis_cs
+
+        # Ensure that the lengths of the energy axes and data match
+        if len(eaxis) != len(selected_slice) and len(eaxis_cs) != len(cross_section):
+            raise ValueError("eaxis, selected_slice, and cross_section must have the same length.")
+
+        # Normalize the experimental and simulated data within the quantification range
+        if self.quant_range_values:
+            mask = (self.eaxis >= self.quant_range_values[0]) & (self.eaxis <= self.quant_range_values[1])
+            mask_ = (self.eaxis_cs >= self.quant_range_values[0]) & (self.eaxis_cs <= self.quant_range_values[1])
+            x_filtered = self.eaxis[mask]
+            y_filtered = selected_slice[mask] - y_extrapolated[mask]
+            x_filtered_ = self.eaxis_cs[mask_]
+            y_filtered_ = self.cross_section[mask_]
+            self.norm_exp = np.trapz(y_filtered, x_filtered).real  # Experimental normalization
+            self.norm_sim = np.trapz(y_filtered_, x_filtered_).real  # Simulated normalization
+        else:
+            self.norm_sim = np.trapz(self.cross_section, self.eaxis).real
+            self.norm_exp = np.trapz(selected_slice - y_extrapolated, self.eaxis).real
+
+        # Apply the chemical shift and calculate the normalized cross-section
+        self.xaxis = self.eaxis_cs - self.chemical_shift
+        self.yaxis = (self.cross_section / self.norm_sim * self.norm_exp).real
+
+    def get_data(self):
+        """
+        Returns the calculated data for plotting.
+
+        Returns:
+            xaxis: The shifted energy axis.
+            yaxis: The normalized cross-section.
+        """
+        return self.xaxis, self.yaxis
+
+def sum_slice(matrix, vertexs):
+    """
+    Sums the values in a region defined by vertices in a matrix.
+
+    Parameters:
+        matrix: The 2D matrix to sum over.
+        vertexs: A tuple (x_start, x_end, y_start, y_end) defining the region.
+
+    Returns:
+        The sum of the values in the specified region.
+    """
+    suma = 0
+    for i in range(vertexs[0], vertexs[1]):
+        for j in range(vertexs[2], vertexs[3]):
+            suma += matrix[j][i]
+    return suma
 
 class SpectrumImageVisualizer(AbstractEELSVisualizer):
     """
@@ -114,6 +193,96 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     @override
     def create_dataset_info(self):
         return super().create_dataset_info()
+    
+
+
+
+
+    def plot_quantification_elements(self, loader_OOS : "Loader_OOS", element_items: list):
+        """Placeholder method to match abstract base class."""
+        fig = self._figB_region(self._region_pairs)
+        fig = self._to_plotly(fig)
+        
+        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
+        if res is not None:
+            selected_slice, _ = res
+            
+
+            if element_items:
+                i = 0
+                for element_item in element_items:
+                    fig = self.plot_element(fig, loader_OOS, selected_slice, element_item)
+        
+        self.paneB.object = self._set_ranges_and_convert(fig)
+
+    def plot_element(self, fig, loader_OOS, selected_slice, element_item):
+        print("Selected slice obtained")
+        print("Element item:", element_item)
+        print("State shells and element:", element_item.shells, element_item.element)
+        if element_item and element_item.element and element_item.shells:
+            try:
+                shells_data = []
+                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, selected_slice, range_values=self.range_slider.value)
+                fig = self._plot_fit_traces(fig, self._energy, selected_slice, y_fit)
+                for ishell in element_item.shells:
+                    fig, shell_data = self.calculate_shell_data(fig, loader_OOS, selected_slice, element_item, y_fit, ishell)
+                    ##shells_data.append((ishell, shell_data))
+                    print(f"Quantification for {element_item.element} {ishell} added.")
+                """
+                if len(shells_data) == 2:
+                    ##afegir element data a init
+                    self.element_data.append([
+                                    element_item, y_fit,
+                                    get_envelope(
+                                        shells_data[0][1][0], shells_data[0][1][1],
+                                        shells_data[1][1][0], shells_data[1][1][1]
+                                    )
+                                ])
+                else:
+                    self.element_data.append([element_item, y_fit, shells_data[0][1]])
+                """
+            except Exception as e:
+                raise e
+        return fig
+
+    def calculate_shell_data(self, fig, loader_OOS, selected_slice, element_item, y_extrapolated, ishell):
+        eaxis, counts, onset = loader_OOS.oos_reader(element_item.element, ishell)
+        V = self._dataset.attrs['beam_energy']
+        b = self._dataset.attrs['collection_angle']
+        cross_section = loader_OOS.df_cross_section(element_item.element, ishell, V = V, b = b)
+        fig, shell_data = self.plot_cs(
+                                    fig, element_item, ishell, selected_slice, y_extrapolated,
+                                    eaxis_cs=eaxis, counts=counts, onset=onset,
+                                    cross_section=cross_section, chemical_shift=16
+                                )
+                    
+        return fig,shell_data
+    
+    def plot_cs(self, fig, element_item, ishell, selected_slice, y_extrapolated, eaxis_cs, counts, onset, cross_section, chemical_shift=16):
+        
+        cs_instance = add_cs(
+                    element=element_item.element, 
+                    ishell=ishell, 
+                    selected_slice=selected_slice, 
+                    y_extrapolated=y_extrapolated, 
+                    chemical_shift=chemical_shift, 
+                    quant_range_values=element_item.quant_range, 
+                    eaxis=self._e_axis, 
+                    eaxis_cs=eaxis_cs, 
+                    counts=counts, 
+                    onset=onset, 
+                    cross_section=cross_section
+            )
+    
+        xaxis, yaxis = cs_instance.get_data()
+        fig.add_trace(go.Scatter(
+            x=xaxis, 
+            y=yaxis, 
+            name=f'{cs_instance.element} {cs_instance.ishell} OOS'
+        ))
+        fig.update_layout(xaxis=dict(range=[self._e_axis, self._e_axis]))
+        return fig, (xaxis, yaxis)
+
     
 
     # --- Widget Setup (kept from original, but range_slider reused) ---

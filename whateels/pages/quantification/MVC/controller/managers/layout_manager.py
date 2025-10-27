@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from ...model import QuantificationModel
     from ...controller import QuantificationController
     from xarray import Dataset
+    from ...controller.services.oos_loader_service import Loader_OOS
+    from ...controller import ElementItem
 
 class LayoutManager:
     """
@@ -37,6 +39,8 @@ class LayoutManager:
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
         self._max_energy_range = [float('inf'), float('-inf')]
+        self._plots_tab = None
+        self._chosen_visualizers = []
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
@@ -72,7 +76,7 @@ class LayoutManager:
             self._all_dataset_info.clear()
             
             visualizer_factory = VisualizerFactory(self._model, self._controller)
-            plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
+            self._plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
             self._max_energy_range = [float('inf'), float('-inf')]
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
@@ -80,7 +84,8 @@ class LayoutManager:
 
                 # Create plots using the factory
                 chosen_visualizer = visualizer_factory.choose_visualizer(str(dataset_type), dataset)
-                
+                self._chosen_visualizers.append(chosen_visualizer)
+                print(f"Chosen visualizer for dataset '{image_name}': {type(chosen_visualizer).__name__}")
                 if chosen_visualizer is None:
                     return
                 if dataset_type == 'SIm':
@@ -89,14 +94,14 @@ class LayoutManager:
                     self._max_energy_range[1] = max(self._max_energy_range[1], energy_axis[-1])
                 visualizer_plots = chosen_visualizer.create_plots()
                 
-                plots_tab.append((image_name, visualizer_plots))
+                self._plots_tab.append((image_name, visualizer_plots))
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
-            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
+            self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
                 
             # Update UI
-            self._controller.base_layout.update_main(plots_tab)
+            self._controller.base_layout.update_main(self._plots_tab)
             self.remove_dataset_info_from_sidebar()
             self.add_component_to_sidebar_layout(self._all_dataset_info[0])
 
@@ -116,3 +121,10 @@ class LayoutManager:
     def add_new_element_input(self, element_input_view: pn.viewable.Viewable):
         """Add a new element input component to the sidebar."""
         self._view.element_item_view_container.append(element_input_view)
+    
+    def plot_quantification_elements(self, element_items: list["ElementItem"], loader_OOS: "Loader_OOS"):
+        """Plot the quantification elements using the model's plotting method."""
+        visualizer_plots = self._chosen_visualizers[0].plot_quantification_elements(loader_OOS, element_items)
+        self._plots_tab[0][1] = visualizer_plots
+        self._plots_tab.__setitem__()
+        self._controller.base_layout.update_main(self._plots_tab)
