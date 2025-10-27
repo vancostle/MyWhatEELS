@@ -19,7 +19,7 @@ class CustomPage(pn.template.FastListTemplate):
     """
     
     _DEFAULT_TITLE = "Custom Page"
-    _DEFAULT_HEADER_BACKGROUND = "#4caf50"
+    _DEFAULT_HEADER_BACKGROUND = "#4d4dc9"
 
     def __init__(
         self, 
