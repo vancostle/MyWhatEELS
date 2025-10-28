@@ -1,7 +1,6 @@
 from .managers import LayoutManager
 from whateels.base.mvc import BaseController
 from whateels.shared_state import AppState
-from xarray import Dataset
 from whateels.helpers.safe_converter import SafeConverter
 import panel as pn
 
