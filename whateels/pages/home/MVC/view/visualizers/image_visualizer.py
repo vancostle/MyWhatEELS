@@ -13,13 +13,12 @@ pn.extension(raw_css=[
     ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
 ])
 
-from .abstract_eels_visualizer import AbstractEELSVisualizer
+from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING
-
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class ImageVisualizer(AbstractEELSVisualizer):
+class ImageVisualizer(BaseVisualizer):
     """Composes image visualizations from EELS data"""
 
     # Constants for sizing modes and plot configuration

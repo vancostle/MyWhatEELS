@@ -5,13 +5,13 @@ import panel as pn
 import numpy as np
 import plotly.graph_objs as go
 import xarray as xr  # (se mantiene por zeros_like si hiciera falta en extensiones)
-from .abstract_eels_visualizer import AbstractEELSVisualizer
-from typing import override, TYPE_CHECKING
 
+from whateels.base.base_visualizer import BaseVisualizer
+from typing import override, TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class SpectrumLineVisualizer(AbstractEELSVisualizer):
+class SpectrumLineVisualizer(BaseVisualizer):
     """Composes spectrum line visualizations from EELS data (Plotly)."""
 
     _IMAGE_X_LABEL = 'Position'

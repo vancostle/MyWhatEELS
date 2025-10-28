@@ -6,13 +6,13 @@ import numpy as np
 import plotly.graph_objs as go
 
 from typing import override, TYPE_CHECKING
-from .abstract_eels_visualizer import AbstractEELSVisualizer
+from whateels.base.base_visualizer import BaseVisualizer
 
 if TYPE_CHECKING:
     from ...model import HomePageModel
     from xarray import Dataset
 
-class SingleSpectrumVisualizer(AbstractEELSVisualizer):
+class SingleSpectrumVisualizer(BaseVisualizer):
     """Composes single spectrum visualizations from EELS data (Plotly)."""
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
@@ -24,7 +24,7 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
         self._dataset = dataset
 
     @override
-    def create_plots(self):
+    def create_plots(self) -> pn.viewable.Viewable:
         """Create layout for single spectrum visualization"""
         # Create spectrum plot
         spectrum_data = self._dataset.ElectronCount.squeeze()
@@ -54,7 +54,11 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
         )
         
         # Convert to Panel
-        spectrum_pane = pn.pane.Plotly(fig.to_plotly_json(), sizing_mode=self._STRETCH_BOTH, config={"responsive": True})
+        spectrum_pane = pn.pane.Plotly(
+            fig.to_plotly_json(), 
+            sizing_mode=self._STRETCH_BOTH, 
+            config={"responsive": True}
+        )
         
         return pn.Column(
             spectrum_pane,
@@ -64,6 +68,3 @@ class SingleSpectrumVisualizer(AbstractEELSVisualizer):
     @override
     def create_dataset_info(self):
         return super().create_dataset_info()
-    @override
-    def create_dataset_info(self):
-        super().create_dataset_info()
