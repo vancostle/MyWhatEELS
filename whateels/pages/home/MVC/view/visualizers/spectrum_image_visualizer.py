@@ -96,7 +96,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
             # fila de botones (fitting + multifit)
             self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
             # slider/range debajo
-            self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
+            self.range_slider_row,
             sizing_mode='stretch_both'
         )
         
@@ -148,11 +148,8 @@ class SpectrumImageVisualizer(BaseVisualizer):
 
         # Fila con label y slider para alineación limpia
         self.range_slider_row = pn.Row(
-            pn.pane.Markdown(
-                "**Range:**", 
-                sizing_mode="fixed", 
-                width=60, 
-                css_classes=["range-label"],
+            pn.pane.HTML(
+                "<p class=\"range-label\">Range:</p>",
             ),
             self.range_slider,
             sizing_mode=self._STRETCH_WIDTH,

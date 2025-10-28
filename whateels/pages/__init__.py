@@ -8,4 +8,4 @@ from .clustering import Clustering
 from .multifitting import MultiFitting
 from .quantification import Quantification
 
-__all__ = [HomePage, GOS, NLLS, Login, Metadata, Test, Clustering, MultiFitting, Quantification]
+__all__ = ["HomePage", "GOS", "NLLS", "Login", "Metadata", "Test", "Clustering", "MultiFitting", "Quantification"]
