@@ -89,7 +89,8 @@ class QuantificationController(BaseController):
             print("Element already added.")
 
     def _run_quantification(self, event):
-        pass
+        print("Running quantification...")
+        self._layout.plot_quantification_pie()
 
     def plot_elements(self, event):
         self._layout.plot_quantification_elements(self._model.app_state.quantification_elements, self.loader_oos)

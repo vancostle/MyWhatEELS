@@ -99,6 +99,80 @@ def sum_slice(matrix, vertexs):
             suma += matrix[j][i]
     return suma
 
+class quanti:
+    """
+    Class to calculate quantification between two regions.
+    """
+    def __init__(self, d_a, d_b, cs_a, cs_b, y1, y2, eaxis):
+        """
+        Initializes the quanti object.
+
+        Parameters:
+            d_a, d_b: Energy ranges for the two regions.
+            cs_a, cs_b: Cross-section data for the two regions.
+            y1, y2: Experimental data for the two regions.
+            eaxis: The energy axis.
+        """
+        self.y1 = y1
+        self.y2 = y2
+        self.d_a = d_a
+        self.d_b = d_b
+        self.cs_b_x, self.cs_b_y = cs_b
+        self.cs_a_x, self.cs_a_y = cs_a
+        self.eaxis = eaxis
+
+    def get_part_delta(self, y, axis, delta):
+        """
+        Calculates the integral of a portion of the data within a specified range.
+
+        Parameters:
+            y: The data to integrate.
+            axis: The corresponding axis.
+            delta: The range for integration.
+
+        Returns:
+            The integral value.
+        """
+        mask = (axis >= delta[0]) & (axis <= delta[1])
+        return np.trapz(y[mask], axis[mask]).real
+
+    def get_quanti(self):
+        """
+        Calculates the quantification ratio between two regions.
+
+        Returns:
+            The quantification ratio (q_ab).
+        """
+        i_a = self.get_part_delta(self.y1, self.eaxis, self.d_a)
+        i_b = self.get_part_delta(self.y2, self.eaxis, self.d_b)
+        cs_a = self.get_part_delta(self.cs_a_y, self.cs_a_x, self.d_a)
+        cs_b = self.get_part_delta(self.cs_b_y, self.cs_b_x, self.d_b)
+        self.q_ab = i_a / i_b * cs_b / cs_a
+        return self.q_ab
+
+def get_envelope(x1, y1, x2, y2):
+    """
+    Calculates the envelope of two curves.
+
+    Parameters:
+        x1, y1: The x and y values of the first curve.
+        x2, y2: The x and y values of the second curve.
+
+    Returns:
+        x_common: The common x values.
+        y_envelope: The envelope (maximum y values at each x).
+    """
+    # Find the common x range
+    x_common = np.union1d(x1, x2)
+
+    # Interpolate y values for the common x points
+    y1_interp = np.interp(x_common, x1, y1)
+    y2_interp = np.interp(x_common, x2, y2)
+
+    # Calculate the envelope by taking the maximum at each point
+    y_envelope = np.maximum(y1_interp, y2_interp)
+    return x_common, y_envelope
+
 class SpectrumImageVisualizer(AbstractEELSVisualizer):
     """
     Version Plotly / Panel del visualizador de Spectrum Image.
@@ -157,6 +231,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self._pc = None    # periodic callback handle
         self._js_executor = None  # invisible HTML pane to run JS
 
+        self.element_quant_data = []  # to store quantification data per element
+
         # Setup widgets, plots and callbacks
         self._setup_widgets()
         self._setup_plots()
@@ -214,24 +290,26 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                     fig = self.plot_element(fig, loader_OOS, selected_slice, element_item)
         
         self.paneB.object = self._set_ranges_and_convert(fig)
+        return self.element_quant_data
 
-    def plot_element(self, fig, loader_OOS, selected_slice, element_item):
+    def plot_element(self, fig, loader_OOS : "Loader_OOS", selected_slice, element_item : "ElementItem"):
         print("Selected slice obtained")
         print("Element item:", element_item)
         print("State shells and element:", element_item.shells, element_item.element)
+        print("Energy axis:", self._energy)
+        print("E axis:", self._e_axis)
         if element_item and element_item.element and element_item.shells:
             try:
                 shells_data = []
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, selected_slice, range_values=self.range_slider.value)
+                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, selected_slice, range_values=element_item.fit_range)
                 fig = self._plot_fit_traces(fig, self._energy, selected_slice, y_fit)
                 for ishell in element_item.shells:
                     fig, shell_data = self.calculate_shell_data(fig, loader_OOS, selected_slice, element_item, y_fit, ishell)
-                    ##shells_data.append((ishell, shell_data))
+                    shells_data.append((ishell, shell_data))
                     print(f"Quantification for {element_item.element} {ishell} added.")
-                """
                 if len(shells_data) == 2:
                     ##afegir element data a init
-                    self.element_data.append([
+                    self.element_quant_data.append([
                                     element_item, y_fit,
                                     get_envelope(
                                         shells_data[0][1][0], shells_data[0][1][1],
@@ -239,10 +317,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                                     )
                                 ])
                 else:
-                    self.element_data.append([element_item, y_fit, shells_data[0][1]])
-                """
+                    self.element_quant_data.append([element_item, y_fit, shells_data[0][1]])
             except Exception as e:
                 raise e
+        fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
         return fig
 
     def calculate_shell_data(self, fig, loader_OOS, selected_slice, element_item, y_extrapolated, ishell):
@@ -281,7 +359,86 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             name=f'{cs_instance.element} {cs_instance.ishell} OOS'
         ))
         fig.update_layout(xaxis=dict(range=[self._e_axis, self._e_axis]))
+
         return fig, (xaxis, yaxis)
+    
+    def plot_quantification_pie(self, element_data):
+        """
+        Calculates the quantification results for the elements in the state.
+
+        Parameters:
+            state: The application state containing element data and energy information.
+
+        Returns:
+            A string summarizing the quantification results or an error message if something goes wrong.
+        """
+        try:
+            q_list = []  # List to store quantification results
+            print("Element data count:", len(element_data))
+            i = 0
+            # Iterate through the element data list in pairs
+            while i < len(element_data) - 1:
+                print(i, len(element_data))
+                # Extract data for the current and next elements
+                element_item0, y_extrapolated0, element_data0 = element_data[i]
+                element_item1, y_extrapolated1, element_data1 = element_data[i + 1]
+                
+                # Perform quantification between the two elements
+                q_aux = quanti(
+                    element_item0.quant_range, element_item1.quant_range,
+                    element_data0, element_data1,
+                    y_extrapolated0, y_extrapolated1,
+                    self._energy
+                ).get_quanti()
+                
+                # Check if the quantification result is valid
+                if q_aux < 0:
+                    return f" | Quantification result: Negative value for {element_item0.element} / {element_item1.element}, check ranges."
+                else:
+                    # Append the result to the list
+                    q_list.append((element_item0.element, element_item1.element, q_aux))
+                i += 1
+
+            print("Quantification results:", q_list)
+            ##state.paneC.object = pie_plot(q_list)  # Update the pie chart with the results
+            self.paneB.object = self._set_ranges_and_convert(self.pie_plot(q_list))
+            return f" | Quantification result: {q_list}"
+        except Exception as e:
+            # Handle any errors that occur during quantification
+            print("Error in quantification calculation:", e)
+            return f" | Error in quantification calculation: {e}"
+
+    def pie_plot(self, q_list):
+        """
+        Creates a pie chart to visualize the quantification results.
+
+        Parameters:
+            q_list: A list of tuples containing element pairs and their quantification values.
+
+        Returns:
+            A Plotly pie chart figure.
+        """
+        A = 1  # Initial value for proportions
+        abc_list = [1]  # List to store intermediate proportions
+        for i in range(len(q_list)):
+            # Calculate the proportion for each element pair
+            abc_list.append(abc_list[i] / q_list[i][2])
+
+        # Normalize the proportions
+        total = sum(abc_list)
+        proportions = []  # List to store normalized proportions
+        labels = []  # List to store labels for the pie chart
+        for i in range(len(abc_list)):
+            proportions.append(abc_list[i] / total)
+            if i != len(abc_list) - 1:
+                labels.append(q_list[i][0])  # Add the first element of the pair as a label
+        labels.append(q_list[-1][1])  # Add the last element of the last pair as a label
+
+        print("Proportions:", proportions)
+        # Create the pie chart using Plotly
+        fig = go.Figure(data=[go.Pie(labels=labels, values=proportions, hole=0.0)])
+        return fig
+
 
     
 

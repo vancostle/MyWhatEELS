@@ -4,6 +4,7 @@ from .resizable_columns import ResizableColumns
 from .uploaded_file import UploadedFile
 from .error_panel import ErrorPanel
 from .toggle_button import ToggleButton
+from .clickable_column import ClickableColumn
 
 __all__ = [
     'FileDropper', 
@@ -11,5 +12,6 @@ __all__ = [
     'ResizableColumns', 
     'UploadedFile', 
     'ErrorPanel', 
-    'ToggleButton'
+    'ToggleButton',
+    'ClickableColumn'
 ]

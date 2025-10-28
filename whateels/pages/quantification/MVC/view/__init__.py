@@ -3,8 +3,8 @@ from whateels.helpers import HTML_ROOT, CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton
 from whateels.base.mvc import BaseView
 from whateels.shared_state import AppState
-
 import panel as pn
+from whateels.components import ClickableColumn
 
 if TYPE_CHECKING:
     from ..model import QuantificationModel
@@ -75,7 +75,7 @@ class QuantificationView(BaseView):
         self.main = self._main_layout()
         self.right_sidebar = self._right_sidebar_layout()
 
-    def get_new_element_item_view(self, element_item, energy) -> pn.Column:
+    def get_new_element_item_view(self, element_item : "ElementItem", energy) -> pn.Column:
         element_item.set_fit_range([energy[0], energy[-1]])
         element_item.set_quant_range([energy[0], energy[-1]])
 
@@ -87,14 +87,23 @@ class QuantificationView(BaseView):
             sizing_mode=self._STRETCH_WIDTH
         )
 
-        element_item_view = pn.Column(
-            pn.Row(pn.pane.Markdown(element_item.__str__()), delete_button, sizing_mode=self._STRETCH_WIDTH),
-            pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[-1], 
-                value=(640,680), step=1, disabled=False),
-            pn.widgets.EditableRangeSlider(name='quant range', start=energy[0], end=energy[-1], 
-                value=(640,680), step=1, disabled=False),
+        slider_button = ToggleButton(
+            height=30,
+            margin=(0,0,10,0),
             sizing_mode=self._STRETCH_WIDTH
         )
+
+        element_item_view = pn.Column(
+            pn.Row(pn.pane.Markdown(element_item.__str__()), delete_button, sizing_mode=self._STRETCH_WIDTH),
+            slider_button,
+            sizing_mode=self._STRETCH_WIDTH, 
+            css_classes=["element-item"]
+        )
+
+        fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[-1], 
+                value=(640,680), step=1, disabled=False)
+        quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[0], end=energy[-1], 
+                value=(640,680), step=1, disabled=False)
 
         def _fit_range_watcher(event):
             element_item.set_fit_range(event.new)
@@ -107,9 +116,24 @@ class QuantificationView(BaseView):
             self._model.app_state.quantification_elements.remove(element_item)
             print(self._model.app_state.quantification_elements)
 
-        element_item_view[1].param.watch(_fit_range_watcher, 'value')
-        element_item_view[2].param.watch(_quant_range_watcher, 'value')
+        slider = {"active": False}
+        
+
+        def _slider_button_watcher(event, slider=slider):
+            if not slider["active"]:
+                element_item_view.append(fit_slider)
+                element_item_view.append(quant_slider)
+                slider["active"] = True
+            else:
+                element_item_view.remove(fit_slider)
+                element_item_view.remove(quant_slider)
+                slider["active"] = False
+
+
+        fit_slider.param.watch(_fit_range_watcher, 'value')
+        quant_slider.param.watch(_quant_range_watcher, 'value')
         delete_button.on_click(_delete_element_watcher)
+        slider_button.on_click(_slider_button_watcher)
 
         #m.axes_manager['energy_loss'].scale
         
