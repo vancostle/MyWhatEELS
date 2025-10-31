@@ -73,7 +73,7 @@ class SpectrumLineVisualizer(BaseVisualizer):
             z=z,
             x=x_coords.values,
             y=e_coords.values,
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model.colors, "GREYS_R") else "Greys",
+            colorscale="Greys",
             colorbar=dict(title=self._model.constants.ELECTRON_COUNT),
             hovertemplate=f"{x_name}=%{{x}}<br>{e_name}=%{{y}}<br>I=%{{z}}<extra></extra>"
         )
@@ -129,7 +129,7 @@ class SpectrumLineVisualizer(BaseVisualizer):
             x=energy,
             y=values,
             mode="lines",
-            line=dict(color=self._model.colors.RED if hasattr(self._model.colors, "RED") else "crimson", width=2),
+            line=dict(color="crimson", width=2),
             name=f"x={self._selected_x_value}"
         ))
         spec_fig.update_layout(
