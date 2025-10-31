@@ -5,9 +5,6 @@ from whateels.helpers import CSS_ROOT
 
 import panel as pn
 
-# # Register Plotly renderer for Panel so pn.pane.Plotly works correctly across the app
-# pn.extension('plotly')
-
 if TYPE_CHECKING:
     from ..model import HomePageModel
     
