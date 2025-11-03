@@ -124,7 +124,7 @@ class LayoutManager:
     
     def plot_quantification_elements(self, element_items: list["ElementItem"], loader_OOS: "Loader_OOS"):
         """Plot the quantification elements using the model's plotting method."""
-        self.element_quant_data = self._chosen_visualizers[0].plot_quantification_elements(loader_OOS, element_items)
+        self.element_quant_data = self._chosen_visualizers[0].plot_quantification_elements(loader_OOS, element_items) # change to active visualitzer later
         self._controller.base_layout.update_main(self._plots_tab)
 
     def plot_quantification_pie(self):

@@ -75,25 +75,40 @@ class QuantificationController(BaseController):
         self.view.quanti_input['shells_multiselect'].options = self.loader_oos.avaibable_subshells(self.view.quanti_input['element_num'].value) if self.view.quanti_input['element_num'].value else []
     
     def _add_element_item_button_callback(self, event):
-        element=self.view.quanti_input['element_num'].value
-        repeted = any(element_i.element == element for element_i in self._model.app_state.quantification_elements)
-        if not repeted:
-            element_item = ElementItem(
-            element=self.view.quanti_input['element_num'].value,
-            shells=self.view.quanti_input['shells_multiselect'].value,
-            )
-            element_item_view, element_item = self._view.get_new_element_item_view(element_item, self._layout.get_max_energy_range())
-            self._model.app_state.quantification_elements.append(element_item)
-            self._layout.add_new_element_input(element_item_view)
+        if not self.view.quanti_input['element_num'].value:
+            print("No element selected.")
+        elif not self.view.quanti_input['shells_multiselect'].value:
+            print("No shells selected.")
         else:
-            print("Element already added.")
+            element=self.view.quanti_input['element_num'].value
+            repeted = any(element_i.element == element for element_i in self._model.app_state.quantification_elements)
+            if not repeted:
+                element_item = ElementItem(
+                element=self.view.quanti_input['element_num'].value,
+                shells=self.view.quanti_input['shells_multiselect'].value,
+                )
+                element_item_view, element_item = self._view.get_new_element_item_view(element_item, self._layout.get_max_energy_range())
+                self._model.app_state.quantification_elements.append(element_item)
+                self._layout.add_new_element_input(element_item_view)
+            else:
+                print("Element already added.")
+        return
 
     def _run_quantification(self, event):
         print("Running quantification...")
-        self._layout.plot_quantification_pie()
+        if not self._model.app_state.quantification_elements:
+            print("No elements to quantify.")
+        elif len(self._mode.app_state.quantification_elements) < 2:
+            print("At least two elements are required for quantification.")
+        else:
+            self._layout.plot_quantification_pie()
+        return
 
     def plot_elements(self, event):
-        self._layout.plot_quantification_elements(self._model.app_state.quantification_elements, self.loader_oos)
+        if not self._model.app_state.quantification_elements:
+            print("No elements to plot.")
+        else:
+            self._layout.plot_quantification_elements(self._model.app_state.quantification_elements, self.loader_oos)
         return
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:

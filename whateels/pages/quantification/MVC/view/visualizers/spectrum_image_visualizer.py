@@ -21,157 +21,6 @@ if TYPE_CHECKING:
     from xarray import Dataset
     from param.parameterized import Event
 
-class add_cs:
-    """
-    Class to calculate and normalize cross-sections for a given element and shell.
-    """
-    def __init__(self, element, ishell, selected_slice, y_extrapolated, chemical_shift=0, quant_range_values=None, eaxis=None, eaxis_cs=None, counts=None, onset=None, cross_section=None):
-        """
-        Initializes the add_cs object.
-
-        Parameters:
-            element: The element name (e.g., "Fe").
-            ishell: The shell name (e.g., "K").
-            selected_slice: The selected slice of data.
-            y_extrapolated: The extrapolated background values.
-            chemical_shift: The chemical shift to apply (default is 0).
-            quant_range_values: The range of energy for quantification.
-            eaxis: The energy axis for the experimental data.
-            eaxis_cs: The energy axis for the cross-section data.
-            counts: The counts data.
-            onset: The onset energy.
-            cross_section: The cross-section data.
-        """
-        self.eaxis, self.counts, self.onset = eaxis, counts, onset
-        self.cross_section = cross_section
-        self.element = element
-        self.ishell = ishell
-        self.chemical_shift = chemical_shift
-        self.quant_range_values = quant_range_values
-        self.eaxis_cs = eaxis_cs
-
-        # Ensure that the lengths of the energy axes and data match
-        if len(eaxis) != len(selected_slice) and len(eaxis_cs) != len(cross_section):
-            raise ValueError("eaxis, selected_slice, and cross_section must have the same length.")
-
-        # Normalize the experimental and simulated data within the quantification range
-        if self.quant_range_values:
-            mask = (self.eaxis >= self.quant_range_values[0]) & (self.eaxis <= self.quant_range_values[1])
-            mask_ = (self.eaxis_cs >= self.quant_range_values[0]) & (self.eaxis_cs <= self.quant_range_values[1])
-            x_filtered = self.eaxis[mask]
-            y_filtered = selected_slice[mask] - y_extrapolated[mask]
-            x_filtered_ = self.eaxis_cs[mask_]
-            y_filtered_ = self.cross_section[mask_]
-            self.norm_exp = np.trapz(y_filtered, x_filtered).real  # Experimental normalization
-            self.norm_sim = np.trapz(y_filtered_, x_filtered_).real  # Simulated normalization
-        else:
-            self.norm_sim = np.trapz(self.cross_section, self.eaxis).real
-            self.norm_exp = np.trapz(selected_slice - y_extrapolated, self.eaxis).real
-
-        # Apply the chemical shift and calculate the normalized cross-section
-        self.xaxis = self.eaxis_cs - self.chemical_shift
-        self.yaxis = (self.cross_section / self.norm_sim * self.norm_exp).real
-
-    def get_data(self):
-        """
-        Returns the calculated data for plotting.
-
-        Returns:
-            xaxis: The shifted energy axis.
-            yaxis: The normalized cross-section.
-        """
-        return self.xaxis, self.yaxis
-
-def sum_slice(matrix, vertexs):
-    """
-    Sums the values in a region defined by vertices in a matrix.
-
-    Parameters:
-        matrix: The 2D matrix to sum over.
-        vertexs: A tuple (x_start, x_end, y_start, y_end) defining the region.
-
-    Returns:
-        The sum of the values in the specified region.
-    """
-    suma = 0
-    for i in range(vertexs[0], vertexs[1]):
-        for j in range(vertexs[2], vertexs[3]):
-            suma += matrix[j][i]
-    return suma
-
-class quanti:
-    """
-    Class to calculate quantification between two regions.
-    """
-    def __init__(self, d_a, d_b, cs_a, cs_b, y1, y2, eaxis):
-        """
-        Initializes the quanti object.
-
-        Parameters:
-            d_a, d_b: Energy ranges for the two regions.
-            cs_a, cs_b: Cross-section data for the two regions.
-            y1, y2: Experimental data for the two regions.
-            eaxis: The energy axis.
-        """
-        self.y1 = y1
-        self.y2 = y2
-        self.d_a = d_a
-        self.d_b = d_b
-        self.cs_b_x, self.cs_b_y = cs_b
-        self.cs_a_x, self.cs_a_y = cs_a
-        self.eaxis = eaxis
-
-    def get_part_delta(self, y, axis, delta):
-        """
-        Calculates the integral of a portion of the data within a specified range.
-
-        Parameters:
-            y: The data to integrate.
-            axis: The corresponding axis.
-            delta: The range for integration.
-
-        Returns:
-            The integral value.
-        """
-        mask = (axis >= delta[0]) & (axis <= delta[1])
-        return np.trapz(y[mask], axis[mask]).real
-
-    def get_quanti(self):
-        """
-        Calculates the quantification ratio between two regions.
-
-        Returns:
-            The quantification ratio (q_ab).
-        """
-        i_a = self.get_part_delta(self.y1, self.eaxis, self.d_a)
-        i_b = self.get_part_delta(self.y2, self.eaxis, self.d_b)
-        cs_a = self.get_part_delta(self.cs_a_y, self.cs_a_x, self.d_a)
-        cs_b = self.get_part_delta(self.cs_b_y, self.cs_b_x, self.d_b)
-        self.q_ab = i_a / i_b * cs_b / cs_a
-        return self.q_ab
-
-def get_envelope(x1, y1, x2, y2):
-    """
-    Calculates the envelope of two curves.
-
-    Parameters:
-        x1, y1: The x and y values of the first curve.
-        x2, y2: The x and y values of the second curve.
-
-    Returns:
-        x_common: The common x values.
-        y_envelope: The envelope (maximum y values at each x).
-    """
-    # Find the common x range
-    x_common = np.union1d(x1, x2)
-
-    # Interpolate y values for the common x points
-    y1_interp = np.interp(x_common, x1, y1)
-    y2_interp = np.interp(x_common, x2, y2)
-
-    # Calculate the envelope by taking the maximum at each point
-    y_envelope = np.maximum(y1_interp, y2_interp)
-    return x_common, y_envelope
 
 class SpectrumImageVisualizer(AbstractEELSVisualizer):
     """
@@ -949,3 +798,156 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return
 
         self.paneB.object = self._set_ranges_and_convert(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
+
+
+class add_cs:
+    """
+    Class to calculate and normalize cross-sections for a given element and shell.
+    """
+    def __init__(self, element, ishell, selected_slice, y_extrapolated, chemical_shift=0, quant_range_values=None, eaxis=None, eaxis_cs=None, counts=None, onset=None, cross_section=None):
+        """
+        Initializes the add_cs object.
+
+        Parameters:
+            element: The element name (e.g., "Fe").
+            ishell: The shell name (e.g., "K").
+            selected_slice: The selected slice of data.
+            y_extrapolated: The extrapolated background values.
+            chemical_shift: The chemical shift to apply (default is 0).
+            quant_range_values: The range of energy for quantification.
+            eaxis: The energy axis for the experimental data.
+            eaxis_cs: The energy axis for the cross-section data.
+            counts: The counts data.
+            onset: The onset energy.
+            cross_section: The cross-section data.
+        """
+        self.eaxis, self.counts, self.onset = eaxis, counts, onset
+        self.cross_section = cross_section
+        self.element = element
+        self.ishell = ishell
+        self.chemical_shift = chemical_shift
+        self.quant_range_values = quant_range_values
+        self.eaxis_cs = eaxis_cs
+
+        # Ensure that the lengths of the energy axes and data match
+        if len(eaxis) != len(selected_slice) and len(eaxis_cs) != len(cross_section):
+            raise ValueError("eaxis, selected_slice, and cross_section must have the same length.")
+
+        # Normalize the experimental and simulated data within the quantification range
+        if self.quant_range_values:
+            mask = (self.eaxis >= self.quant_range_values[0]) & (self.eaxis <= self.quant_range_values[1])
+            mask_ = (self.eaxis_cs >= self.quant_range_values[0]) & (self.eaxis_cs <= self.quant_range_values[1])
+            x_filtered = self.eaxis[mask]
+            y_filtered = selected_slice[mask] - y_extrapolated[mask]
+            x_filtered_ = self.eaxis_cs[mask_]
+            y_filtered_ = self.cross_section[mask_]
+            self.norm_exp = np.trapz(y_filtered, x_filtered).real  # Experimental normalization
+            self.norm_sim = np.trapz(y_filtered_, x_filtered_).real  # Simulated normalization
+        else:
+            self.norm_sim = np.trapz(self.cross_section, self.eaxis).real
+            self.norm_exp = np.trapz(selected_slice - y_extrapolated, self.eaxis).real
+
+        # Apply the chemical shift and calculate the normalized cross-section
+        self.xaxis = self.eaxis_cs - self.chemical_shift
+        self.yaxis = (self.cross_section / self.norm_sim * self.norm_exp).real
+
+    def get_data(self):
+        """
+        Returns the calculated data for plotting.
+
+        Returns:
+            xaxis: The shifted energy axis.
+            yaxis: The normalized cross-section.
+        """
+        return self.xaxis, self.yaxis
+
+def sum_slice(matrix, vertexs):
+    """
+    Sums the values in a region defined by vertices in a matrix.
+
+    Parameters:
+        matrix: The 2D matrix to sum over.
+        vertexs: A tuple (x_start, x_end, y_start, y_end) defining the region.
+
+    Returns:
+        The sum of the values in the specified region.
+    """
+    suma = 0
+    for i in range(vertexs[0], vertexs[1]):
+        for j in range(vertexs[2], vertexs[3]):
+            suma += matrix[j][i]
+    return suma
+
+class quanti:
+    """
+    Class to calculate quantification between two regions.
+    """
+    def __init__(self, d_a, d_b, cs_a, cs_b, y1, y2, eaxis):
+        """
+        Initializes the quanti object.
+
+        Parameters:
+            d_a, d_b: Energy ranges for the two regions.
+            cs_a, cs_b: Cross-section data for the two regions.
+            y1, y2: Experimental data for the two regions.
+            eaxis: The energy axis.
+        """
+        self.y1 = y1
+        self.y2 = y2
+        self.d_a = d_a
+        self.d_b = d_b
+        self.cs_b_x, self.cs_b_y = cs_b
+        self.cs_a_x, self.cs_a_y = cs_a
+        self.eaxis = eaxis
+
+    def get_part_delta(self, y, axis, delta):
+        """
+        Calculates the integral of a portion of the data within a specified range.
+
+        Parameters:
+            y: The data to integrate.
+            axis: The corresponding axis.
+            delta: The range for integration.
+
+        Returns:
+            The integral value.
+        """
+        mask = (axis >= delta[0]) & (axis <= delta[1])
+        return np.trapz(y[mask], axis[mask]).real
+
+    def get_quanti(self):
+        """
+        Calculates the quantification ratio between two regions.
+
+        Returns:
+            The quantification ratio (q_ab).
+        """
+        i_a = self.get_part_delta(self.y1, self.eaxis, self.d_a)
+        i_b = self.get_part_delta(self.y2, self.eaxis, self.d_b)
+        cs_a = self.get_part_delta(self.cs_a_y, self.cs_a_x, self.d_a)
+        cs_b = self.get_part_delta(self.cs_b_y, self.cs_b_x, self.d_b)
+        self.q_ab = i_a / i_b * cs_b / cs_a
+        return self.q_ab
+
+def get_envelope(x1, y1, x2, y2):
+    """
+    Calculates the envelope of two curves.
+
+    Parameters:
+        x1, y1: The x and y values of the first curve.
+        x2, y2: The x and y values of the second curve.
+
+    Returns:
+        x_common: The common x values.
+        y_envelope: The envelope (maximum y values at each x).
+    """
+    # Find the common x range
+    x_common = np.union1d(x1, x2)
+
+    # Interpolate y values for the common x points
+    y1_interp = np.interp(x_common, x1, y1)
+    y2_interp = np.interp(x_common, x2, y2)
+
+    # Calculate the envelope by taking the maximum at each point
+    y_envelope = np.maximum(y1_interp, y2_interp)
+    return x_common, y_envelope

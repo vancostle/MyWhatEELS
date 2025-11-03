@@ -4,7 +4,6 @@ from whateels.components import UploadedFile, ToggleButton
 from whateels.base.mvc import BaseView
 from whateels.shared_state import AppState
 import panel as pn
-from whateels.components import ClickableColumn
 
 if TYPE_CHECKING:
     from ..model import QuantificationModel
@@ -80,22 +79,31 @@ class QuantificationView(BaseView):
         element_item.set_quant_range([energy[0], energy[-1]])
 
         delete_button = pn.widgets.Button(
-            name= 'Delete Element',
-            button_type='danger',
-            height=30,
-            margin=(0,0,10,0),
-            sizing_mode=self._STRETCH_WIDTH
+            name= 'Delete',
+            button_type='danger'
         )
 
+            # State identifiers
+        _ON = 'on'
+        _OFF = 'off'
+        
+        # Dictionary keys for state properties
+        _NAME = 'label'
+        _ON_CLICK = 'on_click'
+        _BUTTON_TYPE = 'button_type'
+
+        states = {
+                _ON: {_NAME: element_item.__str__() + " <", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
+                _OFF: {_NAME: element_item.__str__() + " ˇ", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'danger'}
+            }
+
         slider_button = ToggleButton(
-            height=30,
-            margin=(0,0,10,0),
-            sizing_mode=self._STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH,
+            states=states
         )
 
         element_item_view = pn.Column(
-            pn.Row(pn.pane.Markdown(element_item.__str__()), delete_button, sizing_mode=self._STRETCH_WIDTH),
-            slider_button,
+            pn.Row(slider_button, delete_button, sizing_mode=self._STRETCH_WIDTH),
             sizing_mode=self._STRETCH_WIDTH, 
             css_classes=["element-item"]
         )
@@ -217,7 +225,7 @@ class QuantificationView(BaseView):
             self._element_item_view_container,
             self._plot_elements_button,
             self._quanti_run_button,
-            sizing_mode=self.STRETCH_BOTH
+            sizing_mode=self.STRETCH_BOTH,
         )
         
         return right_sidebar
