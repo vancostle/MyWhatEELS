@@ -104,6 +104,7 @@ class CustomPage(pn.template.FastListTemplate):
                 
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
+            ("[NLLS](/nlls)", "NLLS fitting page"),
         ]
         
         is_eels_tab = self._is_selected_tab_eels(selected_tab_index)
