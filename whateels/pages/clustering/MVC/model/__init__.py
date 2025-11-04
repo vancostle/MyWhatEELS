@@ -15,6 +15,15 @@ class ClusteringModel(BaseModel):
     def constants(self):
         return self._constants
     
+    def get_uplodaded_filename(self) -> str:
+        """
+        Get the filename of the currently uploaded dataset from shared state.
+        
+        Returns:
+            str: Uploaded filename, or empty string if none
+        """
+        return str(self._app_state.filename) if self._app_state.filename is not None else "No file uploaded"
+    
     # --- Multifit Data Access Methods ---
     
     def is_multifit_available(self) -> bool:
@@ -47,9 +56,10 @@ class ClusteringModel(BaseModel):
             # Extract ElectronCount data from the multifit dataset
             # The multifit should have the same structure as original dataset
             if hasattr(multifit_dataset, 'ElectronCount'):
-                multifit_data = multifit_dataset.ElectronCount
-                data_cube = np.asarray(multifit_data.fillna(0.0))
-                return data_cube
+                multifit_data = getattr(multifit_dataset, 'ElectronCount', None)
+                if multifit_data is not None:
+                    data_cube = np.asarray(multifit_data.fillna(0.0))
+                    return data_cube
             elif isinstance(multifit_dataset, np.ndarray):
                 # If multifit is already a numpy array
                 return multifit_dataset

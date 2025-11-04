@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, Optional
 from whateels.helpers import HTML_ROOT, CSS_ROOT
 from whateels.components import UploadedFile
 from whateels.base.mvc import BaseView
-from whateels.shared_state import AppState
 
 import panel as pn
 
@@ -92,8 +91,11 @@ class ClusteringView(BaseView):
         self.right_sidebar = self._right_sidebar_layout()
 
     def _left_sidebar_layout(self):
-        app_state = AppState()
-        uploaded_file = UploadedFile(filename=str(app_state.filename), sizing_mode=self.STRETCH_WIDTH, margin=(0,0,10,0))
+        uploaded_file = UploadedFile(
+            filename=str(self._model.get_uplodaded_filename()), 
+            sizing_mode=self.STRETCH_WIDTH, 
+            margin=(0,0,10,0)
+        )
         left_sidebar = pn.Column(
             uploaded_file,
             sizing_mode=self.STRETCH_WIDTH
@@ -105,7 +107,6 @@ class ClusteringView(BaseView):
         background_subtraction_label = pn.pane.Markdown(
             "### Background-subtraction", 
         )
-
         self._background_subtraction_switch = pn.widgets.Switch(
             name="Background-subtraction", 
             value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
@@ -113,6 +114,10 @@ class ClusteringView(BaseView):
             css_classes=["background-subtraction-switch"]
         )
         background_subtraction_container = pn.Row(
+            pn.widgets.TooltipIcon(
+                value="Must do Multifitting to enable the switch.", 
+                css_classes=["tooltip-icon"]
+            ),
             background_subtraction_label,
             self._background_subtraction_switch,
             sizing_mode=self.STRETCH_WIDTH,
