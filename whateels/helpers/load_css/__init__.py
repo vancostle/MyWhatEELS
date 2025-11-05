@@ -4,7 +4,7 @@ import csscompressor
 
 class LoadCSS:
     """
-    A singleton class to load CSS files into the Panel configuration.
+    A class to load CSS files into the Panel configuration.
     This ensures CSS files are loaded only once, even if the class is instantiated multiple times.
     """
         

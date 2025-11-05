@@ -21,7 +21,6 @@ class ClusteringRightSidebarLayout(pn.Column):
         self._spectral_input = None  # Dictionary to hold Spectral input widgets
         self._spectral_run_button = None  # Button to run Spectral clustering
 
-        
         super().__init__(
             self._create_layout(),
             sizing_mode=self._STRETCH_WIDTH
@@ -31,6 +30,34 @@ class ClusteringRightSidebarLayout(pn.Column):
     def background_subtraction_switch(self) -> Optional[pn.widgets.Switch]:
         """Access the background-subtraction switch widget."""
         return self._background_subtraction_switch
+    @property
+    def spectral_run_button(self) -> Optional[pn.widgets.Button]:
+        """Access the Spectral clustering run button."""
+        return self._spectral_run_button
+    @property
+    def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
+        """Access the Agglomerative clustering run button."""
+        return self._agglomerative_run_button
+    @property
+    def store_button(self) -> Optional[pn.widgets.Button]:
+        """Access the store button."""
+        return self._store_button
+    @property
+    def kmeans_run_button(self) -> Optional[pn.widgets.Button]:
+        """Access the K-Means clustering run button."""
+        return self._kmeans_run_button
+    @property
+    def spectral_input(self):
+        """Access the Spectral clustering input widgets."""
+        return self._spectral_input
+    @property
+    def agglomerative_input(self):
+        """Access the Agglomerative clustering input widgets."""
+        return self._agglomerative_input
+    @property
+    def kmeans_input(self):
+        """Access the K-Means clustering input widgets."""
+        return self._kmeans_input   
         
     def _create_layout(self):
         background_subtraction_label = pn.pane.Markdown(
@@ -88,6 +115,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             self._store_button,
             sizing_mode=self._STRETCH_WIDTH
         )
+
         return right_sidebar
     
     def _create_k_means_tab(self) -> pn.Column:

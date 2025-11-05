@@ -2,7 +2,7 @@ import panel as pn
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ....MVC import ClusteringView, ClusteringModel
+    from ....MVC import ClusteringModel
 
 class ClusteringMainLayout(pn.Column):
     """Manages the main layout for the Clustering View."""
