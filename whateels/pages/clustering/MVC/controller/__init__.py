@@ -9,11 +9,9 @@ if TYPE_CHECKING:
     from ..model import ClusteringModel
     from ..view import ClusteringView
 
-class ClusteringController(BaseController):
+class ClusteringController:
 
     def __init__(self, model: "ClusteringModel", view: "ClusteringView"):
-        super().__init__(model, view)
-
         self._view = view
         self._model = model
         
@@ -28,7 +26,7 @@ class ClusteringController(BaseController):
         
         # Validate datasets and tab index
         if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
-            self.base_layout.empty_main()
+            self.empty_main()
             return
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
@@ -49,3 +47,13 @@ class ClusteringController(BaseController):
         if isinstance(value, list):
             return value[0]
         return value
+        
+    def empty_main(self):
+        """Reset the main layout to the no-file placeholder."""
+        del self._view.main
+        self._view.main.append(self._view.main.no_file_placeholder)
+
+    def update_main(self, plot_component):
+        """Update the main layout with a new plot component."""
+        del self._view.main
+        self._view.main.append(plot_component)

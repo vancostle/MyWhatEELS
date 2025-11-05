@@ -201,12 +201,15 @@ class SpectrumImageVisualizer(BaseVisualizer):
         """
         try:
             # Get switch state from view
-            switch = self._controller.view.background_subtraction_switch
+            switch = self._controller.view.right_sidebar.background_subtraction_switch
             if switch is None:
                 return False
             
+            # Ensure switch.value is a boolean before passing to model
+            switch_value = bool(switch.value) if switch.value is not None else False
+            
             # Delegate decision to model
-            return self._model.should_use_background_subtraction(switch.value)
+            return self._model.should_use_background_subtraction(switch_value)
             
         except Exception as e:
             print(f"Error checking if multifit should be used: {e}")
@@ -438,13 +441,17 @@ class SpectrumImageVisualizer(BaseVisualizer):
         # Store original shape for reshaping labels later
         original_shape = matrix.shape
         
+        # Validate assign_labels parameter
+        allowed_assign_labels: tuple[Literal['kmeans'], Literal['discretize'], Literal['cluster_qr']] = ('kmeans', 'discretize', 'cluster_qr')
+        assign_labels_value: Literal['kmeans', 'discretize', 'cluster_qr'] = assign_labels if assign_labels in allowed_assign_labels else 'kmeans'
+        
         # Create and fit SpectralClustering
         # Note: For 'nearest_neighbors' affinity, increase n_neighbors if you get
         # "Graph is not fully connected" warnings. For 'rbf', adjust gamma parameter.
         spectral = SpectralClustering(
             n_clusters=n_clusters,
             n_init=n_init,
-            assign_labels=assign_labels,
+            assign_labels=assign_labels_value,
             affinity=affinity,
             n_neighbors=n_neighbors,
             gamma=gamma,
@@ -863,7 +870,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         if self._kmeans_run_button is not None:
             self._kmeans_run_button.disabled = True  # Disable to prevent multiple clicks
         
-        kmeans_input = self._controller.view.kmeans_input
+        kmeans_input = self._controller.view.right_sidebar.kmeans_input
         
         n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
         available_norm = self._model.constants.DEFAULT_SELECTED_NORM
@@ -896,7 +903,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         if self._agglomerative_run_button is not None:
             self._agglomerative_run_button.disabled = True  # Disable to prevent multiple clicks
         
-        agglomerative_input = self._controller.view.agglomerative_input
+        agglomerative_input = self._controller.view.right_sidebar.agglomerative_input
         
         # Default values
         n_clusters = 5
@@ -929,7 +936,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         if self._spectral_run_button is not None:
             self._spectral_run_button.disabled = True  # Disable to prevent multiple clicks
         
-        spectral_input = self._controller.view.spectral_input
+        spectral_input = self._controller.view.right_sidebar.spectral_input
         
         # Default values
         n_clusters = 5
@@ -1076,10 +1083,6 @@ class SpectrumImageVisualizer(BaseVisualizer):
         except Exception:
             pass
         return obj
-
-    def _on_range_changed(self, event):
-        """Handle range slider changes."""
-        pass  # Placeholder for range functionality
 
     def _on_paneA_hover(self, event):
         """Handle hover on the heatmap to show single-pixel spectrum.
@@ -1307,10 +1310,6 @@ class SpectrumImageVisualizer(BaseVisualizer):
             print(f"Error handling click: {e}")
             import traceback
             traceback.print_exc()
-
-    def _on_range_changed(self, event):
-        """Handle range slider changes."""
-        pass  # Placeholder for range functionality
 
     def _on_paneA_selected(self, event):
         """Handle lasso/box selection and show summed spectrum for selected pixels.

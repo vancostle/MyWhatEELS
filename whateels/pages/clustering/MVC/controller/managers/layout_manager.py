@@ -40,16 +40,16 @@ class LayoutManager:
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
         self._view.left_sidebar.append(component)
-        self._view.dataset_info = component
+        self._view.left_sidebar.dataset_info = component
         
     def remove_dataset_info_from_sidebar(self):
         """Remove the last dataset info component from the sidebar, if present."""
-        if self._view.dataset_info is None:
+        if self._view.left_sidebar.dataset_info is None:
             return
-        if self._view.dataset_info in self._view.left_sidebar:
-            self._view.left_sidebar.remove(self._view.dataset_info)
-            self._view.dataset_info = None
-            
+        if self._view.left_sidebar.dataset_info in self._view.left_sidebar:
+            self._view.left_sidebar.remove(self._view.left_sidebar.dataset_info)
+            del self._view.left_sidebar.dataset_info
+
     def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
         """
         Create visualizations for all datasets and setup tabbed UI interface.
@@ -92,7 +92,7 @@ class LayoutManager:
             plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
                 
             # Update UI
-            self._controller.base_layout.update_main(plots_tab)
+            self._controller.update_main(plots_tab)
             self.remove_dataset_info_from_sidebar()
             self.add_component_to_sidebar_layout(self._all_dataset_info[0])
 

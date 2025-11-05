@@ -1,6 +1,6 @@
 import panel as pn
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ....MVC import ClusteringModel
 
@@ -12,14 +12,21 @@ class ClusteringMainLayout(pn.Column):
     def __init__(self, model: 'ClusteringModel'):
         self._model = model
         
+        self._no_file_placeholder = None # Placeholder for no file loaded
+        
         super().__init__(
             self._create_layout(),
             sizing_mode=self._STRETCH_BOTH
         )
         
+    @property
+    def no_file_placeholder(self) -> Optional[pn.Column]:
+        """Placeholder layout shown when no file is loaded."""
+        return self._no_file_placeholder
+        
     def _create_layout(self) -> pn.Column:
         """Create the main layout structure."""
-        no_file_placeholder = pn.Column(
+        self._no_file_placeholder = pn.Column(
             pn.pane.HTML(
                 self._model.placeholders.NO_FILE_LOADED,
                 sizing_mode=self._STRETCH_BOTH
@@ -28,6 +35,6 @@ class ClusteringMainLayout(pn.Column):
         )
 
         return pn.Column(
-            no_file_placeholder,
+            self._no_file_placeholder,
             sizing_mode=self._STRETCH_BOTH
         )

@@ -28,20 +28,11 @@ class ClusteringView:
         self._right_sidebar = ClusteringRightSidebarLayout(model)
 
     @property
-    def dataset_info(self) -> Optional[pn.viewable.Viewable]:
-        """Reference to the last dataset info component added to the sidebar."""
-        return self._dataset_info_layout
-    @dataset_info.setter
-    def dataset_info(self, component: pn.viewable.Viewable):
-        """Set the last dataset info component (must be a Panel Viewable)."""
-        self._dataset_info_layout = component
-
-    @property
-    def main(self) -> pn.Column:
+    def main(self) -> "ClusteringMainLayout":
         """Main content area layout for displaying plots or placeholders."""
         return self._main
     @main.setter
-    def main(self, layout: pn.Column):
+    def main(self, layout: "ClusteringMainLayout"):
         """Set the main content area layout."""
         self._main = layout
     @main.deleter
@@ -50,11 +41,11 @@ class ClusteringView:
         self._main.clear()
 
     @property
-    def left_sidebar(self) -> pn.Column:
+    def left_sidebar(self) -> "ClusteringLeftSidebarLayout":
         """Left sidebar layout for controls and options."""
         return self._left_sidebar
     @left_sidebar.setter
-    def left_sidebar(self, layout: pn.Column):
+    def left_sidebar(self, layout: "ClusteringLeftSidebarLayout"):
         """Set the left sidebar layout."""
         self._left_sidebar = layout
     @left_sidebar.deleter
