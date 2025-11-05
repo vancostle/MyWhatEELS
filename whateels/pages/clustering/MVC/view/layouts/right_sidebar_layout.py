@@ -38,6 +38,7 @@ class ClusteringRightSidebarLayout(pn.Column):
     def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
         """Access the Agglomerative clustering run button."""
         return self._agglomerative_run_button
+    # TODO - Still not used anywhere - remove?
     @property
     def store_button(self) -> Optional[pn.widgets.Button]:
         """Access the store button."""

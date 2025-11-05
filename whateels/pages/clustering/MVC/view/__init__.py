@@ -63,36 +63,3 @@ class ClusteringView:
     def right_sidebar(self):
         """Delete the right sidebar layout."""
         self._right_sidebar.clear()
-
-    @property
-    def background_subtraction_switch(self) -> Optional[pn.widgets.Switch]:
-        """Access the background-subtraction switch widget."""
-        return self._right_sidebar.background_subtraction_switch
-    @property
-    def kmeans_input(self):
-        """Access the K-Means input widgets."""
-        return self._right_sidebar.kmeans_input
-    @property
-    def kmeans_run_button(self) -> Optional[pn.widgets.Button]:
-        """Access the K-Means input widgets."""
-        return self._right_sidebar.kmeans_run_button
-    @property
-    def agglomerative_input(self):
-        """Access the Agglomerative input widgets."""
-        return self._right_sidebar.agglomerative_input
-    @property
-    def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
-        """Access the Agglomerative run button."""
-        return self._right_sidebar.agglomerative_run_button
-    @property
-    def spectral_input(self):
-        """Access the Spectral input widgets."""
-        return self._right_sidebar.spectral_input
-    @property
-    def spectral_run_button(self) -> Optional[pn.widgets.Button]:
-        """Access the Spectral run button."""
-        return self._right_sidebar.spectral_run_button
-    @property
-    def store_button(self) -> Optional[pn.widgets.Button]:
-        """Access the store button widget."""
-        return self._right_sidebar.store_button

@@ -850,15 +850,15 @@ class SpectrumImageVisualizer(BaseVisualizer):
     # --- Widget Setup ---
     def _setup_widgets(self):
        
-        if kmeans_run_button := getattr(self._controller.view, "kmeans_run_button", None):
+        if kmeans_run_button := getattr(self._controller.view.right_sidebar, "kmeans_run_button", None):
             self._kmeans_run_button = kmeans_run_button # Store reference
             kmeans_run_button.on_click(self._run_kmeans_clustering)
-            
-        if agglomerative_run_button := getattr(self._controller.view, "agglomerative_run_button", None):
+
+        if agglomerative_run_button := getattr(self._controller.view.right_sidebar, "agglomerative_run_button", None):
             self._agglomerative_run_button = agglomerative_run_button # Store reference
             agglomerative_run_button.on_click(self._run_agglomerative_clustering)
-            
-        if spectral_run_button := getattr(self._controller.view, "spectral_run_button", None):
+
+        if spectral_run_button := getattr(self._controller.view.right_sidebar, "spectral_run_button", None):
             self._spectral_run_button = spectral_run_button # Store reference
             spectral_run_button.on_click(self._run_spectral_clustering)
 
