@@ -1,8 +1,6 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from whateels.helpers import CSS_ROOT, LoadCSS
 from .layouts import ClusteringMainLayout, ClusteringLeftSidebarLayout, ClusteringRightSidebarLayout
-
-import panel as pn
 
 if TYPE_CHECKING:
     from ..model import ClusteringModel
