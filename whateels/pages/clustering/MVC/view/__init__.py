@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING, Optional
-from whateels.helpers import HTML_ROOT, CSS_ROOT, LoadCSS
+from whateels.helpers import CSS_ROOT, LoadCSS
 from .layouts import ClusteringMainLayout, ClusteringLeftSidebarLayout, ClusteringRightSidebarLayout
 
 import panel as pn
@@ -20,9 +20,7 @@ class ClusteringView:
         ]
 
         LoadCSS(css_files)
-                
-        self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
-                                
+
         self._main = ClusteringMainLayout(model)
         self._left_sidebar = ClusteringLeftSidebarLayout(model)
         self._right_sidebar = ClusteringRightSidebarLayout(model)
