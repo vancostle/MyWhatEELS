@@ -29,6 +29,7 @@ class BaseView:
             ),
             sizing_mode=self.STRETCH_BOTH,
         )
+        # TODO - This placeholder is not being used in ClusteringView. Consider delete if unnecessary.
         self._no_file_placeholder = Column(
             HTML(
                 model.placeholders.NO_FILE_LOADED,
