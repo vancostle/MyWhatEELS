@@ -14,15 +14,24 @@ class ClusteringModel(BaseModel):
     @property
     def constants(self):
         return self._constants
-    
-    def get_uplodaded_filename(self) -> str:
+    @property
+    def app_state(self) -> AppState:
+        """
+        Get the shared application state instance.
+        
+        Returns:
+            AppState: The shared application state
+        """
+        return self._app_state
+
+    def get_uploaded_filename(self) -> str:
         """
         Get the filename of the currently uploaded dataset from shared state.
         
         Returns:
             str: Uploaded filename, or empty string if none
         """
-        return str(self._app_state.filename) if self._app_state.filename is not None else "No file uploaded"
+        return str(self.app_state.filename) if self.app_state.filename is not None else "No file uploaded"
     
     # --- Multifit Data Access Methods ---
     
@@ -33,7 +42,7 @@ class ClusteringModel(BaseModel):
         Returns:
             bool: True if multifit data exists, False otherwise
         """
-        return self._app_state.multifit is not None
+        return self.app_state.multifit is not None
     
     def get_multifit_data(self) -> Optional[np.ndarray]:
         """
@@ -48,7 +57,7 @@ class ClusteringModel(BaseModel):
                                  or None if data cannot be retrieved
         """
         try:
-            multifit_dataset = self._app_state.multifit
+            multifit_dataset = self.app_state.multifit
             
             if multifit_dataset is None:
                 return None

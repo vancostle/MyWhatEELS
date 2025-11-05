@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Optional
 from whateels.helpers import HTML_ROOT, CSS_ROOT
 from whateels.components import UploadedFile
 from whateels.base.mvc import BaseView
+from .managers.layouts import ClusteringLayoutManager
 
 import panel as pn
 
@@ -18,8 +19,9 @@ class ClusteringView(BaseView):
                 str(CSS_ROOT / "dataset_info.css")
             ]
         )
-        
         self._model = model
+        
+        self._layout_manager = ClusteringLayoutManager(self, model)
         
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
@@ -35,9 +37,14 @@ class ClusteringView(BaseView):
         self._agglomerative_run_button = None # Button to run Agglomerative clustering
         
         self._spectral_run_button = None # Button to run Spectral clustering
-
-        self._init_components()
         
+        self._init_components()
+    
+    @property
+    def layout_manager(self) -> ClusteringLayoutManager:
+        """Access the layout manager for the Clustering View."""
+        return self._layout_manager
+
     @property
     def kmeans_input(self):
         """Access the K-Means input widgets."""
@@ -86,13 +93,13 @@ class ClusteringView(BaseView):
         self._dataset_info_layout = component
 
     def _init_components(self):
-        self.sidebar = self._left_sidebar_layout()
-        self.main = self._main_layout()
-        self.right_sidebar = self._right_sidebar_layout()
+        self._left_sidebar = self._left_sidebar_layout()
+        self._main = self._layout_manager.main
+        self._right_sidebar = self._right_sidebar_layout()
 
     def _left_sidebar_layout(self):
         uploaded_file = UploadedFile(
-            filename=str(self._model.get_uplodaded_filename()), 
+            filename=str(self._model.get_uploaded_filename()), 
             sizing_mode=self.STRETCH_WIDTH, 
             margin=(0,0,10,0)
         )
@@ -107,15 +114,24 @@ class ClusteringView(BaseView):
         background_subtraction_label = pn.pane.Markdown(
             "### Background-subtraction", 
         )
+
         self._background_subtraction_switch = pn.widgets.Switch(
             name="Background-subtraction", 
             value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"]
         )
+
+        is_multifitting_available = self._model.is_multifit_available()
+        self._background_subtraction_switch.disabled = not is_multifitting_available
+
+        subtraction_bg_tooltip = (
+            "Enable background-subtraction from multifit results." 
+            if is_multifitting_available else "Must do Multifitting to enable the switch."
+        )
         background_subtraction_container = pn.Row(
             pn.widgets.TooltipIcon(
-                value="Must do Multifitting to enable the switch.", 
+                value=subtraction_bg_tooltip, 
                 css_classes=["tooltip-icon"]
             ),
             background_subtraction_label,
@@ -123,7 +139,7 @@ class ClusteringView(BaseView):
             sizing_mode=self.STRETCH_WIDTH,
             css_classes=["background-subtraction-container"]
         )
-        
+
         k_means_tab = self._create_k_means_tab()
         agglomerative_tab = self._create_agglomerative_tab()
         spectral_tab = self._create_spectral_tab()
@@ -440,10 +456,3 @@ class ClusteringView(BaseView):
             css_classes=DATASET_INFO_CLASS
         )
         return dataset_info
-    
-    def _main_layout(self):
-        main = pn.Column(
-            self._no_file_placeholder,
-            sizing_mode=self.STRETCH_BOTH
-        )
-        return main

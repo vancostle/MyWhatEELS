@@ -16,7 +16,7 @@ class Clustering(CustomPage):
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.sidebar] if AppState().metadata is not None else [],
+            sidebar=[view.left_sidebar] if AppState().metadata is not None else [],
             right_sidebar=[] if AppState().metadata is None else [view.right_sidebar],
             collapsed_sidebar=True,
         )

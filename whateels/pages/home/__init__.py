@@ -15,5 +15,5 @@ class HomePage(CustomPage):
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.sidebar],
+            sidebar=[view.left_sidebar],
         )

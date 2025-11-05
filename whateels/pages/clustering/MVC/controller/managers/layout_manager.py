@@ -39,15 +39,15 @@ class LayoutManager:
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
-        self._view.sidebar.append(component)
+        self._view.left_sidebar.append(component)
         self._view.dataset_info = component
         
     def remove_dataset_info_from_sidebar(self):
         """Remove the last dataset info component from the sidebar, if present."""
         if self._view.dataset_info is None:
             return
-        if self._view.dataset_info in self._view.sidebar:
-            self._view.sidebar.remove(self._view.dataset_info)
+        if self._view.dataset_info in self._view.left_sidebar:
+            self._view.left_sidebar.remove(self._view.dataset_info)
             self._view.dataset_info = None
             
     def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:

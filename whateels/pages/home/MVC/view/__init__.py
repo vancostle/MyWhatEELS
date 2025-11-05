@@ -43,7 +43,7 @@ class HomePageView(BaseView):
         self._dataset_info_layout = component
         
     def _init_components(self):
-        self.sidebar = self._left_sidebar_layout()
+        self.left_sidebar = self._left_sidebar_layout()
         self.main = self._main_layout()
         
     def _left_sidebar_layout(self):
