@@ -90,6 +90,7 @@ class QuantificationController(BaseController):
                 element_item_view, element_item = self._view.get_new_element_item_view(element_item, self._layout.get_max_energy_range())
                 self._model.app_state.quantification_elements.append(element_item)
                 self._layout.add_new_element_input(element_item_view)
+                self.view.quanti_input['shells_multiselect'].value = []
             else:
                 print("Element already added.")
         return

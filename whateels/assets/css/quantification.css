@@ -24,9 +24,14 @@
     flex: 1;
 
     box-sizing: border-box;
+    overflow-y: hidden;
 
     & > .nav.flex-column {
         flex: 1;
+
+    }
+    & > ul {
+        height: 100%;
     }
 }
 

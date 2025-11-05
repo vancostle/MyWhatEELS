@@ -93,8 +93,8 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-                _ON: {_NAME: element_item.__str__() + " <", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
-                _OFF: {_NAME: element_item.__str__() + " ˇ", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'danger'}
+                _ON: {_NAME: element_item.__str__() + " <", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'default'},
+                _OFF: {_NAME: element_item.__str__() + " ˇ", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
             }
 
         slider_button = ToggleButton(
@@ -174,7 +174,7 @@ class QuantificationView(BaseView):
 
         self._quanti_input = {
             "element_num": pn.widgets.IntInput(
-                name='Element Numbering Scheme',
+                name='Element Atomic Number',
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "shells_multiselect": pn.widgets.MultiChoice(
