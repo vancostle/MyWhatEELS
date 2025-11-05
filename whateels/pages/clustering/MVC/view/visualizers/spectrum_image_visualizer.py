@@ -15,7 +15,8 @@ from whateels.helpers.colormaps import (
 )
 
 from sklearn.preprocessing import normalize
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, AgglomerativeClustering, SpectralClustering
+from sklearn.feature_extraction.image import grid_to_graph
 from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING, Literal
 from whateels.components import ResizableColumns
@@ -95,7 +96,10 @@ class SpectrumImageVisualizer(BaseVisualizer):
         self.paneA = None  # Plotly heatmap pane
         self.paneB = None  # Plotly spectrum pane
         self._pc = None    # periodic callback handle
+        
         self._kmeans_run_button = None  # KMeans run button
+        self._agglomerative_run_button = None  # Agglomerative clustering button
+        self._spectral_run_button = None  # Spectral clustering button
 
         # Setup widgets, plots and callbacks
         self._setup_widgets()
@@ -173,7 +177,7 @@ class SpectrumImageVisualizer(BaseVisualizer):
         if isinstance(available_norm, str) and available_norm.lower() == 'none':
             sclust_norm = matrix_norm
         else:
-            sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)
+            sclust_norm = normalize(matrix_norm, norm=available_norm, axis=1, copy=True)  # type: ignore
 
         # Store for later access
         try:
@@ -231,6 +235,333 @@ class SpectrumImageVisualizer(BaseVisualizer):
             import traceback
             traceback.print_exc()
             return None
+
+    # --- Agglomerative Clustering Implementation ---
+    def _agglomerative_clustering(self, matrix, n_clusters, linkage='ward', affinity='euclidean', 
+                                   available_norm='none', use_connectivity=False):
+        """
+        Apply Agglomerative Hierarchical Clustering to the spectrum image data.
+        
+        Parameters:
+        -----------
+        matrix: numpy array (x, y, eloss)
+            Spectrum image data cube.
+        n_clusters: int
+            Number of clusters to form.
+        linkage: string, optional (default='ward')
+            Linkage criterion: 'ward', 'complete', 'average', 'single'.
+            Note: 'ward' only works with 'euclidean' affinity.
+        affinity: string, optional (default='euclidean')
+            Distance metric: 'euclidean', 'l1', 'l2', 'manhattan', 'cosine', etc.
+        available_norm: string, optional (default='none')
+            Normalization to apply before clustering. Options: 'l1', 'l2', 'max', 'none'.
+        use_connectivity: bool, optional (default=False)
+            Whether to use spatial connectivity constraints (pixels cluster with neighbors).
+            
+        Returns:
+        --------
+        labels: numpy array (x, y)
+            Cluster labels for each pixel.
+        centres: numpy array (n_clusters, eloss)
+            Mean spectrum for each cluster (computed after clustering).
+        """
+        # Prepare and (optionally) normalize the matrix using the same helper as KMeans
+        matrix_norm, sclust_norm = self._prepare_clustering_matrix(matrix, available_norm)
+        
+        # Store original shape for reshaping labels later
+        original_shape = matrix.shape
+        
+        # Handle 'ward' linkage constraint (only works with euclidean)
+        if linkage == 'ward' and affinity != 'euclidean':
+            print(f"Warning: 'ward' linkage requires 'euclidean' affinity. Changing affinity to 'euclidean'.")
+            affinity = 'euclidean'
+        
+        # Validate linkage parameter
+        allowed_linkages: tuple[Literal['ward'], Literal['complete'], Literal['average'], Literal['single']] = ('ward', 'complete', 'average', 'single')
+        linkage_value: Literal['ward', 'complete', 'average', 'single'] = linkage if linkage in allowed_linkages else 'ward'
+        
+        # Build connectivity matrix if requested
+        connectivity_matrix = None
+        if use_connectivity:
+            # Create spatial connectivity based on image structure
+            # This ensures pixels cluster with their spatial neighbors
+            ny, nx = original_shape[0], original_shape[1]
+            connectivity_matrix = grid_to_graph(ny, nx)
+        
+        # Create and fit AgglomerativeClustering using the normalized data
+        agglomerative = AgglomerativeClustering(
+            n_clusters=n_clusters,
+            linkage=linkage_value,
+            metric=affinity,
+            connectivity=connectivity_matrix  # type: ignore
+        )
+        
+        labels_1d = agglomerative.fit_predict(sclust_norm)
+        labels = labels_1d.reshape(original_shape[:-1])
+        
+        # Compute cluster centers (mean spectrum for each cluster)
+        centres = np.zeros((n_clusters, matrix.shape[-1]))
+        for i in range(n_clusters):
+            cluster_mask = labels_1d == i
+            if np.any(cluster_mask):
+                centres[i] = matrix_norm[cluster_mask].mean(axis=0)
+        
+        return labels, centres
+
+    def _apply_agglomerative_clustering(self, n_clusters=5, linkage='ward', affinity='euclidean',
+                                       available_norm='none', use_connectivity=False):
+        """
+        Apply Agglomerative clustering to the spectrum image data and update visualization.
+        
+        If background-subtraction switch is active and multifit results are available,
+        uses the background-subtracted data from multifit instead of raw data.
+        """
+        try:
+            # Check if background-subtraction is enabled and multifit data is available
+            use_multifit_data = self._should_use_multifit_data()
+            
+            if use_multifit_data:
+                # Get background-subtracted data from multifit
+                data_cube = self._get_multifit_data()
+                if data_cube is None:
+                    # Fallback to original data if multifit retrieval fails
+                    print("Warning: Could not retrieve multifit data, using original data")
+                    data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            else:
+                # Get the 3D data cube (x, y, energy) from original dataset
+                data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            
+            # Store original heatmap data if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Apply agglomerative clustering
+            labels, centres = self._agglomerative_clustering(
+                data_cube,
+                n_clusters=n_clusters,
+                linkage=linkage,
+                affinity=affinity,
+                available_norm=available_norm,
+                use_connectivity=use_connectivity
+            )
+            
+            self._clustering_results = (labels, centres)
+            self._current_norm = available_norm  # Store for later use
+            
+            # Try to preserve the current paneB height
+            current_b_height = None
+            try:
+                if self.paneB is not None and getattr(self.paneB, 'object', None) is not None:
+                    obj = self.paneB.object
+                    if isinstance(obj, go.Figure):
+                        current_b_height = obj.layout.height
+                    elif isinstance(obj, dict):
+                        current_b_height = obj.get('layout', {}).get('height')
+                    if current_b_height is not None:
+                        try:
+                            current_b_height = int(current_b_height)
+                        except Exception:
+                            pass
+            except Exception:
+                current_b_height = None
+
+            # Create clustering visualization
+            clustering_fig = self._plot_kmeans_labels_plotly(labels, f"Agglomerative Clustering (n={n_clusters})")
+            
+            # Apply preserved height if available
+            try:
+                if current_b_height is not None:
+                    clustering_fig.update_layout(height=current_b_height)
+            except Exception:
+                pass
+
+            # Update the heatmap pane with clustering results
+            if self.paneA is not None:
+                self.paneA.object = self._to_plotly(clustering_fig)
+                self.paneA.param.trigger('object')
+            
+            # Update spectrum pane to show cluster centers
+            self._update_spectrum_with_clusters(centres)
+            
+            self._clustering_active = True
+            
+        except Exception as e:
+            print(f"Error applying agglomerative clustering: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # --- Spectral Clustering Implementation ---
+    def _spectral_clustering(
+        self, 
+        matrix, 
+        n_clusters, 
+        available_norm='none', 
+        n_init=10,
+        assign_labels='kmeans', 
+        affinity='rbf', 
+        n_neighbors=10, 
+        gamma=1.0
+    ):
+        """
+        Apply Spectral Clustering to the spectrum image data.
+        
+        Parameters:
+        -----------
+        matrix: numpy array (x, y, eloss)
+            Spectrum image data cube.
+        n_clusters: int
+            Number of clusters to form.
+        available_norm: string, optional (default='none')
+            Normalization to apply before clustering. Options: 'l1', 'l2', 'max', 'none'.
+        n_init: int, optional (default=10)
+            Number of times the k-means algorithm is run with different centroid seeds
+            (only used if assign_labels='kmeans').
+        assign_labels: string, optional (default='kmeans')
+            Strategy for assigning labels: 'kmeans', 'discretize', 'cluster_qr'.
+        affinity: string, optional (default='rbf')
+            How to construct the affinity matrix: 'nearest_neighbors', 'rbf', 'precomputed', etc.
+        n_neighbors: int, optional (default=10)
+            Number of neighbors for nearest_neighbors affinity.
+        gamma: float, optional (default=1.0)
+            Kernel coefficient for rbf, poly, sigmoid, laplacian and chi2 kernels.
+            
+        Returns:
+        --------
+        labels: numpy array (x, y)
+            Cluster labels for each pixel.
+        centres: numpy array (n_clusters, eloss)
+            Mean spectrum for each cluster (computed after clustering).
+        """
+        # Prepare and (optionally) normalize the matrix using the same helper as KMeans
+        matrix_norm, sclust_norm = self._prepare_clustering_matrix(matrix, available_norm)
+        
+        # Store original shape for reshaping labels later
+        original_shape = matrix.shape
+        
+        # Create and fit SpectralClustering
+        # Note: For 'nearest_neighbors' affinity, increase n_neighbors if you get
+        # "Graph is not fully connected" warnings. For 'rbf', adjust gamma parameter.
+        spectral = SpectralClustering(
+            n_clusters=n_clusters,
+            n_init=n_init,
+            assign_labels=assign_labels,
+            affinity=affinity,
+            n_neighbors=n_neighbors,
+            gamma=gamma,
+            random_state=13
+        )
+        
+        try:
+            labels_1d = spectral.fit_predict(sclust_norm)
+        except Exception as e:
+            print(f"Spectral clustering warning/error: {e}")
+            print(f"Current parameters: affinity={affinity}, n_neighbors={n_neighbors}, gamma={gamma}")
+            print("Suggestion: Try increasing n_neighbors or adjusting gamma parameter")
+            raise
+        labels = labels_1d.reshape(original_shape[:-1])
+        
+        # Compute cluster centers (mean spectrum for each cluster)
+        centres = np.zeros((n_clusters, matrix.shape[-1]))
+        for i in range(n_clusters):
+            cluster_mask = labels_1d == i
+            if np.any(cluster_mask):
+                centres[i] = matrix_norm[cluster_mask].mean(axis=0)
+        
+        return labels, centres
+
+    def _apply_spectral_clustering(
+        self, 
+        n_clusters=5, 
+        available_norm='none', 
+        n_init=10,
+        assign_labels='kmeans', 
+        affinity='rbf', 
+        n_neighbors=10, 
+        gamma=1.0
+    ):
+        """
+        Apply Spectral clustering to the spectrum image data and update visualization.
+        
+        If background-subtraction switch is active and multifit results are available,
+        uses the background-subtracted data from multifit instead of raw data.
+        """
+        try:
+            # Check if background-subtraction is enabled and multifit data is available
+            use_multifit_data = self._should_use_multifit_data()
+            
+            if use_multifit_data:
+                # Get background-subtracted data from multifit
+                data_cube = self._get_multifit_data()
+                if data_cube is None:
+                    # Fallback to original data if multifit retrieval fails
+                    print("Warning: Could not retrieve multifit data, using original data")
+                    data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            else:
+                # Get the 3D data cube (x, y, energy) from original dataset
+                data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+            
+            # Store original heatmap data if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Apply spectral clustering
+            labels, centres = self._spectral_clustering(
+                data_cube,
+                n_clusters=n_clusters,
+                available_norm=available_norm,
+                n_init=n_init,
+                assign_labels=assign_labels,
+                affinity=affinity,
+                n_neighbors=n_neighbors,
+                gamma=gamma
+            )
+            
+            self._clustering_results = (labels, centres)
+            self._current_norm = available_norm  # Store for later use
+            
+            # Try to preserve the current paneB height
+            current_b_height = None
+            try:
+                if self.paneB is not None and getattr(self.paneB, 'object', None) is not None:
+                    obj = self.paneB.object
+                    if isinstance(obj, go.Figure):
+                        current_b_height = obj.layout.height
+                    elif isinstance(obj, dict):
+                        current_b_height = obj.get('layout', {}).get('height')
+                    if current_b_height is not None:
+                        try:
+                            current_b_height = int(current_b_height)
+                        except Exception:
+                            pass
+            except Exception:
+                current_b_height = None
+
+            # Create clustering visualization
+            clustering_fig = self._plot_kmeans_labels_plotly(labels, f"Spectral Clustering (n={n_clusters})")
+            
+            # Apply preserved height if available
+            try:
+                if current_b_height is not None:
+                    clustering_fig.update_layout(height=current_b_height)
+            except Exception:
+                pass
+
+            # Update the heatmap pane with clustering results
+            if self.paneA is not None:
+                self.paneA.object = self._to_plotly(clustering_fig)
+                self.paneA.param.trigger('object')
+            
+            # Update spectrum pane to show cluster centers
+            self._update_spectrum_with_clusters(centres)
+            
+            self._clustering_active = True
+            
+        except Exception as e:
+            print(f"Error applying spectral clustering: {e}")
+            import traceback
+            traceback.print_exc()
+            
+
 
     def _plot_kmeans_labels_plotly(self, labels, title="KMeans Clustering Labels"):
         """
@@ -513,15 +844,24 @@ class SpectrumImageVisualizer(BaseVisualizer):
     def _setup_widgets(self):
        
         if kmeans_run_button := getattr(self._controller.view, "kmeans_run_button", None):
-            self._kmeans_clustering_button = kmeans_run_button # Store reference
-            kmeans_run_button.on_click(self._on_run_clustering_clicked)
+            self._kmeans_run_button = kmeans_run_button # Store reference
+            kmeans_run_button.on_click(self._run_kmeans_clustering)
+            
+        if agglomerative_run_button := getattr(self._controller.view, "agglomerative_run_button", None):
+            self._agglomerative_run_button = agglomerative_run_button # Store reference
+            agglomerative_run_button.on_click(self._run_agglomerative_clustering)
+            
+        if spectral_run_button := getattr(self._controller.view, "spectral_run_button", None):
+            self._spectral_run_button = spectral_run_button # Store reference
+            spectral_run_button.on_click(self._run_spectral_clustering)
 
-
-    def _on_run_clustering_clicked(self, event):
+    def _run_kmeans_clustering(self, event):
         """Handle clustering button click."""
         
-        if self._kmeans_clustering_button is not None:
-            self._kmeans_clustering_button.disabled = True  # Disable to prevent multiple clicks
+        # self._restore_original_view()
+        
+        if self._kmeans_run_button is not None:
+            self._kmeans_run_button.disabled = True  # Disable to prevent multiple clicks
         
         kmeans_input = self._controller.view.kmeans_input
         
@@ -547,13 +887,81 @@ class SpectrumImageVisualizer(BaseVisualizer):
                 init_method=init_method
             )
         finally:
-            if self._kmeans_clustering_button is not None:
-                self._kmeans_clustering_button.disabled = False  # Re-enable button after processing
-        
+            if self._kmeans_run_button is not None:
+                self._kmeans_run_button.disabled = False  # Re-enable button after processing
 
-    def _on_stop_clustering_clicked(self):
-        """Handle restore button click."""
-        self._restore_original_view()
+    def _run_agglomerative_clustering(self, event):
+        """Handle agglomerative clustering button click."""
+        
+        if self._agglomerative_run_button is not None:
+            self._agglomerative_run_button.disabled = True  # Disable to prevent multiple clicks
+        
+        agglomerative_input = self._controller.view.agglomerative_input
+        
+        # Default values
+        n_clusters = 5
+        linkage = 'ward'
+        affinity = 'euclidean'
+        available_norm = 'none'
+        connectivity = False
+
+        if agglomerative_input is not None:
+            n_clusters = agglomerative_input["n_clusters"].value
+            linkage = agglomerative_input["linkage"].value
+            affinity = agglomerative_input["affinity"].value
+            available_norm = agglomerative_input["available_norms"].value
+
+        try:
+            self._apply_agglomerative_clustering(
+                n_clusters=n_clusters,
+                linkage=linkage,
+                affinity=affinity,
+                available_norm=available_norm,
+                use_connectivity=connectivity
+            )
+        finally:
+            if self._agglomerative_run_button is not None:
+                self._agglomerative_run_button.disabled = False
+
+    def _run_spectral_clustering(self, event):
+        """Handle spectral clustering button click."""
+        
+        if self._spectral_run_button is not None:
+            self._spectral_run_button.disabled = True  # Disable to prevent multiple clicks
+        
+        spectral_input = self._controller.view.spectral_input
+        
+        # Default values
+        n_clusters = 5
+        available_norm = 'none'
+        n_init = 10
+        assign_labels = 'kmeans'
+        affinity = 'rbf'
+        n_neighbors = 10
+        gamma = 1.0
+
+        if spectral_input is not None:
+            n_clusters = spectral_input["n_clusters"].value
+            available_norm = spectral_input["available_norms"].value
+            n_init = spectral_input["n_init"].value
+            assign_labels = spectral_input["labels_assign_method"].value
+            affinity = spectral_input["spectral_affinity_metrics"].value
+            n_neighbors = spectral_input["n_neighbors"].value
+            gamma = spectral_input["gamma"].value
+
+        try:
+            self._apply_spectral_clustering(
+                n_clusters=n_clusters,
+                available_norm=available_norm,
+                n_init=n_init,
+                assign_labels=assign_labels,
+                affinity=affinity,
+                n_neighbors=n_neighbors,
+                gamma=gamma
+            )
+        finally:
+            if self._spectral_run_button is not None:
+                self._spectral_run_button.disabled = False
 
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):

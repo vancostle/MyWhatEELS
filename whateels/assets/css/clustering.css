@@ -26,7 +26,7 @@
     box-sizing: border-box;
 
     & > .nav.flex-column {
-        flex: 1;
+        height: 100%;
     }
 }
 
@@ -38,17 +38,19 @@
     height: 100%;
 }
 
-.kmeans-input-container {
+.kmeans-input-container, 
+.agglomerative-input-container, 
+.spectral-input-container {
     flex: 1;
     overflow-y: auto;
     padding: 0.5rem 0;
 }
 
-    .background-subtraction-switch {
-        display: grid;
-        place-content: center;
-    }
+.background-subtraction-switch {
+    display: grid;
+    place-content: center;
+}
 
-    .background-subtraction-container {
-        max-height: 65px;
-    }
+.background-subtraction-container {
+    max-height: 65px;
+}

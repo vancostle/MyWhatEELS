@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 from whateels.helpers import HTML_ROOT, CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton
+from whateels.components import UploadedFile
 from whateels.base.mvc import BaseView
 from whateels.shared_state import AppState
 
@@ -32,18 +32,39 @@ class ClusteringView(BaseView):
         self._kmeans_run_button = None # Button to run K-Means clustering
         self._background_subtraction_switch = None # Switch for background-subtraction option
         self._store_button = None # Button to store clustering results
+        
+        self._agglomerative_run_button = None # Button to run Agglomerative clustering
+        
+        self._spectral_run_button = None # Button to run Spectral clustering
 
         self._init_components()
         
     @property
     def kmeans_input(self):
         """Access the K-Means input widgets."""
-        return self._kmeans_input  
-    
+        return self._kmeans_input
     @property
     def kmeans_run_button(self) -> Optional[pn.widgets.Button]:
         """Access the K-Means input widgets."""
-        return self._kmeans_run_button         
+        return self._kmeans_run_button      
+    
+    @property
+    def agglomerative_input(self):
+        """Access the Agglomerative input widgets."""
+        return self._agglomerative_input   
+    @property
+    def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
+        """Access the Agglomerative run button."""
+        return self._agglomerative_run_button
+    
+    @property
+    def spectral_input(self):
+        """Access the Spectral input widgets."""
+        return self._spectral_input
+    @property
+    def spectral_run_button(self) -> Optional[pn.widgets.Button]:
+        """Access the Spectral run button."""
+        return self._spectral_run_button
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -98,8 +119,35 @@ class ClusteringView(BaseView):
             css_classes=["background-subtraction-container"]
         )
         
-        k_means_tab = pn.pane.Markdown("Clustering controls go here.", sizing_mode=self.STRETCH_WIDTH)
+        k_means_tab = self._create_k_means_tab()
+        agglomerative_tab = self._create_agglomerative_tab()
+        spectral_tab = self._create_spectral_tab()
 
+        clustering_tabs = pn.Tabs(
+            ("K-Means", k_means_tab),
+            ("Agglomerative", agglomerative_tab),
+            ("Spectral", spectral_tab),
+            sizing_mode=self.STRETCH_BOTH,
+            css_classes=["clustering-tabs"]
+        )
+        
+        self._store_button = pn.widgets.Button(
+            name="Store", 
+            button_type="primary", 
+            height=55, 
+            sizing_mode=self.STRETCH_WIDTH,
+            margin=0
+        )
+
+        right_sidebar = pn.Column(
+            background_subtraction_container,
+            clustering_tabs,
+            self._store_button,
+            sizing_mode=self.STRETCH_BOTH
+        )
+        return right_sidebar
+    
+    def _create_k_means_tab(self) -> pn.Column:
         self._kmeans_input = {
             "available_norms": pn.widgets.Select(
                 name='Available norms', 
@@ -154,8 +202,17 @@ class ClusteringView(BaseView):
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["kmeans-tab"]
         )
-                
-        self._agglomerative_input = {
+        
+        return k_means_tab
+    
+    def _create_agglomerative_tab(self) -> pn.Column:
+        agglomerative_input = {
+            "available_norms": pn.widgets.Select(
+                name='Available norms', 
+                options=self._model.constants.AVAILABLE_NORMS,
+                value=self._model.constants.DEFAULT_SELECTED_NORM,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
                 value=5, 
@@ -165,129 +222,127 @@ class ClusteringView(BaseView):
             ),
             "linkage": pn.widgets.Select(
                 name='Linkage Method', 
-                options=['ward', 'complete', 'average', 'single'], 
-                value='ward', 
+                options=self._model.constants.AVAILABLE_LINKAGE_METHODS, 
+                value=self._model.constants.DEFAULT_LINKAGE,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "affinity": pn.widgets.Select(
                 name='Affinity', 
-                options=['euclidean', 'l1', 'l2', 'manhattan', 'cosine'], 
-                value='euclidean', 
-                sizing_mode=self.STRETCH_WIDTH
-            ),
-            "connectivity": ToggleButton(
-                initial_state=False,
-                states={
-                    'on': {
-                        'label': 'Connectivity: On',
-                        'on_click': lambda: print("Connectivity enabled."),
-                        'button_type': 'success'
-                    },
-                    'off': {
-                        'label': 'Connectivity: Off',
-                        'on_click': lambda: print("Connectivity disabled."),
-                        'button_type': 'danger'
-                    }
-                },
-                sizing_mode=self.STRETCH_WIDTH
-            ),
-            "Norm-matrix": ToggleButton(
-                initial_state=False,
-                states={
-                    'on': {
-                        'label': 'Norm-matrix: On',
-                        'on_click': lambda: print("Norm-matrix enabled."),
-                        'button_type': 'success'
-                    },
-                    'off': {
-                        'label': 'Norm-matrix: Off',
-                        'on_click': lambda: print("Norm-matrix disabled."),
-                        'button_type': 'danger'
-                    }
-                },
-                sizing_mode=self.STRETCH_WIDTH
-            ),
+                options=self._model.constants.AVAILABLE_AFFINITIES, 
+                value=self._model.constants.DEFAULT_AFFINITY,
+                sizing_mode=self.STRETCH_WIDTH,
+                disabled=self._model.constants.DEFAULT_LINKAGE == 'ward',
+            )
         }
+
+        # store local reference and on-instance reference to avoid "None" typing issues
+        self._agglomerative_input = agglomerative_input
+
+        # --- Linkage/Affinity interaction: force affinity to 'euclidean' and disable if linkage is 'ward' ---
+        def _on_linkage_change(event):
+            linkage_value = event.new
+            affinity_widget = agglomerative_input["affinity"]
+            if linkage_value == 'ward':
+                affinity_widget.value = 'euclidean'
+                affinity_widget.disabled = True
+            else:
+                affinity_widget.disabled = False
+
+        agglomerative_input["linkage"].param.watch(_on_linkage_change, 'value')
         
+        self._agglomerative_run_button = pn.widgets.Button(
+            name='Run Agglomerative',
+            button_type='success',
+            height=55,
+            margin=(20,0,10,0),
+            sizing_mode=self.STRETCH_WIDTH
+        )
         
         agglomerative_tab = pn.Column(
-            *[widget for widget in self._agglomerative_input.values()],
+            pn.Column(
+                *[widget for widget in agglomerative_input.values()],
+                sizing_mode=self.STRETCH_BOTH,
+                css_classes=["agglomerative-input-container"]
+            ),
+            self._agglomerative_run_button,
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["agglomerative-tab"]
         )
         
+        return agglomerative_tab
+    
+    def _create_spectral_tab(self) -> pn.Column:
         self._spectral_input = {
+            "available_norms": pn.widgets.Select(
+                name='Available norms', 
+                options=self._model.constants.AVAILABLE_NORMS,
+                value=self._model.constants.DEFAULT_SELECTED_NORM,
+                sizing_mode=self.STRETCH_WIDTH
+            ),
             "n_clusters": pn.widgets.IntInput(
                 name="Number of Clusters", 
-                value=5,
+                value=self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS,
                 step=1,
                 end=100,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "n_init": pn.widgets.IntInput(
                 name="Number of Initializations",
-                value=10,
+                value=self._model.constants.DEFAULT_NUMBER_OF_INIT,
                 step=1,
                 end=100,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "labels_assign_method": pn.widgets.Select(
                 name='Labels Assignment Method',
-                options=['kmeans', 'spectral', 'agglomerative'],
-                value='kmeans',
+                options=self._model.constants.AVAILABLE_SPECTRAL_ASSIGN_LABELS,
+                value=self._model.constants.DEFAULT_SPECTRAL_ASSIGN_LABELS,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "spectral_affinity_metrics": pn.widgets.Select(
                 name='Spectral Affinity Metrics',
-                options=['nearest_neighbors', 'precomputed', 'rbf', 'poly', 'sigmoid'],
-                value='rbf',
+                options=self._model.constants.AVAILABLE_SPECTRAL_AFFINITIES,
+                value=self._model.constants.DEFAULT_SPECTRAL_AFFINITY,
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "n_neighbors": pn.widgets.IntInput(
                 name="Number of Neighbors",
-                value=10,
+                value=self._model.constants.DEFAULT_SPECTRAL_N_NEIGHBORS,
                 step=1,
-                end=100,
+                end=1000,
                 sizing_mode=self.STRETCH_WIDTH
             ),
-            "gamma": pn.widgets.FloatInput(
+            "gamma": pn.widgets.EditableFloatSlider(
                 name="Gamma",
-                value=1.0,
-                step=0.1,
+                value=self._model.constants.DEFAULT_SPECTRAL_GAMMA,
+                start=self._model.constants.DEFAULT_SPECTRAL_GAMMA,
+                step=0.5,
                 end=10.0,
-                sizing_mode=self.STRETCH_WIDTH
+                sizing_mode=self.STRETCH_WIDTH,
+                margin=(10,18,0,18)
             ),
         }
+        
+        self._spectral_run_button = pn.widgets.Button(
+            name='Run Spectral',
+            button_type='success',
+            height=55,
+            margin=(20,0,10,0),
+            sizing_mode=self.STRETCH_WIDTH
+        )
 
         spectral_tab = pn.Column(
-            *[widget for widget in self._spectral_input.values()],
+            pn.Column(
+                *[widget for widget in self._spectral_input.values()],
+                sizing_mode=self.STRETCH_BOTH,
+                css_classes=["spectral-input-container"]
+            ),
+            self._spectral_run_button,
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["spectral-tab"]
         )
-
-        clustering_tabs = pn.Tabs(
-            ("K-Means", k_means_tab),
-            ("Agglomerative", agglomerative_tab),
-            ("Spectral", spectral_tab),
-            sizing_mode=self.STRETCH_BOTH,
-            css_classes=["clustering-tabs"]
-        )
         
-        self._store_button = pn.widgets.Button(
-            name="Store", 
-            button_type="primary", 
-            height=55, 
-            sizing_mode=self.STRETCH_WIDTH,
-            margin=0
-        )
-
-        right_sidebar = pn.Column(
-            background_subtraction_container,
-            clustering_tabs,
-            self._store_button,
-            sizing_mode=self.STRETCH_BOTH
-        )
-        return right_sidebar
+        return spectral_tab
     
     def create_tab_and_dataset_info(self):
         # File and encoding constants

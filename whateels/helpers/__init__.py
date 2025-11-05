@@ -4,3 +4,4 @@ from .constants import *
 from .spectrum_extractor import SpectrumExtractor
 from .spectrum_fitting import SpectrumFitting
 from .in_memory_file import InMemoryFile
+from .safe_converter import SafeConverter

@@ -8,7 +8,6 @@ The AppState uses param for reactive updates across the application.
 """
 
 import param
-from xarray import Dataset
 from .helpers.logging import Logger
 
 _logger = Logger.get_logger("shared_state.log", __name__)
@@ -50,8 +49,8 @@ class AppState(param.Parameterized):
         Name of the currently loaded file.
     """)
     
-    selected_dataset = param.Parameter(default=None, doc="""
-        Currently selected dataset (xarray.Dataset) for operations.
+    selected_tab_index_dataset = param.Integer(default=0, doc="""
+        Index of the currently selected dataset tab.
     """)
 
     quantification_elements = param.List(default=list(), doc="""
@@ -105,7 +104,12 @@ class AppState(param.Parameterized):
             _logger.info(f"Filename updated via param: {self.filename}")
         else:
             _logger.info("Filename cleared via param")
-        
+            
+    @param.depends('selected_tab_index_dataset', watch=True)
+    def _on_selected_tab_index_change(self):
+        """Called automatically when selected_tab_index_dataset changes."""
+        _logger.info(f"Selected dataset tab index changed to: {self.selected_tab_index_dataset}")
+
     def clear_metadata(self):
         self.metadata = None
         
@@ -114,17 +118,17 @@ class AppState(param.Parameterized):
         
     def clear_filename(self):
         self.filename = ""
-
-    def clear_selected_dataset(self):
-        self.selected_dataset = None
     
     def clear_elements_selected(self):
         self.quantification_elements = []
+        
+    def clear_selected_tab_index(self):
+        self.selected_tab_index_dataset = 0
 
     def clear_all(self):
         """Clear all shared state parameters."""
         self.clear_metadata()
         self.clear_datasets()
         self.clear_filename()
-        self.clear_selected_dataset()
         self.clear_elements_selected()
+        self.clear_selected_tab_index()

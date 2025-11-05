@@ -2,9 +2,10 @@ from .managers import LayoutManager
 from whateels.base.mvc import BaseController
 from whateels.shared_state import AppState
 from xarray import Dataset
-# from scikit-learn.cluster import KMeans
+from whateels.helpers.safe_converter import SafeConverter
+import panel as pn
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import ClusteringModel
     from ..view import ClusteringView
@@ -13,27 +14,25 @@ class ClusteringController(BaseController):
 
     def __init__(self, model: "ClusteringModel", view: "ClusteringView"):
         super().__init__(model, view)
-        
+
         self._view = view
         self._model = model
         
         self._layout = LayoutManager(view, self, model)
         
-        app_state = AppState()
-        all_datasets = app_state.all_datasets
-
-        if not isinstance(all_datasets, list) or not all_datasets:
+        all_datasets = AppState().all_datasets
+        
+        # Get 'tab' query parameter from URL
+        tab_param = self._get_query_param("tab")
+        # Convert to integer with default -1
+        tab_param = SafeConverter.to_int(tab_param, default=-1) # -1 indicates invalid index in this context
+        
+        # Validate datasets and tab index
+        if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
             self.base_layout.empty_main()
             return
         
-        eels = self._get_only_eels_datasets(all_datasets)
-        self._layout.create_tab_and_dataset_info(eels)
-        
-        # K-Means related attributes
-        self._current_available_norms_value: Optional[str] = self._model.constants.DEFAULT_SELECTED_NORM
-        self._current_n_clusters_value: Optional[int] = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
-        
-        self._kmeans_user_update(view)
+        self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
 
     @property
     def view(self) -> "ClusteringView":
@@ -43,36 +42,11 @@ class ClusteringController(BaseController):
     def layout(self) -> LayoutManager:
         """Access the LayoutManager instance."""
         return self._layout
-        
-    def _kmeans_user_update(self, view: "ClusteringView"):
-        """Debug method to print the K-Means input widgets."""
-        if view.kmeans_input is not None:
-            view.kmeans_input["available_norms"].param.watch(self._available_norms_watcher, 'value')
-            view.kmeans_input["n_clusters"].param.watch(self._n_cluster_watcher, 'value')
-            view.kmeans_input["n_init"].param.watch(self._n_init_watcher, 'value')
-            view.kmeans_input["max_iter"].param.watch(self._max_iter_watcher, 'value')
-            view.kmeans_input["init_method"].param.watch(self._init_method_watcher, 'value')
 
-    def _available_norms_watcher(self, event):
-        """Watcher for changes in the available norms selection."""
-        self._current_available_norms_value = event.new
-
-    def _n_cluster_watcher(self, event):
-        """Watcher for changes in the number of clusters selection."""
-        self._current_n_clusters_value = event.new
-        
-    def _n_init_watcher(self, event):
-        """Watcher for changes in the number of initializations selection."""
-        self._current_n_init_value = event.new
-        
-    def _max_iter_watcher(self, event):
-        """Watcher for changes in the maximum iterations selection."""
-        self._current_max_iter_value = event.new
-        
-    def _init_method_watcher(self, event):
-        """Watcher for changes in the initialization method selection."""
-        self._current_init_method_value = event.new
-    
-    def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
-        """Filter and return only EELS datasets from the provided list."""
-        return [ds for ds in datasets if "Eloss" in ds.coords]
+    def _get_query_param(self, param_name: str) -> str | None:
+        """Retrieve a specific query parameter from the URL, handling both list and single value cases."""
+        params = pn.state.location.query_params if pn.state.location else {}
+        value = params.get(param_name, None)
+        if isinstance(value, list):
+            return value[0]
+        return value

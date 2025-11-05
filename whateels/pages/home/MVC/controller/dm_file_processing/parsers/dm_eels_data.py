@@ -76,37 +76,28 @@ class DM_EELS_data:
         )
         return dims[::-1]
 
-    def get_image_name(self, image: np.ndarray) -> str:
+    def get_image_name(self, image: dict) -> str:
         """Get the name of a specific spectrum image from its metadata dictionary."""
         NAME = "Name"
         NO_NAME = "Unnamed Image"
         return image.get(NAME, NO_NAME)
     
     def get_beam_energy(self, image) -> float:
-        """Get beam energy for a specific spectrum image."""
-
+        """
+        Get beam energy for a specific spectrum image.
+        """
+        IMAGE_TAGS = self._IMAGE_TAGS
         MICROSCOPE_INFO = "Microscope Info"
         VOLTAGE = "Voltage"
-        E0 = 0.0  # Default value in keV
-
+        VOLT_TO_KILOVOLT = 1000
         try:
-            microscope_voltage = image[self._IMAGE_TAGS][MICROSCOPE_INFO][VOLTAGE]
-            E0 = self._volt_to_kilovolt(microscope_voltage)
-        except KeyError as e:
-            msg = "Expected a value for the beam energy. No such value in the parsed dictionary found"
-            _logger.warning(msg)
-            _logger.warning(e)
-            self._recursively_add_key(
-                self._spectral_info, [self._IMAGE_TAGS, MICROSCOPE_INFO]
-            )
-            _logger.info(
-                f"Added Route to the dictionary -> [{self._IMAGE_TAGS}][{MICROSCOPE_INFO}]"
-            )
-            _logger.info(f"Acceleration voltage V0 value updated to {microscope_voltage} V")
-
-        return E0
+            microscope_voltage = image[IMAGE_TAGS][MICROSCOPE_INFO][VOLTAGE]
+            return microscope_voltage / VOLT_TO_KILOVOLT
+        except (KeyError, TypeError):
+            # Return a default value if not found
+            return 0.0
     
-    def get_convergence_angle(self, image: np.ndarray) -> float:
+    def get_convergence_angle(self, image: dict) -> float:
         """Get convergence angle for a specific spectrum image."""
         
         EELS = "EELS"
@@ -131,7 +122,7 @@ class DM_EELS_data:
 
         return alpha
 
-    def get_collection_angle(self, image: np.ndarray) -> float:
+    def get_collection_angle(self, image: dict) -> float:
         """"Get collection angle for a specific spectrum image."""
 
         EELS = "EELS"
@@ -194,11 +185,6 @@ class DM_EELS_data:
         return self._all_spectral_info
 
     # ==================== PRIVATE METHODS ====================
-    
-    def _volt_to_kilovolt(self, voltage: float) -> float:
-        """Convert voltage from volts to kilovolts."""
-        VOLT_TO_KILOVOLT = 1000
-        return voltage / VOLT_TO_KILOVOLT
 
     def _filter_spectrum_images(self, infoDict):
         """
@@ -330,6 +316,22 @@ class DM_EELS_data:
         """Origins for the dimensions of a single image that include the scaling factors"""
         return -1 * self._get_origins_of_one_image(image_dict) * self._get_scales_of_one_image(image_dict)
 
+    def _get_units(self):
+        """Units for the scales involved, one per each dimension"""
+        
+        UNITS = 'Units'
+        
+        # TODO safeguard for the cases where the dimensions cannot be read from file
+        units = []
+        for k, el in self._spectral_info[self._IMAGE_DATA][self._CALIBRATIONS][
+            self._DIMENSION
+        ].items():
+            if not el[UNITS]:
+                # self.spectralInfo['ImageData']['Calibrations']['Dimension'][k]['Units'] = 'a.u.'
+                el[UNITS] = "a.u."
+            units.append(el[UNITS])
+        return tuple(units[::-1])
+    
     def _get_units(self):
         """Units for the scales involved, one per each dimension"""
         

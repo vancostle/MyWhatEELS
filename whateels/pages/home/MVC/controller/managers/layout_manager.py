@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, override
 from whateels.errors.dm.data import DMPlotCreationError
 from ..visualizer_factory import VisualizerFactory
 from panel.viewable import Viewable
+from whateels.shared_state import AppState
+
 if TYPE_CHECKING:
     from ...view import HomePageView
     from ...model import HomePageModel
@@ -66,6 +68,9 @@ class HomePageLayoutManager:
         NOT_AVAILABLE = 'N/A'
         ACTIVE = 'active'
         STRETCH_BOTH = 'stretch_both'
+        DEFAULT_TAB_INDEX = 0
+
+        app_state = AppState()
 
         try:
             # Clear previous dataset info panels to prevent caching old data
@@ -89,21 +94,27 @@ class HomePageLayoutManager:
                 plots_tab.append((image_name, visualizer_plots))
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
-                
-            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
-                
+
+            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            # Set the active tab based on shared state or default
+            plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
+            
             # Update UI
             self._controller.base_layout.update_main(plots_tab)
             self.remove_dataset_info_from_sidebar()
-            self.add_component_to_sidebar_layout(self._all_dataset_info[0])
-
+            self.add_component_to_sidebar_layout(self._all_dataset_info[DEFAULT_TAB_INDEX])
+            
         except Exception as e:
             raise DMPlotCreationError(e)
 
     def _on_tab_with_visualizers_change(self, event):
         """Handle tab changes by updating sidebar with selected dataset info."""
 
-        new_tab = event.new
-        print(new_tab)
+        # Get the selected tab index
+        selected_tab_index = event.new
+
+        AppState().selected_tab_index_dataset = selected_tab_index  # Update shared state
+
+        # Update sidebar with the corresponding dataset info
         self._controller.layout.remove_dataset_info_from_sidebar()
-        self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[new_tab])
+        self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[selected_tab_index])

@@ -7,7 +7,7 @@ class HomePage(CustomPage):
     This class extends CustomPage to create a specific home page layout.
     """
 
-    def __init__(self):
+    def __init__(self):        
         model = HomePageModel()
         view = HomePageView(model)
         HomePageController(model, view)

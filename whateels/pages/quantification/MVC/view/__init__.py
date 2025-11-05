@@ -50,7 +50,7 @@ class QuantificationView(BaseView):
         return self._quanti_add_element_button
     
     @property
-    def element_item_view_container(self):
+    def element_item_view_container(self) -> pn.Column:
         """Access the container for element item views."""
         return self._element_item_view_container
     

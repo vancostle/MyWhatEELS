@@ -3,9 +3,11 @@ from typing import TYPE_CHECKING
 
 from whateels.errors.dm.data import DMPlotCreationError
 from ..visualizer_factory import VisualizerFactory
+from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
     from ...view import QuantificationView
+    from ...view.visualizers.abstract_eels_visualizer import AbstractEELSVisualizer
     from ...model import QuantificationModel
     from ...controller import QuantificationController
     from xarray import Dataset
@@ -40,7 +42,7 @@ class LayoutManager:
         self._all_dataset_info: list[pn.viewable.Viewable] = []
         self._max_energy_range = [float('inf'), float('-inf')]
         self._plots_tab = None
-        self._chosen_visualizers = []
+        self._chosen_visualizers: list[AbstractEELSVisualizer] = []
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
@@ -70,13 +72,16 @@ class LayoutManager:
         NOT_AVAILABLE = 'N/A'
         ACTIVE = 'active'
         STRETCH_BOTH = 'stretch_both'
+        DEFAULT_TAB_INDEX = 0
+
+        app_state = AppState()
 
         try:
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
             
             visualizer_factory = VisualizerFactory(self._model, self._controller)
-            self._plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
+            plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
             self._max_energy_range = [float('inf'), float('-inf')]
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
@@ -94,16 +99,18 @@ class LayoutManager:
                     self._max_energy_range[1] = max(self._max_energy_range[1], energy_axis[-1])
                 visualizer_plots = chosen_visualizer.create_plots()
                 
-                self._plots_tab.append((image_name, visualizer_plots))
+                plots_tab.append((image_name, visualizer_plots))
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
-            self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE)
-                
+            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            # Set the active tab based on shared state or default
+            plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
+            
             # Update UI
-            self._controller.base_layout.update_main(self._plots_tab)
+            self._controller.base_layout.update_main(plots_tab)
             self.remove_dataset_info_from_sidebar()
-            self.add_component_to_sidebar_layout(self._all_dataset_info[0])
+            self.add_component_to_sidebar_layout(self._all_dataset_info[DEFAULT_TAB_INDEX])
 
         except Exception as e:
             raise DMPlotCreationError(e)
@@ -114,9 +121,14 @@ class LayoutManager:
     def _on_tab_with_visualizers_change(self, event):
         """Handle tab changes by updating sidebar with selected dataset info."""
 
-        new_tab = event.new
+        # Get the selected tab index
+        selected_tab_index = event.new
+
+        AppState().selected_tab_index_dataset = selected_tab_index  # Update shared state
+
+        # Update sidebar with the corresponding dataset info
         self._controller.layout.remove_dataset_info_from_sidebar()
-        self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[new_tab])
+        self._controller.layout.add_component_to_sidebar_layout(self._all_dataset_info[selected_tab_index])
 
     def add_new_element_input(self, element_input_view: pn.viewable.Viewable):
         """Add a new element input component to the sidebar."""
@@ -130,5 +142,5 @@ class LayoutManager:
     def plot_quantification_pie(self):
         """Plot the quantification pie chart using the model's plotting method."""
         print ("Plotting quantification pie chart...")
-        self._chosen_visualizers[0].plot_quantification_pie(self.element_quant_data)
+        self._chosen_visualizers[AppState().selected_tab_index_dataset].plot_quantification_pie(self.element_quant_data)
         self._controller.base_layout.update_main(self._plots_tab)
