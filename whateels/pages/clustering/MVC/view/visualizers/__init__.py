@@ -1,15 +1,12 @@
 """
 Clustering page visualizers.
 
-Imports:
-- Base ImageVisualizer from shared components
-- Clustering-specific SpectrumImageVisualizer (extends base component)
+All visualizers for the clustering page:
+- ImageVisualizer: Simple 2D image heatmap (wraps shared component)
+- SpectrumImageVisualizer: Interactive 3D datacube with clustering features
 """
 
-# Import base ImageVisualizer from shared components
-from whateels.components.visualizers import ImageVisualizer
-
-# Import clustering-specific SpectrumImageVisualizer (local, extends base)
+from .image_visualizer import ImageVisualizer
 from .spectrum_image_visualizer import SpectrumImageVisualizer
 
 __all__ = [

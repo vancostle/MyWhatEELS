@@ -35,7 +35,13 @@ def get_nclusters_cmap(
     base_colors: List[Tuple[float, float, float, float]] = []
     if hasattr(cmap, 'colors'):
         try:
-            base_colors = [tuple(map(float, c)) for c in cmap.colors]
+            colors_attr = getattr(cmap, 'colors')
+            for c in colors_attr:
+                color_tuple = tuple(map(float, c))
+                if len(color_tuple) == 3:
+                    base_colors.append((color_tuple[0], color_tuple[1], color_tuple[2], 1.0))
+                elif len(color_tuple) >= 4:
+                    base_colors.append((color_tuple[0], color_tuple[1], color_tuple[2], color_tuple[3]))
         except Exception:
             base_colors = []
 
@@ -47,7 +53,14 @@ def get_nclusters_cmap(
         if index_order:
             required = max(required, max(index_order) + 1)
         resolution = max(required, 1)
-        base_colors = [tuple(map(float, cmap(p))) for p in np.linspace(0.0, 1.0, resolution)]
+        base_colors = []
+        for p in np.linspace(0.0, 1.0, resolution):
+            color = cmap(p)
+            color_tuple = tuple(map(float, color))
+            if len(color_tuple) == 3:
+                base_colors.append((color_tuple[0], color_tuple[1], color_tuple[2], 1.0))
+            elif len(color_tuple) >= 4:
+                base_colors.append((color_tuple[0], color_tuple[1], color_tuple[2], color_tuple[3]))
 
     if index_order:
         # Validate and build ordered list, cycling if necessary
@@ -59,7 +72,14 @@ def get_nclusters_cmap(
         max_idx = max(idxs)
         if max_idx >= len(base_colors):
             resolution = max_idx + 1
-            base_colors = [tuple(map(float, cmap(p))) for p in np.linspace(0.0, 1.0, resolution)]
+            base_colors = []
+            for p in np.linspace(0.0, 1.0, resolution):
+                color = cmap(p)
+                color_tuple = tuple(map(float, color))
+                if len(color_tuple) == 3:
+                    base_colors.append((color_tuple[0], color_tuple[1], color_tuple[2], 1.0))
+                elif len(color_tuple) >= 4:
+                    base_colors.append((color_tuple[0], color_tuple[1], color_tuple[2], color_tuple[3]))
 
         i = 0
         while len(ordered) < n_clusters:
@@ -70,7 +90,14 @@ def get_nclusters_cmap(
 
     # default: sample n distinct positions in the [0,1] range
     positions = np.linspace(0.0, 1.0, n_clusters)
-    return [tuple(map(float, cmap(p))) for p in positions]
+    result = []
+    for p in positions:
+        color = cmap(p)
+        if len(color) == 3:
+            result.append((float(color[0]), float(color[1]), float(color[2]), 1.0))
+        else:
+            result.append((float(color[0]), float(color[1]), float(color[2]), float(color[3])))
+    return result
 
 
 def to_plotly_color(color: ColorLike) -> str:
