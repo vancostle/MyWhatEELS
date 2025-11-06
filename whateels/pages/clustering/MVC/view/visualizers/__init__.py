@@ -1,15 +1,18 @@
 """
-Visualization factories for different EELS data types.
+Clustering page visualizers.
+
+Imports:
+- Base ImageVisualizer from shared components
+- Clustering-specific SpectrumImageVisualizer (extends base component)
 """
 
-# from .spectrum_line_visualizer import SpectrumLineVisualizer
+# Import base ImageVisualizer from shared components
+from whateels.components.visualizers import ImageVisualizer
+
+# Import clustering-specific SpectrumImageVisualizer (local, extends base)
 from .spectrum_image_visualizer import SpectrumImageVisualizer
-# from .single_spectrum_visualizer import SingleSpectrumVisualizer
-from .image_visualizer import ImageVisualizer
 
 __all__ = [
-    # 'SpectrumLineVisualizer', 
-    'SpectrumImageVisualizer',
-    # 'SingleSpectrumVisualizer',
-    'ImageVisualizer'
+    'SpectrumImageVisualizer',  # Clustering-enhanced visualizer
+    'ImageVisualizer'             # Base component from shared
 ]
