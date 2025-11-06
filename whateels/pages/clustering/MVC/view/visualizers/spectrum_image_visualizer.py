@@ -8,7 +8,7 @@ Extends the shared SpectrumImageVisualizer component with clustering capabilitie
 - Cluster center visualization
 - Normalized spectrum display
 
-This visualizer orchestrates the UI interactions and delegates to helper modules
+This visualizer orchestrates the UI interactions and delegates to OOP utility classes
 for algorithms, data preparation, and plotting.
 """
 
@@ -22,17 +22,13 @@ from whateels.components.visualizers import SpectrumImageVisualizer as SharedSpe
 from whateels.components import ResizableColumns
 from typing import override, TYPE_CHECKING
 
-# Import clustering page helpers
+# Import clustering page utilities (OOP classes)
 from ....utils import (
-    kmeans_clustering,
-    agglomerative_clustering,
-    spectral_clustering,
-    prepare_clustering_matrix,
-    should_use_multifit_data,
-    get_multifit_data,
-    plot_cluster_labels,
-    build_cluster_colors_and_scale,
-    plot_cluster_centers,
+    DataPreprocessor,
+    KMeansClusteringAlgorithm,
+    AgglomerativeClusteringAlgorithm,
+    SpectralClusteringAlgorithm,
+    ClusterVisualizer,
 )
 
 if TYPE_CHECKING:
@@ -86,6 +82,10 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         self._agglomerative_run_button = None
         self._spectral_run_button = None
         
+        # OOP utility instances
+        self._preprocessor = DataPreprocessor()
+        self._visualizer: ClusterVisualizer | None = None  # Created after clustering
+        
         # Cluster colors (set after clustering)
         self.cluster_colors = []
 
@@ -111,25 +111,23 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             if self._original_heatmap_data is None:
                 self._original_heatmap_data = data_cube.sum(axis=-1)
             
-            # Prepare data
-            allowed_norms = tuple(self._model.constants.AVAILABLE_NORMS)
-            matrix_norm, sclust_norm = prepare_clustering_matrix(data_cube, available_norm, allowed_norms)
+            # Prepare data using OOP preprocessor
+            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
             
             # Store for later use in visualization
             self._last_clustering_matrix = matrix_norm
             self._last_clustering_input = sclust_norm
             
-            # Apply clustering algorithm
-            labels, centres = kmeans_clustering(
-                data_cube,
-                n_clusters,
-                available_norm,
+            # Apply clustering algorithm using OOP class
+            init_val = 'k-means++' if init_method == 'k-means++' else 'random'
+            algorithm = KMeansClusteringAlgorithm(
+                n_clusters=n_clusters,
+                norm=available_norm,  # type: ignore
                 n_init=n_init,
                 max_iter=max_iter,
-                init_method=init_method,
-                matrix_norm=matrix_norm,
-                sclust_norm=sclust_norm
+                init_method=init_val
             )
+            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
             
             # Store results and update visualization
             self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "KMeans")
@@ -156,25 +154,23 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             if self._original_heatmap_data is None:
                 self._original_heatmap_data = data_cube.sum(axis=-1)
             
-            # Prepare data
-            allowed_norms = tuple(self._model.constants.AVAILABLE_NORMS)
-            matrix_norm, sclust_norm = prepare_clustering_matrix(data_cube, available_norm, allowed_norms)
+            # Prepare data using OOP preprocessor
+            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
             
             # Store for later use in visualization
             self._last_clustering_matrix = matrix_norm
             self._last_clustering_input = sclust_norm
             
-            # Apply clustering algorithm
-            labels, centres = agglomerative_clustering(
-                data_cube,
-                n_clusters,
-                available_norm,
-                linkage=linkage,
+            # Apply clustering algorithm using OOP class
+            linkage_val = linkage if linkage in ('ward', 'complete', 'average', 'single') else 'ward'
+            algorithm = AgglomerativeClusteringAlgorithm(
+                n_clusters=n_clusters,
+                norm=available_norm,  # type: ignore
+                linkage=linkage_val,  # type: ignore
                 affinity=affinity,
-                use_connectivity=use_connectivity,
-                matrix_norm=matrix_norm,
-                sclust_norm=sclust_norm
+                use_connectivity=use_connectivity
             )
+            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
             
             # Store results and update visualization
             self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Agglomerative")
@@ -203,27 +199,25 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             if self._original_heatmap_data is None:
                 self._original_heatmap_data = data_cube.sum(axis=-1)
             
-            # Prepare data
-            allowed_norms = tuple(self._model.constants.AVAILABLE_NORMS)
-            matrix_norm, sclust_norm = prepare_clustering_matrix(data_cube, available_norm, allowed_norms)
+            # Prepare data using OOP preprocessor
+            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
             
             # Store for later use in visualization
             self._last_clustering_matrix = matrix_norm
             self._last_clustering_input = sclust_norm
             
-            # Apply clustering algorithm
-            labels, centres = spectral_clustering(
-                data_cube,
-                n_clusters,
-                available_norm,
+            # Apply clustering algorithm using OOP class
+            assign_val = assign_labels if assign_labels in ('kmeans', 'discretize', 'cluster_qr') else 'kmeans'
+            algorithm = SpectralClusteringAlgorithm(
+                n_clusters=n_clusters,
+                norm=available_norm,  # type: ignore
                 n_init=n_init,
-                assign_labels=assign_labels,
+                assign_labels=assign_val,  # type: ignore
                 affinity=affinity,
                 n_neighbors=n_neighbors,
-                gamma=gamma,
-                matrix_norm=matrix_norm,
-                sclust_norm=sclust_norm
+                gamma=gamma
             )
+            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
             
             # Store results and update visualization
             self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Spectral")
@@ -241,13 +235,13 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         try:
             switch = self._controller.view.right_sidebar.background_subtraction_switch
             switch_value = bool(switch.value) if switch and switch.value is not None else False
-            use_multifit = should_use_multifit_data(self._model, switch_value)
+            use_multifit = DataPreprocessor.should_use_multifit_data(self._model, switch_value)
         except Exception:
             use_multifit = False
         
         if use_multifit:
             # Get background-subtracted data from multifit
-            data_cube = get_multifit_data(self._model)
+            data_cube = DataPreprocessor.get_multifit_data(self._model)
             if data_cube is None:
                 print("Warning: Could not retrieve multifit data, using original data")
                 data_cube = np.asarray(self._electron_count_data.fillna(0.0))
@@ -262,14 +256,15 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         self._clustering_results = (labels, centres)
         self._current_norm = norm
         
-        # Build colors for clusters
-        self.cluster_colors, _ = build_cluster_colors_and_scale(n_clusters)
+        # Create visualizer and build colors for clusters
+        self._visualizer = ClusterVisualizer(n_clusters)
+        self.cluster_colors = self._visualizer.cluster_colors
         
         # Try to preserve current paneB height
         current_b_height = self._get_current_pane_height()
         
-        # Create clustering visualization
-        clustering_fig = plot_cluster_labels(
+        # Create clustering visualization using OOP visualizer
+        clustering_fig = self._visualizer.plot_labels(
             labels,
             title=f"{algorithm_name} Clustering (n={n_clusters})",
             height=current_b_height
@@ -281,7 +276,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             self.paneA.param.trigger('object')
         
         # Update spectrum pane to show cluster centers
-        centers_fig = plot_cluster_centers(centres, self._energy, self.cluster_colors)
+        centers_fig = self._visualizer.plot_centers(centres, self._energy)
         if self.paneB is not None:
             self.paneB.object = centers_fig
             self.paneB.param.trigger('object')
@@ -580,16 +575,15 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                             self.paneB.object = fig
                 else:
                     # Show all clusters and disable hover
-                    if self._clustering_active and self._clustering_results is not None:
+                    if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
                         self._hover_disabled = True  # Disable hover
                         
                         _, centres = self._clustering_results
                         
-                        # Create figure with all cluster centers
-                        fig = plot_cluster_centers(
+                        # Create figure with all cluster centers using OOP visualizer
+                        fig = self._visualizer.plot_centers(
                             centres,
                             self._energy,
-                            self.cluster_colors,
                             title="All Cluster Centers (Double Click again to re-enable hover)"
                         )
                         

@@ -56,11 +56,12 @@ class ClusteringAlgorithm(ABC):
             - labels: 2D array (x, y) with cluster assignments
             - centers: 2D array (n_clusters, eloss) with cluster centers
         """
-        from .preprocessing import prepare_clustering_matrix
+        from .preprocessing import DataPreprocessor
         
         # Use provided normalized matrices or prepare them
         if matrix_norm is None or sclust_norm is None:
-            self._matrix_norm, self._sclust_norm = prepare_clustering_matrix(matrix, self.norm)
+            preprocessor = DataPreprocessor()
+            self._matrix_norm, self._sclust_norm = preprocessor.prepare_matrix(matrix, self.norm)  # type: ignore
         else:
             self._matrix_norm = matrix_norm
             self._sclust_norm = sclust_norm
@@ -286,81 +287,3 @@ class SpectralClusteringAlgorithm(ClusteringAlgorithm):
         centers = self._compute_centers_from_labels(labels_1d, matrix)
         
         return labels, centers
-
-
-# ============================================================================
-# Backwards Compatibility: Legacy function wrappers
-# ============================================================================
-
-def kmeans_clustering(
-    matrix: "ndarray",
-    n_clusters: int,
-    norm: str,
-    n_init: int = 10,
-    max_iter: int = 300,
-    init_method: str = 'k-means++',
-    matrix_norm: "ndarray | None" = None,
-    sclust_norm: "ndarray | None" = None
-) -> tuple["ndarray", "ndarray"]:
-    """Legacy function wrapper for backwards compatibility."""
-    init_value: Literal['k-means++', 'random'] = 'k-means++' if init_method == 'k-means++' else 'random'
-    algorithm = KMeansClusteringAlgorithm(
-        n_clusters=n_clusters,
-        norm=norm,  # type: ignore
-        n_init=n_init,
-        max_iter=max_iter,
-        init_method=init_value
-    )
-    return algorithm.fit(matrix, matrix_norm, sclust_norm)
-
-
-def agglomerative_clustering(
-    matrix: "ndarray",
-    n_clusters: int,
-    norm: str,
-    linkage: str = 'ward',
-    affinity: str = 'euclidean',
-    use_connectivity: bool = False,
-    matrix_norm: "ndarray | None" = None,
-    sclust_norm: "ndarray | None" = None
-) -> tuple["ndarray", "ndarray"]:
-    """Legacy function wrapper for backwards compatibility."""
-    linkage_value: Literal['ward', 'complete', 'average', 'single'] = (
-        linkage if linkage in ('ward', 'complete', 'average', 'single') else 'ward'  # type: ignore
-    )
-    algorithm = AgglomerativeClusteringAlgorithm(
-        n_clusters=n_clusters,
-        norm=norm,  # type: ignore
-        linkage=linkage_value,
-        affinity=affinity,
-        use_connectivity=use_connectivity
-    )
-    return algorithm.fit(matrix, matrix_norm, sclust_norm)
-
-
-def spectral_clustering(
-    matrix: "ndarray",
-    n_clusters: int,
-    norm: str,
-    n_init: int = 10,
-    assign_labels: str = 'kmeans',
-    affinity: str = 'rbf',
-    n_neighbors: int = 10,
-    gamma: float = 1.0,
-    matrix_norm: "ndarray | None" = None,
-    sclust_norm: "ndarray | None" = None
-) -> tuple["ndarray", "ndarray"]:
-    """Legacy function wrapper for backwards compatibility."""
-    assign_value: Literal['kmeans', 'discretize', 'cluster_qr'] = (
-        assign_labels if assign_labels in ('kmeans', 'discretize', 'cluster_qr') else 'kmeans'  # type: ignore
-    )
-    algorithm = SpectralClusteringAlgorithm(
-        n_clusters=n_clusters,
-        norm=norm,  # type: ignore
-        n_init=n_init,
-        assign_labels=assign_value,
-        affinity=affinity,
-        n_neighbors=n_neighbors,
-        gamma=gamma
-    )
-    return algorithm.fit(matrix, matrix_norm, sclust_norm)

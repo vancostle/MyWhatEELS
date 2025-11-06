@@ -117,24 +117,3 @@ class DataPreprocessor:
             import traceback
             traceback.print_exc()
             return None
-
-
-# Backwards compatibility: keep old function signatures
-def prepare_clustering_matrix(
-    matrix: "ndarray",
-    norm: str,
-    allowed_norms: tuple[str, ...] = DataPreprocessor.ALLOWED_NORMS
-) -> tuple["ndarray", "ndarray"]:
-    """Legacy function wrapper for backwards compatibility."""
-    preprocessor = DataPreprocessor(allowed_norms)
-    return preprocessor.prepare_matrix(matrix, norm)  # type: ignore
-
-
-def should_use_multifit_data(model: "ClusteringModel", switch_value: bool) -> bool:
-    """Legacy function wrapper for backwards compatibility."""
-    return DataPreprocessor.should_use_multifit_data(model, switch_value)
-
-
-def get_multifit_data(model: "ClusteringModel") -> "ndarray | None":
-    """Legacy function wrapper for backwards compatibility."""
-    return DataPreprocessor.get_multifit_data(model)
