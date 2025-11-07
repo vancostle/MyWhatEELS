@@ -1,38 +1,40 @@
+
 """
-EELSPlotFactory: Centralized factory for creating EELS visualizer components based on dataset type.
+PlotsFactory: Centralized factory for creating clustering plot components based on dataset type.
 
 Features:
-- Uses the Factory Pattern to decouple visualization creation from the View.
-- Supports extensible mapping of dataset types to visualizer classes.
-- Provides a consistent interface for visualization components.
+- Uses the Factory Pattern to decouple plot creation from the View and Layouts.
+- Supports extensible mapping of dataset types to plot classes (e.g., spectrum, image).
+- Provides a consistent interface for plot components.
 - Handles errors robustly by raising exceptions with clear messages.
+
+This factory is located in the 'plots' folder, which contains all clustering-specific plot components and visualizers.
+It should be used by views/layouts to instantiate the correct plot for a given dataset type.
 """
+import traceback
 
-from ..view.visualizers import SpectrumImageVisualizer, ImageVisualizer
-
+from .plots import SpectrumImageVisualizer, ImageVisualizer
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import ClusteringModel
-    from . import ClusteringController
+    from . import ClusteringView
     from xarray import Dataset
 
-import traceback
-
-class VisualizerFactory:
+class PlotsFactory:
     """
-    Centralized factory for creating EELS visualizer components.
+    Centralized factory for creating clustering plot components.
     
-    - Decouples visualization creation from the View.
-    - Maps dataset types to visualizer classes.
+    - Decouples plot creation from the View and Layouts.
+    - Maps dataset types to plot classes (e.g., spectrum, image).
     - Raises exceptions for unknown types or plot creation errors.
     """
-    
-    def __init__(self, model: "ClusteringModel", controller: "ClusteringController") -> None:
+
+    def __init__(self, model: "ClusteringModel", view: "ClusteringView") -> None:
         self._model = model
-        self._controller = controller
-        
-        # Mapping of dataset types to visualizer classes
-        # This can be extended with more visualizers as needed
+        self._view = view
+
+        # Mapping of dataset types to plot classes
+        # Extend this dictionary to support more plot types as needed
         self._all_visualizers = {
             model.constants.SPECTRUM_IMAGE: SpectrumImageVisualizer,
             model.constants.IMAGE: ImageVisualizer
@@ -44,17 +46,17 @@ class VisualizerFactory:
         dataset: "Dataset"
     ) -> SpectrumImageVisualizer | ImageVisualizer | None:
         """
-        Instantiates and returns the appropriate EELS visualizer for the specified dataset type.
+        Instantiates and returns the appropriate plot component for the specified dataset type.
 
         Args:
-            dataset_type (str): The dataset type key (e.g., model.constants.SPECTRUM_LINE or SPECTRUM_IMAGE).
+            dataset_type (str): The dataset type key (e.g., model.constants.SPECTRUM_IMAGE or IMAGE).
 
         Returns:
-            SpectrumImageVisualizer: An instance of the corresponding visualizer class.
+            SpectrumImageVisualizer | ImageVisualizer: An instance of the corresponding plot class.
 
         Raises:
-            ValueError: If the dataset type is not recognized (not mapped in _all_spectrum_visualizer).
-            RuntimeError: If an exception occurs during visualizer instantiation.
+            ValueError: If the dataset type is not recognized (not mapped in _all_visualizers).
+            RuntimeError: If an exception occurs during plot instantiation.
         """
         
         # Error message constants
@@ -66,7 +68,7 @@ class VisualizerFactory:
             if chosen_spectrum_visualizer:
                 # Pass controller only to SpectrumImageVisualizer, others get model and dataset only
                 if chosen_spectrum_visualizer == SpectrumImageVisualizer:
-                    chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, self._controller, dataset)
+                    chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, self._view, dataset)
                 else:
                     chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)
                 return chosen_spectrum_visualizer

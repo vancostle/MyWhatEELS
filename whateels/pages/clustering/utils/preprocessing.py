@@ -5,14 +5,12 @@ OOP-based preprocessing and normalization for data before clustering,
 including multifit data retrieval for background subtraction.
 """
 
-import numpy as np
 from typing import TYPE_CHECKING, Literal
 from sklearn.preprocessing import normalize
 
 if TYPE_CHECKING:
     from numpy import ndarray
     from ..MVC.model import ClusteringModel
-
 
 class DataPreprocessor:
     """

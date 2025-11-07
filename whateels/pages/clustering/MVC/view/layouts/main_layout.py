@@ -38,3 +38,13 @@ class ClusteringMainLayout(pn.Column):
             self._no_file_placeholder,
             sizing_mode=self._STRETCH_BOTH
         )
+        
+    def empty(self):
+        """Reset the main layout to the no-file placeholder."""
+        self.clear()
+        self.append(self._no_file_placeholder)
+
+    def update(self, plot_component):
+        """Update the main layout with a new plot component."""
+        self.clear()
+        self.append(plot_component)

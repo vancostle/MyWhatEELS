@@ -12,7 +12,6 @@ from .helpers.logging import Logger
 
 _logger = Logger.get_logger("shared_state.log", __name__)
 
-
 class AppState(param.Parameterized):
     """
     Singleton AppState class using param for reactive metadata management.

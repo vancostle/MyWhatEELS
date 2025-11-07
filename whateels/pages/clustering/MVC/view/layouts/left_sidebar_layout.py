@@ -43,3 +43,16 @@ class ClusteringLeftSidebarLayout(pn.Column):
             uploaded_file,
             sizing_mode=self._STRETCH_WIDTH
         )
+        
+    def add_component(self, component: pn.viewable.Viewable):
+        """Add a component to the sidebar and track it as the last dataset info component."""
+        self.append(component)
+        self.dataset_info = component
+
+    def remove_dataset_info(self):
+        """Remove the last dataset info component from the sidebar, if present."""
+        if self.dataset_info is None:
+            return
+        if self.dataset_info in self:
+            self.remove(self.dataset_info)
+            del self.dataset_info

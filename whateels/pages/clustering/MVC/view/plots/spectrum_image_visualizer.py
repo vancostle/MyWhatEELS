@@ -33,7 +33,7 @@ from ....utils import (
 
 if TYPE_CHECKING:
     from ...model import ClusteringModel
-    from ...controller import ClusteringController
+    from ...view import ClusteringView
     from xarray import Dataset
 
 
@@ -51,7 +51,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
     heavy lifting to helper modules.
     """
 
-    def __init__(self, model: "ClusteringModel", controller: "ClusteringController", dataset: "Dataset"):
+    def __init__(self, model: "ClusteringModel", view: "ClusteringView", dataset: "Dataset"):
         # Get axis name from model constants
         eloss_name = getattr(model.constants, 'ELOSS', 'Eloss') if hasattr(model, 'constants') else 'Eloss'
         
@@ -60,7 +60,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
 
         # Store references for clustering features
         self._model = model
-        self._controller = controller
+        self._view = view
 
         # Double-click timing for toggling cluster display
         self._last_click_time = 0
@@ -233,7 +233,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         """Get data cube for clustering, possibly with background subtraction."""
         # Check if background-subtraction is enabled
         try:
-            switch = self._controller.view.right_sidebar.background_subtraction_switch
+            switch = self._view.right_sidebar.background_subtraction_switch
             switch_value = bool(switch.value) if switch and switch.value is not None else False
             use_multifit = DataPreprocessor.should_use_multifit_data(self._model, switch_value)
         except Exception:
@@ -304,7 +304,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             self._kmeans_run_button.disabled = True
         
         try:
-            kmeans_input = self._controller.view.right_sidebar.kmeans_input
+            kmeans_input = self._view.right_sidebar.kmeans_input
             
             # Get parameters or use defaults
             n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
@@ -337,7 +337,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             self._agglomerative_run_button.disabled = True
         
         try:
-            agglomerative_input = self._controller.view.right_sidebar.agglomerative_input
+            agglomerative_input = self._view.right_sidebar.agglomerative_input
             
             # Default values
             n_clusters = 5
@@ -369,7 +369,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             self._spectral_run_button.disabled = True
         
         try:
-            spectral_input = self._controller.view.right_sidebar.spectral_input
+            spectral_input = self._view.right_sidebar.spectral_input
             
             # Default values
             n_clusters = 5
@@ -406,15 +406,15 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
     
     def _setup_clustering_widgets(self):
         """Connect clustering buttons to their respective handlers."""
-        if kmeans_run_button := getattr(self._controller.view.right_sidebar, "kmeans_run_button", None):
+        if kmeans_run_button := getattr(self._view.right_sidebar, "kmeans_run_button", None):
             self._kmeans_run_button = kmeans_run_button
             kmeans_run_button.on_click(self._run_kmeans_clustering)
 
-        if agglomerative_run_button := getattr(self._controller.view.right_sidebar, "agglomerative_run_button", None):
+        if agglomerative_run_button := getattr(self._view.right_sidebar, "agglomerative_run_button", None):
             self._agglomerative_run_button = agglomerative_run_button
             agglomerative_run_button.on_click(self._run_agglomerative_clustering)
 
-        if spectral_run_button := getattr(self._controller.view.right_sidebar, "spectral_run_button", None):
+        if spectral_run_button := getattr(self._view.right_sidebar, "spectral_run_button", None):
             self._spectral_run_button = spectral_run_button
             spectral_run_button.on_click(self._run_spectral_clustering)
 
