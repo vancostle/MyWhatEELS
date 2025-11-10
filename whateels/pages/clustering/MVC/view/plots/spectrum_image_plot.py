@@ -33,7 +33,7 @@ from ....utils import (
 
 if TYPE_CHECKING:
     from ...model import ClusteringModel
-    from ...view import ClusteringView
+    from .. import ClusteringView
     from xarray import Dataset
 
 

@@ -27,7 +27,7 @@ class ClusteringController:
             return
         
         self._view.create_tab_and_dataset_info([all_datasets[tab_param]])
-    
+
     def _on_tab_change(self, event):
         """Handle tab change events by updating the sidebar."""
         new_tab = event.new

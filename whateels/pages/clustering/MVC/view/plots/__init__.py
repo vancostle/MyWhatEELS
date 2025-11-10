@@ -6,8 +6,8 @@ All visualizers for the clustering page:
 - SpectrumImageVisualizer: Interactive 3D datacube with clustering features
 """
 
-from .image_visualizer import ImageVisualizer
-from .spectrum_image_visualizer import SpectrumImageVisualizer
+from .image_plot import ImageVisualizer
+from .spectrum_image_plot import SpectrumImageVisualizer
 
 __all__ = [
     'SpectrumImageVisualizer',  # Clustering-enhanced visualizer

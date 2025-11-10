@@ -12,7 +12,7 @@ class Clustering(CustomPage):
         model = ClusteringModel()
         view = ClusteringView(model)
         ClusteringController(model, view)
-
+        
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
