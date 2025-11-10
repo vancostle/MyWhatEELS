@@ -7,6 +7,7 @@ import panel as pn
 
 if TYPE_CHECKING:
     from ..model import QuantificationModel
+    from ..controller import QuantificationController
 
 class QuantificationView(BaseView):
     
@@ -24,6 +25,7 @@ class QuantificationView(BaseView):
         )
 
         self._model = model
+        self._controller: Optional["QuantificationController"] = None
 
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
@@ -33,6 +35,10 @@ class QuantificationView(BaseView):
         self._element_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH)
 
         self._init_components()
+    
+    def set_controller(self, controller: "QuantificationController"):
+        """Set the controller for this view."""
+        self._controller = controller
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -75,8 +81,9 @@ class QuantificationView(BaseView):
         self.right_sidebar = self._right_sidebar_layout()
 
     def get_new_element_item_view(self, element_item : "ElementItem", energy) -> pn.Column:
-        element_item.set_fit_range([energy[0], energy[-1]])
-        element_item.set_quant_range([energy[0], energy[-1]])
+        print("Energy for slider:", energy)
+
+        
 
         delete_button = pn.widgets.Button(
             name= 'Delete',
@@ -93,8 +100,8 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-                _ON: {_NAME: element_item.__str__() + " <", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'default'},
-                _OFF: {_NAME: element_item.__str__() + " ˇ", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
+                _ON: {_NAME: "+ " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
+                _OFF: {_NAME: "- " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
             }
 
         slider_button = ToggleButton(
@@ -108,16 +115,32 @@ class QuantificationView(BaseView):
             css_classes=["element-item"]
         )
 
-        fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[-1], 
-                value=(640,680), step=1, disabled=False)
-        quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[0], end=energy[-1], 
-                value=(640,680), step=1, disabled=False)
+        chemical_shift_input = pn.widgets.FloatInput(name='Chemical Shift', value=0., step=1e-1)
 
+        def _chemical_shift_watcher(event):
+            element_item.chemical_shift = event.new
+            self._controller.plot_quantification_element(element_item)
+
+
+        element_item.set_fit_range([energy[0], energy[1]])
+        element_item.set_quant_range([energy[1], energy[2]])
+
+        fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[1] - 20, 
+                value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a')
+        quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[1] - 20, end=energy[2], 
+                value=(energy[1],energy[2]), step=1, disabled=False, format='0.00a')
+            
         def _fit_range_watcher(event):
             element_item.set_fit_range(event.new)
+            self._controller.plot_quantification_element(element_item)
 
         def _quant_range_watcher(event):   
             element_item.set_quant_range(event.new)
+            self._controller.plot_quantification_element(element_item)
+        
+        
+
+
 
         def _delete_element_watcher(event):
             self._element_item_view_container.remove(element_item_view)
@@ -129,6 +152,7 @@ class QuantificationView(BaseView):
 
         def _slider_button_watcher(event, slider=slider):
             if not slider["active"]:
+                element_item_view.append(chemical_shift_input)
                 element_item_view.append(fit_slider)
                 element_item_view.append(quant_slider)
                 slider["active"] = True
@@ -142,6 +166,7 @@ class QuantificationView(BaseView):
         quant_slider.param.watch(_quant_range_watcher, 'value')
         delete_button.on_click(_delete_element_watcher)
         slider_button.on_click(_slider_button_watcher)
+        chemical_shift_input.param.watch(_chemical_shift_watcher, 'value')
 
         #m.axes_manager['energy_loss'].scale
         

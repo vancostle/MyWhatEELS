@@ -81,9 +81,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self._js_executor = None  # invisible HTML pane to run JS
 
         self.element_quant_data = []  # to store quantification data per element
+        self.selected_slice = None
 
         # Setup widgets, plots and callbacks
-        self._setup_widgets()
         self._setup_plots()
         self._setup_callbacks()
 
@@ -120,6 +120,43 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         return super().create_dataset_info()
     
 
+    def plot_quantification_element(self, element_item: "ElementItem"):
+        fig = self._figB_region(self._region_pairs)
+        fig = self._to_plotly(fig)
+        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
+        if res is not None:
+            print(res)
+            self.selected_slice, _ = res ## Retorna none
+            try:
+                print(self._energy, self.selected_slice)
+                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
+                fig = self._plot_fit_traces(fig, self._energy, self.selected_slice, y_fit)
+                self.plot_shells_cross_section(fig, element_item)
+                fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
+
+                self.paneB.object = self._to_plotly(fig)
+            except Exception as e:
+                raise e
+        pass
+
+    def plot_shells_cross_section(self, fig, element_item: "ElementItem"):
+        y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
+
+        for ishell in element_item.shells:
+            eaxis = element_item.cross_sections[ishell][0]
+            counts = element_item.cross_sections[ishell][1]
+            onset = element_item.cross_sections[ishell][2]
+            cross_section = element_item.cross_sections[ishell][3]
+            chemical_shift = element_item.chemical_shift
+            
+            self.plot_cs(
+                fig, element_item, ishell, self.selected_slice, y_fit,
+                eaxis_cs=eaxis, counts=counts, onset=onset,
+                cross_section=cross_section, chemical_shift=chemical_shift
+            )
+
+
+
 
 
 
@@ -130,13 +167,13 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
         if res is not None:
-            selected_slice, _ = res
+            self.selected_slice, _ = res
             
 
             if element_items:
                 i = 0
                 for element_item in element_items:
-                    fig = self.plot_element(fig, loader_OOS, selected_slice, element_item)
+                    fig = self.plot_element(fig, loader_OOS, self.selected_slice, element_item)
         
         self.paneB.object = self._set_ranges_and_convert(fig)
         return self.element_quant_data
@@ -170,20 +207,31 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             except Exception as e:
                 raise e
         fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
-        return fig
+        return fig, shell_data[1][0]
+    
 
-    def calculate_shell_data(self, fig, loader_OOS, selected_slice, element_item, y_extrapolated, ishell):
-        eaxis, counts, onset = loader_OOS.oos_reader(element_item.element, ishell)
-        V = self._dataset.attrs['beam_energy']
-        b = self._dataset.attrs['collection_angle']
-        cross_section = loader_OOS.df_cross_section(element_item.element, ishell, V = V, b = b)
-        fig, shell_data = self.plot_cs(
-                                    fig, element_item, ishell, selected_slice, y_extrapolated,
-                                    eaxis_cs=eaxis, counts=counts, onset=onset,
-                                    cross_section=cross_section, chemical_shift=16
-                                )
+    def calculate_shell_data(self, selected_slice, element_item, y_extrapolated, ishell):
+        eaxis = element_item.cross_sections[ishell][0]
+        counts = element_item.cross_sections[ishell][1]
+        onset = element_item.cross_sections[ishell][2]
+        cross_section = element_item.cross_sections[ishell][3]
+        cs_instance = add_cs(
+                    element=element_item.element, 
+                    ishell=ishell, 
+                    selected_slice=selected_slice, 
+                    y_extrapolated=y_extrapolated, 
+                    chemical_shift=element_item.chemical_shift, 
+                    quant_range_values=element_item.quant_range, 
+                    eaxis=self._e_axis, 
+                    eaxis_cs=eaxis, 
+                    counts=counts, 
+                    onset=onset, 
+                    cross_section=cross_section
+            )
+    
+        shell_data = cs_instance.get_data()
                     
-        return fig,shell_data
+        return shell_data
     
     def plot_cs(self, fig, element_item, ishell, selected_slice, y_extrapolated, eaxis_cs, counts, onset, cross_section, chemical_shift=16):
         
@@ -211,7 +259,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         return fig, (xaxis, yaxis)
     
-    def plot_quantification_pie(self, element_data):
+    def plot_quantification_pie(self, element_items):
         """
         Calculates the quantification results for the elements in the state.
 
@@ -221,6 +269,28 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         Returns:
             A string summarizing the quantification results or an error message if something goes wrong.
         """
+        element_data = []
+        for element_item in element_items:
+            try:
+                shells_data = []
+                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
+                for ishell in element_item.shells:
+                    shell_data = self.calculate_shell_data(self.selected_slice, element_item, y_fit, ishell)
+                    shells_data.append((ishell, shell_data))
+                    print(f"Quantification for {element_item.element} {ishell} added.")
+                if len(shells_data) == 2:
+                    ##afegir element data a init
+                    element_data.append([
+                                    element_item, y_fit,
+                                    get_envelope(
+                                        shells_data[0][1][0], shells_data[0][1][1],
+                                        shells_data[1][1][0], shells_data[1][1][1]
+                                    )
+                                ])
+                else:
+                    element_data.append([element_item, y_fit, shells_data[0][1]])
+            except Exception as e:
+                raise e
         try:
             q_list = []  # List to store quantification results
             print("Element data count:", len(element_data))
@@ -250,7 +320,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
             print("Quantification results:", q_list)
             ##state.paneC.object = pie_plot(q_list)  # Update the pie chart with the results
-            self.paneB.object = self._set_ranges_and_convert(self.pie_plot(q_list))
+            self.paneB.object = self._to_plotly(self.pie_plot(q_list))
             return f" | Quantification result: {q_list}"
         except Exception as e:
             # Handle any errors that occur during quantification
@@ -287,96 +357,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Create the pie chart using Plotly
         fig = go.Figure(data=[go.Pie(labels=labels, values=proportions, hole=0.0)])
         return fig
-
-
-    
-
-    # --- Widget Setup (kept from original, but range_slider reused) ---
-    def _setup_widgets(self):
-        # Range slider ya usado por la implementación anterior  
-        self.range_slider = pn.widgets.EditableRangeSlider(
-            name="",  # label externo controlado manualmente
-            start=float(self._e_axis[0]) if len(self._e_axis) > 0 else 0.0,
-            end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
-            value=(float(self._e_axis[0]), float(self._e_axis[-1])),
-            sizing_mode=self._STRETCH_WIDTH,
-        )
-        # Apply our CSS class to style the widget
-        self.range_slider.css_classes = ["my-range"]
-        self.range_slider.param.watch(self._on_range_changed, 'value')
-
-        # Fitting toggle button
-        self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
-        self.fitting_button.on_click(self._on_fitting_clicked)
-
-        # Multifit button (orange)
-        self.multifit_button = pn.widgets.Button(name="Multifit", button_type="warning")
-        self.multifit_button.on_click(self._on_multifit_clicked)  # server-side fallback
-        self.multifit_button.visible = False
-
-        # Invisible HTML pane to run JavaScript (Open new window with params)
-        self._js_executor = pn.pane.HTML("", width=0, height=0)
-
-        # Fila de botones debajo de paneB
-        self.buttons_row = pn.Row(
-            self.fitting_button,
-            self.multifit_button,
-            self._js_executor,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-
-        # Fila con label y slider para alineación limpia
-        self.range_slider_row = pn.Row(
-            pn.pane.Markdown("**Range:**", sizing_mode="fixed", width=60, css_classes=["range-label"]),
-            self.range_slider,
-            sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["range-label-wrapper"],
-        )
-        self.range_slider_row.visible = False
-
-    def _on_multifit_clicked(self, event):
-        """Callback para el botón de multifit"""
-        # Publish the dataset now that multifit is requested.
-        try:
-            AppState().plot_dataset = self._dataset
-        except Exception:
-            print("Error publishing dataset to AppState for multifit.")
-        
-        min_val, max_val = self.range_slider.value
-        
-        url_base = f"http://{pn.state.location.hostname}:{pn.state.location.port}"
-
-        values = f"{min_val},{max_val}"
-        url_with_params = f"{url_base}/multifit-details?values={values}"
-
-        self._js_executor.object = f"""
-            <script>
-                window.open('{url_with_params}', '_blank');
-            </script>
-        """
-
-    def _on_range_changed(self, event):
-        """Refresh paneB when the fit range slider changes (only when fitting is active)."""
-        if not self._fitting_active:
-            return
-        if self._region_pairs:
-            fig = self._figB_region(self._region_pairs)
-            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-            if res is not None:
-                spec, _ = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            return
-        if self._last_hover_point is not None:
-            fig = self._figB_hover(self._last_hover_point)
-            i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-            spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-            if spec is not None:
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-
 
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):

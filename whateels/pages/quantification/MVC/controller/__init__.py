@@ -18,6 +18,8 @@ class ElementItem:
         self.shells = shells
         self.fit_range = fit_range
         self.quant_range = quant_range
+        self.cross_sections = {}
+        self.chemical_shift = 0.0  # Default chemical shift value
 
     def __str__(self):
         return f"{self.element} ({', '.join(self.shells)})"
@@ -32,6 +34,7 @@ class ElementItem:
 class QuantificationController(BaseController):
 
     def __init__(self, model: "QuantificationModel", view: "QuantificationView"):
+        view.set_controller(self)
         super().__init__(model, view)
 
         self._model = model
@@ -48,7 +51,6 @@ class QuantificationController(BaseController):
             return
         
         eels = self._get_only_eels_datasets(all_datasets)
-        print(self._layout.get_max_energy_range())
         self._layout.create_tab_and_dataset_info(eels)
 
         self._quantification_user_update(view)
@@ -87,19 +89,35 @@ class QuantificationController(BaseController):
                 element=self.view.quanti_input['element_num'].value,
                 shells=self.view.quanti_input['shells_multiselect'].value,
                 )
-                element_item_view, element_item = self._view.get_new_element_item_view(element_item, self._layout.get_max_energy_range())
+                min_eaxis_cs = None
+                for ishell in element_item.shells:
+                    eaxis, counts, onset = self.loader_oos.oos_reader(element_item.element, ishell)
+                    V = self._layout.get_active_dataset().attrs['beam_energy']
+                    b = self._layout.get_active_dataset().attrs['collection_angle']
+                    element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b,), V, b]
+
+                    min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])                
+
+                element_item_view, element_item = self._view.get_new_element_item_view(element_item, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]))
                 self._model.app_state.quantification_elements.append(element_item)
                 self._layout.add_new_element_input(element_item_view)
                 self.view.quanti_input['shells_multiselect'].value = []
+                print("lets plot")
+                
+                self._layout.plot_quantification_element(element_item)
             else:
                 print("Element already added.")
+        return
+
+    def plot_quantification_element(self, element_item: ElementItem):
+        self._layout.plot_quantification_element(element_item)
         return
 
     def _run_quantification(self, event):
         print("Running quantification...")
         if not self._model.app_state.quantification_elements:
             print("No elements to quantify.")
-        elif len(self._mode.app_state.quantification_elements) < 2:
+        elif len(self._model.app_state.quantification_elements) < 2:
             print("At least two elements are required for quantification.")
         else:
             self._layout.plot_quantification_pie()
@@ -109,7 +127,7 @@ class QuantificationController(BaseController):
         if not self._model.app_state.quantification_elements:
             print("No elements to plot.")
         else:
-            self._layout.plot_quantification_elements(self._model.app_state.quantification_elements, self.loader_oos)
+            self._layout.plot_quantification_elements( self._model.app_state.quantification_elements, self.loader_oos)
         return
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:

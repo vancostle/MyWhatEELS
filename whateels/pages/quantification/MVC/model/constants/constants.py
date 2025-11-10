@@ -1,5 +1,5 @@
 class Constants:
-    TITLE = "Clustering"
+    TITLE = "Quantification"
     
     # Visualization constants
     AXIS_X = 'x'

@@ -1,5 +1,6 @@
 from whateels.components import CustomPage
 from .MVC import QuantificationModel, QuantificationController, QuantificationView
+from whateels.shared_state import AppState
 
 class Quantification(CustomPage):
     """
@@ -12,10 +13,15 @@ class Quantification(CustomPage):
         view = QuantificationView(model)
         QuantificationController(model, view)
 
+        if AppState().metadata is not None:
+            print("Quantification page initialized with metadata.")
+            print(view.sidebar)
+        else:
+            print("Quantification page initialized without metadata.")
         super().__init__(
-            title="Quantification",
+            title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.sidebar],
-            right_sidebar=[view.right_sidebar],
+            sidebar=[view.left_sidebar] if AppState().metadata is not None else [],
+            right_sidebar=[] if AppState().metadata is None else [view.right_sidebar],
             collapsed_sidebar=True,
         )

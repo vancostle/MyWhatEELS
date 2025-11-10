@@ -53,8 +53,8 @@ class LayoutManager:
         """Remove the last dataset info component from the sidebar, if present."""
         if self._view.dataset_info is None:
             return
-        if self._view.dataset_info in self._view.sidebar:
-            self._view.sidebar.remove(self._view.dataset_info)
+        if self._view.dataset_info in self._view.left_sidebar:
+            self._view.left_sidebar.remove(self._view.dataset_info)
             self._view.dataset_info = None
             
     def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
@@ -81,42 +81,42 @@ class LayoutManager:
             self._all_dataset_info.clear()
             
             visualizer_factory = VisualizerFactory(self._model, self._controller)
-            plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
-            self._max_energy_range = [float('inf'), float('-inf')]
+            self._plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
             for dataset in all_datasets:
                 dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
                 image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
 
                 # Create plots using the factory
+                print(self._chosen_visualizers)
                 chosen_visualizer = visualizer_factory.choose_visualizer(str(dataset_type), dataset)
                 self._chosen_visualizers.append(chosen_visualizer)
                 print(f"Chosen visualizer for dataset '{image_name}': {type(chosen_visualizer).__name__}")
                 if chosen_visualizer is None:
                     return
-                if dataset_type == 'SIm':
-                    energy_axis = chosen_visualizer.get_e_axis()
-                    self._max_energy_range[0] = min(self._max_energy_range[0], energy_axis[0])
-                    self._max_energy_range[1] = max(self._max_energy_range[1], energy_axis[-1])
                 visualizer_plots = chosen_visualizer.create_plots()
                 
-                plots_tab.append((image_name, visualizer_plots))
+                self._plots_tab.append((image_name, visualizer_plots))
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
-            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
             # Set the active tab based on shared state or default
-            plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
+            self._plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
             
             # Update UI
-            self._controller.base_layout.update_main(plots_tab)
+            self._controller.base_layout.update_main(self._plots_tab)
             self.remove_dataset_info_from_sidebar()
             self.add_component_to_sidebar_layout(self._all_dataset_info[DEFAULT_TAB_INDEX])
 
         except Exception as e:
             raise DMPlotCreationError(e)
-    def get_max_energy_range(self) -> list[float]:
+    def get_energy_range(self) -> list[float]:
         """Get the maximum energy range across all datasets."""
-        return self._max_energy_range
+        return self._chosen_visualizers[AppState().selected_tab_index_dataset]._dataset.coords[self._model.constants.ELOSS].values
+
+    
+    def get_active_dataset(self):
+        return self._chosen_visualizers[AppState().selected_tab_index_dataset]._dataset
 
     def _on_tab_with_visualizers_change(self, event):
         """Handle tab changes by updating sidebar with selected dataset info."""
@@ -136,11 +136,20 @@ class LayoutManager:
     
     def plot_quantification_elements(self, element_items: list["ElementItem"], loader_OOS: "Loader_OOS"):
         """Plot the quantification elements using the model's plotting method."""
-        self.element_quant_data = self._chosen_visualizers[0].plot_quantification_elements(loader_OOS, element_items) # change to active visualitzer later
+        self.element_quant_data, shell_start= self._chosen_visualizers[0].plot_quantification_elements(loader_OOS, element_items) # change to active visualitzer later
         self._controller.base_layout.update_main(self._plots_tab)
+        return shell_start
+
+    def plot_quantification_element(self, element_item: "ElementItem"):
+        """Plot a single quantification element using the model's plotting method."""
+        print ("Plotting quantification element...")
+        self.element_quant_data= self._chosen_visualizers[0].plot_quantification_element(element_item)
+
+    def plot_shells_cross_section(self, element_item: "ElementItem"):
+        print ("Plotting shells")
+        self._chosen_visualizers[0].plot_shells_cross_section(element_item)
 
     def plot_quantification_pie(self):
         """Plot the quantification pie chart using the model's plotting method."""
         print ("Plotting quantification pie chart...")
-        self._chosen_visualizers[AppState().selected_tab_index_dataset].plot_quantification_pie(self.element_quant_data)
-        self._controller.base_layout.update_main(self._plots_tab)
+        self._chosen_visualizers[0].plot_quantification_pie(self._model.app_state.quantification_elements)
