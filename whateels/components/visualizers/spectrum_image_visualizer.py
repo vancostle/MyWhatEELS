@@ -88,7 +88,7 @@ class SpectrumImageVisualizer:
         self._setup_callbacks()
 
     # --- Public layout builders ---
-    def create_plots(self):
+    def create_plots(self) -> pn.Column:
         """
         Create the resizable two-column layout with heatmap and spectrum.
         
@@ -110,8 +110,13 @@ class SpectrumImageVisualizer:
             right_column=right_column,
             sizing_mode='stretch_both',
         )
- 
-        return resizable_columns
+
+        container = pn.Column( 
+            resizable_columns,
+            sizing_mode='stretch_both'
+        )
+
+        return container
 
     def create_dataset_info(self, dataset_attrs: dict | None = None):
         """

@@ -16,10 +16,11 @@ import panel as pn
 import numpy as np
 import plotly.graph_objs as go
 import time
+import threading
 
 from whateels.helpers import SpectrumExtractor
 from whateels.components.visualizers import SpectrumImageVisualizer as SharedSpectrumImageVisualizer
-from whateels.components import ResizableColumns
+from whateels.components import ResizableColumns, ProgressDisplay
 from typing import override, TYPE_CHECKING
 
 # Import clustering page utilities (OOP classes)
@@ -61,6 +62,9 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         # Store references for clustering features
         self._model = model
         self._view = view
+        
+        # Store original plots layout to restore after clustering
+        self._plots_layout = None
 
         # Double-click timing for toggling cluster display
         self._last_click_time = 0
@@ -88,6 +92,9 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         
         # Cluster colors (set after clustering)
         self.cluster_colors = []
+        
+        # Progress display for clustering operations
+        self._progress_display = ProgressDisplay(name="Clustering")
 
         # Setup clustering-specific widgets
         self._setup_clustering_widgets()
@@ -103,39 +110,94 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         init_method='k-means++'
     ):
         """Apply KMeans clustering and update visualization."""
-        try:
-            # Get data (possibly background-subtracted)
-            data_cube = self._get_data_for_clustering()
-            
-            # Store original heatmap if not already stored
-            if self._original_heatmap_data is None:
-                self._original_heatmap_data = data_cube.sum(axis=-1)
-            
-            # Prepare data using OOP preprocessor
-            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
-            
-            # Store for later use in visualization
-            self._last_clustering_matrix = matrix_norm
-            self._last_clustering_input = sclust_norm
-            
-            # Apply clustering algorithm using OOP class
-            init_val = 'k-means++' if init_method == 'k-means++' else 'random'
-            algorithm = KMeansClusteringAlgorithm(
-                n_clusters=n_clusters,
-                norm=available_norm,  # type: ignore
-                n_init=n_init,
-                max_iter=max_iter,
-                init_method=init_val
-            )
-            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
-            
-            # Store results and update visualization
-            self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "KMeans")
-            
-        except Exception as e:
-            print(f"Error applying KMeans clustering: {e}")
-            import traceback
-            traceback.print_exc()
+        def run_clustering():
+            try:
+                # Reset and prepare progress display
+                self._progress_display.reset()
+                self._progress_display.visible = True
+                
+                # Replace main content with progress display
+                self._show_clustering_progress()
+                
+                # Show progress spinner
+                self._progress_display.show_spinner(f"Running K-Means clustering (n_clusters={n_clusters})...")
+                time.sleep(0.5)
+                
+                # Get data (possibly background-subtracted)
+                self._progress_display.update(5, "Loading data...", level='info')
+                data_cube = self._get_data_for_clustering()
+                time.sleep(0.3)
+                
+                # Store original heatmap if not already stored
+                if self._original_heatmap_data is None:
+                    self._original_heatmap_data = data_cube.sum(axis=-1)
+                
+                # Update progress: preparing data - step 1
+                self._progress_display.update(15, "Preparing data - normalizing...", level='info')
+                time.sleep(0.2)
+                
+                # Prepare data using OOP preprocessor
+                matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
+                
+                # Update progress: preparing data - step 2
+                self._progress_display.update(25, "Preparing data - reshaping...", level='info')
+                time.sleep(0.2)
+                
+                # Store for later use in visualization
+                self._last_clustering_matrix = matrix_norm
+                self._last_clustering_input = sclust_norm
+                
+                # Update progress: running algorithm - step 1
+                self._progress_display.update(35, "Running algorithm - initializing...", level='info')
+                time.sleep(0.2)
+                
+                # Apply clustering algorithm using OOP class
+                init_val = 'k-means++' if init_method == 'k-means++' else 'random'
+                algorithm = KMeansClusteringAlgorithm(
+                    n_clusters=n_clusters,
+                    norm=available_norm,  # type: ignore
+                    n_init=n_init,
+                    max_iter=max_iter,
+                    init_method=init_val
+                )
+                
+                # Update progress: running algorithm - step 2
+                self._progress_display.update(50, "Running algorithm - clustering...", level='info')
+                time.sleep(0.2)
+                
+                labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
+                
+                # Update progress: visualizing results
+                self._progress_display.update(65, "Visualizing results - creating heatmap...", level='info')
+                time.sleep(0.2)
+                
+                # Store results and update visualization
+                self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "KMeans")
+                
+                # Update progress: finishing up
+                self._progress_display.update(85, "Finalizing...", level='info')
+                time.sleep(0.2)
+                
+                # Mark as complete and restore plots
+                self._progress_display.completion("K-Means clustering complete!")
+                
+                # Small delay to show completion message, then restore plots
+                time.sleep(1)
+                self._restore_plots_layout()
+                
+            except Exception as e:
+                print(f"Error applying KMeans clustering: {e}")
+                import traceback
+                traceback.print_exc()
+                self._progress_display.error(f"Clustering failed: {str(e)}")
+                
+                # Restore plots on error too
+                time.sleep(2)
+                self._restore_plots_layout()
+        
+        # Run in background thread to prevent UI blocking
+        thread = threading.Thread(target=run_clustering, daemon=True)
+        thread.start()
 
     def _apply_agglomerative_clustering(
         self,
@@ -146,39 +208,94 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         use_connectivity=False
     ):
         """Apply Agglomerative clustering and update visualization."""
-        try:
-            # Get data (possibly background-subtracted)
-            data_cube = self._get_data_for_clustering()
-            
-            # Store original heatmap if not already stored
-            if self._original_heatmap_data is None:
-                self._original_heatmap_data = data_cube.sum(axis=-1)
-            
-            # Prepare data using OOP preprocessor
-            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
-            
-            # Store for later use in visualization
-            self._last_clustering_matrix = matrix_norm
-            self._last_clustering_input = sclust_norm
-            
-            # Apply clustering algorithm using OOP class
-            linkage_val = linkage if linkage in ('ward', 'complete', 'average', 'single') else 'ward'
-            algorithm = AgglomerativeClusteringAlgorithm(
-                n_clusters=n_clusters,
-                norm=available_norm,  # type: ignore
-                linkage=linkage_val,  # type: ignore
-                affinity=affinity,
-                use_connectivity=use_connectivity
-            )
-            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
-            
-            # Store results and update visualization
-            self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Agglomerative")
-            
-        except Exception as e:
-            print(f"Error applying Agglomerative clustering: {e}")
-            import traceback
-            traceback.print_exc()
+        def run_clustering():
+            try:
+                # Reset and prepare progress display
+                self._progress_display.reset()
+                self._progress_display.visible = True
+                
+                # Replace main content with progress display
+                self._show_clustering_progress()
+                
+                # Show progress spinner
+                self._progress_display.show_spinner(f"Running Agglomerative clustering (n_clusters={n_clusters})...")
+                time.sleep(0.5)
+                
+                # Get data (possibly background-subtracted)
+                self._progress_display.update(5, "Loading data...", level='info')
+                data_cube = self._get_data_for_clustering()
+                time.sleep(0.3)
+                
+                # Store original heatmap if not already stored
+                if self._original_heatmap_data is None:
+                    self._original_heatmap_data = data_cube.sum(axis=-1)
+                
+                # Update progress: preparing data - step 1
+                self._progress_display.update(15, "Preparing data - normalizing...", level='info')
+                time.sleep(0.2)
+                
+                # Prepare data using OOP preprocessor
+                matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
+                
+                # Update progress: preparing data - step 2
+                self._progress_display.update(25, "Preparing data - reshaping...", level='info')
+                time.sleep(0.2)
+                
+                # Store for later use in visualization
+                self._last_clustering_matrix = matrix_norm
+                self._last_clustering_input = sclust_norm
+                
+                # Update progress: running algorithm - step 1
+                self._progress_display.update(35, "Running algorithm - building hierarchy...", level='info')
+                time.sleep(0.2)
+                
+                # Apply clustering algorithm using OOP class
+                linkage_val = linkage if linkage in ('ward', 'complete', 'average', 'single') else 'ward'
+                algorithm = AgglomerativeClusteringAlgorithm(
+                    n_clusters=n_clusters,
+                    norm=available_norm,  # type: ignore
+                    linkage=linkage_val,  # type: ignore
+                    affinity=affinity,
+                    use_connectivity=use_connectivity
+                )
+                
+                # Update progress: running algorithm - step 2
+                self._progress_display.update(50, "Running algorithm - clustering...", level='info')
+                time.sleep(0.2)
+                
+                labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
+                
+                # Update progress: visualizing results
+                self._progress_display.update(65, "Visualizing results - creating heatmap...", level='info')
+                time.sleep(0.2)
+                
+                # Store results and update visualization
+                self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Agglomerative")
+                
+                # Update progress: finishing up
+                self._progress_display.update(85, "Finalizing...", level='info')
+                time.sleep(0.2)
+                
+                # Mark as complete and restore plots
+                self._progress_display.completion("Agglomerative clustering complete!")
+                
+                # Small delay to show completion message, then restore plots
+                time.sleep(1)
+                self._restore_plots_layout()
+                
+            except Exception as e:
+                print(f"Error applying Agglomerative clustering: {e}")
+                import traceback
+                traceback.print_exc()
+                self._progress_display.error(f"Clustering failed: {str(e)}")
+                
+                # Restore plots on error too
+                time.sleep(2)
+                self._restore_plots_layout()
+        
+        # Run in background thread to prevent UI blocking
+        thread = threading.Thread(target=run_clustering, daemon=True)
+        thread.start()
 
     def _apply_spectral_clustering(
         self,
@@ -191,41 +308,96 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         gamma=1.0
     ):
         """Apply Spectral clustering and update visualization."""
-        try:
-            # Get data (possibly background-subtracted)
-            data_cube = self._get_data_for_clustering()
-            
-            # Store original heatmap if not already stored
-            if self._original_heatmap_data is None:
-                self._original_heatmap_data = data_cube.sum(axis=-1)
-            
-            # Prepare data using OOP preprocessor
-            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
-            
-            # Store for later use in visualization
-            self._last_clustering_matrix = matrix_norm
-            self._last_clustering_input = sclust_norm
-            
-            # Apply clustering algorithm using OOP class
-            assign_val = assign_labels if assign_labels in ('kmeans', 'discretize', 'cluster_qr') else 'kmeans'
-            algorithm = SpectralClusteringAlgorithm(
-                n_clusters=n_clusters,
-                norm=available_norm,  # type: ignore
-                n_init=n_init,
-                assign_labels=assign_val,  # type: ignore
-                affinity=affinity,
-                n_neighbors=n_neighbors,
-                gamma=gamma
-            )
-            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
-            
-            # Store results and update visualization
-            self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Spectral")
-            
-        except Exception as e:
-            print(f"Error applying Spectral clustering: {e}")
-            import traceback
-            traceback.print_exc()
+        def run_clustering():
+            try:
+                # Reset and prepare progress display
+                self._progress_display.reset()
+                self._progress_display.visible = True
+                
+                # Replace main content with progress display
+                self._show_clustering_progress()
+                
+                # Show progress spinner
+                self._progress_display.show_spinner(f"Running Spectral clustering (n_clusters={n_clusters})...")
+                time.sleep(0.5)
+                
+                # Get data (possibly background-subtracted)
+                self._progress_display.update(5, "Loading data...", level='info')
+                data_cube = self._get_data_for_clustering()
+                time.sleep(0.3)
+                
+                # Store original heatmap if not already stored
+                if self._original_heatmap_data is None:
+                    self._original_heatmap_data = data_cube.sum(axis=-1)
+                
+                # Update progress: preparing data - step 1
+                self._progress_display.update(15, "Preparing data - normalizing...", level='info')
+                time.sleep(0.2)
+                
+                # Prepare data using OOP preprocessor
+                matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
+                
+                # Update progress: preparing data - step 2
+                self._progress_display.update(25, "Preparing data - reshaping...", level='info')
+                time.sleep(0.2)
+                
+                # Store for later use in visualization
+                self._last_clustering_matrix = matrix_norm
+                self._last_clustering_input = sclust_norm
+                
+                # Update progress: running algorithm - step 1
+                self._progress_display.update(35, "Running algorithm - computing affinity...", level='info')
+                time.sleep(0.2)
+                
+                # Apply clustering algorithm using OOP class
+                assign_val = assign_labels if assign_labels in ('kmeans', 'discretize', 'cluster_qr') else 'kmeans'
+                algorithm = SpectralClusteringAlgorithm(
+                    n_clusters=n_clusters,
+                    norm=available_norm,  # type: ignore
+                    n_init=n_init,
+                    assign_labels=assign_val,  # type: ignore
+                    affinity=affinity,
+                    n_neighbors=n_neighbors,
+                    gamma=gamma
+                )
+                
+                # Update progress: running algorithm - step 2
+                self._progress_display.update(50, "Running algorithm - eigendecomposition...", level='info')
+                time.sleep(0.2)
+                
+                labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
+                
+                # Update progress: visualizing results
+                self._progress_display.update(65, "Visualizing results - creating heatmap...", level='info')
+                time.sleep(0.2)
+                
+                # Store results and update visualization
+                self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Spectral")
+                
+                # Update progress: finishing up
+                self._progress_display.update(85, "Finalizing...", level='info')
+                time.sleep(0.2)
+                
+                # Mark as complete and restore plots
+                self._progress_display.completion("Spectral clustering complete!")
+                
+                # Small delay to show completion message, then restore plots
+                time.sleep(1)
+                self._restore_plots_layout()
+                
+            except Exception as e:
+                print(f"Error applying Spectral clustering: {e}")
+                import traceback
+                traceback.print_exc()
+                self._progress_display.error(f"Clustering failed: {str(e)}")
+                
+                # Restore plots on error too
+                time.sleep(2)
+                self._restore_plots_layout()
+        
+        # Run in background thread to prevent UI blocking
+        thread = threading.Thread(target=run_clustering, daemon=True)
+        thread.start()
 
     # --- Helper Methods ---
     
@@ -295,6 +467,27 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         except Exception:
             pass
         return None
+    
+    def _show_clustering_progress(self):
+        """Replace main content with progress display during clustering."""
+        try:
+            # Ensure progress display is visible before showing
+            self._progress_display.visible = True
+            
+            if self._view and hasattr(self._view, 'main'):
+                self._view.main.update(self._progress_display)
+        except Exception as e:
+            print(f"Error showing clustering progress: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _restore_plots_layout(self):
+        """Restore the plots layout after clustering completes."""
+        try:
+            if self._view and hasattr(self._view, 'main') and self._plots_layout is not None:
+                self._view.main.update(self._plots_layout)
+        except Exception as e:
+            print(f"Error restoring plots layout: {e}")
 
     # --- Event Handlers ---
     
@@ -438,8 +631,15 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             right_column=right_column,
             sizing_mode='stretch_both',
         )
- 
-        return resizable_columns
+        
+        # Store the plots layout so we can restore it after clustering
+        self._plots_layout = resizable_columns
+
+        container = pn.Column( 
+            resizable_columns,
+            sizing_mode='stretch_both'
+        )
+        return container
 
     @override
     def create_dataset_info(self, dataset_attrs: dict | None = None):

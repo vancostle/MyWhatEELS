@@ -14,7 +14,6 @@ Features:
 import panel as pn
 from typing import Optional, Dict
 
-
 class ProgressDisplay(pn.Column):
     """
     Standalone progress display component that can be embedded in any layout.
@@ -35,7 +34,7 @@ class ProgressDisplay(pn.Column):
         progress.update(100, "Complete!", 'success')
     """
     
-    def __init__(self, name: str = "Progress", width: Optional[int] = 400):
+    def __init__(self, name: str = "Progress"):
         """
         Initialize the progress display.
         
@@ -44,7 +43,6 @@ class ProgressDisplay(pn.Column):
             width: Width of components in pixels. None for responsive width.
         """
         self._display_name = name
-        self._display_width = width
         
         # Progress bar
         self._progress_bar = pn.indicators.Progress(
@@ -52,15 +50,13 @@ class ProgressDisplay(pn.Column):
             value=0,
             max=100,
             visible=False,
-            width=self._display_width,
-            sizing_mode='stretch_width' if self._display_width is None else None
+            sizing_mode='stretch_width',
         )
         
         # Status text
         self._status_text = pn.pane.Markdown(
             f'**{self._display_name}**: Ready',
             visible=False,
-            width=self._display_width,
             styles=self._get_color_styles('info')
         )
         
@@ -77,7 +73,7 @@ class ProgressDisplay(pn.Column):
             self._spinner,
             pn.pane.Str(" Loading...", width=150),
             visible=False,
-            sizing_mode='stretch_width' if self._display_width is None else None
+            sizing_mode='stretch_width'
         )
         
         # Initialize parent Column with components
@@ -86,14 +82,14 @@ class ProgressDisplay(pn.Column):
             self._status_text,
             self._spinner_row,
             visible=False,
-            sizing_mode='stretch_width'
+            sizing_mode='stretch_both'
         )
     
     @staticmethod
     def _get_color_styles(level: str) -> Dict[str, str]:
         """Get style dictionary for message level."""
         colors = {
-            'info': '#e3f2fd',      # Light blue
+            'info': 'transparent',      # Transparent
             'success': '#e8f5e9',   # Light green
             'warning': '#fff3e0',   # Light orange
             'error': '#ffebee'      # Light red
@@ -155,14 +151,33 @@ class ProgressDisplay(pn.Column):
         self._progress_bar.value = value
         self._progress_bar.visible = True
         
-        # Update status message
-        if message:
-            self._status_text.object = f'**{self._display_name}**: {message}'
-            self._status_text.styles = self._get_color_styles(level)
-            self._status_text.visible = True
+        # Get color styles based on level
+        color_styles = self._get_color_styles(level)
         
-        # Hide spinner when showing progress
-        self._spinner_row.visible = False
+        # Create a more visible progress display with message and percentage
+        percentage = int((value / max_value) * 100) if max_value > 0 else 0
+        
+        progress_display = pn.Column(
+            pn.Row(
+                pn.pane.HTML(
+                    f'<span>{message or "Processing..."}</span>',
+                    styles={'padding': '0px 10px', 'text-align': 'left', 'font-size': '18px', 'font-weight': 'bold'}
+                ),
+                styles={'justify-content': 'center', 'align-items': 'center'}
+            ),
+            self._progress_bar,
+            pn.pane.HTML(
+                f"<span>{percentage}%</span>",
+                sizing_mode='stretch_width',
+                styles={'padding': '0px', 'text-align': 'right', 'font-size': '14px', 'color': '#666'},
+            ),
+            sizing_mode='stretch_both',
+            styles={**color_styles, 'padding': '40px', 'border-radius': '5px'}
+        )
+        
+        # Clear and update display
+        self.clear()
+        self.append(progress_display)
     
     def show_spinner(self, message: str = "Loading...") -> None:
         """
@@ -174,15 +189,33 @@ class ProgressDisplay(pn.Column):
             message: Message to display next to spinner
         """
         self._show()
+        self.visible = True  # Make sure container is visible
         
-        # Update spinner message in row (recreate for safety)
-        self._spinner_row.clear()
-        self._spinner_row.append(self._spinner)
-        self._spinner_row.append(pn.pane.Str(f" {message}", width=150))
-        
-        # Hide progress bar, show spinner
+        # Hide progress bar
         self._progress_bar.visible = False
-        self._spinner_row.visible = True
+        
+        # Create a more prominent loading display
+        # Use a heading and larger spacing for better visibility
+        loading_message = pn.Column(
+            pn.pane.Markdown(
+                f'## ⏳ {message}\n\n**Please wait...**',
+                styles={'padding': '20px', 'text-align': 'center'}
+            ),
+            pn.Row(
+                pn.pane.Markdown('  ', width=20),
+                self._spinner,
+                pn.pane.Markdown('  ', width=20),
+                sizing_mode='stretch_width',
+                styles={'justify-content': 'center', 'align-items': 'center'}
+            ),
+            sizing_mode='stretch_width',
+            styles={'padding': '40px', 'text-align': 'center'}
+        )
+        
+        # Clear existing content and add the loading display
+        self.clear()
+        self.append(loading_message)
+        self._spinner.visible = True
     
     def hide_spinner(self) -> None:
         """Hide the loading spinner."""
@@ -249,8 +282,19 @@ class ProgressDisplay(pn.Column):
         Args:
             message: Error message to display
         """
-        self._progress_bar.visible = False
-        self._status_text.object = f'**{self._display_name}**: {message}'
-        self._status_text.styles = self._get_color_styles('error')
-        self._status_text.visible = True
         self._show()
+        self.visible = True
+        
+        # Create a prominent error display
+        error_display = pn.Column(
+            pn.pane.Markdown(
+                f'## ❌ Error\n\n**{message}**',
+                styles={'padding': '20px', 'text-align': 'center', 'color': '#d32f2f'}
+            ),
+            sizing_mode='stretch_width',
+            styles={'padding': '40px', 'background': '#ffebee', 'border-radius': '5px'}
+        )
+        
+        # Clear and update display
+        self.clear()
+        self.append(error_display)
