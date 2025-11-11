@@ -50,7 +50,8 @@ class ProgressDisplay(pn.Column):
             value=0,
             max=100,
             visible=False,
-            sizing_mode='stretch_width',
+            sizing_mode='stretch_both',
+            styles={'max-height': '30px'}
         )
         
         # Status text
@@ -172,49 +173,49 @@ class ProgressDisplay(pn.Column):
                 styles={'padding': '0px', 'text-align': 'right', 'font-size': '14px', 'color': '#666'},
             ),
             sizing_mode='stretch_both',
-            styles={**color_styles, 'padding': '40px', 'border-radius': '5px'}
+            styles={**color_styles, 'padding': '40px', 'border-radius': '5px', 'display': 'flex', 'justify-content': 'center', 'align-items': 'center'}
         )
         
         # Clear and update display
         self.clear()
         self.append(progress_display)
     
-    def show_spinner(self, message: str = "Loading...") -> None:
-        """
-        Show indeterminate loading spinner.
+    # def show_spinner(self, message: str = "Loading...") -> None:
+    #     """
+    #     Show indeterminate loading spinner.
         
-        Use when you can't determine exact progress percentage.
+    #     Use when you can't determine exact progress percentage.
         
-        Args:
-            message: Message to display next to spinner
-        """
-        self._show()
-        self.visible = True  # Make sure container is visible
+    #     Args:
+    #         message: Message to display next to spinner
+    #     """
+    #     self._show()
+    #     self.visible = True  # Make sure container is visible
         
-        # Hide progress bar
-        self._progress_bar.visible = False
+    #     # Hide progress bar
+    #     self._progress_bar.visible = False
         
-        # Create a more prominent loading display
-        # Use a heading and larger spacing for better visibility
-        loading_message = pn.Column(
-            pn.pane.Markdown(
-                f'## ⏳ {message}\n\n**Please wait...**',
-                styles={'padding': '20px', 'text-align': 'center'}
-            ),
-            pn.Row(
-                pn.pane.Markdown('  ', width=20),
-                self._spinner,
-                pn.pane.Markdown('  ', width=20),
-                sizing_mode='stretch_width',
-                styles={'justify-content': 'center', 'align-items': 'center'}
-            ),
-            sizing_mode='stretch_width',
-            styles={'padding': '40px', 'text-align': 'center'}
-        )
+    #     # Create a more prominent loading display
+    #     # Use a heading and larger spacing for better visibility
+    #     loading_message = pn.Column(
+    #         pn.pane.Markdown(
+    #             f'## ⏳ {message}\n\n**Please wait...**',
+    #             styles={'padding': '20px', 'text-align': 'center'}
+    #         ),
+    #         pn.Row(
+    #             pn.pane.Markdown('  ', width=20),
+    #             self._spinner,
+    #             pn.pane.Markdown('  ', width=20),
+    #             sizing_mode='stretch_width',
+    #             styles={'justify-content': 'center', 'align-items': 'center'}
+    #         ),
+    #         sizing_mode='stretch_width',
+    #         styles={'padding': '40px', 'text-align': 'center'}
+    #     )
         
-        # Clear existing content and add the loading display
-        self.clear()
-        self.append(loading_message)
+    #     # Clear existing content and add the loading display
+    #     self.clear()
+    #     self.append(loading_message)
         self._spinner.visible = True
     
     def hide_spinner(self) -> None:

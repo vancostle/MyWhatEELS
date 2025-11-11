@@ -119,14 +119,10 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 # Replace main content with progress display
                 self._show_clustering_progress()
                 
-                # Show progress spinner
-                self._progress_display.show_spinner(f"Running K-Means clustering (n_clusters={n_clusters})...")
-                time.sleep(0.5)
-                
                 # Get data (possibly background-subtracted)
                 self._progress_display.update(5, "Loading data...", level='info')
                 data_cube = self._get_data_for_clustering()
-                time.sleep(0.3)
+                time.sleep(0.05)
                 
                 # Store original heatmap if not already stored
                 if self._original_heatmap_data is None:
@@ -134,14 +130,14 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: preparing data - step 1
                 self._progress_display.update(15, "Preparing data - normalizing...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
                 
                 # Prepare data using OOP preprocessor
                 matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
                 
                 # Update progress: preparing data - step 2
                 self._progress_display.update(25, "Preparing data - reshaping...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
                 
                 # Store for later use in visualization
                 self._last_clustering_matrix = matrix_norm
@@ -149,7 +145,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: running algorithm - step 1
                 self._progress_display.update(35, "Running algorithm - initializing...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
                 
                 # Apply clustering algorithm using OOP class
                 init_val = 'k-means++' if init_method == 'k-means++' else 'random'
@@ -163,26 +159,26 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: running algorithm - step 2
                 self._progress_display.update(50, "Running algorithm - clustering...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
                 
                 labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
                 
                 # Update progress: visualizing results
                 self._progress_display.update(65, "Visualizing results - creating heatmap...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
                 
                 # Store results and update visualization
                 self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "KMeans")
                 
                 # Update progress: finishing up
                 self._progress_display.update(85, "Finalizing...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
                 
                 # Mark as complete and restore plots
                 self._progress_display.completion("K-Means clustering complete!")
                 
                 # Small delay to show completion message, then restore plots
-                time.sleep(1)
+                time.sleep(0.3)
                 self._restore_plots_layout()
                 
             except Exception as e:
@@ -216,15 +212,11 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Replace main content with progress display
                 self._show_clustering_progress()
-                
-                # Show progress spinner
-                self._progress_display.show_spinner(f"Running Agglomerative clustering (n_clusters={n_clusters})...")
-                time.sleep(0.5)
-                
+
                 # Get data (possibly background-subtracted)
                 self._progress_display.update(5, "Loading data...", level='info')
                 data_cube = self._get_data_for_clustering()
-                time.sleep(0.3)
+                time.sleep(0.05)
                 
                 # Store original heatmap if not already stored
                 if self._original_heatmap_data is None:
@@ -232,14 +224,15 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: preparing data - step 1
                 self._progress_display.update(15, "Preparing data - normalizing...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
                 
                 # Prepare data using OOP preprocessor
                 matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
                 
                 # Update progress: preparing data - step 2
                 self._progress_display.update(25, "Preparing data - reshaping...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Store for later use in visualization
                 self._last_clustering_matrix = matrix_norm
@@ -247,7 +240,8 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: running algorithm - step 1
                 self._progress_display.update(35, "Running algorithm - building hierarchy...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Apply clustering algorithm using OOP class
                 linkage_val = linkage if linkage in ('ward', 'complete', 'average', 'single') else 'ward'
@@ -261,26 +255,29 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: running algorithm - step 2
                 self._progress_display.update(50, "Running algorithm - clustering...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
                 
                 # Update progress: visualizing results
                 self._progress_display.update(65, "Visualizing results - creating heatmap...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Store results and update visualization
                 self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Agglomerative")
                 
                 # Update progress: finishing up
                 self._progress_display.update(85, "Finalizing...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Mark as complete and restore plots
                 self._progress_display.completion("Agglomerative clustering complete!")
                 
                 # Small delay to show completion message, then restore plots
-                time.sleep(1)
+                time.sleep(0.3)
                 self._restore_plots_layout()
                 
             except Exception as e:
@@ -317,14 +314,11 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 # Replace main content with progress display
                 self._show_clustering_progress()
                 
-                # Show progress spinner
-                self._progress_display.show_spinner(f"Running Spectral clustering (n_clusters={n_clusters})...")
-                time.sleep(0.5)
-                
                 # Get data (possibly background-subtracted)
                 self._progress_display.update(5, "Loading data...", level='info')
                 data_cube = self._get_data_for_clustering()
-                time.sleep(0.3)
+                time.sleep(0.05)
+
                 
                 # Store original heatmap if not already stored
                 if self._original_heatmap_data is None:
@@ -332,14 +326,16 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: preparing data - step 1
                 self._progress_display.update(15, "Preparing data - normalizing...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Prepare data using OOP preprocessor
                 matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
                 
                 # Update progress: preparing data - step 2
                 self._progress_display.update(25, "Preparing data - reshaping...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Store for later use in visualization
                 self._last_clustering_matrix = matrix_norm
@@ -347,7 +343,8 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: running algorithm - step 1
                 self._progress_display.update(35, "Running algorithm - computing affinity...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Apply clustering algorithm using OOP class
                 assign_val = assign_labels if assign_labels in ('kmeans', 'discretize', 'cluster_qr') else 'kmeans'
@@ -363,26 +360,29 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
                 # Update progress: running algorithm - step 2
                 self._progress_display.update(50, "Running algorithm - eigendecomposition...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
                 
                 # Update progress: visualizing results
                 self._progress_display.update(65, "Visualizing results - creating heatmap...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Store results and update visualization
                 self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Spectral")
                 
                 # Update progress: finishing up
                 self._progress_display.update(85, "Finalizing...", level='info')
-                time.sleep(0.2)
+                time.sleep(0.05)
+
                 
                 # Mark as complete and restore plots
                 self._progress_display.completion("Spectral clustering complete!")
                 
                 # Small delay to show completion message, then restore plots
-                time.sleep(1)
+                time.sleep(0.3)
                 self._restore_plots_layout()
                 
             except Exception as e:
