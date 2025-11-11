@@ -359,7 +359,7 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 )
                 
                 # Update progress: running algorithm - step 2
-                self._progress_display.update(50, "Running algorithm - eigendecomposition...", level='info')
+                self._progress_display.update(50, "Running algorithm...", level='info')
                 time.sleep(0.05)
 
                 

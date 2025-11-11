@@ -13,7 +13,7 @@ class ClusteringRightSidebarLayout(pn.Column):
         self._model = model
         
         self._background_subtraction_switch = None  # Switch for background-subtraction option
-        self._store_button = None  # Button to store clustering results
+        # self._store_button = None  # Button to store clustering results
         self._kmeans_input = None  # Dictionary to hold K-Means input widgets
         self._kmeans_run_button = None  # Button to run K-Means clustering
         self._agglomerative_input = None  # Dictionary to hold Agglomerative input widgets
@@ -38,11 +38,11 @@ class ClusteringRightSidebarLayout(pn.Column):
     def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
         """Access the Agglomerative clustering run button."""
         return self._agglomerative_run_button
-    # TODO - Still not used anywhere - remove?
-    @property
-    def store_button(self) -> Optional[pn.widgets.Button]:
-        """Access the store button."""
-        return self._store_button
+    # # TODO - Still not used anywhere - remove?
+    # @property
+    # def store_button(self) -> Optional[pn.widgets.Button]:
+    #     """Access the store button."""
+    #     return self._store_button
     @property
     def kmeans_run_button(self) -> Optional[pn.widgets.Button]:
         """Access the K-Means clustering run button."""
@@ -102,18 +102,23 @@ class ClusteringRightSidebarLayout(pn.Column):
             css_classes=["clustering-tabs"]
         )
         
-        self._store_button = pn.widgets.Button(
-            name="Store", 
-            button_type="primary", 
-            height=55, 
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=0
-        )
+        # self._store_button = pn.widgets.Button(
+        #     name="Store", 
+        #     button_type="primary", 
+        #     height=55, 
+        #     sizing_mode=self._STRETCH_WIDTH,
+        #     margin=0
+        # )
 
         right_sidebar = pn.Column(
             background_subtraction_container,
-            clustering_tabs,
-            self._store_button,
+            pn.Column(
+                clustering_tabs,
+                sizing_mode=self._STRETCH_BOTH,
+                styles={'flex':'1'}
+            ),
+            # self._store_button,
+            styles={'display':'flex'},
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -160,7 +165,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run K-Means',
             button_type='success',
             height=55,
-            margin=(20,0,10,0),
+            margin=(20,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
         
@@ -226,7 +231,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run Agglomerative',
             button_type='success',
             height=55,
-            margin=(20,0,10,0),
+            margin=(20,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
         
@@ -299,7 +304,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run Spectral',
             button_type='success',
             height=55,
-            margin=(20,0,10,0),
+            margin=(20,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
