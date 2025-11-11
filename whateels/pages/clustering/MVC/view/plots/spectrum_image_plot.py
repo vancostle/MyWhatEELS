@@ -17,6 +17,7 @@ import numpy as np
 import plotly.graph_objs as go
 import time
 import threading
+import traceback
 
 from whateels.helpers import SpectrumExtractor
 from whateels.components.visualizers import SpectrumImageVisualizer as SharedSpectrumImageVisualizer
@@ -183,7 +184,6 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
             except Exception as e:
                 print(f"Error applying KMeans clustering: {e}")
-                import traceback
                 traceback.print_exc()
                 self._progress_display.error(f"Clustering failed: {str(e)}")
                 
@@ -282,7 +282,6 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
             except Exception as e:
                 print(f"Error applying Agglomerative clustering: {e}")
-                import traceback
                 traceback.print_exc()
                 self._progress_display.error(f"Clustering failed: {str(e)}")
                 
@@ -387,7 +386,6 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 
             except Exception as e:
                 print(f"Error applying Spectral clustering: {e}")
-                import traceback
                 traceback.print_exc()
                 self._progress_display.error(f"Clustering failed: {str(e)}")
                 
@@ -478,7 +476,6 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
                 self._view.main.update(self._progress_display)
         except Exception as e:
             print(f"Error showing clustering progress: {e}")
-            import traceback
             traceback.print_exc()
     
     def _restore_plots_layout(self):
@@ -744,12 +741,21 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
         return fig
     
     @override
+    def _on_paneA_hover(self, event):
+        """Override hover to disable it during clustering."""
+        if self._clustering_active:
+            # Disable hover during clustering
+            return
+        # Call parent hover implementation for non-clustering mode
+        super()._on_paneA_hover(event)
+    
+    @override
     def _on_paneA_click(self, event):
         """
         Handle single/double clicks on the heatmap with clustering features.
         
-        Single click: Freezes the current pixel so hovering doesn't change the view.
-        Double click: Toggles between showing all cluster centers and re-enabling hover mode.
+        Single click: Shows the spectrum for the clicked pixel.
+        Double click: Resets to show all cluster centers.
         """
         if event.new is None:
             return
@@ -760,47 +766,39 @@ class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
             
             # Check if this is a double-click
             if time_since_last_click < self._DOUBLE_CLICK_MS:
-                # DOUBLE CLICK: Toggle between showing all clusters and re-enabling hover
-                self._frozen_pixel = None  # Unfreeze
-                
-                if self._hover_disabled:
-                    # Re-enable hover mode
-                    self._hover_disabled = False
+                # DOUBLE CLICK: Show all cluster centers
+                if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
+                    _, centres = self._clustering_results
                     
-                    # Trigger hover for current mouse position if available
-                    if self._last_hover_point is not None:
-                        i, j = int(self._last_hover_point['y']), int(self._last_hover_point['x'])
-                        fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
-                        if fig is not None and self.paneB is not None:
-                            self.paneB.object = fig
-                else:
-                    # Show all clusters and disable hover
-                    if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
-                        self._hover_disabled = True  # Disable hover
-                        
-                        _, centres = self._clustering_results
-                        
-                        # Create figure with all cluster centers using OOP visualizer
-                        fig = self._visualizer.plot_centers(
-                            centres,
-                            self._energy,
-                            title="All Cluster Centers (Double Click again to re-enable hover)"
-                        )
-                        
-                        if self.paneB is not None:
-                            self.paneB.object = fig
+                    # Create figure with all cluster centers using OOP visualizer
+                    fig = self._visualizer.plot_centers(
+                        centres,
+                        self._energy,
+                        title="All Cluster Centers"
+                    )
+                    
+                    if self.paneB is not None:
+                        self.paneB.object = fig
                 
                 # Reset timer to prevent treating next click as double-click
                 self._last_click_time = current_time - 1000
                 return
                 
             else:
-                # SINGLE CLICK: Call parent implementation to freeze pixel
-                super()._on_paneA_click(event)
-                # Update last click time
+                # SINGLE CLICK: Show spectrum for clicked pixel
                 self._last_click_time = current_time
+                
+                if self._clustering_active:
+                    # Extract coordinates from click event
+                    point = event.new['points'][0]
+                    i, j = int(point['y']), int(point['x'])
+                    fig = self._plot_pixel_spectrum(i, j, title_prefix="Click")
+                    if fig is not None and self.paneB is not None:
+                        self.paneB.object = fig
+                else:
+                    # Call parent implementation for non-clustering mode
+                    super()._on_paneA_click(event)
                 
         except Exception as e:
             print(f"Error handling click: {e}")
-            import traceback
             traceback.print_exc()
