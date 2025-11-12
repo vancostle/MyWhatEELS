@@ -4,6 +4,8 @@ from whateels.base.mvc.base_controller import BaseController
 from .services.oos_loader_service import Loader_OOS
 from xarray import Dataset
 from whateels.helpers.constants import OOS_ROOT
+from whateels.helpers.safe_converter import SafeConverter
+
 
 import panel as pn
 
@@ -11,6 +13,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import QuantificationModel
     from ..view import QuantificationView
+    
 
 class ElementItem:
     def __init__(self, element, shells, fit_range= None, quant_range= None):
@@ -41,17 +44,22 @@ class QuantificationController(BaseController):
         self._view = view
 
         self._layout = LayoutManager(view, self, model)
-        
-        app_state = AppState()
-        all_datasets = app_state.all_datasets
-        self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
 
-        if not isinstance(all_datasets, list) or not all_datasets:
+        all_datasets = AppState().all_datasets
+        
+        # Get 'tab' query parameter from URL
+        tab_param = self._get_query_param("tab")
+        # Convert to integer with default -1
+        tab_param = SafeConverter.to_int(tab_param, default=-1) # -1 indicates invalid index in this context
+        
+        # Validate datasets and tab index
+        if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
             self.base_layout.empty_main()
             return
         
-        eels = self._get_only_eels_datasets(all_datasets)
-        self._layout.create_tab_and_dataset_info(eels)
+        self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
+
+        self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
 
         self._quantification_user_update(view)
 
@@ -69,7 +77,6 @@ class QuantificationController(BaseController):
         view.quanti_input["element_num"].param.watch(self._element_num_watcher, 'value')
         view.quanti_add_element_button.on_click(self._add_element_item_button_callback)
         view.quanti_run_button.on_click(self._run_quantification)
-        view.plot_elements_button.on_click(self.plot_elements)
 
     def _element_num_watcher(self, event):
         """Watcher for changes in the element number selection."""
@@ -104,14 +111,11 @@ class QuantificationController(BaseController):
                 self.view.quanti_input['shells_multiselect'].value = []
                 print("lets plot")
                 
-                self._layout.plot_quantification_element(element_item)
+                self._layout.plot_quantification_elements()
             else:
                 print("Element already added.")
         return
 
-    def plot_quantification_element(self, element_item: ElementItem):
-        self._layout.plot_quantification_element(element_item)
-        return
 
     def _run_quantification(self, event):
         print("Running quantification...")
@@ -123,13 +127,21 @@ class QuantificationController(BaseController):
             self._layout.plot_quantification_pie()
         return
 
-    def plot_elements(self, event):
+    def plot_elements(self):
         if not self._model.app_state.quantification_elements:
             print("No elements to plot.")
         else:
-            self._layout.plot_quantification_elements( self._model.app_state.quantification_elements, self.loader_oos)
+            self._layout.plot_quantification_elements()
         return
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""
         return [ds for ds in datasets if "Eloss" in ds.coords]
+    
+    def _get_query_param(self, param_name: str) -> str | None:
+        """Retrieve a specific query parameter from the URL, handling both list and single value cases."""
+        params = pn.state.location.query_params if pn.state.location else {}
+        value = params.get(param_name, None)
+        if isinstance(value, list):
+            return value[0]
+        return value

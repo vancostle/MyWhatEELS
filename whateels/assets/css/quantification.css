@@ -38,6 +38,7 @@
 .element-container {
     flex: 1;
     overflow-y: auto;
+    padding-right: 2%;
 }
 
 .element-item {
@@ -45,3 +46,7 @@
     border-radius: 4px;
     background-color: #f8f9fa;
 }
+.element-item * {
+    box-sizing: border-box;
+  }
+  

@@ -20,6 +20,10 @@ if TYPE_CHECKING:
     from ...model import Model
     from xarray import Dataset
     from param.parameterized import Event
+    
+import bokeh.palettes as palettes
+
+colors = palettes.Category10[10]  # o Category20, viridis, etc.
 
 
 class SpectrumImageVisualizer(AbstractEELSVisualizer):
@@ -119,26 +123,37 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     def create_dataset_info(self):
         return super().create_dataset_info()
     
-
-    def plot_quantification_element(self, element_item: "ElementItem"):
+    def plot_quantification_elements(self, element_items: list["ElementItems"]):
         fig = self._figB_region(self._region_pairs)
         fig = self._to_plotly(fig)
+
+        colors = palettes.Category10[10]
+        
+
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
         if res is not None:
-            print(res)
             self.selected_slice, _ = res ## Retorna none
-            try:
-                print(self._energy, self.selected_slice)
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
-                fig = self._plot_fit_traces(fig, self._energy, self.selected_slice, y_fit)
-                self.plot_shells_cross_section(fig, element_item)
-                fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
+            i = 0
+            for element_item in element_items:
+                color = colors[i % len(colors)]
+                fig = self.plot_quantification_element(fig, element_item, color)
+                i += 1
 
-                self.paneB.object = self._to_plotly(fig)
-            except Exception as e:
-                raise e
-        pass
+            self.paneB.object = self._to_plotly(fig)
 
+
+    
+
+    def plot_quantification_element(self, fig, element_item: "ElementItem", color):
+        try:
+            y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
+            fig = self._plot_fit_traces(fig, element_item.element, self._energy, self.selected_slice, y_fit, color)
+            self.plot_shells_cross_section(fig, element_item)
+            fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
+
+            return fig
+        except Exception as e:
+            raise e
     def plot_shells_cross_section(self, fig, element_item: "ElementItem"):
         y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
 
@@ -154,60 +169,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 eaxis_cs=eaxis, counts=counts, onset=onset,
                 cross_section=cross_section, chemical_shift=chemical_shift
             )
-
-
-
-
-
-
-    def plot_quantification_elements(self, loader_OOS : "Loader_OOS", element_items: list):
-        """Placeholder method to match abstract base class."""
-        fig = self._figB_region(self._region_pairs)
-        fig = self._to_plotly(fig)
-        
-        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-        if res is not None:
-            self.selected_slice, _ = res
-            
-
-            if element_items:
-                i = 0
-                for element_item in element_items:
-                    fig = self.plot_element(fig, loader_OOS, self.selected_slice, element_item)
-        
-        self.paneB.object = self._set_ranges_and_convert(fig)
-        return self.element_quant_data
-
-    def plot_element(self, fig, loader_OOS : "Loader_OOS", selected_slice, element_item : "ElementItem"):
-        print("Selected slice obtained")
-        print("Element item:", element_item)
-        print("State shells and element:", element_item.shells, element_item.element)
-        print("Energy axis:", self._energy)
-        print("E axis:", self._e_axis)
-        if element_item and element_item.element and element_item.shells:
-            try:
-                shells_data = []
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, selected_slice, range_values=element_item.fit_range)
-                fig = self._plot_fit_traces(fig, self._energy, selected_slice, y_fit)
-                for ishell in element_item.shells:
-                    fig, shell_data = self.calculate_shell_data(fig, loader_OOS, selected_slice, element_item, y_fit, ishell)
-                    shells_data.append((ishell, shell_data))
-                    print(f"Quantification for {element_item.element} {ishell} added.")
-                if len(shells_data) == 2:
-                    ##afegir element data a init
-                    self.element_quant_data.append([
-                                    element_item, y_fit,
-                                    get_envelope(
-                                        shells_data[0][1][0], shells_data[0][1][1],
-                                        shells_data[1][1][0], shells_data[1][1][1]
-                                    )
-                                ])
-                else:
-                    self.element_quant_data.append([element_item, y_fit, shells_data[0][1]])
-            except Exception as e:
-                raise e
-        fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
-        return fig, shell_data[1][0]
     
 
     def calculate_shell_data(self, selected_slice, element_item, y_extrapolated, ishell):
@@ -277,7 +238,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 for ishell in element_item.shells:
                     shell_data = self.calculate_shell_data(self.selected_slice, element_item, y_fit, ishell)
                     shells_data.append((ishell, shell_data))
-                    print(f"Quantification for {element_item.element} {ishell} added.")
                 if len(shells_data) == 2:
                     ##afegir element data a init
                     element_data.append([
@@ -293,7 +253,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 raise e
         try:
             q_list = []  # List to store quantification results
-            print("Element data count:", len(element_data))
             i = 0
             # Iterate through the element data list in pairs
             while i < len(element_data) - 1:
@@ -317,8 +276,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                     # Append the result to the list
                     q_list.append((element_item0.element, element_item1.element, q_aux))
                 i += 1
-
-            print("Quantification results:", q_list)
             ##state.paneC.object = pie_plot(q_list)  # Update the pie chart with the results
             self.paneB.object = self._to_plotly(self.pie_plot(q_list))
             return f" | Quantification result: {q_list}"
@@ -518,6 +475,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
             fig = self._figB_region(self._region_pairs)
+            if AppState().quantification_elements:
+                self.plot_quantification_elements(AppState().quantification_elements)
+                return
             if self._fitting_active:
                 res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
                 if res is not None:
@@ -527,8 +487,26 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             self.paneB.object = self._set_ranges_and_convert(fig)
             if self._pc.running:
                 self._pc.stop()
-                
-    def _plot_fit_traces(self, fig, x, y, y_fit):
+
+    # funcio que entra un color hex i un alpha i retorna el color amb rgba amb alpha
+    def _hex_to_rgba(self, hex_color, alpha):
+        """
+        Convert a hex color string to an rgba color string with the given alpha.
+
+        Parameters:
+            hex_color (str): The hex color string (e.g., '#RRGGBB').
+            alpha (float): The alpha value (0.0 to 1.0).
+
+        Returns:
+            str: The rgba color string (e.g., 'rgba(r, g, b, a)').
+        """
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return f'rgba({r}, {g}, {b}, {alpha})'
+        
+    
+    
+    def _plot_fit_traces(self, fig, element, x, y, y_fit, color):
         """
         Add fit and background subtraction traces to a Plotly figure.
 
@@ -542,11 +520,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             plotly.graph_objs.Figure: The figure with added fit and subtraction traces.
         """
         # Local constants for Plotly and fitting
-        POWERLAW_FIT_NAME = 'PowerLaw Fit'
-        BG_SUBTRACTION_NAME = 'Background Subtraction'
-        CRIMSON = 'crimson'
-        BG_LINE_COLOR = 'rgba(255,160,122,0.2)'
-        BG_FILL_COLOR = 'rgba(255,160,122,0.6)'
+        POWERLAW_FIT_NAME = f'{element} PowerLaw Fit'
+        BG_SUBTRACTION_NAME = f'{element} Background Subtraction'
+        BG_LINE_COLOR = self._hex_to_rgba(color, 0.2)
+        BG_FILL_COLOR = self._hex_to_rgba(color, 0.6)
         LEGEND_X = 0.98
         LEGEND_Y = 0.98
         LEGEND_XANCHOR = 'right'
@@ -562,7 +539,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         newfig.add_trace(go.Scatter(
             x=x,
             y=y_fit,
-            line=dict(color=CRIMSON),
+            line=dict(color=color),
             name=POWERLAW_FIT_NAME
         ))
         newfig.add_trace(go.Scatter(
@@ -625,6 +602,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return
         self._last_hover_point = point
         fig = self._figB_hover(self._last_hover_point)
+        if AppState().quantification_elements:
+            self.plot_quantification_elements(AppState().quantification_elements)
+            return
         if self._fitting_active:
             i, j = int(point["y"]), int(point["x"])
             spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
@@ -660,7 +640,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             else:
                 self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
             return
-
+        if AppState().quantification_elements:
+            self.plot_quantification_elements(AppState().quantification_elements)
+            return
         fig = self._figB_region(self._region_pairs)
         if self._fitting_active:
             res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)

@@ -119,7 +119,7 @@ class QuantificationView(BaseView):
 
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
-            self._controller.plot_quantification_element(element_item)
+            self._controller.plot_elements()
 
 
         element_item.set_fit_range([energy[0], energy[1]])
@@ -132,11 +132,11 @@ class QuantificationView(BaseView):
             
         def _fit_range_watcher(event):
             element_item.set_fit_range(event.new)
-            self._controller.plot_quantification_element(element_item)
+            self._controller.plot_elements()
 
         def _quant_range_watcher(event):   
             element_item.set_quant_range(event.new)
-            self._controller.plot_quantification_element(element_item)
+            self._controller.plot_elements()
         
         
 
@@ -159,6 +159,7 @@ class QuantificationView(BaseView):
             else:
                 element_item_view.remove(fit_slider)
                 element_item_view.remove(quant_slider)
+                element_item_view.remove(chemical_shift_input)
                 slider["active"] = False
 
 
@@ -248,7 +249,6 @@ class QuantificationView(BaseView):
             self._quanti_element_item,
             self._quanti_add_element_button,
             self._element_item_view_container,
-            self._plot_elements_button,
             self._quanti_run_button,
             sizing_mode=self.STRETCH_BOTH,
         )
