@@ -1,6 +1,5 @@
 from whateels.components import CustomPage
 from .MVC import ClusteringModel, ClusteringController, ClusteringView
-from whateels.shared_state import AppState
 
 class Clustering(CustomPage):
     """
@@ -16,7 +15,7 @@ class Clustering(CustomPage):
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.left_sidebar] if AppState().metadata is not None else [],
-            right_sidebar=[] if AppState().metadata is None else [view.right_sidebar],
+            sidebar=[view.left_sidebar] if model.app_state.metadata is not None else [],
+            right_sidebar=[] if model.app_state.metadata is None else [view.right_sidebar],
             collapsed_sidebar=True,
         )
