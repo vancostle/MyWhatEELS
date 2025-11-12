@@ -13,7 +13,7 @@ It should be used by views/layouts to instantiate the correct plot for a given d
 """
 import traceback
 
-from .plots import SpectrumImageVisualizer, ImageVisualizer
+from .plots import SpectrumImagePlot, ImagePlot
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import ClusteringModel
@@ -36,15 +36,15 @@ class PlotsFactory:
         # Mapping of dataset types to plot classes
         # Extend this dictionary to support more plot types as needed
         self._all_visualizers = {
-            model.constants.SPECTRUM_IMAGE: SpectrumImageVisualizer,
-            model.constants.IMAGE: ImageVisualizer
+            model.constants.SPECTRUM_IMAGE: SpectrumImagePlot,
+            model.constants.IMAGE: ImagePlot
         }
 
     def choose_visualizer(
         self, 
         dataset_type: str, 
         dataset: "Dataset"
-    ) -> SpectrumImageVisualizer | ImageVisualizer | None:
+    ) -> SpectrumImagePlot | ImagePlot | None:
         """
         Instantiates and returns the appropriate plot component for the specified dataset type.
 
@@ -67,7 +67,7 @@ class PlotsFactory:
             chosen_spectrum_visualizer = self._all_visualizers.get(dataset_type)
             if chosen_spectrum_visualizer:
                 # Pass controller only to SpectrumImageVisualizer, others get model and dataset only
-                if chosen_spectrum_visualizer == SpectrumImageVisualizer:
+                if chosen_spectrum_visualizer == SpectrumImagePlot:
                     chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, self._view, dataset)
                 else:
                     chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)

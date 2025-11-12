@@ -6,10 +6,10 @@ All visualizers for the clustering page:
 - SpectrumImageVisualizer: Interactive 3D datacube with clustering features
 """
 
-from .image_plot import ImageVisualizer
-from .spectrum_image_plot import SpectrumImageVisualizer
+from .image_plot import ImagePlot
+from .spectrum_image_plot import SpectrumImagePlot
 
 __all__ = [
-    'SpectrumImageVisualizer',  # Clustering-enhanced visualizer
-    'ImageVisualizer'             # Base component from shared
+    'SpectrumImagePlot',  # Clustering-enhanced visualizer
+    'ImagePlot'             # Base component from shared
 ]

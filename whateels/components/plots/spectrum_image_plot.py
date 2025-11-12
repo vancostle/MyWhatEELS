@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from xarray import Dataset
 
-class SpectrumImageVisualizer:
+class SpectrumImagePlot:
     """
     Base component for spectrum image (datacube) visualization.
     

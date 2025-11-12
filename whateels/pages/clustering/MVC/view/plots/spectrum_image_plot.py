@@ -20,7 +20,7 @@ import threading
 import traceback
 
 from whateels.helpers import SpectrumExtractor
-from whateels.components.visualizers import SpectrumImageVisualizer as SharedSpectrumImageVisualizer
+from whateels.components.plots import SpectrumImagePlot as SharedSpectrumImagePlot
 from whateels.components import ResizableColumns, ProgressDisplay
 from typing import override, TYPE_CHECKING
 
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from xarray import Dataset
 
 
-class SpectrumImageVisualizer(SharedSpectrumImageVisualizer):
+class SpectrumImagePlot(SharedSpectrumImagePlot):
     """
     Clustering-enhanced Spectrum Image Visualizer.
     
