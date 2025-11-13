@@ -66,6 +66,11 @@ class QuantificationView(BaseView):
         return self._quanti_run_button
     
     @property
+    def quanti_toggle_button(self):
+        """Access the 'Toggle Quantification' button."""
+        return self._quanti_toggle_button
+    
+    @property
     def plot_elements_button(self):
         """Access the 'Plot Elements' button."""
         return self._plot_elements_button
@@ -80,10 +85,7 @@ class QuantificationView(BaseView):
         self.main = self._main_layout()
         self.right_sidebar = self._right_sidebar_layout()
 
-    def get_new_element_item_view(self, element_item : "ElementItem", energy) -> pn.Column:
-        print("Energy for slider:", energy)
-
-        
+    def get_new_element_item_view(self, element_item : "ElementItem", energy) -> pn.Column:        
 
         delete_button = pn.widgets.Button(
             name= 'Delete',
@@ -145,7 +147,6 @@ class QuantificationView(BaseView):
         def _delete_element_watcher(event):
             self._element_item_view_container.remove(element_item_view)
             self._model.app_state.quantification_elements.remove(element_item)
-            print(self._model.app_state.quantification_elements)
 
         slider = {"active": False}
         
@@ -227,6 +228,25 @@ class QuantificationView(BaseView):
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["element-container"]
         )
+
+            # State identifiers
+        _ON = 'on'
+        _OFF = 'off'
+        
+        # Dictionary keys for state properties
+        _NAME = 'label'
+        _ON_CLICK = 'on_click'
+        _BUTTON_TYPE = 'button_type'
+
+        states = {
+                _ON: {_NAME: "Hide Quantification", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
+                _OFF: {_NAME: "Show Quantification", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
+            }
+
+        self._quanti_toggle_button = ToggleButton(
+            sizing_mode=self._STRETCH_WIDTH,
+            states=states
+        )
         
         self._quanti_run_button = pn.widgets.Button(
             name='Run Quantification',
@@ -249,7 +269,7 @@ class QuantificationView(BaseView):
             self._quanti_element_item,
             self._quanti_add_element_button,
             self._element_item_view_container,
-            self._quanti_run_button,
+            self._quanti_toggle_button,
             sizing_mode=self.STRETCH_BOTH,
         )
         

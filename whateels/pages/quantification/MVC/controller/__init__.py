@@ -61,6 +61,9 @@ class QuantificationController(BaseController):
 
         self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
 
+        self._slider_active =  False
+        
+
         self._quantification_user_update(view)
 
     @property
@@ -77,6 +80,7 @@ class QuantificationController(BaseController):
         view.quanti_input["element_num"].param.watch(self._element_num_watcher, 'value')
         view.quanti_add_element_button.on_click(self._add_element_item_button_callback)
         view.quanti_run_button.on_click(self._run_quantification)
+        view.quanti_toggle_button.on_click(self._toggle_quantification)
 
     def _element_num_watcher(self, event):
         """Watcher for changes in the element number selection."""
@@ -109,8 +113,6 @@ class QuantificationController(BaseController):
                 self._model.app_state.quantification_elements.append(element_item)
                 self._layout.add_new_element_input(element_item_view)
                 self.view.quanti_input['shells_multiselect'].value = []
-                print("lets plot")
-                
                 self._layout.plot_quantification_elements()
             else:
                 print("Element already added.")
@@ -118,7 +120,6 @@ class QuantificationController(BaseController):
 
 
     def _run_quantification(self, event):
-        print("Running quantification...")
         if not self._model.app_state.quantification_elements:
             print("No elements to quantify.")
         elif len(self._model.app_state.quantification_elements) < 2:
@@ -126,6 +127,30 @@ class QuantificationController(BaseController):
         else:
             self._layout.plot_quantification_pie()
         return
+    
+
+    def _toggle_quantification(self, event):
+        print(self._slider_active)
+        if not self._slider_active:
+            if not self._model.app_state.quantification_elements:
+                self.view.quanti_toggle_button.toggle()  # Revert the toggle state
+                print("No elements to quantify.")
+            elif len(self._model.app_state.quantification_elements) < 2:
+                self.view.quanti_toggle_button.toggle()  # Revert the toggle state
+                print("At least two elements are required for quantification.")
+                
+            else:
+                try:
+                    self._layout.plot_quantification_pie()
+                    self._slider_active = True
+                except Exception as e:
+                    self.view.quanti_toggle_button.toggle()
+                    print(f"Error plotting quantification pie chart: {e}")
+                
+            
+        else:
+            self.plot_elements()
+            self._slider_active = False
 
     def plot_elements(self):
         if not self._model.app_state.quantification_elements:

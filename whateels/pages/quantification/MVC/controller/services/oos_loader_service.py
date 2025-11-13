@@ -90,8 +90,7 @@ class Loader_OOS():
             try:
                 # Check if the item is a dictionary and contains the subshell
                 if isinstance(item, dict):
-                    self.subshells.extend(item.keys())
-                    print(self.subshells)                 
+                    self.subshells.extend(item.keys())              
                     if subshell in self.subshells:
                         ##print(f'Subshell {subshell} found.')
                         ##print("Energy axis (last value):", np.array(item[subshell]['eaxis'])[-1])

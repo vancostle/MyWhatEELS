@@ -12,12 +12,6 @@ class Quantification(CustomPage):
         model = QuantificationModel()
         view = QuantificationView(model)
         QuantificationController(model, view)
-
-        if AppState().metadata is not None:
-            print("Quantification page initialized with metadata.")
-            print(view.sidebar)
-        else:
-            print("Quantification page initialized without metadata.")
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
