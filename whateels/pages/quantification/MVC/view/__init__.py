@@ -115,7 +115,7 @@ class QuantificationView(BaseView):
             css_classes=["element-item"]
         )
 
-        chemical_shift_input = pn.widgets.FloatInput(name='Chemical Shift', value=0., step=1e-1)
+        chemical_shift_input = pn.widgets.FloatInput(name='Chemical Shift', value=0., step=1e-1, styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
 
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
@@ -126,9 +126,9 @@ class QuantificationView(BaseView):
         element_item.set_quant_range([energy[1], energy[2]])
 
         fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[1] - 20, 
-                value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a')
+                value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
         quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[1] - 20, end=energy[2], 
-                value=(energy[1],energy[2]), step=1, disabled=False, format='0.00a')
+                value=(energy[1],energy[2]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
             
         def _fit_range_watcher(event):
             element_item.set_fit_range(event.new)

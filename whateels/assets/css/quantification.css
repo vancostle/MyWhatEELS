@@ -1,3 +1,9 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 .bk-body {
     --switch-width: 50px;
     --bar-height: 25px;
@@ -38,7 +44,6 @@
 .element-container {
     flex: 1;
     overflow-y: auto;
-    padding-right: 2%;
 }
 
 .element-item {
@@ -46,7 +51,9 @@
     border-radius: 4px;
     background-color: #f8f9fa;
 }
+
 .element-item * {
     box-sizing: border-box;
-  }
-  
+}
+
+
