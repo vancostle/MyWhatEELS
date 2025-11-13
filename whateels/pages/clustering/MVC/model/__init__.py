@@ -1,19 +1,42 @@
-from whateels.base.mvc import BaseModel
-from whateels.shared_state import AppState
-from .constants import Constants
 import numpy as np
+
+from whateels.shared_state import AppState
+from .placeholders import Placeholders
+from .constants import Constants
 from typing import Optional
 
-class ClusteringModel(BaseModel):
+class ClusteringModel:
     def __init__(self):
         super().__init__()
-
+        
+        self._placeholders = Placeholders()
         self._constants = Constants()
         self._app_state = AppState()
         
     @property
     def constants(self):
         return self._constants
+    @property
+    def placeholders(self) -> Placeholders:
+        return self._placeholders
+    @property
+    def app_state(self) -> AppState:
+        """
+        Get the shared application state instance.
+        
+        Returns:
+            AppState: The shared application state
+        """
+        return self._app_state
+
+    def get_uploaded_filename(self) -> str:
+        """
+        Get the filename of the currently uploaded dataset from shared state.
+        
+        Returns:
+            str: Uploaded filename, or empty string if none
+        """
+        return str(self.app_state.filename) if self.app_state.filename is not None else "No file uploaded"
     
     # --- Multifit Data Access Methods ---
     
@@ -24,7 +47,7 @@ class ClusteringModel(BaseModel):
         Returns:
             bool: True if multifit data exists, False otherwise
         """
-        return self._app_state.multifit is not None
+        return self.app_state.multifit is not None
     
     def get_multifit_data(self) -> Optional[np.ndarray]:
         """
@@ -39,7 +62,7 @@ class ClusteringModel(BaseModel):
                                  or None if data cannot be retrieved
         """
         try:
-            multifit_dataset = self._app_state.multifit
+            multifit_dataset = self.app_state.multifit
             
             if multifit_dataset is None:
                 return None
@@ -47,9 +70,10 @@ class ClusteringModel(BaseModel):
             # Extract ElectronCount data from the multifit dataset
             # The multifit should have the same structure as original dataset
             if hasattr(multifit_dataset, 'ElectronCount'):
-                multifit_data = multifit_dataset.ElectronCount
-                data_cube = np.asarray(multifit_data.fillna(0.0))
-                return data_cube
+                multifit_data = getattr(multifit_dataset, 'ElectronCount', None)
+                if multifit_data is not None:
+                    data_cube = np.asarray(multifit_data.fillna(0.0))
+                    return data_cube
             elif isinstance(multifit_dataset, np.ndarray):
                 # If multifit is already a numpy array
                 return multifit_dataset

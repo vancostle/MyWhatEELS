@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from whateels.helpers import HTML_ROOT
-from whateels.components import ResizableColumns
 import panel as pn
 
 from typing import TYPE_CHECKING
@@ -23,7 +22,7 @@ class BaseVisualizer(ABC):
         self._dataset = dataset
 
     @abstractmethod
-    def create_plots(self) -> ResizableColumns:
+    def create_plots(self) -> pn.viewable.Viewable:
         """
         Create the main layout for the EELS visualizer.
         

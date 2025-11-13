@@ -5,13 +5,13 @@ import panel as pn
 import numpy as np
 import plotly.graph_objs as go
 import xarray as xr  # (se mantiene por zeros_like si hiciera falta en extensiones)
-from .abstract_eels_visualizer import AbstractEELSVisualizer
-from typing import override, TYPE_CHECKING
 
+from whateels.base.base_visualizer import BaseVisualizer
+from typing import override, TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class SpectrumLineVisualizer(AbstractEELSVisualizer):
+class SpectrumLineVisualizer(BaseVisualizer):
     """Composes spectrum line visualizations from EELS data (Plotly)."""
 
     _IMAGE_X_LABEL = 'Position'
@@ -73,7 +73,7 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
             z=z,
             x=x_coords.values,
             y=e_coords.values,
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model.colors, "GREYS_R") else "Greys",
+            colorscale="Greys",
             colorbar=dict(title=self._model.constants.ELECTRON_COUNT),
             hovertemplate=f"{x_name}=%{{x}}<br>{e_name}=%{{y}}<br>I=%{{z}}<extra></extra>"
         )
@@ -129,7 +129,7 @@ class SpectrumLineVisualizer(AbstractEELSVisualizer):
             x=energy,
             y=values,
             mode="lines",
-            line=dict(color=self._model.colors.RED if hasattr(self._model.colors, "RED") else "crimson", width=2),
+            line=dict(color="crimson", width=2),
             name=f"x={self._selected_x_value}"
         ))
         spec_fig.update_layout(

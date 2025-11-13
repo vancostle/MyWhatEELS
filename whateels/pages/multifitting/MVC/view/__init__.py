@@ -1,8 +1,6 @@
 import panel as pn
-from typing import TYPE_CHECKING
-from whateels.helpers import HTML_ROOT
+from typing import TYPE_CHECKING, Optional
 from .view_multifit import SpectrumImageVisualizer
-from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
     from ..model import Model
@@ -20,8 +18,19 @@ class View:
     def __init__(self, model: "Model") -> None:
         self._model = model
         self._main_container_layout = None
+        self._loader_spinner = None
         
         self._init_components()
+    
+    # --- Properties ---
+    @property
+    def main(self) -> Optional[pn.Column]:
+        """Main content area layout for displaying metadata."""
+        return self._main_container_layout
+    @property
+    def loader_spinner(self) -> Optional[pn.indicators.LoadingSpinner]:
+        """Loading spinner indicator for data loading states."""
+        return self._loader_spinner
     
     # --- UI Component Creation Methods ---
     
@@ -63,18 +72,17 @@ class View:
     def create_no_multifit_component(self):
         """Fallback component when no multifit is available."""
         return pn.pane.HTML("<p>No multifit data available.</p>", sizing_mode=self._STRETCH_BOTH)
-
-    # --- Properties ---
-    @property
-    def main(self) -> pn.Column:
-        """Main content area layout for displaying metadata."""
-        return self._main_container_layout
         
     # --- Private/Internal Setup Methods ---
     
     def _init_components(self):
         """Initialize main and sidebar layout containers."""
         self._main_container_layout = self._main_layout()
+        self._loader_spinner = pn.indicators.LoadingSpinner(
+            value=True,
+            width=50,
+            sizing_mode="stretch_both",
+        )
 
     def _main_layout(self):
         """Create and return the main layout."""

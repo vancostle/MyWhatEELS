@@ -13,13 +13,12 @@ pn.extension(raw_css=[
     ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
 ])
 
-from .abstract_eels_visualizer import AbstractEELSVisualizer
+from whateels.base.base_visualizer import BaseVisualizer
 from typing import override, TYPE_CHECKING
-
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class ImageVisualizer(AbstractEELSVisualizer):
+class ImageVisualizer(BaseVisualizer):
     """Composes image visualizations from EELS data"""
 
     # Constants for sizing modes and plot configuration
@@ -67,7 +66,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
             z=m_image,
             x=np.arange(nx),
             y=np.arange(ny-1, -1, -1),
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model, 'colors') else 'Greys_r',
+            colorscale='Greys_r',
             showscale=False,
             hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )
@@ -130,7 +129,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
             z=m_image,
             x=np.arange(data_width),
             y=np.arange(data_height-1, -1, -1),
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model, 'colors') else 'Greys_r',
+            colorscale='Greys_r',
             showscale=False,
             hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )

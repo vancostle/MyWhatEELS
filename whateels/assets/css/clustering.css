@@ -54,3 +54,7 @@
 .background-subtraction-container {
     max-height: 65px;
 }
+
+.tooltip-icon {
+    margin: 0;
+}

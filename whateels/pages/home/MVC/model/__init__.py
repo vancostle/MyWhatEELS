@@ -1,6 +1,6 @@
 from whateels.helpers.in_memory_file import InMemoryFile
 from whateels.base.mvc.base_model import BaseModel
-from .constants import Constants, Colors, FileDropper, Placeholders
+from .constants import Constants, Placeholders
 
 class HomePageModel(BaseModel):
     """
@@ -13,19 +13,11 @@ class HomePageModel(BaseModel):
 
         # Shared configuration and constants
         self._constants = Constants()
-        self._colors = Colors()
-        self._file_dropper = FileDropper()
         self._placeholders = Placeholders()
 
     @property
     def constants(self) -> Constants:
         return self._constants
-    @property
-    def colors(self) -> Colors:
-        return self._colors
-    @property
-    def file_dropper(self) -> FileDropper:
-        return self._file_dropper
     @property
     def in_memory_file(self) -> InMemoryFile | None:
         return self._in_memory_file
