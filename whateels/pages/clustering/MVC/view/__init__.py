@@ -44,7 +44,7 @@ class ClusteringView:
     @main.deleter
     def main(self):
         """Delete the main content area layout."""
-        self._main.clear()
+        self._main.empty()
 
     @property
     def left_sidebar(self) -> "ClusteringLeftSidebarLayout":

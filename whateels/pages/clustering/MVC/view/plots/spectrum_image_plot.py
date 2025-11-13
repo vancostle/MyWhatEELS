@@ -163,6 +163,8 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 time.sleep(0.05)
                 
                 labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
+                print("K-Means lables", labels)
+                print("K-Means centres", centres)
                 
                 # Update progress: visualizing results
                 self._progress_display.update(65, "Visualizing K-Means results - creating heatmap...", level='info')

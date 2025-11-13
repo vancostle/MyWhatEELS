@@ -1,4 +1,5 @@
 import panel as pn
+import json
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -39,7 +40,7 @@ class ClusteringRightSidebarLayout(pn.Column):
         """Access the Agglomerative clustering run button."""
         return self._agglomerative_run_button
     @property
-    def store_button(self) -> Optional[pn.widgets.Button]:
+    def store_button(self) -> Optional[pn.widgets.FileDownload]:
         """Access the store button."""
         return self._store_button
     @property
@@ -101,12 +102,73 @@ class ClusteringRightSidebarLayout(pn.Column):
             css_classes=["clustering-tabs"]
         )
         
-        self._store_button = pn.widgets.Button(
-            name="Store", 
-            button_type="primary", 
-            height=55, 
+        # self._store_button = pn.widgets.Button(
+        #     name="Store", 
+        #     button_type="primary", 
+        #     height=55, 
+        #     sizing_mode=self._STRETCH_WIDTH,
+        #     margin=(10, 0, 0, 0)
+        # )
+        
+        def get_input_values():
+            kmeans_input = self._kmeans_input
+            
+            json = {
+                "clustering" : {
+                    "file" : self._model.get_uploaded_filename(),
+                    "spectrum_image" : "EELS LL SI",
+                    "type" : "k_means",
+                    "inputs" : {
+                        "n_clusters" : {
+                            "value" : 5
+                        },
+                        "norm" : {
+                            "value" : "l2"
+                        },
+                        "n_init" : {
+                            "value" : 10
+                        },
+                        "max_iter" : {
+                            "value" : 300
+                        },
+                        "init_method" : {
+                            "value" : "k-means++"
+                        }
+                    },
+                    "outputs" : {
+                        "labels" : {
+                            "value" : [0, 1, 2, 0, 1, 2, 3, 4, 0, 1],
+                            "type" : "array",
+                            "description" : "Cluster labels for each data point."
+                        },
+                        "centres" : {
+                            "value" : [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]],
+                            "type" : "array",
+                            "description" : "Coordinates of cluster centers."
+                        }
+                    }
+                }
+            }
+            
+            
+            pass
+        
+
+        def create_file():
+
+            print("Store button clicked")
+            return b"sio"
+
+        self._store_button = pn.widgets.FileDownload(
+            label="Store Results",
+            filename="clustering.json",
+            button_type="primary",
+            callback=pn.bind(create_file),
             sizing_mode=self._STRETCH_WIDTH,
-            margin=(10, 0, 0, 0)
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
+            css_classes=["store-button"]
         )
 
         right_sidebar = pn.Column(
