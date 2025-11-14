@@ -13,6 +13,7 @@ class ClusteringModel:
         self._placeholders = Placeholders()
         self._constants = Constants()
         self._app_state = AppState()
+        self._current_image_name: Optional[str] = None
         
         # Example structure for last clustering result
         self._last_clustering_result = {
@@ -50,9 +51,15 @@ class ClusteringModel:
         """
         return self._app_state
     @property
+    def current_image_name(self) -> Optional[str]:
+        return self._current_image_name
+    @property
     def last_clustering_result(self) -> dict:
         return self._last_clustering_result
     
+    @current_image_name.setter
+    def current_image_name(self, name: str):
+        self._current_image_name = name
     @last_clustering_result.setter
     def last_clustering_result(self, result: dict):
         """
@@ -75,12 +82,6 @@ class ClusteringModel:
         missing_keys = [key for key in required_keys if key not in clustering]
         if missing_keys:
             raise ValueError(f"Missing required keys in 'clustering': {missing_keys}")
-        
-        # Validate inputs structure
-        required_input_keys = ["n_clusters", "norm", "n_init", "max_iter", "init_method"]
-        missing_input_keys = [key for key in required_input_keys if key not in clustering["inputs"]]
-        if missing_input_keys:
-            raise ValueError(f"Missing required keys in 'inputs': {missing_input_keys}")
         
         # Validate outputs structure
         required_output_keys = ["labels", "centres"]

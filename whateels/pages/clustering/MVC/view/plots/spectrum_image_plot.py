@@ -102,330 +102,379 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
     # --- Clustering Application Methods ---
     
-    def _apply_kmeans_clustering(
-        self, 
-        n_clusters=6, 
-        available_norm='l2', 
-        n_init=10, 
-        max_iter=300, 
-        init_method='k-means++'
-    ):
+    def _apply_kmeans_clustering(self):
         """Apply KMeans clustering and update visualization."""
-        def run_clustering():
-            try:
-                # Reset and prepare progress display
-                self._progress_display.reset()
-                self._progress_display.visible = True
-                
-                # Replace main content with progress display
-                self._show_clustering_progress()
-                
-                # Get data (possibly background-subtracted)
-                self._progress_display.update(5, f"Loading K-Means data...", level='info')
-                data_cube = self._get_data_for_clustering()
-                time.sleep(0.1)
-                
-                # Store original heatmap if not already stored
-                if self._original_heatmap_data is None:
-                    self._original_heatmap_data = data_cube.sum(axis=-1)
-                
-                # Update progress: preparing data - step 1
-                self._progress_display.update(15, "Preparing K-Means data - normalizing...", level='info')
-                time.sleep(0.1)
-                
-                # Prepare data using OOP preprocessor
-                matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
-                
-                # Update progress: preparing data - step 2
-                self._progress_display.update(25, "Preparing K-Means data - reshaping...", level='info')
-                time.sleep(0.1)
-                
-                # Store for later use in visualization
-                self._last_clustering_matrix = matrix_norm
-                self._last_clustering_input = sclust_norm
-                
-                # Update progress: running algorithm - step 1
-                self._progress_display.update(35, "Running K-Means algorithm - initializing...", level='info')
-                time.sleep(0.1)
-                
-                # Apply clustering algorithm using OOP class
-                init_val = 'k-means++' if init_method == 'k-means++' else 'random'
-                algorithm = KMeansClusteringAlgorithm(
-                    n_clusters=n_clusters,
-                    norm=available_norm,  # type: ignore
-                    n_init=n_init,
-                    max_iter=max_iter,
-                    init_method=init_val
-                )
-                
-                # Update progress: running algorithm - step 2
-                self._progress_display.update(50, f"Running K-Means algorithm - clustering (n={n_clusters})...", level='info')
-                time.sleep(0.1)
-                
-                labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
-                print("K-Means lables", labels)
-                print("K-Means centres", centres)
-                
-                self._model.last_clustering_result = {
-                    "clustering": {
-                        "file": self._model.get_uploaded_filename(),
-                        "spectrum_image": self._original_heatmap_data,
-                        "type": "KMeans",
-                        "inputs": {
-                            "n_clusters": n_clusters,
-                            "norm": available_norm,
-                            "n_init": n_init,
-                            "max_iter": max_iter,
-                            "init_method": init_val,
-                        },
-                        "outputs": {
-                            "labels": labels,
-                            "centres": centres,
-                        }
+
+        CLUSTERING_TYPE = "K-Means"
+        
+        kmeans_input = self._view.right_sidebar.kmeans_input
+        # Get parameters or use defaults
+        n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
+        available_norm = self._model.constants.DEFAULT_SELECTED_NORM
+        n_init = self._model.constants.DEFAULT_NUMBER_OF_INIT
+        max_iter = self._model.constants.DEFAULT_MAX_ITER
+        init_method = self._model.constants.DEFAULT_INIT_METHOD
+
+        try:
+            # Reset and prepare progress display
+            self._progress_display.reset()
+            self._progress_display.visible = True
+            
+            # Replace main content with progress display
+            self._show_clustering_progress()
+
+            if kmeans_input is not None:
+                # Read current values from widgets
+                n_clusters = int(kmeans_input["n_clusters"].value)
+                available_norm = str(kmeans_input["available_norms"].value)
+                n_init = int(kmeans_input["n_init"].value)
+                max_iter = int(kmeans_input["max_iter"].value)
+                init_method = str(kmeans_input["init_method"].value)
+
+            # Get data (possibly background-subtracted)
+            self._progress_display.update(5, "Loading K-Means data...", level='info')
+            data_cube = self._get_data_for_clustering()
+            time.sleep(0.1)
+            
+            # Store original heatmap if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Update progress: preparing data - step 1
+            self._progress_display.update(15, "Preparing K-Means data - normalizing...", level='info')
+            time.sleep(0.1)
+            
+            # Prepare data using OOP preprocessor
+            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
+            
+            # Update progress: preparing data - step 2
+            self._progress_display.update(25, "Preparing K-Means data - reshaping...", level='info')
+            time.sleep(0.1)
+            
+            # Store for later use in visualization
+            self._last_clustering_matrix = matrix_norm
+            self._last_clustering_input = sclust_norm
+            
+            # Update progress: running algorithm - step 1
+            self._progress_display.update(35, "Running K-Means algorithm - initializing...", level='info')
+            time.sleep(0.1)
+            
+            # Apply clustering algorithm using OOP class
+            init_val = 'k-means++' if init_method == 'k-means++' else 'random'
+            algorithm = KMeansClusteringAlgorithm(
+                n_clusters=n_clusters,
+                norm=available_norm,  # type: ignore
+                n_init=n_init,
+                max_iter=max_iter,
+                init_method=init_val
+            )
+            
+            # Update progress: running algorithm - step 2
+            self._progress_display.update(50, f"Running K-Means algorithm - clustering (n={n_clusters})...", level='info')
+            time.sleep(0.1)
+            
+            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
+            
+            self._model.last_clustering_result = {
+                "clustering": {
+                    "file": self._model.get_uploaded_filename(),
+                    "spectrum_image": self._model.current_image_name,
+                    "type": CLUSTERING_TYPE,
+                    "inputs": {
+                        "n_clusters": n_clusters,
+                        "norm": available_norm,
+                        "n_init": n_init,
+                        "max_iter": max_iter,
+                        "init_method": init_val,
+                    },
+                    "outputs": {
+                        "labels": labels,
+                        "centres": centres,
                     }
                 }
-                
-                # Update progress: visualizing results
-                self._progress_display.update(65, "Visualizing K-Means results - creating heatmap...", level='info')
-                time.sleep(0.1)
-                
-                # Store results and update visualization
-                self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "KMeans")
-                
-                # Update progress: finishing up
-                self._progress_display.update(85, "Finalizing K-Means clustering...", level='info')
-                time.sleep(0.1)
-                
-                # Mark as complete and restore plots
-                self._progress_display.completion(f"K-Means clustering complete! (n={n_clusters})")
-                
-                # Small delay to show completion message, then restore plots
-                time.sleep(0.2)
-                self._restore_plots_layout()
-                
-            except Exception as e:
-                print(f"Error applying KMeans clustering: {e}")
-                traceback.print_exc()
-                self._progress_display.error(f"Clustering failed: {str(e)}")
-                
-                # Restore plots on error too
-                time.sleep(2)
-                self._restore_plots_layout()
-            finally:
-                # Re-enable all clustering buttons after clustering completes
-                self._enable_all_clustering_buttons()
-        
-        # Run in background thread to prevent UI blocking
-        thread = threading.Thread(target=run_clustering, daemon=True)
-        thread.start()
+            }
+            
+            # Update progress: visualizing results
+            self._progress_display.update(65, "Visualizing K-Means results - creating heatmap...", level='info')
+            time.sleep(0.1)
+            
+            # Store results and update visualization
+            self._update_clustering_plots(labels, centres, available_norm, n_clusters, "KMeans")
+            
+            # Update progress: finishing up
+            self._progress_display.update(85, "Finalizing K-Means clustering...", level='info')
+            time.sleep(0.1)
+            
+            # Mark as complete and restore plots
+            self._progress_display.completion(f"K-Means clustering complete! (n={n_clusters})")
+            
+            # Small delay to show completion message, then restore plots
+            time.sleep(0.2)
+            self._restore_plots_layout()
+            
+        except Exception as e:
+            print(f"Error applying KMeans clustering: {e}")
+            traceback.print_exc()
+            self._progress_display.error(f"Clustering failed: {str(e)}")
+            
+            # Restore plots on error too
+            time.sleep(2)
+            self._restore_plots_layout()
+        finally:
+            # Re-enable all clustering buttons after clustering completes
+            self._enable_all_clustering_buttons()
 
-    def _apply_agglomerative_clustering(
-        self,
-        n_clusters=5,
-        linkage='ward',
-        affinity='euclidean',
-        available_norm='none',
-        use_connectivity=False
-    ):
+    def _apply_agglomerative_clustering(self):
         """Apply Agglomerative clustering and update visualization."""
-        def run_clustering():
-            try:
-                # Reset and prepare progress display
-                self._progress_display.reset()
-                self._progress_display.visible = True
-                
-                # Replace main content with progress display
-                self._show_clustering_progress()
-
-                # Get data (possibly background-subtracted)
-                self._progress_display.update(5, f"Loading Agglomerative data...", level='info')
-                data_cube = self._get_data_for_clustering()
-                time.sleep(0.05)
-                
-                # Store original heatmap if not already stored
-                if self._original_heatmap_data is None:
-                    self._original_heatmap_data = data_cube.sum(axis=-1)
-                
-                # Update progress: preparing data - step 1
-                self._progress_display.update(15, "Preparing Agglomerative data - normalizing...", level='info')
-                time.sleep(0.05)
-                
-                # Prepare data using OOP preprocessor
-                matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
-                
-                # Update progress: preparing data - step 2
-                self._progress_display.update(25, "Preparing Agglomerative data - reshaping...", level='info')
-                time.sleep(0.05)
-
-                
-                # Store for later use in visualization
-                self._last_clustering_matrix = matrix_norm
-                self._last_clustering_input = sclust_norm
-                
-                # Update progress: running algorithm - step 1
-                self._progress_display.update(35, "Running Agglomerative algorithm - building hierarchy...", level='info')
-                time.sleep(0.05)
-
-                
-                # Apply clustering algorithm using OOP class
-                linkage_val = linkage if linkage in ('ward', 'complete', 'average', 'single') else 'ward'
-                algorithm = AgglomerativeClusteringAlgorithm(
-                    n_clusters=n_clusters,
-                    norm=available_norm,  # type: ignore
-                    linkage=linkage_val,  # type: ignore
-                    affinity=affinity,
-                    use_connectivity=use_connectivity
-                )
-                
-                # Update progress: running algorithm - step 2
-                self._progress_display.update(50, f"Running Agglomerative algorithm - clustering (n={n_clusters})...", level='info')
-                time.sleep(0.05)
-
-                
-                labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
-                
-                # Update progress: visualizing results
-                self._progress_display.update(65, "Visualizing Agglomerative results - creating heatmap...", level='info')
-                time.sleep(0.05)
-
-                
-                # Store results and update visualization
-                self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Agglomerative")
-                
-                # Update progress: finishing up
-                self._progress_display.update(85, f"Finalizing Agglomerative clustering (n={n_clusters})...", level='info')
-                time.sleep(0.05)
-
-                
-                # Mark as complete and restore plots
-                self._progress_display.completion(f"Agglomerative clustering complete! (n={n_clusters})")
-                
-                # Small delay to show completion message, then restore plots
-                time.sleep(0.3)
-                self._restore_plots_layout()
-                
-            except Exception as e:
-                print(f"Error applying Agglomerative clustering: {e}")
-                traceback.print_exc()
-                self._progress_display.error(f"Clustering failed: {str(e)}")
-                
-                # Restore plots on error too
-                time.sleep(2)
-                self._restore_plots_layout()
-            finally:
-                # Re-enable all clustering buttons after clustering completes
-                self._enable_all_clustering_buttons()
         
-        # Run in background thread to prevent UI blocking
-        thread = threading.Thread(target=run_clustering, daemon=True)
-        thread.start()
+        CLUSTERING_TYPE = "Agglomerative"
 
-    def _apply_spectral_clustering(
-        self,
-        n_clusters=5,
-        available_norm='none',
-        n_init=10,
-        assign_labels='kmeans',
-        affinity='rbf',
-        n_neighbors=10,
-        gamma=1.0
-    ):
+        try:
+            # Reset and prepare progress display
+            self._progress_display.reset()
+            self._progress_display.visible = True
+            
+            # Replace main content with progress display
+            self._show_clustering_progress()
+            
+            agglomerative_input = self._view.right_sidebar.agglomerative_input
+            
+            # Default values
+            n_clusters = 5
+            linkage = 'ward'
+            affinity = 'euclidean'
+            available_norm = 'none'
+            connectivity = False
+
+            if agglomerative_input is not None:
+                # Read current values from widgets
+                n_clusters = int(agglomerative_input["n_clusters"].value)
+                linkage = str(agglomerative_input["linkage"].value)
+                affinity = str(agglomerative_input["affinity"].value)
+                available_norm = str(agglomerative_input["available_norms"].value)
+
+            # Get data (possibly background-subtracted)
+            self._progress_display.update(5, f"Loading Agglomerative data...", level='info')
+            data_cube = self._get_data_for_clustering()
+            time.sleep(0.1)
+            
+            # Store original heatmap if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Update progress: preparing data - step 1
+            self._progress_display.update(15, "Preparing Agglomerative data - normalizing...", level='info')
+            time.sleep(0.1)
+            
+            # Prepare data using OOP preprocessor
+            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
+            
+            # Update progress: preparing data - step 2
+            self._progress_display.update(25, "Preparing Agglomerative data - reshaping...", level='info')
+            time.sleep(0.1)
+
+            # Store for later use in visualization
+            self._last_clustering_matrix = matrix_norm
+            self._last_clustering_input = sclust_norm
+            
+            # Update progress: running algorithm - step 1
+            self._progress_display.update(35, "Running Agglomerative algorithm - building hierarchy...", level='info')
+            time.sleep(0.1)
+
+            # Apply clustering algorithm using OOP class
+            linkage_val = linkage if linkage in ('ward', 'complete', 'average', 'single') else 'ward'
+            algorithm = AgglomerativeClusteringAlgorithm(
+                n_clusters=n_clusters,
+                norm=available_norm,  # type: ignore
+                linkage=linkage_val,  # type: ignore
+                affinity=affinity,
+                use_connectivity=connectivity
+            )
+            
+            # Update progress: running algorithm - step 2
+            self._progress_display.update(50, f"Running Agglomerative algorithm - clustering (n={n_clusters})...", level='info')
+            time.sleep(0.1)
+            
+            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
+            
+            self._model.last_clustering_result = {
+                "clustering": {
+                    "file": self._model.get_uploaded_filename(),
+                    "spectrum_image": self._model.current_image_name,
+                    "type": CLUSTERING_TYPE,
+                    "inputs": {
+                        "norm": available_norm,
+                        "n_clusters": n_clusters,
+                        "linkage": linkage_val,
+                        "affinity": affinity,
+                    },
+                    "outputs": {
+                        "labels": labels,
+                        "centres": centres,
+                    }
+                }
+            }
+            
+            # Update progress: visualizing results
+            self._progress_display.update(65, "Visualizing Agglomerative results - creating heatmap...", level='info')
+            time.sleep(0.1)
+
+            # Store results and update visualization
+            self._update_clustering_plots(labels, centres, available_norm, n_clusters, "Agglomerative")
+            
+            # Update progress: finishing up
+            self._progress_display.update(85, f"Finalizing Agglomerative clustering (n={n_clusters})...", level='info')
+            time.sleep(0.1)
+
+            # Mark as complete and restore plots
+            self._progress_display.completion(f"Agglomerative clustering complete! (n={n_clusters})")
+            
+            # Small delay to show completion message, then restore plots
+            time.sleep(0.2)
+            self._restore_plots_layout()
+            
+        except Exception as e:
+            print(f"Error applying Agglomerative clustering: {e}")
+            traceback.print_exc()
+            self._progress_display.error(f"Clustering failed: {str(e)}")
+            
+            # Restore plots on error too
+            time.sleep(2)
+            self._restore_plots_layout()
+        finally:
+            # Re-enable all clustering buttons after clustering completes
+            self._enable_all_clustering_buttons()
+
+    def _apply_spectral_clustering(self):
         """Apply Spectral clustering and update visualization."""
-        def run_clustering():
-            try:
-                # Reset and prepare progress display
-                self._progress_display.reset()
-                self._progress_display.visible = True
                 
-                # Replace main content with progress display
-                self._show_clustering_progress()
-                
-                # Get data (possibly background-subtracted)
-                self._progress_display.update(5, f"Loading Spectral data...", level='info')
-                data_cube = self._get_data_for_clustering()
-                time.sleep(0.05)
+        CLUSTERING_TYPE = "Spectral"
 
-                
-                # Store original heatmap if not already stored
-                if self._original_heatmap_data is None:
-                    self._original_heatmap_data = data_cube.sum(axis=-1)
-                
-                # Update progress: preparing data - step 1
-                self._progress_display.update(15, "Preparing Spectral data - normalizing...", level='info')
-                time.sleep(0.05)
+        try:
+            # Reset and prepare progress display
+            self._progress_display.reset()
+            self._progress_display.visible = True
+            
+            # Replace main content with progress display
+            self._show_clustering_progress()
+            
+            spectral_input = self._view.right_sidebar.spectral_input
 
-                
-                # Prepare data using OOP preprocessor
-                matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
-                
-                # Update progress: preparing data - step 2
-                self._progress_display.update(25, "Preparing Spectral data - reshaping...", level='info')
-                time.sleep(0.05)
+            # Default values
+            n_clusters = 5
+            available_norm = 'none'
+            n_init = 10
+            assign_labels = 'kmeans'
+            affinity = 'rbf'
+            n_neighbors = 10
+            gamma = 1.0
 
-                
-                # Store for later use in visualization
-                self._last_clustering_matrix = matrix_norm
-                self._last_clustering_input = sclust_norm
-                
-                # Update progress: running algorithm - step 1
-                self._progress_display.update(35, "Running Spectral algorithm - computing affinity...", level='info')
-                time.sleep(0.05)
+            if spectral_input is not None:
+                # Read current values from widgets
+                n_clusters = int(spectral_input["n_clusters"].value)
+                available_norm = str(spectral_input["available_norms"].value)
+                n_init = int(spectral_input["n_init"].value)
+                assign_labels = str(spectral_input["labels_assign_method"].value)
+                affinity = str(spectral_input["spectral_affinity_metrics"].value)
+                n_neighbors = int(spectral_input["n_neighbors"].value)
+                gamma = float(spectral_input["gamma"].value)
+            
+            # Get data (possibly background-subtracted)
+            self._progress_display.update(5, f"Loading Spectral data...", level='info')
+            data_cube = self._get_data_for_clustering()
+            time.sleep(0.1)
 
-                
-                # Apply clustering algorithm using OOP class
-                assign_val = assign_labels if assign_labels in ('kmeans', 'discretize', 'cluster_qr') else 'kmeans'
-                algorithm = SpectralClusteringAlgorithm(
-                    n_clusters=n_clusters,
-                    norm=available_norm,  # type: ignore
-                    n_init=n_init,
-                    assign_labels=assign_val,  # type: ignore
-                    affinity=affinity,
-                    n_neighbors=n_neighbors,
-                    gamma=gamma
-                )
-                
-                # Update progress: running algorithm - step 2
-                self._progress_display.update(50, "Running Spectral algorithm...", level='info')
-                time.sleep(0.05)
+            # Store original heatmap if not already stored
+            if self._original_heatmap_data is None:
+                self._original_heatmap_data = data_cube.sum(axis=-1)
+            
+            # Update progress: preparing data - step 1
+            self._progress_display.update(15, "Preparing Spectral data - normalizing...", level='info')
+            time.sleep(0.1)
 
-                
-                labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
-                
-                # Update progress: visualizing results
-                self._progress_display.update(65, "Visualizing Spectral results - creating heatmap...", level='info')
-                time.sleep(0.05)
+            # Prepare data using OOP preprocessor
+            matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
+            
+            # Update progress: preparing data - step 2
+            self._progress_display.update(25, "Preparing Spectral data - reshaping...", level='info')
+            time.sleep(0.1)
 
-                
-                # Store results and update visualization
-                self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "Spectral")
-                
-                # Update progress: finishing up
-                self._progress_display.update(85, "Finalizing Spectral clustering...", level='info')
-                time.sleep(0.05)
+            # Store for later use in visualization
+            self._last_clustering_matrix = matrix_norm
+            self._last_clustering_input = sclust_norm
+            
+            # Update progress: running algorithm - step 1
+            self._progress_display.update(35, "Running Spectral algorithm - computing affinity...", level='info')
+            time.sleep(0.1)
 
-                
-                # Mark as complete and restore plots
-                self._progress_display.completion(f"Spectral clustering complete! (n={n_clusters})")
-                
-                # Small delay to show completion message, then restore plots
-                time.sleep(0.3)
-                self._restore_plots_layout()
-                
-            except Exception as e:
-                print(f"Error applying Spectral clustering: {e}")
-                traceback.print_exc()
-                self._progress_display.error(f"Spectral clustering failed: {str(e)}")
-                
-                # Restore plots on error too
-                time.sleep(2)
-                self._restore_plots_layout()
-            finally:
-                # Re-enable all clustering buttons after clustering completes
-                self._enable_all_clustering_buttons()
-        
-        # Run in background thread to prevent UI blocking
-        thread = threading.Thread(target=run_clustering, daemon=True)
-        thread.start()
+            # Apply clustering algorithm using OOP class
+            assign_val = assign_labels if assign_labels in ('kmeans', 'discretize', 'cluster_qr') else 'kmeans'
+            algorithm = SpectralClusteringAlgorithm(
+                n_clusters=n_clusters,
+                norm=available_norm,  # type: ignore
+                n_init=n_init,
+                assign_labels=assign_val,  # type: ignore
+                affinity=affinity,
+                n_neighbors=n_neighbors,
+                gamma=gamma
+            )
+            
+            # Update progress: running algorithm - step 2
+            self._progress_display.update(50, "Running Spectral algorithm...", level='info')
+            time.sleep(0.1)
+            
+            labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
+            
+            self._model.last_clustering_result = {
+                "clustering": {
+                    "file": self._model.get_uploaded_filename(),
+                    "spectrum_image": self._model.current_image_name,
+                    "type": CLUSTERING_TYPE,
+                    "inputs": {
+                        "norm": available_norm,
+                        "n_clusters": n_clusters,
+                        "n_init": n_init,
+                        "assign_labels": assign_val,
+                        "spectral_affinity": affinity,
+                        "n_neighbors": n_neighbors,
+                        "gamma": gamma,
+                    },
+                    "outputs": {
+                        "labels": labels,
+                        "centres": centres,
+                    }
+                }
+            }
+            
+            # Update progress: visualizing results
+            self._progress_display.update(65, "Visualizing Spectral results - creating heatmap...", level='info')
+            time.sleep(0.1)
+
+            # Store results and update visualization
+            self._update_clustering_plots(labels, centres, available_norm, n_clusters, "Spectral")
+            
+            # Update progress: finishing up
+            self._progress_display.update(85, "Finalizing Spectral clustering...", level='info')
+            time.sleep(0.1)
+
+            # Mark as complete and restore plots
+            self._progress_display.completion(f"Spectral clustering complete! (n={n_clusters})")
+            
+            # Small delay to show completion message, then restore plots
+            time.sleep(0.2)
+            self._restore_plots_layout()
+            
+        except Exception as e:
+            print(f"Error applying Spectral clustering: {e}")
+            traceback.print_exc()
+            self._progress_display.error(f"Spectral clustering failed: {str(e)}")
+            
+            # Restore plots on error too
+            time.sleep(2)
+            self._restore_plots_layout()
+        finally:
+            # Re-enable all clustering buttons after clustering completes
+            self._enable_all_clustering_buttons()
 
     # --- Helper Methods ---
     
@@ -451,7 +500,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         
         return data_cube
     
-    def _update_clustering_visualization(self, labels, centres, norm, n_clusters, algorithm_name):
+    def _update_clustering_plots(self, labels, centres, norm, n_clusters, algorithm_name):
         """Update visualization after clustering."""
         self._clustering_results = (labels, centres)
         self._current_norm = norm
@@ -501,9 +550,13 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         try:
             # Ensure progress display is visible before showing
             self._progress_display.visible = True
+            tab = pn.Tabs((
+                f"Running Clustering on {self._model.current_image_name}...", 
+                 self._progress_display
+            ))
             
             if self._view and hasattr(self._view, 'main'):
-                self._view.main.update(self._progress_display)
+                self._view.main.update(tab)
         except Exception as e:
             print(f"Error showing clustering progress: {e}")
             traceback.print_exc()
@@ -513,7 +566,9 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         """Restore the plots layout after clustering completes."""
         try:
             if self._view and hasattr(self._view, 'main') and self._plots_layout is not None:
-                self._view.main.update(self._plots_layout)
+                last_clustering_type = self._model.last_clustering_result.get('clustering', {}).get('type', 'Clustering')
+                tab = pn.Tabs((f"Applied {last_clustering_type} Clustering on {self._model.current_image_name}", self._plots_layout))
+                self._view.main.update(tab)
         except Exception as e:
             print(f"Error restoring plots layout: {e}")
 
@@ -542,101 +597,36 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         # Disable all clustering buttons immediately on click
         self._disable_all_clustering_buttons()
         
-        # Force a small delay to ensure Panel has updated widget values
-        time.sleep(0.1)
-        
-        kmeans_input = self._view.right_sidebar.kmeans_input
-        # Get parameters or use defaults
-        n_clusters = self._model.constants.DEFAULT_NUMBER_OF_CLUSTERS
-        available_norm = self._model.constants.DEFAULT_SELECTED_NORM
-        n_init = self._model.constants.DEFAULT_NUMBER_OF_INIT
-        max_iter = self._model.constants.DEFAULT_MAX_ITER
-        init_method = self._model.constants.DEFAULT_INIT_METHOD
-
-        if kmeans_input is not None:
-            # Read current values from widgets
-            n_clusters = int(kmeans_input["n_clusters"].value)
-            available_norm = str(kmeans_input["available_norms"].value)
-            n_init = int(kmeans_input["n_init"].value)
-            max_iter = int(kmeans_input["max_iter"].value)
-            init_method = str(kmeans_input["init_method"].value)
-
-        self._apply_kmeans_clustering(
-            n_clusters=n_clusters,
-            available_norm=available_norm,
-            n_init=n_init,
-            max_iter=max_iter,
-            init_method=init_method
+        # Run in background thread to prevent UI blocking
+        thread = threading.Thread(
+            target=self._apply_kmeans_clustering, 
+            daemon=True
         )
+        thread.start()
 
     def _run_agglomerative_clustering(self, event):
         """Handle Agglomerative clustering button click."""
         # Disable all clustering buttons immediately on click
         self._disable_all_clustering_buttons()
         
-        # Force a small delay to ensure Panel has updated widget values
-        time.sleep(0.1)
-        
-        agglomerative_input = self._view.right_sidebar.agglomerative_input
-        # Default values
-        n_clusters = 5
-        linkage = 'ward'
-        affinity = 'euclidean'
-        available_norm = 'none'
-        connectivity = False
-
-        if agglomerative_input is not None:
-            # Read current values from widgets
-            n_clusters = int(agglomerative_input["n_clusters"].value)
-            linkage = str(agglomerative_input["linkage"].value)
-            affinity = str(agglomerative_input["affinity"].value)
-            available_norm = str(agglomerative_input["available_norms"].value)
-
-        self._apply_agglomerative_clustering(
-            n_clusters=n_clusters,
-            linkage=linkage,
-            affinity=affinity,
-            available_norm=available_norm,
-            use_connectivity=connectivity
+        # Run in background thread to prevent UI blocking
+        thread = threading.Thread(
+            target=self._apply_agglomerative_clustering, 
+            daemon=True
         )
+        thread.start()
 
     def _run_spectral_clustering(self, event):
         """Handle Spectral clustering button click."""
         # Disable all clustering buttons immediately on click
         self._disable_all_clustering_buttons()
-        
-        # Force a small delay to ensure Panel has updated widget values
-        time.sleep(0.05)
-        
-        spectral_input = self._view.right_sidebar.spectral_input
-        # Default values
-        n_clusters = 5
-        available_norm = 'none'
-        n_init = 10
-        assign_labels = 'kmeans'
-        affinity = 'rbf'
-        n_neighbors = 10
-        gamma = 1.0
-
-        if spectral_input is not None:
-            # Read current values from widgets
-            n_clusters = int(spectral_input["n_clusters"].value)
-            available_norm = str(spectral_input["available_norms"].value)
-            n_init = int(spectral_input["n_init"].value)
-            assign_labels = str(spectral_input["labels_assign_method"].value)
-            affinity = str(spectral_input["spectral_affinity_metrics"].value)
-            n_neighbors = int(spectral_input["n_neighbors"].value)
-            gamma = float(spectral_input["gamma"].value)
-
-        self._apply_spectral_clustering(
-            n_clusters=n_clusters,
-            available_norm=available_norm,
-            n_init=n_init,
-            assign_labels=assign_labels,
-            affinity=affinity,
-            n_neighbors=n_neighbors,
-            gamma=gamma
+                
+        # Run in background thread to prevent UI blocking
+        thread = threading.Thread(
+            target=self._apply_spectral_clustering, 
+            daemon=True
         )
+        thread.start()
 
     # --- Widget Setup ---
     
