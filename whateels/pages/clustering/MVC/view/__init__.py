@@ -72,7 +72,7 @@ class ClusteringView:
         """Delete the right sidebar layout."""
         self._right_sidebar.clear()
         
-    def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
+    def create_tab_and_dataset_info(self, dataset: "Dataset") -> None:
         """
         Create visualizations for all datasets and setup tabbed UI interface.
         
@@ -80,7 +80,7 @@ class ClusteringView:
             all_datasets: List of processed datasets to visualize
                          
         Raises:
-            DMPlotCreationError: When visualization creation fails
+            DMPlotCreationError: When plot creation fails
         """
         DATASET_TYPE = 'dataset_type'
         IMAGE_NAME_ATTRIBUTE = 'image_name'
@@ -95,22 +95,21 @@ class ClusteringView:
             plots_factory = PlotsFactory(self._model, view=self)
             plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
 
-            for dataset in all_datasets:
-                dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
-                image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
+            dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
+            image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
 
-                # Create plots using the factory
-                chosen_plot = plots_factory.choose_plot(str(dataset_type), dataset)
-                
-                if chosen_plot is None:
-                    print(f"No plot found for dataset type: {dataset_type}")
-                    return
-                
-                chosen_plot_created = chosen_plot.create_plots()
-                
-                plots_tab.append((image_name, chosen_plot_created))
-                
-                self._all_dataset_info.append(chosen_plot.create_dataset_info())
+            # Create plots using the factory
+            chosen_plot = plots_factory.choose_plot(str(dataset_type), dataset)
+            
+            if chosen_plot is None:
+                print(f"No plot found for dataset type: {dataset_type}")
+                return
+            
+            chosen_plot_created = chosen_plot.create_plots()
+            
+            plots_tab.append((image_name, chosen_plot_created))
+            
+            self._all_dataset_info.append(chosen_plot.create_dataset_info())
                 
             # Register tab change callback if controller provided one
             if self._on_tab_change_callback is not None:

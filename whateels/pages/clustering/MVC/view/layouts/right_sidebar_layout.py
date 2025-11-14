@@ -168,7 +168,6 @@ class ClusteringRightSidebarLayout(pn.Column):
             margin=(10, 0, 0, 0),
             icon="download",
             icon_size="20px",
-            css_classes=["store-button"]
         )
 
         right_sidebar = pn.Column(

@@ -123,7 +123,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 # Get data (possibly background-subtracted)
                 self._progress_display.update(5, f"Loading K-Means data...", level='info')
                 data_cube = self._get_data_for_clustering()
-                time.sleep(0.05)
+                time.sleep(0.1)
                 
                 # Store original heatmap if not already stored
                 if self._original_heatmap_data is None:
@@ -131,14 +131,14 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 
                 # Update progress: preparing data - step 1
                 self._progress_display.update(15, "Preparing K-Means data - normalizing...", level='info')
-                time.sleep(0.05)
+                time.sleep(0.1)
                 
                 # Prepare data using OOP preprocessor
                 matrix_norm, sclust_norm = self._preprocessor.prepare_matrix(data_cube, available_norm)  # type: ignore
                 
                 # Update progress: preparing data - step 2
                 self._progress_display.update(25, "Preparing K-Means data - reshaping...", level='info')
-                time.sleep(0.05)
+                time.sleep(0.1)
                 
                 # Store for later use in visualization
                 self._last_clustering_matrix = matrix_norm
@@ -146,7 +146,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 
                 # Update progress: running algorithm - step 1
                 self._progress_display.update(35, "Running K-Means algorithm - initializing...", level='info')
-                time.sleep(0.05)
+                time.sleep(0.1)
                 
                 # Apply clustering algorithm using OOP class
                 init_val = 'k-means++' if init_method == 'k-means++' else 'random'
@@ -160,28 +160,47 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 
                 # Update progress: running algorithm - step 2
                 self._progress_display.update(50, f"Running K-Means algorithm - clustering (n={n_clusters})...", level='info')
-                time.sleep(0.05)
+                time.sleep(0.1)
                 
                 labels, centres = algorithm.fit(data_cube, matrix_norm, sclust_norm)
                 print("K-Means lables", labels)
                 print("K-Means centres", centres)
                 
+                self._model.last_clustering_result = {
+                    "clustering": {
+                        "file": self._model.get_uploaded_filename(),
+                        "spectrum_image": self._original_heatmap_data,
+                        "type": "KMeans",
+                        "inputs": {
+                            "n_clusters": n_clusters,
+                            "norm": available_norm,
+                            "n_init": n_init,
+                            "max_iter": max_iter,
+                            "init_method": init_val,
+                        },
+                        "outputs": {
+                            "labels": labels,
+                            "centres": centres,
+                        }
+                    }
+                }
+                
                 # Update progress: visualizing results
                 self._progress_display.update(65, "Visualizing K-Means results - creating heatmap...", level='info')
-                time.sleep(0.05)
+                time.sleep(0.1)
                 
                 # Store results and update visualization
                 self._update_clustering_visualization(labels, centres, available_norm, n_clusters, "KMeans")
                 
                 # Update progress: finishing up
                 self._progress_display.update(85, "Finalizing K-Means clustering...", level='info')
-                time.sleep(0.05)
+                time.sleep(0.1)
                 
                 # Mark as complete and restore plots
                 self._progress_display.completion(f"K-Means clustering complete! (n={n_clusters})")
                 
                 # Small delay to show completion message, then restore plots
-                time.sleep(0.3)
+                time.sleep(0.2)
                 self._restore_plots_layout()
                 
             except Exception as e:
@@ -524,7 +543,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         self._disable_all_clustering_buttons()
         
         # Force a small delay to ensure Panel has updated widget values
-        time.sleep(0.05)
+        time.sleep(0.1)
         
         kmeans_input = self._view.right_sidebar.kmeans_input
         # Get parameters or use defaults
@@ -556,7 +575,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         self._disable_all_clustering_buttons()
         
         # Force a small delay to ensure Panel has updated widget values
-        time.sleep(0.05)
+        time.sleep(0.1)
         
         agglomerative_input = self._view.right_sidebar.agglomerative_input
         # Default values

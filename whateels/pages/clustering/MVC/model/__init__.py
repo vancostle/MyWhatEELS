@@ -1,5 +1,6 @@
 import numpy as np
 
+from whateels.pages import clustering
 from whateels.shared_state import AppState
 from .placeholders import Placeholders
 from .constants import Constants
@@ -12,6 +13,26 @@ class ClusteringModel:
         self._placeholders = Placeholders()
         self._constants = Constants()
         self._app_state = AppState()
+        
+        # Example structure for last clustering result
+        self._last_clustering_result = {
+            "clustering" : {
+                "file" : None,
+                "spectrum_image" : None,
+                "type" : None,
+                "inputs" : {
+                    "n_clusters" : None,
+                    "norm" : None,
+                    "n_init" : None,
+                    "max_iter" : None,
+                    "init_method" : None,
+                },
+                "outputs" : {
+                    "labels" : None,
+                    "centres" : None,
+                }
+            }
+        }
         
     @property
     def constants(self):
@@ -28,6 +49,46 @@ class ClusteringModel:
             AppState: The shared application state
         """
         return self._app_state
+    @property
+    def last_clustering_result(self) -> dict:
+        return self._last_clustering_result
+    
+    @last_clustering_result.setter
+    def last_clustering_result(self, result: dict):
+        """
+        Set the last clustering result with validation.
+        
+        Args:
+            result: Dictionary containing clustering results
+            
+        Raises:
+            ValueError: If required keys are missing from the result dictionary
+        """
+        # Validate top-level structure
+        if "clustering" not in result:
+            raise ValueError("Missing 'clustering' key in result dictionary")
+        
+        clustering = result["clustering"]
+        
+        # Validate required top-level clustering keys
+        required_keys = ["file", "spectrum_image", "type", "inputs", "outputs"]
+        missing_keys = [key for key in required_keys if key not in clustering]
+        if missing_keys:
+            raise ValueError(f"Missing required keys in 'clustering': {missing_keys}")
+        
+        # Validate inputs structure
+        required_input_keys = ["n_clusters", "norm", "n_init", "max_iter", "init_method"]
+        missing_input_keys = [key for key in required_input_keys if key not in clustering["inputs"]]
+        if missing_input_keys:
+            raise ValueError(f"Missing required keys in 'inputs': {missing_input_keys}")
+        
+        # Validate outputs structure
+        required_output_keys = ["labels", "centres"]
+        missing_output_keys = [key for key in required_output_keys if key not in clustering["outputs"]]
+        if missing_output_keys:
+            raise ValueError(f"Missing required keys in 'outputs': {missing_output_keys}")
+        
+        self._last_clustering_result = result
 
     def get_uploaded_filename(self) -> str:
         """
