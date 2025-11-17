@@ -212,6 +212,10 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             time.sleep(0.2)
             self._restore_plots_layout()
             
+            # Enable store button if it was possible to cluster
+            if hasattr(self._view.right_sidebar, 'store_button') and self._view.right_sidebar.store_button is not None:
+                self._view.right_sidebar.store_button.disabled = False
+            
         except Exception as e:
             print(f"Error applying KMeans clustering: {e}")
             traceback.print_exc()
@@ -332,6 +336,10 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             # Small delay to show completion message, then restore plots
             time.sleep(0.2)
             self._restore_plots_layout()
+            
+            # Enable store button if it was possible to cluster
+            if hasattr(self._view.right_sidebar, 'store_button') and self._view.right_sidebar.store_button is not None:
+                self._view.right_sidebar.store_button.disabled = False
             
         except Exception as e:
             print(f"Error applying Agglomerative clustering: {e}")
@@ -463,6 +471,10 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             # Small delay to show completion message, then restore plots
             time.sleep(0.2)
             self._restore_plots_layout()
+            
+            # Enable store button if it was possible to cluster
+            if hasattr(self._view.right_sidebar, 'store_button') and self._view.right_sidebar.store_button is not None:
+                self._view.right_sidebar.store_button.disabled = False
             
         except Exception as e:
             print(f"Error applying Spectral clustering: {e}")

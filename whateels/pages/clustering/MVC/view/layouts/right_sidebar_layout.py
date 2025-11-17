@@ -1,6 +1,6 @@
-import panel as pn
-import json
+import panel as pn, json, numpy as np
 
+from whateels.helpers.in_memory_file import InMemoryFile
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ....MVC import ClusteringModel
@@ -102,66 +102,44 @@ class ClusteringRightSidebarLayout(pn.Column):
             css_classes=["clustering-tabs"]
         )
         
-        # self._store_button = pn.widgets.Button(
-        #     name="Store", 
-        #     button_type="primary", 
-        #     height=55, 
-        #     sizing_mode=self._STRETCH_WIDTH,
-        #     margin=(10, 0, 0, 0)
-        # )
-        
-        def get_input_values():
-            kmeans_input = self._kmeans_input
-            
-            json = {
-                "clustering" : {
-                    "file" : self._model.get_uploaded_filename(),
-                    "spectrum_image" : "EELS LL SI",
-                    "type" : "k_means",
-                    "inputs" : {
-                        "n_clusters" : {
-                            "value" : 5
-                        },
-                        "norm" : {
-                            "value" : "l2"
-                        },
-                        "n_init" : {
-                            "value" : 10
-                        },
-                        "max_iter" : {
-                            "value" : 300
-                        },
-                        "init_method" : {
-                            "value" : "k-means++"
-                        }
-                    },
-                    "outputs" : {
-                        "labels" : {
-                            "value" : [0, 1, 2, 0, 1, 2, 3, 4, 0, 1],
-                            "type" : "array",
-                            "description" : "Cluster labels for each data point."
-                        },
-                        "centres" : {
-                            "value" : [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]],
-                            "type" : "array",
-                            "description" : "Coordinates of cluster centers."
-                        }
-                    }
-                }
-            }
-            
-            
-            pass
-        
+        def convert_ndarrays(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {k: convert_ndarrays(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_ndarrays(v) for v in obj]
+            else:
+                return obj
 
-        def create_file():
+        def create_file():            
+            data_to_store = self._model.last_clustering_result
+            
+            # Update shared state with the last clustering result
+            self._model.app_state.last_clustering_result = data_to_store
 
-            print("Store button clicked")
-            return b"sio"
+            if data_to_store is None:
+                return b""
+            
+            data_to_store_clean = convert_ndarrays(data_to_store)
+            json_str = json.dumps(data_to_store_clean)
+            
+            last_clustering = self._model.last_clustering_result
+            clustering_type = last_clustering['clustering'].get('type', 'unknown')
+            clustering_n = last_clustering['clustering']['inputs'].get('n_clusters', 'unknown')
+            
+            filename = f"Clustering_{clustering_type}_n_{clustering_n}.json"
+            
+            if (self._store_button is not None):
+                self._store_button.filename = filename
+            
+            return InMemoryFile(
+                json_str.encode('utf-8'), 
+                name=filename, 
+            )
 
         self._store_button = pn.widgets.FileDownload(
-            label="Store Results",
-            filename="clustering.json",
+            label="Store Last Clustering Results",
             button_type="primary",
             callback=pn.bind(create_file),
             sizing_mode=self._STRETCH_WIDTH,

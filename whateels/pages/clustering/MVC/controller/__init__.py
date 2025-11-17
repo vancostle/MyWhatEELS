@@ -26,7 +26,7 @@ class ClusteringController:
         if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
             self._view.main.empty() # Clear main layout with a placeholder
             return
-        
+
         # Disable store button by default until clustering is performed
         store_button = self._view.right_sidebar.store_button
         if store_button is not None:
@@ -38,6 +38,10 @@ class ClusteringController:
         self._model.current_image_name = image_name
 
         self._view.create_tab_and_dataset_info(selected_dataset)
+        
+    def _initialize_view_with_clustering(self) -> None:
+        
+        pass
 
     def _on_tab_change(self, event):
         """Handle tab change events by updating the sidebar."""
