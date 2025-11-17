@@ -15,6 +15,11 @@ class Constants:
     
     DEFAULT_BACKGROUND_SUBTRACTION = False
     
+    # Tabs clustering names
+    TAB_KMEANS = "K-Means"
+    TAB_AGGLOMERATIVE = "Agglomerative"
+    TAB_SPECTRAL = "Spectral"
+    
     # K-Means defaults
     DEFAULT_SELECTED_NORM = 'none'
     AVAILABLE_NORMS = [DEFAULT_SELECTED_NORM, 'l1', 'l2', 'max']

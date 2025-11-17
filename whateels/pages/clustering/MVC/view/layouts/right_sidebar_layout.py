@@ -93,11 +93,15 @@ class ClusteringRightSidebarLayout(pn.Column):
         k_means_tab = self._create_k_means_tab()
         agglomerative_tab = self._create_agglomerative_tab()
         spectral_tab = self._create_spectral_tab()
+        
+        tab_means_title = self._model.constants.TAB_KMEANS
+        tab_agglomerative_title = self._model.constants.TAB_AGGLOMERATIVE
+        tab_spectral_title = self._model.constants.TAB_SPECTRAL
 
         clustering_tabs = pn.Tabs(
-            ("K-Means", k_means_tab),
-            ("Agglomerative", agglomerative_tab),
-            ("Spectral", spectral_tab),
+            (tab_means_title, k_means_tab),
+            (tab_agglomerative_title, agglomerative_tab),
+            (tab_spectral_title, spectral_tab),
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["clustering-tabs"]
         )

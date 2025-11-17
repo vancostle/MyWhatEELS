@@ -604,7 +604,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
     # --- Event Handlers ---
     
-    def _run_kmeans_clustering(self, event):
+    def run_kmeans_clustering(self):
         """Handle KMeans clustering button click."""
         # Disable all clustering buttons immediately on click
         self._disable_all_clustering_buttons()
@@ -616,7 +616,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         )
         thread.start()
 
-    def _run_agglomerative_clustering(self, event):
+    def run_agglomerative_clustering(self):
         """Handle Agglomerative clustering button click."""
         # Disable all clustering buttons immediately on click
         self._disable_all_clustering_buttons()
@@ -628,7 +628,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         )
         thread.start()
 
-    def _run_spectral_clustering(self, event):
+    def run_spectral_clustering(self):
         """Handle Spectral clustering button click."""
         # Disable all clustering buttons immediately on click
         self._disable_all_clustering_buttons()
@@ -646,16 +646,15 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         """Connect clustering buttons to their respective handlers."""
         if kmeans_run_button := getattr(self._view.right_sidebar, "kmeans_run_button", None):
             self._kmeans_run_button = kmeans_run_button
-            kmeans_run_button.on_click(self._run_kmeans_clustering)
+            kmeans_run_button.on_click(lambda _ : self.run_kmeans_clustering())
 
         if agglomerative_run_button := getattr(self._view.right_sidebar, "agglomerative_run_button", None):
             self._agglomerative_run_button = agglomerative_run_button
-            agglomerative_run_button.on_click(self._run_agglomerative_clustering)
+            agglomerative_run_button.on_click(lambda _ : self.run_agglomerative_clustering())
 
         if spectral_run_button := getattr(self._view.right_sidebar, "spectral_run_button", None):
             self._spectral_run_button = spectral_run_button
-            spectral_run_button.on_click(self._run_spectral_clustering)
-
+            spectral_run_button.on_click(lambda _ : self.run_spectral_clustering())
     # --- Public Layout Builders ---
     
     @override

@@ -1,6 +1,5 @@
 import numpy as np
 
-from whateels.pages import clustering
 from whateels.shared_state import AppState
 from .placeholders import Placeholders
 from .constants import Constants
@@ -36,7 +35,7 @@ class ClusteringModel:
         }
         
     @property
-    def constants(self):
+    def constants(self) -> Constants:
         return self._constants
     @property
     def placeholders(self) -> Placeholders:

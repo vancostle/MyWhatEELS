@@ -72,7 +72,7 @@ class ClusteringView:
         """Delete the right sidebar layout."""
         self._right_sidebar.clear()
         
-    def create_tab_and_dataset_info(self, dataset: "Dataset") -> None:
+    def create_tab_and_dataset_info(self, dataset: "Dataset", last_clustering_result) -> None:
         """
         Create visualizations for all datasets and setup tabbed UI interface.
         
@@ -106,7 +106,7 @@ class ClusteringView:
                 return
             
             chosen_plot_created = chosen_plot.create_plots()
-            
+                
             plots_tab.append((image_name, chosen_plot_created))
             
             self._all_dataset_info.append(chosen_plot.create_dataset_info())
@@ -119,6 +119,27 @@ class ClusteringView:
             self.main.update(plots_tab)
             self.left_sidebar.remove_dataset_info()
             self.left_sidebar.add_component(self._all_dataset_info[0])
+            
+            if (last_clustering_result is None):
+                return
+            
+            tab_means_title = self._model.constants.TAB_KMEANS
+            tab_agglomerative_title = self._model.constants.TAB_AGGLOMERATIVE
+            tab_spectral_title = self._model.constants.TAB_SPECTRAL
+            
+            last_clustering_result_type = last_clustering_result.get("clustering", {}).get("type", None)
+
+            if (last_clustering_result_type == tab_means_title):
+                if hasattr(chosen_plot, 'run_kmeans_clustering') and callable(getattr(chosen_plot, 'run_kmeans_clustering')):
+                    getattr(chosen_plot, 'run_kmeans_clustering')()
+            elif (last_clustering_result_type == tab_agglomerative_title):
+                if hasattr(chosen_plot, 'run_agglomerative_clustering') and callable(getattr(chosen_plot, 'run_agglomerative_clustering')):
+                    getattr(chosen_plot, 'run_agglomerative_clustering')()
+            elif (last_clustering_result_type == tab_spectral_title):
+                if hasattr(chosen_plot, 'run_spectral_clustering') and callable(getattr(chosen_plot, 'run_spectral_clustering')):
+                    getattr(chosen_plot, 'run_spectral_clustering')()
+            else:
+                raise DMPlotCreationError(f"Unknown clustering type: {last_clustering_result_type}")
 
         except Exception as e:
             raise DMPlotCreationError(e)

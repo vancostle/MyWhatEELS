@@ -36,12 +36,11 @@ class ClusteringController:
         selected_dataset = all_datasets[tab_param]
         image_name = selected_dataset.attrs.get('image_name', None)
         self._model.current_image_name = image_name
+        
+        # Get last clustering result and update view if available
+        last_clustering_result = self._model.app_state.last_clustering_result
 
-        self._view.create_tab_and_dataset_info(selected_dataset)
-        
-    def _initialize_view_with_clustering(self) -> None:
-        
-        pass
+        self._view.create_tab_and_dataset_info(selected_dataset, last_clustering_result)
 
     def _on_tab_change(self, event):
         """Handle tab change events by updating the sidebar."""
