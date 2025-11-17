@@ -129,6 +129,7 @@ class ClusteringView:
             
             last_clustering_result_type = last_clustering_result.get("clustering", {}).get("type", None)
 
+            # Run clustering to display results
             if (last_clustering_result_type == tab_means_title):
                 if hasattr(chosen_plot, 'run_kmeans_clustering') and callable(getattr(chosen_plot, 'run_kmeans_clustering')):
                     getattr(chosen_plot, 'run_kmeans_clustering')()

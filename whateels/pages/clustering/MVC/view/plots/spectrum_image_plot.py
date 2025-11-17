@@ -102,6 +102,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
     # --- Clustering Application Methods ---
     
+    # TODO - El problema es que se está recogiendo los inputs actuales en lugar del last_clustering_result
     def _apply_kmeans_clustering(self):
         """Apply KMeans clustering and update visualization."""
 

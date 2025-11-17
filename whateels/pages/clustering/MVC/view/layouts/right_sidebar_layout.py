@@ -117,18 +117,17 @@ class ClusteringRightSidebarLayout(pn.Column):
                 return obj
 
         def create_file():            
-            data_to_store = self._model.last_clustering_result
+            last_clustering = self._model.last_clustering_result
             
             # Update shared state with the last clustering result
-            self._model.app_state.last_clustering_result = data_to_store
+            self._model.app_state.last_clustering_result = last_clustering
 
-            if data_to_store is None:
+            if last_clustering is None:
                 return b""
             
-            data_to_store_clean = convert_ndarrays(data_to_store)
+            data_to_store_clean = convert_ndarrays(last_clustering)
             json_str = json.dumps(data_to_store_clean)
             
-            last_clustering = self._model.last_clustering_result
             clustering_type = last_clustering['clustering'].get('type', 'unknown')
             clustering_n = last_clustering['clustering']['inputs'].get('n_clusters', 'unknown')
             
