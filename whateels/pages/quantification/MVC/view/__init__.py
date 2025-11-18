@@ -39,6 +39,8 @@ class QuantificationView(BaseView):
     def set_controller(self, controller: "QuantificationController"):
         """Set the controller for this view."""
         self._controller = controller
+        for element_item in self._model.app_state.quantification_elements:
+           self._controller.add_element_item(element_item)
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -121,15 +123,17 @@ class QuantificationView(BaseView):
 
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
+            element_item_view[2].end = energy[1] - element_item.chemical_shift
+            element_item_view[3].start = energy[1] - element_item.chemical_shift
             self._controller.plot_elements()
 
 
-        element_item.set_fit_range([energy[0], energy[1]])
-        element_item.set_quant_range([energy[1], energy[2]])
+        element_item.set_fit_range([energy[0], energy[1]- element_item.chemical_shift])
+        element_item.set_quant_range([energy[1]- element_item.chemical_shift, energy[2]])
 
-        fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[1] - 20, 
+        fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[1] - element_item.chemical_shift, 
                 value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
-        quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[1] - 20, end=energy[2], 
+        quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[1] - element_item.chemical_shift, end=energy[2], 
                 value=(energy[1],energy[2]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
             
         def _fit_range_watcher(event):
@@ -272,6 +276,8 @@ class QuantificationView(BaseView):
             self._quanti_toggle_button,
             sizing_mode=self.STRETCH_BOTH,
         )
+
+
         
         return right_sidebar
     

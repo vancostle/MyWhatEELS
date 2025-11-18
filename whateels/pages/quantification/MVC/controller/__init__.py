@@ -37,15 +37,21 @@ class ElementItem:
 class QuantificationController(BaseController):
 
     def __init__(self, model: "QuantificationModel", view: "QuantificationView"):
-        view.set_controller(self)
+        
+        
         super().__init__(model, view)
 
         self._model = model
         self._view = view
 
+        
+
         self._layout = LayoutManager(view, self, model)
 
         all_datasets = AppState().all_datasets
+
+        self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
+        view.set_controller(self)
         
         # Get 'tab' query parameter from URL
         tab_param = self._get_query_param("tab")
@@ -59,11 +65,11 @@ class QuantificationController(BaseController):
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
 
-        self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
-
-        self._slider_active =  False
         
 
+        self._quanti_active =  False
+        
+        
         self._quantification_user_update(view)
 
     @property
@@ -117,6 +123,21 @@ class QuantificationController(BaseController):
             else:
                 print("Element already added.")
         return
+    def add_element_item(self, element_item: ElementItem):
+        min_eaxis_cs = None
+        for ishell in element_item.shells:
+            eaxis, counts, onset = self.loader_oos.oos_reader(element_item.element, ishell)
+            V = self._layout.get_active_dataset().attrs['beam_energy']
+            b = self._layout.get_active_dataset().attrs['collection_angle']
+            element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b,), V, b]
+
+            min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])                
+
+        element_item_view, element_item = self._view.get_new_element_item_view(element_item, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]))
+        self._layout.add_new_element_input(element_item_view)
+        self.view.quanti_input['shells_multiselect'].value = []
+        print("Element added programmatically.")
+        return
 
 
     def _run_quantification(self, event):
@@ -130,8 +151,8 @@ class QuantificationController(BaseController):
     
 
     def _toggle_quantification(self, event):
-        print(self._slider_active)
-        if not self._slider_active:
+        print(self._quanti_active)
+        if not self._quanti_active:
             if not self._model.app_state.quantification_elements:
                 self.view.quanti_toggle_button.toggle()  # Revert the toggle state
                 print("No elements to quantify.")
@@ -142,7 +163,7 @@ class QuantificationController(BaseController):
             else:
                 try:
                     self._layout.plot_quantification_pie()
-                    self._slider_active = True
+                    self._quanti_active = True
                 except Exception as e:
                     self.view.quanti_toggle_button.toggle()
                     print(f"Error plotting quantification pie chart: {e}")
@@ -150,7 +171,7 @@ class QuantificationController(BaseController):
             
         else:
             self.plot_elements()
-            self._slider_active = False
+            self._quanti_active = False
 
     def plot_elements(self):
         if not self._model.app_state.quantification_elements:

@@ -108,11 +108,15 @@ class LayoutManager:
             raise DMPlotCreationError(e)
     def get_energy_range(self) -> list[float]:
         """Get the maximum energy range across all datasets."""
-        return self._chosen_visualizers[0]._dataset.coords[self._model.constants.ELOSS].values
+        state = AppState()
+        selected_index = state.selected_tab_index_dataset
+        return state.all_datasets[selected_index].coords[self._model.constants.ELOSS].values
 
     
     def get_active_dataset(self):
-        return self._chosen_visualizers[0]._dataset
+        state = AppState()
+        selected_index = state.selected_tab_index_dataset
+        return state.all_datasets[selected_index]
 
     def _on_tab_with_visualizers_change(self, event):
         """Handle tab changes by updating sidebar with selected dataset info."""
@@ -121,6 +125,8 @@ class LayoutManager:
         selected_tab_index = event.new
 
         AppState().selected_tab_index_dataset = selected_tab_index  # Update shared state
+
+        AppState().quantification_elements = []
 
         # Update sidebar with the corresponding dataset info
         self._controller.layout.remove_dataset_info_from_sidebar()
