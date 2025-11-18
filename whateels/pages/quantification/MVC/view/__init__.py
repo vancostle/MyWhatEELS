@@ -104,8 +104,8 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-                _ON: {_NAME: "+ " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
-                _OFF: {_NAME: "- " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
+                _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
+                _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
             }
 
         slider_button = ToggleButton(
@@ -119,7 +119,7 @@ class QuantificationView(BaseView):
             css_classes=["element-item"]
         )
 
-        chemical_shift_input = pn.widgets.FloatInput(name='Chemical Shift', value=0., step=1e-1, styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
+        chemical_shift_input = pn.widgets.FloatInput(name='Chemical Shift', value=0., step=1e-1, styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
 
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
@@ -132,9 +132,13 @@ class QuantificationView(BaseView):
         element_item.set_quant_range([energy[1]- element_item.chemical_shift, energy[2]])
 
         fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[1] - element_item.chemical_shift, 
-                value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
+                value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
         quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[1] - element_item.chemical_shift, end=energy[2], 
-                value=(energy[1],energy[2]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"})
+                value=(energy[1],energy[2]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
+
+        element_item_view.append(chemical_shift_input)
+        element_item_view.append(fit_slider)
+        element_item_view.append(quant_slider)
             
         def _fit_range_watcher(event):
             element_item.set_fit_range(event.new)
@@ -150,22 +154,13 @@ class QuantificationView(BaseView):
 
         def _delete_element_watcher(event):
             self._element_item_view_container.remove(element_item_view)
-            self._model.app_state.quantification_elements.remove(element_item)
+            self._model.app_state.quantification_elements.remove(element_item)        
 
-        slider = {"active": False}
-        
-
-        def _slider_button_watcher(event, slider=slider):
-            if not slider["active"]:
-                element_item_view.append(chemical_shift_input)
-                element_item_view.append(fit_slider)
-                element_item_view.append(quant_slider)
-                slider["active"] = True
-            else:
-                element_item_view.remove(fit_slider)
-                element_item_view.remove(quant_slider)
-                element_item_view.remove(chemical_shift_input)
-                slider["active"] = False
+        def _slider_button_watcher(event):
+            show = not chemical_shift_input.visible
+            chemical_shift_input.visible = show
+            fit_slider.visible = show
+            quant_slider.visible = show
 
 
         fit_slider.param.watch(_fit_range_watcher, 'value')
@@ -209,7 +204,7 @@ class QuantificationView(BaseView):
                 sizing_mode=self.STRETCH_WIDTH
             ),
             "shells_multiselect": pn.widgets.MultiChoice(
-                name="Shells", 
+                name="Subshells", 
                 options=[],
                 sizing_mode=self.STRETCH_WIDTH
             ),
@@ -276,8 +271,5 @@ class QuantificationView(BaseView):
             self._quanti_toggle_button,
             sizing_mode=self.STRETCH_BOTH,
         )
-
-
-        
         return right_sidebar
     

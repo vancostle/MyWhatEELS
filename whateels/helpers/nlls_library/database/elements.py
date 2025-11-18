@@ -5,9 +5,7 @@
 # Kotochigova, S.A., and Zucker, D.S.
 #
 # The line weight, more precisely the approximate line weight for K,L M
-# shells are taken from epq library
-
-from hyperspy.misc import utils
+# shells are taken from epq librar
 
 elements = {'Ru': {'Physical_properties': {'density (g/cm^3)': 12.37},
                    'Atomic_properties': {'Xray_lines': {'Lb1': {'weight': 0.33039,
@@ -3579,7 +3577,7 @@ elements = {'Ru': {'Physical_properties': {'density (g/cm^3)': 12.37},
                    'General_properties': {'Z': 42,
                                           'atomic_weight': 95.96,
                                           'name': 'molybdenum'}}}
-
+"""
 elements_db = utils.DictionaryTreeBrowser(elements)
 
 # read dictionary of atomic numbers from HyperSpy, and add the elements that
@@ -3594,3 +3592,4 @@ atomic_number2name.update({93: 'Np', 94: 'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk',
                            111: 'Rg', 112: 'Cp', 113: 'Uut', 114: 'Uuq',
                            115: 'Uup', 116: 'Uuh', 117: 'Uus', 118: 'Uuo',
                            119: 'Uue'})
+"""

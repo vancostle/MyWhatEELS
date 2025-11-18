@@ -102,6 +102,32 @@ class Loader_OOS():
                         raise KeyError(f'Subshell {subshell} not found in available subshells: {self.subshells}.') 
             except KeyError as e:
                 raise KeyError(e)
+    
+    def element_name(self, z_number):
+        """
+        Retrieves the element name for a given atomic number.
+
+        Parameters:
+            z_number: Atomic number of the element.
+
+        Returns:
+            The name of the element.
+        """
+        try:
+            z_number = int(z_number)  # Ensure the atomic number is an integer
+            if z_number < 10:
+                oos_filename = "OOS0" + str(z_number)
+            elif 10 <= z_number <= 99:
+                oos_filename = "OOS" + str(z_number)
+            else:
+                raise ValueError("z_number should be between 1 and 99")
+        except ValueError:
+            print("z_number must be a valid integer between 1 and 99")
+
+        # Load the OOS data from the JSON file
+        with open(f'{self.directory}/{oos_filename}.json', 'r') as g:
+            oos_file = json.load(g)
+        return oos_file[0]
             
     def avaibable_subshells(self, z_number):
         """

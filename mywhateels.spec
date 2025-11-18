@@ -27,6 +27,7 @@ a = Analysis(
         ('whateels/assets/html/*.html', 'whateels/assets/html'),
         ('whateels/assets/js/*.js', 'whateels/assets/js'),
         ('whateels/assets/img/*', 'whateels/assets/img'),
+        ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/asset/oos/Hartree_Xsections_FSalvat')
         # Add other asset folders as needed
     ],
     hiddenimports=[

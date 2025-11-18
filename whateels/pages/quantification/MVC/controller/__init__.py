@@ -16,16 +16,17 @@ if TYPE_CHECKING:
     
 
 class ElementItem:
-    def __init__(self, element, shells, fit_range= None, quant_range= None):
+    def __init__(self, element, shells, element_name, fit_range= None, quant_range= None):
         self.element = element
         self.shells = shells
+        self.element_name = element_name
         self.fit_range = fit_range
         self.quant_range = quant_range
         self.cross_sections = {}
         self.chemical_shift = 0.0  # Default chemical shift value
 
     def __str__(self):
-        return f"{self.element} ({', '.join(self.shells)})"
+        return f"{self.element_name} ({self.element}) ({', '.join(self.shells)})"
 
     def set_fit_range(self, fit_range):
         self.fit_range = fit_range
@@ -105,6 +106,7 @@ class QuantificationController(BaseController):
                 element_item = ElementItem(
                 element=self.view.quanti_input['element_num'].value,
                 shells=self.view.quanti_input['shells_multiselect'].value,
+                element_name= self.loader_oos.element_name(self.view.quanti_input['element_num'].value)
                 )
                 min_eaxis_cs = None
                 for ishell in element_item.shells:
