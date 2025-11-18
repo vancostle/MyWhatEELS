@@ -504,6 +504,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     def run_kmeans_clustering(self, user_click=False):
         """Handle KMeans clustering button click."""
         self._disable_all_clustering_buttons()
+
         # Unlock Panel I/O for background processing
         pn.io.unlocked()
         

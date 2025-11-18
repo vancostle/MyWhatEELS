@@ -31,7 +31,7 @@ class App:
             "/clustering": lambda: Clustering(),
             "/multifit-details": lambda: MultiFitting(),
             "/quantification": lambda: Quantification(),
-            "/nlls": lambda: NLLS(),
+            # "/nlls": lambda: NLLS(),
         }
 
         return pn.serve(
