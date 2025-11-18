@@ -40,7 +40,7 @@ class ClusteringController:
         # Get last clustering result and update view if available
         last_clustering_result = self._model.app_state.last_clustering_result
 
-        self._view.create_tab_and_dataset_info(selected_dataset, last_clustering_result)
+        self._view.create_plots_and_restore_clustering(selected_dataset, last_clustering_result)
 
     def _on_tab_change(self, event):
         """Handle tab change events by updating the sidebar."""

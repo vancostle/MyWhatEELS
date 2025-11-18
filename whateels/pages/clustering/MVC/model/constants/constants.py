@@ -20,6 +20,19 @@ class Constants:
     TAB_AGGLOMERATIVE = "Agglomerative"
     TAB_SPECTRAL = "Spectral"
     
+    # Input keys
+    INPUT_N_CLUSTERS = "n_clusters"
+    INPUT_AVAILABLE_NORMS = "available_norms"
+    INPUT_N_INIT = "n_init"
+    INPUT_MAX_ITER = "max_iter"
+    INPUT_INIT_METHOD = "init_method"
+    INPUT_LINKAGE = "linkage"
+    INPUT_AFFINITY = "affinity"
+    INPUT_SPECTRAL_AFFINITY = "spectral_affinity"
+    INPUT_SPECTRAL_N_NEIGHBORS = "spectral_n_neighbors"
+    INPUT_SPECTRAL_GAMMA = "spectral_gamma"
+    INPUT_LABELS_ASSIGN_METHOD = "labels_assign_method"
+    
     # K-Means defaults
     DEFAULT_SELECTED_NORM = 'none'
     AVAILABLE_NORMS = [DEFAULT_SELECTED_NORM, 'l1', 'l2', 'max']

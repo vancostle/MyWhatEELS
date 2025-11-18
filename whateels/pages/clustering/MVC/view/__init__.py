@@ -72,7 +72,7 @@ class ClusteringView:
         """Delete the right sidebar layout."""
         self._right_sidebar.clear()
         
-    def create_tab_and_dataset_info(self, dataset: "Dataset", last_clustering_result) -> None:
+    def create_plots_and_restore_clustering(self, dataset: "Dataset", last_clustering_result) -> None:
         """
         Create visualizations for all datasets and setup tabbed UI interface.
         
@@ -120,6 +120,7 @@ class ClusteringView:
             self.left_sidebar.remove_dataset_info()
             self.left_sidebar.add_component(self._all_dataset_info[0])
             
+            # If last clustering result exists, run clustering to display results
             if (last_clustering_result is None):
                 return
             

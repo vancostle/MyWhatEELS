@@ -22,7 +22,7 @@ class ClusteringModel:
                 "type" : None,
                 "inputs" : {
                     "n_clusters" : None,
-                    "norm" : None,
+                    "available_norms" : None,
                     "n_init" : None,
                     "max_iter" : None,
                     "init_method" : None,
