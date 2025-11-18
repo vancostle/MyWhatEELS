@@ -95,6 +95,7 @@ class AppState(param.Parameterized):
         """Called automatically when all_datasets parameter changes."""
         count = len(self.all_datasets) if isinstance(self.all_datasets, list) else 0
         _logger.info(f"All datasets updated via param, count: {count}")
+        self.clear_elements_selected()
         
     @param.depends('filename', watch=True)
     def _on_filename_change(self):
@@ -103,6 +104,7 @@ class AppState(param.Parameterized):
             _logger.info(f"Filename updated via param: {self.filename}")
         else:
             _logger.info("Filename cleared via param")
+        self.clear_elements_selected()
             
     @param.depends('selected_tab_index_dataset', watch=True)
     def _on_selected_tab_index_change(self):
