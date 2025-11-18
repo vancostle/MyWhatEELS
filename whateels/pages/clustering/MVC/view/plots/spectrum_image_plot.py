@@ -105,8 +105,6 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     # TODO - El problema es que se está recogiendo los inputs actuales en lugar del last_clustering_result
     def _apply_kmeans_clustering(self):
         """Apply KMeans clustering and update visualization."""
-
-        CLUSTERING_TYPE = "K-Means"
         
         kmeans_input = self._view.right_sidebar.kmeans_input
         # Get parameters or use defaults
@@ -180,7 +178,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 "clustering": {
                     "file": self._model.get_uploaded_filename(),
                     "spectrum_image": self._model.current_image_name,
-                    "type": CLUSTERING_TYPE,
+                    "type": self._model.constants.TAB_KMEANS,
                     "inputs": {
                         "n_clusters": n_clusters,
                         "norm": available_norm,
@@ -231,8 +229,6 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
     def _apply_agglomerative_clustering(self):
         """Apply Agglomerative clustering and update visualization."""
-        
-        CLUSTERING_TYPE = "Agglomerative"
 
         try:
             # Reset and prepare progress display
@@ -306,7 +302,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 "clustering": {
                     "file": self._model.get_uploaded_filename(),
                     "spectrum_image": self._model.current_image_name,
-                    "type": CLUSTERING_TYPE,
+                    "type": self._model.constants.TAB_AGGLOMERATIVE,
                     "inputs": {
                         "norm": available_norm,
                         "n_clusters": n_clusters,
@@ -356,8 +352,6 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
     def _apply_spectral_clustering(self):
         """Apply Spectral clustering and update visualization."""
-                
-        CLUSTERING_TYPE = "Spectral"
 
         try:
             # Reset and prepare progress display
@@ -438,7 +432,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
                 "clustering": {
                     "file": self._model.get_uploaded_filename(),
                     "spectrum_image": self._model.current_image_name,
-                    "type": CLUSTERING_TYPE,
+                    "type": self._model.constants.TAB_SPECTRAL,
                     "inputs": {
                         "norm": available_norm,
                         "n_clusters": n_clusters,
