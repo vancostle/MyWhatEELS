@@ -115,8 +115,8 @@ class CustomPage(pn.template.FastListTemplate):
         
         navigation_links.append((clustering_a_element,"Clustering"))
         
-        quantification_href = '/quantification' if is_metadata_loaded else '/#'
-        quantification_class = LINK_ENABLE_CLASS if is_metadata_loaded else LINK_DISABLE_CLASS
+        quantification_href = f'/quantification?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
+        quantification_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
         quantification_a_element = f'<a href="{quantification_href}" class="{quantification_class}">Quantification</a>'
 
         navigation_links.append((quantification_a_element, "Quantification"))

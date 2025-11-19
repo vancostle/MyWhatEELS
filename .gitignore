@@ -5,6 +5,7 @@ ENV/
 .venv/
 .env/
 .virtualenv/
+.python-version/
 
 # Python cache files
 __pycache__/

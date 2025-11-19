@@ -2,6 +2,8 @@ import os
 import shutil
 import subprocess
 import zipfile
+import platform
+
 
 # Configuración
 MAIN_SCRIPT = "main.py"  # Cambia si tu entrypoint es otro
@@ -9,8 +11,9 @@ DIST_DIR = "dist"
 BUILD_DIR = "build"
 ZIP_NAME = "Whateels_dist.zip"
 TEMP_VENV = "temporal_venv"
-TEMP_VENV_PY = os.path.join(TEMP_VENV, "Scripts", "python.exe")
-TEMP_VENV_PIP = os.path.join(TEMP_VENV, "Scripts", "pip.exe")
+IS_WINDOWS = platform.system() == "Windows"
+TEMP_VENV_PY  = os.path.join(TEMP_VENV, "Scripts", "python.exe") if IS_WINDOWS else os.path.join(TEMP_VENV,"bin", "python")
+TEMP_VENV_PIP = os.path.join(TEMP_VENV, "Scripts", "pip.exe")    if IS_WINDOWS else os.path.join(TEMP_VENV,"bin", "pip")
 COMMAND = {
     "create_venv": f'"{os.sys.executable}" -m venv {TEMP_VENV}',
     "install_deps": f'"{TEMP_VENV_PY}" -m pip install -r requirements.txt',

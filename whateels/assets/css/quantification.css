@@ -1,0 +1,59 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.bk-body {
+    --switch-width: 50px;
+    --bar-height: 25px;
+    --switch-size: 25px;
+}
+
+.bk-bar {
+    transition-property: background-color;
+}
+
+.bk-knob {
+    border-radius: 100%;
+    transition-property: left, background-color;
+}
+
+.bk-bar, .bk-knob {
+    transition-duration: 0.3s;
+    transition-timing-function: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+#right-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+
+    box-sizing: border-box;
+    overflow-y: hidden;
+
+    & > .nav.flex-column {
+        flex: 1;
+
+    }
+    & > ul {
+        height: 100%;
+    }
+}
+
+.element-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.element-item {
+    border: 2px solid #0066cc;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+}
+
+.element-item * {
+    box-sizing: border-box;
+}
+
+

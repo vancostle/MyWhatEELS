@@ -56,6 +56,9 @@ class ToggleButton(Button):
     def toggle(self):
         """Toggle the button's state."""
         self._state = not self._state
+        new_state_key = self._ON if self._state else self._OFF
+        self.name = self._states[new_state_key][self._NAME]
+        self.button_type = self._states[new_state_key][self._BUTTON_TYPE]
 
     def is_on(self):
         """Check if the button is in the 'on' state."""
