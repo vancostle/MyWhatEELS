@@ -1,8 +1,7 @@
 from typing import TYPE_CHECKING, Optional
-from whateels.helpers import HTML_ROOT, CSS_ROOT
+from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton
 from whateels.base.mvc import BaseView
-from whateels.shared_state import AppState
 import panel as pn
 
 if TYPE_CHECKING:
@@ -174,9 +173,15 @@ class QuantificationView(BaseView):
         return element_item_view, element_item
 
     def _left_sidebar_layout(self):
+        
+        uploaded_file = UploadedFile(
+            filename=str(self._model.get_uploaded_filename()), 
+            sizing_mode=self._STRETCH_WIDTH, 
+            margin=(0,0,10,0)
+        )
  
         left_sidebar_container_layout = pn.Column(
-            pn.pane.Markdown("### Upload EELS Data", sizing_mode=self._STRETCH_WIDTH),
+            uploaded_file,
             pn.layout.Divider(),
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
