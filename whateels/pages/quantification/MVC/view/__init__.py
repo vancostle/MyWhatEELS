@@ -6,7 +6,7 @@ import panel as pn
 
 if TYPE_CHECKING:
     from ..model import QuantificationModel
-    from ..controller import QuantificationController
+    from ..controller import QuantificationController, ElementItem
 
 class QuantificationView(BaseView):
     
@@ -103,9 +103,9 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-                _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
-                _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
-            }
+            _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
+            _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
+        }
 
         slider_button = ToggleButton(
             sizing_mode=self._STRETCH_WIDTH,
@@ -118,7 +118,13 @@ class QuantificationView(BaseView):
             css_classes=["element-item"]
         )
 
-        chemical_shift_input = pn.widgets.FloatInput(name='Chemical Shift', value=0., step=1e-1, styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
+        chemical_shift_input = pn.widgets.FloatInput(
+            name='Chemical Shift', 
+            value=0., 
+            step=1e-1, 
+            styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, 
+            visible=False
+        )
 
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
@@ -147,20 +153,32 @@ class QuantificationView(BaseView):
             element_item.set_quant_range(event.new)
             self._controller.plot_elements()
         
-        
-
-
-
         def _delete_element_watcher(event):
             self._element_item_view_container.remove(element_item_view)
-            self._model.app_state.quantification_elements.remove(element_item)        
+            self._model.app_state.quantification_elements.remove(element_item)  
+            
+            current_atomic_number = self._quanti_input["element_num"].value
+            atomic_number_of_added_element = element_item.element
+            
+            add_element_button = self._quanti_add_element_button
+            if add_element_button is None:
+                return
+            
+            current_subshells_multiselect_value = self._quanti_input["shells_multiselect"].value
+            if current_subshells_multiselect_value is None or current_atomic_number is None:
+                add_element_button.disabled = True
+                return
+            
+            if current_atomic_number == atomic_number_of_added_element:
+                add_element_button.disabled = False
+                add_element_button.button_type = 'primary'
+                add_element_button.name = f'Add Element'      
 
         def _slider_button_watcher(event):
             show = not chemical_shift_input.visible
             chemical_shift_input.visible = show
             fit_slider.visible = show
             quant_slider.visible = show
-
 
         fit_slider.param.watch(_fit_range_watcher, 'value')
         quant_slider.param.watch(_quant_range_watcher, 'value')
@@ -199,19 +217,20 @@ class QuantificationView(BaseView):
         return self._main_container_layout
     
     def _right_sidebar_layout(self) -> pn.Column:
-        quantification_input_label = pn.pane.Markdown(
-            "### Quantification Input", 
-        )
-
         self._quanti_input = {
             "element_num": pn.widgets.IntInput(
                 name='Element Atomic Number',
-                sizing_mode=self.STRETCH_WIDTH
+                sizing_mode=self.STRETCH_WIDTH,
+                value=1,
+                start=1,
+                end=99,
+                margin=(0,0,10,0),
             ),
             "shells_multiselect": pn.widgets.MultiChoice(
                 name="Subshells", 
                 options=[],
-                sizing_mode=self.STRETCH_WIDTH
+                sizing_mode=self.STRETCH_WIDTH,
+                margin=(0,0,10,0)
             ),
         }
 
@@ -219,8 +238,9 @@ class QuantificationView(BaseView):
             name='Add Element',
             button_type='primary',
             height=55,
-            margin=(0,0,10,0),
-            sizing_mode=self.STRETCH_WIDTH
+            margin=(0,0,20,0),
+            sizing_mode=self.STRETCH_WIDTH,
+            disabled=True,
         )
 
         self._quanti_element_item = pn.Column(
@@ -269,7 +289,6 @@ class QuantificationView(BaseView):
         )
 
         right_sidebar = pn.Column(
-            quantification_input_label,
             self._quanti_element_item,
             self._quanti_add_element_button,
             self._element_item_view_container,
