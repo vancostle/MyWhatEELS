@@ -269,7 +269,9 @@ class QuantificationView(BaseView):
 
         self._quanti_toggle_button = ToggleButton(
             sizing_mode=self._STRETCH_WIDTH,
-            states=states
+            states=states,
+            margin=0,
+            height=55
         )
         
         self._quanti_run_button = pn.widgets.Button(
