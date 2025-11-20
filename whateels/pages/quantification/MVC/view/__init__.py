@@ -93,7 +93,7 @@ class QuantificationView(BaseView):
             button_type='danger'
         )
 
-            # State identifiers
+        # State identifiers
         _ON = 'on'
         _OFF = 'off'
         
@@ -113,7 +113,11 @@ class QuantificationView(BaseView):
         )
 
         element_item_view = pn.Column(
-            pn.Row(slider_button, delete_button, sizing_mode=self._STRETCH_WIDTH),
+            pn.Row(
+                slider_button, 
+                delete_button, 
+                sizing_mode=self._STRETCH_WIDTH
+            ),
             sizing_mode=self._STRETCH_WIDTH, 
             css_classes=["element-item"]
         )
@@ -122,7 +126,7 @@ class QuantificationView(BaseView):
             name='Chemical Shift', 
             value=0., 
             step=1e-1, 
-            styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, 
+            styles={"margin": "0", "padding": "0 1rem 1rem 2rem"}, 
             visible=False
         )
 
@@ -172,7 +176,11 @@ class QuantificationView(BaseView):
             if current_atomic_number == atomic_number_of_added_element:
                 add_element_button.disabled = False
                 add_element_button.button_type = 'primary'
-                add_element_button.name = f'Add Element'      
+                add_element_button.name = f'Add Element'
+            
+            # Update quantification toggle button state
+            isDisabled = self.should_enable_quantification_button()
+            self._quanti_toggle_button.disabled = not isDisabled 
 
         def _slider_button_watcher(event):
             show = not chemical_shift_input.visible
@@ -238,7 +246,7 @@ class QuantificationView(BaseView):
             name='Add Element',
             button_type='primary',
             height=55,
-            margin=(0,0,20,0),
+            margin=(0,0,10,0),
             sizing_mode=self.STRETCH_WIDTH,
             disabled=True,
         )
@@ -263,15 +271,16 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-                _ON: {_NAME: "Hide Quantification", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
-                _OFF: {_NAME: "Show Quantification", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
-            }
+            _ON: {_NAME: "Hide Quantification", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
+            _OFF: {_NAME: "Show Quantification", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
+        }
 
         self._quanti_toggle_button = ToggleButton(
             sizing_mode=self._STRETCH_WIDTH,
             states=states,
             margin=0,
-            height=55
+            height=55,
+            disabled=True
         )
         
         self._quanti_run_button = pn.widgets.Button(
@@ -294,8 +303,34 @@ class QuantificationView(BaseView):
             self._quanti_element_item,
             self._quanti_add_element_button,
             self._element_item_view_container,
-            self._quanti_toggle_button,
+            pn.Row(
+                pn.widgets.TooltipIcon(
+                    value='You also must select an area in the left plot.',
+                    width=30,
+                ),
+                self._quanti_toggle_button,
+                sizing_mode=self.STRETCH_WIDTH,
+                margin=(10, 0, 0, 0)
+            ),
             sizing_mode=self.STRETCH_BOTH,
         )
         return right_sidebar
     
+    def should_enable_quantification_button(self) -> bool:
+        """
+        Determine if the quantification controls should be enabled.
+        
+        Returns:
+            bool: True if quantification can be enabled, False otherwise
+        """
+        
+        MIN_ELEMENTS_REQUIRED = 2
+        quantification_elements = self._model.app_state.quantification_elements
+        if quantification_elements is None or not isinstance(quantification_elements, list):
+            return False
+
+        has_2_elements = len(quantification_elements) >= MIN_ELEMENTS_REQUIRED
+        if not has_2_elements:
+            return False
+        
+        return True

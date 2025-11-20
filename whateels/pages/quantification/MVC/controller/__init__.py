@@ -45,8 +45,6 @@ class QuantificationController(BaseController):
         self._model = model
         self._view = view
 
-        
-
         self._layout = LayoutManager(view, self, model)
 
         all_datasets = AppState().all_datasets
@@ -65,11 +63,12 @@ class QuantificationController(BaseController):
             return
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
-
         
+        # Enable or disable quantification toggle button based on current state
+        isDisabled = self._view.should_enable_quantification_button()
+        self._view.quanti_toggle_button.disabled = not isDisabled
 
         self._quanti_active =  False
-        
         
         self._quantification_user_update(view)
 
@@ -234,6 +233,10 @@ class QuantificationController(BaseController):
         add_element_button.name = "Element Already Added"
         add_element_button.button_type = "danger"
         
+        # Enable or disable quantification toggle button based on current state
+        isDisabled = self._view.should_enable_quantification_button()
+        self._view.quanti_toggle_button.disabled = not isDisabled
+        
         return
     def add_element_item(self, element_item: ElementItem):
         min_eaxis_cs = None
@@ -269,7 +272,6 @@ class QuantificationController(BaseController):
             elif len(self._model.app_state.quantification_elements) < 2:
                 self.view.quanti_toggle_button.toggle()  # Revert the toggle state
                 print("At least two elements are required for quantification.")
-                
             else:
                 try:
                     self._layout.plot_quantification_pie()
@@ -277,8 +279,6 @@ class QuantificationController(BaseController):
                 except Exception as e:
                     self.view.quanti_toggle_button.toggle()
                     print(f"Error plotting quantification pie chart: {e}")
-                
-            
         else:
             self.plot_elements()
             self._quanti_active = False
