@@ -1,4 +1,3 @@
-from whateels.base.mvc.base_view import BaseView
 from whateels.helpers import LoadCSS
 from typing import TYPE_CHECKING
 from whateels.components import FileDropper
