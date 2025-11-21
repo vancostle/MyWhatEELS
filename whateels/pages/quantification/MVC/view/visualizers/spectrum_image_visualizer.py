@@ -154,9 +154,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return fig
         except Exception as e:
             raise e
+        
     def plot_shells_cross_section(self, fig, element_item: "ElementItem"):
         y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
-
+        min_eaxis_cs = float('inf')
         for ishell in element_item.shells:
             eaxis = element_item.cross_sections[ishell][0]
             counts = element_item.cross_sections[ishell][1]
@@ -169,6 +170,21 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 eaxis_cs=eaxis, counts=counts, onset=onset,
                 cross_section=cross_section, chemical_shift=chemical_shift
             )
+            if eaxis[0] < min_eaxis_cs:
+                min_eaxis_cs = eaxis[0]
+        
+        ## fig.add_vline(x=min_eaxis_cs - chemical_shift, line_width=2, line_dash="dash", line_color="rgba(0, 0, 0, 0.7)")
+        """
+        fig.add_annotation(
+            x=min_eaxis_cs - chemical_shift,
+            y=max(self.selected_slice),
+            text=element_item.element_name_short,
+            font=dict(color="rgba(0, 0, 0, 0.7)"),
+            bgcolor='rgba(255, 255, 255, 0.7)',
+            showarrow=False,
+            align='center'
+        )
+        """
     
 
     def calculate_shell_data(self, selected_slice, element_item, y_extrapolated, ishell):
@@ -209,13 +225,16 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                     onset=onset, 
                     cross_section=cross_section
             )
-    
+        
         xaxis, yaxis = cs_instance.get_data()
         fig.add_trace(go.Scatter(
             x=xaxis, 
             y=yaxis, 
             name=f'{cs_instance.element} {cs_instance.ishell} OOS'
         ))
+
+        
+
         fig.update_layout(xaxis=dict(range=[self._e_axis, self._e_axis]))
 
         return fig, (xaxis, yaxis)
@@ -231,6 +250,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             A string summarizing the quantification results or an error message if something goes wrong.
         """
         element_data = []
+        if element_items is None or len(element_items) == 0:
+            raise ValueError("No elements provided for quantification.")
         for element_item in element_items:
             try:
                 shells_data = []
@@ -375,7 +396,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         # Pane B initial message (apply stored ranges if any)
         self.paneB = pn.pane.Plotly(
-            self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
+            self._set_ranges_and_convert(self._figB_message(" ", "Select a region for ROI")),
             sizing_mode='stretch_both', config={"responsive": True}
         )
 
@@ -443,6 +464,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             xaxis_title=self._X_AXIS_SPECTRUM_TITLE, 
             yaxis_title=self._Y_AXIS_SPECTRUM_TITLE
         )
+        region_selected = True
         return fig
 
     # --- Inactivity logic (restaurar selección tras inactivity) ---
@@ -567,13 +589,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             self._last_hover_ts = self._now_ms()
             if not self._pc.running:
                 self._pc.start()
-        else:
-            # No selection: persistent hover view, no inactivity timer
-            fig = self._figB_hover(self._last_hover_point)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            if self._pc.running:
-                self._pc.stop()
-            self._last_hover_ts = None
 
     def _on_paneA_click(self, event):
         point = SpectrumExtractor.extract_point(event)
@@ -731,6 +746,11 @@ class add_cs:
         # Apply the chemical shift and calculate the normalized cross-section
         self.xaxis = self.eaxis_cs - self.chemical_shift
         self.yaxis = (self.cross_section / self.norm_sim * self.norm_exp).real
+
+        max_eaxis = self.eaxis[-1]
+        mask = self.xaxis <= max_eaxis
+        self.xaxis = self.xaxis[mask]
+        self.yaxis = self.yaxis[mask]
 
     def get_data(self):
         """
