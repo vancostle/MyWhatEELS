@@ -173,7 +173,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             if eaxis[0] < min_eaxis_cs:
                 min_eaxis_cs = eaxis[0]
         
-        fig.add_vline(x=min_eaxis_cs - chemical_shift, line_width=2, line_dash="dash", line_color="rgba(0, 0, 0, 0.7)")
+        ## fig.add_vline(x=min_eaxis_cs - chemical_shift, line_width=2, line_dash="dash", line_color="rgba(0, 0, 0, 0.7)")
+        
         fig.add_annotation(
             x=min_eaxis_cs - chemical_shift,
             y=max(self.selected_slice),
@@ -223,7 +224,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                     onset=onset, 
                     cross_section=cross_section
             )
-    
+        
         xaxis, yaxis = cs_instance.get_data()
         fig.add_trace(go.Scatter(
             x=xaxis, 
@@ -248,6 +249,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             A string summarizing the quantification results or an error message if something goes wrong.
         """
         element_data = []
+        if element_items is None or len(element_items) == 0:
+            raise ValueError("No elements provided for quantification.")
         for element_item in element_items:
             try:
                 shells_data = []
@@ -742,6 +745,11 @@ class add_cs:
         # Apply the chemical shift and calculate the normalized cross-section
         self.xaxis = self.eaxis_cs - self.chemical_shift
         self.yaxis = (self.cross_section / self.norm_sim * self.norm_exp).real
+
+        max_eaxis = self.eaxis[-1]
+        mask = self.xaxis <= max_eaxis
+        self.xaxis = self.xaxis[mask]
+        self.yaxis = self.yaxis[mask]
 
     def get_data(self):
         """

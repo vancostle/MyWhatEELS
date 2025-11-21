@@ -12,6 +12,7 @@ class Quantification(CustomPage):
         model = QuantificationModel()
         view = QuantificationView(model)
         QuantificationController(model, view)
+        
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],

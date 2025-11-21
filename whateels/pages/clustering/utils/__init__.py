@@ -22,6 +22,7 @@ from .clustering import (
     SpectralClusteringAlgorithm,
 )
 from .visualization import ClusterVisualizer
+from .orchestrator import ClusteringOrchestrator
 
 __all__ = [
     'DataPreprocessor',
@@ -30,4 +31,5 @@ __all__ = [
     'AgglomerativeClusteringAlgorithm',
     'SpectralClusteringAlgorithm',
     'ClusterVisualizer',
+    'ClusteringOrchestrator',
 ]

@@ -51,9 +51,13 @@ class AppState(param.Parameterized):
     selected_tab_index_dataset = param.Integer(default=0, doc="""
         Index of the currently selected dataset tab.
     """)
-
+    
     quantification_elements = param.List(default=list(), doc="""
         List of quantification elements selected for quantification.
+    """)
+
+    last_clustering_result = param.Parameter(default=None, doc="""
+        The last clustering result dictionary.
     """)
 
     def __new__(cls):
@@ -110,6 +114,14 @@ class AppState(param.Parameterized):
     def _on_selected_tab_index_change(self):
         """Called automatically when selected_tab_index_dataset changes."""
         _logger.info(f"Selected dataset tab index changed to: {self.selected_tab_index_dataset}")
+        
+    @param.depends('last_clustering_result', watch=True)
+    def _on_last_clustering_result_change(self):
+        """Called automatically when last_clustering_result changes."""
+        if self.last_clustering_result is not None:
+            _logger.info("Last clustering result updated via param")
+        else:
+            _logger.info("Last clustering result cleared via param")
 
     def clear_metadata(self):
         self.metadata = None
@@ -125,6 +137,9 @@ class AppState(param.Parameterized):
         
     def clear_selected_tab_index(self):
         self.selected_tab_index_dataset = 0
+    
+    def clear_last_clustering_result(self):
+        self.last_clustering_result = None
 
     def clear_all(self):
         """Clear all shared state parameters."""
@@ -133,3 +148,4 @@ class AppState(param.Parameterized):
         self.clear_filename()
         self.clear_elements_selected()
         self.clear_selected_tab_index()
+        self.clear_last_clustering_result()

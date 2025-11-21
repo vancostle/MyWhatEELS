@@ -18,15 +18,29 @@ class ClusteringController:
     def _initialize_view(self) -> None:
         """Initialize the view based on the current application state."""
         TAB_PARAM = "tab"
-        tab_param = URLUtils.get_query_param(TAB_PARAM)
-        tab_param = SafeConverter.to_int(tab_param, default=-1)
+        tab_param = URLUtils.get_query_param(TAB_PARAM) # Get tab index from URL
+        tab_param = SafeConverter.to_int(tab_param, default=-1) # Get tab index as int, default to -1 if invalid
         all_datasets = self._model.app_state.all_datasets
         
+        # Display nothing if no valid tab or datasets
         if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
-            self._view.main.empty()
+            self._view.main.empty() # Clear main layout with a placeholder
             return
+
+        # Disable store button by default until clustering is performed
+        store_button = self._view.right_sidebar.store_button
+        if store_button is not None:
+            store_button.disabled = True
         
-        self._view.create_tab_and_dataset_info([all_datasets[tab_param]])
+        # Get selected dataset and update model
+        selected_dataset = all_datasets[tab_param]
+        image_name = selected_dataset.attrs.get('image_name', None)
+        self._model.current_image_name = image_name
+        
+        # Get last clustering result and update view if available
+        last_clustering_result = self._model.app_state.last_clustering_result
+
+        self._view.create_plots_and_restore_clustering(selected_dataset, last_clustering_result)
 
     def _on_tab_change(self, event):
         """Handle tab change events by updating the sidebar."""

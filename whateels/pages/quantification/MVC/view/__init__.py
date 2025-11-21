@@ -1,13 +1,12 @@
 from typing import TYPE_CHECKING, Optional
-from whateels.helpers import HTML_ROOT, CSS_ROOT
+from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton
 from whateels.base.mvc import BaseView
-from whateels.shared_state import AppState
 import panel as pn
 
 if TYPE_CHECKING:
     from ..model import QuantificationModel
-    from ..controller import QuantificationController
+    from ..controller import QuantificationController, ElementItem
 
 class QuantificationView(BaseView):
     
@@ -94,7 +93,7 @@ class QuantificationView(BaseView):
             button_type='danger'
         )
 
-            # State identifiers
+        # State identifiers
         _ON = 'on'
         _OFF = 'off'
         
@@ -104,9 +103,9 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-                _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
-                _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
-            }
+            _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
+            _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
+        }
 
         slider_button = ToggleButton(
             sizing_mode=self._STRETCH_WIDTH,
@@ -115,12 +114,22 @@ class QuantificationView(BaseView):
         )
 
         element_item_view = pn.Column(
-            pn.Row(slider_button, delete_button, sizing_mode=self._STRETCH_WIDTH),
+            pn.Row(
+                slider_button, 
+                delete_button, 
+                sizing_mode=self._STRETCH_WIDTH
+            ),
             sizing_mode=self._STRETCH_WIDTH, 
             css_classes=["element-item"]
         )
 
-        chemical_shift_input = pn.widgets.FloatInput(name='Chemical Shift', value=0., step=1e-1, styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
+        chemical_shift_input = pn.widgets.FloatInput(
+            name='Chemical Shift', 
+            value=0., 
+            step=1e-1, 
+            styles={"margin": "0", "padding": "0 1rem 1rem 2rem"}, 
+            visible=False
+        )
 
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
@@ -146,18 +155,43 @@ class QuantificationView(BaseView):
         def _quant_width_watcher(event):   
             element_item.set_quant_width(event.new)
             self._controller.plot_elements()
-    
+        
+        
+
+
+
         def _delete_element_watcher(event):
             self._element_item_view_container.remove(element_item_view)
             self._model.app_state.quantification_elements.remove(element_item)  
-            self._controller.plot_elements()      
+            
+            current_atomic_number = self._quanti_input["element_num"].value
+            atomic_number_of_added_element = element_item.element
+            
+            add_element_button = self._quanti_add_element_button
+            if add_element_button is None:
+                return
+            
+            current_subshells_multiselect_value = self._quanti_input["shells_multiselect"].value
+            if current_subshells_multiselect_value is None or current_atomic_number is None:
+                add_element_button.disabled = True
+                return
+            
+            if current_atomic_number == atomic_number_of_added_element:
+                add_element_button.disabled = False
+                add_element_button.button_type = 'primary'
+                add_element_button.name = f'Add Element'
+            
+            # Update quantification toggle button state
+            isDisabled = self.should_enable_quantification_button()
+            self._quanti_toggle_button.disabled = not isDisabled 
+            
+            self._controller.plot_elements()
 
         def _slider_button_watcher(event):
             show = not chemical_shift_input.visible
             chemical_shift_input.visible = show
             fit_slider.visible = show
             quant_width_input.visible = show
-
 
         fit_slider.param.watch(_fit_range_watcher, 'value')
         quant_width_input.param.watch(_quant_width_watcher, 'value')
@@ -170,9 +204,15 @@ class QuantificationView(BaseView):
         return element_item_view, element_item
 
     def _left_sidebar_layout(self):
+        
+        uploaded_file = UploadedFile(
+            filename=str(self._model.get_uploaded_filename()), 
+            sizing_mode=self._STRETCH_WIDTH, 
+            margin=(0,0,10,0)
+        )
  
         left_sidebar_container_layout = pn.Column(
-            pn.pane.Markdown("### Upload EELS Data", sizing_mode=self._STRETCH_WIDTH),
+            uploaded_file,
             pn.layout.Divider(),
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
@@ -190,19 +230,20 @@ class QuantificationView(BaseView):
         return self._main_container_layout
     
     def _right_sidebar_layout(self) -> pn.Column:
-        quantification_input_label = pn.pane.Markdown(
-            "### Quantification Input", 
-        )
-
         self._quanti_input = {
             "element_num": pn.widgets.IntInput(
                 name='Element Atomic Number',
-                sizing_mode=self.STRETCH_WIDTH
+                sizing_mode=self.STRETCH_WIDTH,
+                value=1,
+                start=1,
+                end=99,
+                margin=(0,0,10,0),
             ),
             "shells_multiselect": pn.widgets.MultiChoice(
                 name="Subshells", 
                 options=[],
-                sizing_mode=self.STRETCH_WIDTH
+                sizing_mode=self.STRETCH_WIDTH,
+                margin=(0,0,10,0)
             ),
         }
 
@@ -211,7 +252,8 @@ class QuantificationView(BaseView):
             button_type='primary',
             height=55,
             margin=(0,0,10,0),
-            sizing_mode=self.STRETCH_WIDTH
+            sizing_mode=self.STRETCH_WIDTH,
+            disabled=True,
         )
 
         self._quanti_element_item = pn.Column(
@@ -234,13 +276,16 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-                _ON: {_NAME: "Hide Quantification", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
-                _OFF: {_NAME: "Show Quantification", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
-            }
+            _ON: {_NAME: "Hide Quantification", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
+            _OFF: {_NAME: "Show Quantification", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
+        }
 
         self._quanti_toggle_button = ToggleButton(
             sizing_mode=self._STRETCH_WIDTH,
-            states=states
+            states=states,
+            margin=0,
+            height=55,
+            disabled=True
         )
         
         self._quanti_run_button = pn.widgets.Button(
@@ -260,12 +305,37 @@ class QuantificationView(BaseView):
         )
 
         right_sidebar = pn.Column(
-            quantification_input_label,
             self._quanti_element_item,
             self._quanti_add_element_button,
             self._element_item_view_container,
-            self._quanti_toggle_button,
+            pn.Row(
+                pn.widgets.TooltipIcon(
+                    value='You also must select an area in the left plot.',
+                    width=30,
+                ),
+                self._quanti_toggle_button,
+                sizing_mode=self.STRETCH_WIDTH,
+                margin=(10, 0, 0, 0)
+            ),
             sizing_mode=self.STRETCH_BOTH,
         )
         return right_sidebar
     
+    def should_enable_quantification_button(self) -> bool:
+        """
+        Determine if the quantification controls should be enabled.
+        
+        Returns:
+            bool: True if quantification can be enabled, False otherwise
+        """
+        
+        MIN_ELEMENTS_REQUIRED = 2
+        quantification_elements = self._model.app_state.quantification_elements
+        if quantification_elements is None or not isinstance(quantification_elements, list):
+            return False
+
+        has_2_elements = len(quantification_elements) >= MIN_ELEMENTS_REQUIRED
+        if not has_2_elements:
+            return False
+        
+        return True

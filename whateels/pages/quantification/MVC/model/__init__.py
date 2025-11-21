@@ -8,7 +8,6 @@ class QuantificationModel(BaseModel):
         self._constants = Constants()
         self._app_state = AppState()
 
-
     @property
     def constants(self) -> Constants:
         return self._constants
@@ -16,3 +15,12 @@ class QuantificationModel(BaseModel):
     @property
     def app_state(self) -> AppState:
         return self._app_state
+
+    def get_uploaded_filename(self) -> str:
+        """
+        Get the filename of the currently uploaded dataset from shared state.
+        
+        Returns:
+            str: Uploaded filename, or empty string if none
+        """
+        return str(self.app_state.filename) if self.app_state.filename is not None else "No file uploaded"
