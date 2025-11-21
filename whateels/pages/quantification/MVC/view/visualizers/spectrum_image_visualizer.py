@@ -174,7 +174,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 min_eaxis_cs = eaxis[0]
         
         ## fig.add_vline(x=min_eaxis_cs - chemical_shift, line_width=2, line_dash="dash", line_color="rgba(0, 0, 0, 0.7)")
-        
+        """
         fig.add_annotation(
             x=min_eaxis_cs - chemical_shift,
             y=max(self.selected_slice),
@@ -184,6 +184,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             showarrow=False,
             align='center'
         )
+        """
     
 
     def calculate_shell_data(self, selected_slice, element_item, y_extrapolated, ishell):
