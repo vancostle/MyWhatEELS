@@ -27,7 +27,7 @@ a = Analysis(
         ('whateels/assets/html/*.html', 'whateels/assets/html'),
         ('whateels/assets/js/*.js', 'whateels/assets/js'),
         ('whateels/assets/img/*', 'whateels/assets/img'),
-        ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/asset/oos/Hartree_Xsections_FSalvat')
+        ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/assets/oos/Hartree_Xsections_FSalvat')
         # Add other asset folders as needed
     ],
     hiddenimports=[
@@ -36,6 +36,10 @@ a = Analysis(
         '_hashlib',
         'ssl',
         'certifi',
+        
+        # System utilities
+        'psutil',
+        'psutil._pswindows',
         
         # Panel and dependencies
         'panel',
@@ -77,6 +81,11 @@ a = Analysis(
         
         # Other
         'numba',
+        'numba.core',
+        'numba.core.typing',
+        'numba.core.datamodel',
+        'numba.cpython',
+        'numba.np',
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -87,6 +96,7 @@ a = Analysis(
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -98,6 +108,13 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    console=True,
+    upx=False,  # Disable UPX - it's often flagged by antivirus
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    version='version_info.txt',  # Add version info from file
 )

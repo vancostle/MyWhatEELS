@@ -1,8 +1,7 @@
 from whateels.helpers.in_memory_file import InMemoryFile
-from whateels.base.mvc.base_model import BaseModel
 from .constants import Constants, Placeholders
 
-class HomePageModel(BaseModel):
+class HomePageModel:
     """
     Main application model for the WhatEELS home page.
     Stores the loaded EELS dataset, metadata, and shared configuration/state.
@@ -21,6 +20,9 @@ class HomePageModel(BaseModel):
     @property
     def in_memory_file(self) -> InMemoryFile | None:
         return self._in_memory_file
+    @property
+    def placeholders(self) -> Placeholders:
+        return self._placeholders
 
     @in_memory_file.setter
     def in_memory_file(self, file: InMemoryFile | None):
