@@ -16,12 +16,13 @@ if TYPE_CHECKING:
     
 
 class ElementItem:
-    def __init__(self, element, shells, element_name, fit_range= None, quant_range= None):
+    def __init__(self, element, shells, element_name, element_name_short, fit_range= None, quant_width= 50):
         self.element = element
         self.shells = shells
         self.element_name = element_name
+        self.element_name_short = element_name_short
         self.fit_range = fit_range
-        self.quant_range = quant_range
+        self.quant_width = quant_width
         self.cross_sections = {}
         self.chemical_shift = 0.0  # Default chemical shift value
 
@@ -31,8 +32,12 @@ class ElementItem:
     def set_fit_range(self, fit_range):
         self.fit_range = fit_range
 
-    def set_quant_range(self, quant_range):
-        self.quant_range = quant_range
+    def set_quant_width(self, quant_width):
+        self.quant_width = quant_width
+
+    def set_quant_range(self, min_eaxis_cs):
+        print(min_eaxis_cs)
+        self.quant_range = (min_eaxis_cs - self.chemical_shift, min_eaxis_cs + self.quant_width - self.chemical_shift)
 
 
 class QuantificationController(BaseController):
@@ -106,7 +111,8 @@ class QuantificationController(BaseController):
                 element_item = ElementItem(
                 element=self.view.quanti_input['element_num'].value,
                 shells=self.view.quanti_input['shells_multiselect'].value,
-                element_name= self.loader_oos.element_name(self.view.quanti_input['element_num'].value)
+                element_name = self.loader_oos.element_name(self.view.quanti_input['element_num'].value),
+                element_name_short = self.loader_oos.element_name_short(self.view.quanti_input['element_num'].value)
                 )
                 min_eaxis_cs = None
                 for ishell in element_item.shells:
@@ -118,6 +124,7 @@ class QuantificationController(BaseController):
                     min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])                
 
                 element_item_view, element_item = self._view.get_new_element_item_view(element_item, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]))
+                element_item.set_quant_range(min_eaxis_cs)
                 self._model.app_state.quantification_elements.append(element_item)
                 self._layout.add_new_element_input(element_item_view)
                 self.view.quanti_input['shells_multiselect'].value = []
@@ -136,6 +143,7 @@ class QuantificationController(BaseController):
             min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])                
 
         element_item_view, element_item = self._view.get_new_element_item_view(element_item, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]))
+        element_item.set_quant_range(min_eaxis_cs)
         self._layout.add_new_element_input(element_item_view)
         self.view.quanti_input['shells_multiselect'].value = []
         print("Element added programmatically.")

@@ -110,7 +110,8 @@ class QuantificationView(BaseView):
 
         slider_button = ToggleButton(
             sizing_mode=self._STRETCH_WIDTH,
-            states=states
+            states=states,
+            css_classes=["element-toggle-button"]
         )
 
         element_item_view = pn.Column(
@@ -129,42 +130,37 @@ class QuantificationView(BaseView):
 
 
         element_item.set_fit_range([energy[0], energy[1]- element_item.chemical_shift])
-        element_item.set_quant_range([energy[1]- element_item.chemical_shift, energy[2]])
 
         fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[1] - element_item.chemical_shift, 
                 value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
-        quant_slider = pn.widgets.EditableRangeSlider(name='quant range', start=energy[1] - element_item.chemical_shift, end=energy[2], 
-                value=(energy[1],energy[2]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
+        quant_width_input = pn.widgets.FloatInput(name='Quantification Width', value=50., step=1e-1, styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
 
         element_item_view.append(chemical_shift_input)
         element_item_view.append(fit_slider)
-        element_item_view.append(quant_slider)
+        element_item_view.append(quant_width_input)
             
         def _fit_range_watcher(event):
             element_item.set_fit_range(event.new)
             self._controller.plot_elements()
 
-        def _quant_range_watcher(event):   
-            element_item.set_quant_range(event.new)
+        def _quant_width_watcher(event):   
+            element_item.set_quant_width(event.new)
             self._controller.plot_elements()
-        
-        
-
-
-
+    
         def _delete_element_watcher(event):
             self._element_item_view_container.remove(element_item_view)
-            self._model.app_state.quantification_elements.remove(element_item)        
+            self._model.app_state.quantification_elements.remove(element_item)  
+            self._controller.plot_elements()      
 
         def _slider_button_watcher(event):
             show = not chemical_shift_input.visible
             chemical_shift_input.visible = show
             fit_slider.visible = show
-            quant_slider.visible = show
+            quant_width_input.visible = show
 
 
         fit_slider.param.watch(_fit_range_watcher, 'value')
-        quant_slider.param.watch(_quant_range_watcher, 'value')
+        quant_width_input.param.watch(_quant_width_watcher, 'value')
         delete_button.on_click(_delete_element_watcher)
         slider_button.on_click(_slider_button_watcher)
         chemical_shift_input.param.watch(_chemical_shift_watcher, 'value')
