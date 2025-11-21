@@ -112,6 +112,32 @@ print_info("Iniciando proceso de construcción...")
 print_info("Verificando procesos en ejecución...")
 kill_process_by_name("WhatEELS.exe")
 
+# Clean up old build artifacts before starting (including PyInstaller cache)
+print_info("Limpiando artefactos de compilación anteriores...")
+
+if os.path.exists(BUILD_DIR):
+    try:
+        shutil.rmtree(BUILD_DIR, ignore_errors=True)
+        print_success(f"'{BUILD_DIR}' eliminado.")
+    except Exception as e:
+        print_warning(f"No se pudo eliminar '{BUILD_DIR}': {e}")
+
+if os.path.exists(DIST_DIR):
+    try:
+        shutil.rmtree(DIST_DIR, ignore_errors=True)
+        print_success(f"'{DIST_DIR}' eliminado.")
+    except Exception as e:
+        print_warning(f"No se pudo eliminar '{DIST_DIR}': {e}")
+
+# Also remove __pycache__ to force Python to recompile
+for root, dirs, files in os.walk('.'):
+    if '__pycache__' in dirs:
+        pycache_path = os.path.join(root, '__pycache__')
+        try:
+            shutil.rmtree(pycache_path, ignore_errors=True)
+        except:
+            pass
+
 # Check if virtual environment already exists
 if os.path.exists(TEMP_VENV) and os.path.exists(TEMP_VENV_PY):
     print_success(f"Virtualenv temporal '{TEMP_VENV}' ya existe, reutilizándolo...")
@@ -143,6 +169,15 @@ print_info("Construyendo ejecutable...\n")
 print_warning("ESTO PUEDE TARDAR VARIOS MINUTOS, POR FAVOR ESPERA...")
 run(COMMAND["build_exe"])
 print_success("Ejecutable construido.")
+
+# Refresh Windows icon cache so the new icon shows immediately
+if IS_WINDOWS:
+    print_info("Actualizando caché de iconos de Windows...")
+    try:
+        subprocess.run("ie4uinit.exe -show", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print_success("Caché de iconos actualizado.")
+    except:
+        print_warning("No se pudo actualizar la caché de iconos. Presiona F5 en el explorador para ver el nuevo icono.")
 
 # 3. Comprimir la carpeta dist/
 if os.path.exists(ZIP_NAME):
@@ -180,28 +215,52 @@ if cleanup == 's' or cleanup == 'y' or cleanup == 'yes' or cleanup == 'si':
     # Remove virtual environment
     if os.path.exists(TEMP_VENV):
         try:
-            shutil.rmtree(TEMP_VENV)
+            shutil.rmtree(TEMP_VENV, ignore_errors=False)
             print_success(f"'{TEMP_VENV}' eliminado.")
+        except PermissionError:
+            print_warning(f"Algunos archivos en '{TEMP_VENV}' están en uso. Intentando eliminación forzada...")
+            time.sleep(1)
+            try:
+                shutil.rmtree(TEMP_VENV, ignore_errors=True)
+                print_success(f"'{TEMP_VENV}' eliminado.")
+            except Exception as e:
+                print_error(f"No se pudo eliminar completamente '{TEMP_VENV}': {e}")
         except Exception as e:
             print_error(f"No se pudo eliminar '{TEMP_VENV}': {e}")
     
-    print_success("Entorno virtual temporal eliminado.")
+    print_success("Limpieza completada.")
 else:
     print_info("\nEntorno virtual temporal conservado para futuras compilaciones.")
     
 # Remove build directory
 if os.path.exists(BUILD_DIR):
     try:
-        shutil.rmtree(BUILD_DIR)
+        shutil.rmtree(BUILD_DIR, ignore_errors=False)
         print_success(f"'{BUILD_DIR}' eliminado.")
+    except PermissionError:
+        print_warning(f"Algunos archivos en '{BUILD_DIR}' están en uso. Intentando eliminación forzada...")
+        time.sleep(1)
+        try:
+            shutil.rmtree(BUILD_DIR, ignore_errors=True)
+            print_success(f"'{BUILD_DIR}' eliminado.")
+        except Exception as e:
+            print_error(f"No se pudo eliminar completamente '{BUILD_DIR}': {e}")
     except Exception as e:
         print_error(f"No se pudo eliminar '{BUILD_DIR}': {e}")
 
 # Remove dist directory
 if os.path.exists(DIST_DIR):
     try:
-        shutil.rmtree(DIST_DIR)
+        shutil.rmtree(DIST_DIR, ignore_errors=False)
         print_success(f"'{DIST_DIR}' eliminado.")
+    except PermissionError:
+        print_warning(f"Algunos archivos en '{DIST_DIR}' están en uso. Intentando eliminación forzada...")
+        time.sleep(1)
+        try:
+            shutil.rmtree(DIST_DIR, ignore_errors=True)
+            print_success(f"'{DIST_DIR}' eliminado.")
+        except Exception as e:
+            print_error(f"No se pudo eliminar completamente '{DIST_DIR}': {e}")
     except Exception as e:
         print_error(f"No se pudo eliminar '{DIST_DIR}': {e}")
 

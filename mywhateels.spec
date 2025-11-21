@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 block_cipher = None
 
@@ -18,19 +18,20 @@ if hasattr(ssl, 'get_default_verify_paths'):
                 if file.startswith(('libssl', 'libcrypto')) and file.endswith('.dll'):
                     ssl_paths.append((os.path.join(search_dir, file), '.'))
 
-a = Analysis(
-    ['main.py'],
-    pathex=['.'],
-    binaries=ssl_paths,  # Include SSL DLLs
-    datas=[
-        ('whateels/assets/css/*.css', 'whateels/assets/css'),
-        ('whateels/assets/html/*.html', 'whateels/assets/html'),
-        ('whateels/assets/js/*.js', 'whateels/assets/js'),
-        ('whateels/assets/img/*', 'whateels/assets/img'),
-        ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/assets/oos/Hartree_Xsections_FSalvat')
-        # Add other asset folders as needed
-    ],
-    hiddenimports=[
+    a = Analysis(
+        ['main.py'],
+        pathex=['.'],
+        binaries=ssl_paths,  # Include SSL DLLs
+        datas=[
+            ('whateels/assets/css/*.css', 'whateels/assets/css'),
+            ('whateels/assets/html/*.html', 'whateels/assets/html'),
+            ('whateels/assets/js/*.js', 'whateels/assets/js'),
+            ('whateels/assets/img/*', 'whateels/assets/img'),
+            ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/assets/oos/Hartree_Xsections_FSalvat'),
+            # Add other asset folders as needed
+            *copy_metadata('numpy'),
+        ],
+        hiddenimports=[
         # SSL and networking
         '_ssl',
         '_hashlib',
