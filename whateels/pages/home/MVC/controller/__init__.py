@@ -75,22 +75,22 @@ class HomePageController:
             app_state.all_datasets = all_datasets
             
             if not all_datasets:
-                self._handle_file_upload_error(filename)
+                self._view.main.error_placeholder()
                 return
             
             self._view.create_tab_and_dataset_info(all_datasets)
 
         except DMFileLoadingError as e:
-            self._handle_file_upload_error(filename)
+            self._view.main.error_placeholder()
             raise e
         except DMFileUploadError as e:
-            self._handle_file_upload_error(filename)
+            self._view.main.error_placeholder()
             raise e
         except DMShapeMismatchError as e:
-            self._handle_file_upload_error(filename)
+            self._view.main.error_placeholder()
             raise e
         except Exception as e:
-            self._handle_file_upload_error(filename)
+            self._view.main.error_placeholder()
             raise DMFileUploadError(e)
         
         
@@ -117,7 +117,3 @@ class HomePageController:
 
         except Exception as e:
             raise DMFileRemovalError(e)
-
-    def _handle_file_upload_error(self, filename: str) -> None:
-        """Handle file upload errors by showing error UI state."""
-        self._view.main.error_placeholder()
