@@ -1,8 +1,7 @@
 import panel as pn
 
 from whateels.errors.dm.data import DMPlotCreationError
-from whateels.helpers import LoadCSS
-from whateels.helpers import CSS_ROOT
+from whateels.helpers import LoadCSS, CSS_ROOT
 from .plots_factory import PlotsFactory
 from .layouts import HomePageLeftSidebar, HomePageMainLayout
 

@@ -120,13 +120,14 @@ class DataProcessorService:
             return self._process_1d_data(electron_count_data)
         elif len_shape == 2:
             # Spectrum line: position × energy
+            if energy_axis is None:
+                raise ValueError("ERROR: energy_axis cannot be None for 2D EELS data.")
             return self._process_2d_data(electron_count_data, energy_axis)
         elif len_shape == 3:
             # Spectrum image: energy × y × x (will be transposed to y × x × energy)
             return self._process_3d_data(electron_count_data)
         else:
-            print(UNSUPPORTED_DIMENSION_MESSAGE)
-            return None
+            raise ValueError(UNSUPPORTED_DIMENSION_MESSAGE)
 
     # --- Private Methods ---
 
