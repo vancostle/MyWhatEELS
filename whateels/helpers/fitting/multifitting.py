@@ -346,7 +346,7 @@ class MultiFit:
             eloss_values = np.array([])
         self._coords = {'Eloss': AxisArray(eloss_values)}
 
-    def run(self, mode='subtracted', use_parallel=True, workers=None):
+    def run(self, mode='subtracted', use_parallel=False, workers=None):
         """
         Execute the multifit and generate fitted_data.
         
