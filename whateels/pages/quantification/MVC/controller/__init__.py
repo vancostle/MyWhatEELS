@@ -5,7 +5,7 @@ from .services.oos_loader_service import Loader_OOS
 from xarray import Dataset
 from whateels.helpers.constants import OOS_ROOT
 from whateels.helpers.safe_converter import SafeConverter
-
+from ..model.element_item import ElementItem
 
 import panel as pn
 
@@ -13,31 +13,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import QuantificationModel
     from ..view import QuantificationView
-    
-
-class ElementItem:
-    def __init__(self, element, shells, element_name, element_name_short, fit_range= None, quant_width= 50):
-        self.element = element
-        self.shells = shells
-        self.element_name = element_name
-        self.element_name_short = element_name_short
-        self.fit_range = fit_range
-        self.quant_width = quant_width
-        self.cross_sections = {}
-        self.chemical_shift = 0.0  # Default chemical shift value
-
-    def __str__(self):
-        return f"{self.element_name} ({self.element}) ({', '.join(self.shells)})"
-
-    def set_fit_range(self, fit_range):
-        self.fit_range = fit_range
-
-    def set_quant_width(self, quant_width):
-        self.quant_width = quant_width
-
-    def set_quant_range(self, min_eaxis_cs):
-        print(min_eaxis_cs)
-        self.quant_range = (min_eaxis_cs - self.chemical_shift, min_eaxis_cs + self.quant_width - self.chemical_shift)
 
 
 class QuantificationController(BaseController):
@@ -242,8 +217,8 @@ class QuantificationController(BaseController):
         # Enable or disable quantification toggle button based on current state
         isDisabled = self._view.should_enable_quantification_button()
         self._view.quanti_toggle_button.disabled = not isDisabled
-        
         return
+    
     def add_element_item(self, element_item: ElementItem):
         min_eaxis_cs = None
         for ishell in element_item.shells:
@@ -291,10 +266,7 @@ class QuantificationController(BaseController):
             self._quanti_active = False
 
     def plot_elements(self):
-        if not self._model.app_state.quantification_elements:
-            print("No elements to plot.")
-        else:
-            self._layout.plot_quantification_elements()
+        self._layout.plot_quantification_elements()
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""
