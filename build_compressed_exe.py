@@ -14,11 +14,18 @@ TEMP_VENV = "temporal_venv"
 IS_WINDOWS = platform.system() == "Windows"
 TEMP_VENV_PY  = os.path.join(TEMP_VENV, "Scripts", "python.exe") if IS_WINDOWS else os.path.join(TEMP_VENV,"bin", "python")
 TEMP_VENV_PIP = os.path.join(TEMP_VENV, "Scripts", "pip.exe")    if IS_WINDOWS else os.path.join(TEMP_VENV,"bin", "pip")
-COMMAND = {
-    "create_venv": f'"{os.sys.executable}" -m venv {TEMP_VENV}',
-    "install_deps": f'"{TEMP_VENV_PY}" -m pip install -r requirements.txt',
-    "build_exe": f'"{TEMP_VENV_PY}" -m PyInstaller mywhateels.spec',
-}
+if IS_WINDOWS:
+    COMMAND = {
+        "create_venv": f'"{os.sys.executable}" -m venv {TEMP_VENV}',
+        "install_deps": f'"{TEMP_VENV_PY}" -m pip install -r requirements.txt',
+        "build_exe": f'"{TEMP_VENV_PY}" -m PyInstaller mywhateels.spec',
+    }
+else:
+    COMMAND = {
+        "create_venv": f'"{os.sys.executable}" -m venv {TEMP_VENV}',
+        "install_deps": f'"{TEMP_VENV_PY}" -m pip install -r requirements.txt',
+        "build_exe": f'"{TEMP_VENV_PY}" -m PyInstaller mywhateels_linux.spec',
+    }
 
 # Function to run shell commands
 def run(cmd):
