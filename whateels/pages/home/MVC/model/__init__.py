@@ -1,5 +1,6 @@
 from whateels.helpers.in_memory_file import InMemoryFile
 from .constants import Constants, Placeholders
+from whateels.shared_state import AppState
 
 class HomePageModel:
     """
@@ -13,7 +14,8 @@ class HomePageModel:
         # Shared configuration and constants
         self._constants = Constants()
         self._placeholders = Placeholders()
-
+        self._app_state = AppState()
+        
     @property
     def constants(self) -> Constants:
         return self._constants
@@ -23,6 +25,9 @@ class HomePageModel:
     @property
     def placeholders(self) -> Placeholders:
         return self._placeholders
+    @property
+    def app_state(self) -> AppState:
+        return self._app_state
 
     @in_memory_file.setter
     def in_memory_file(self, file: InMemoryFile | None):

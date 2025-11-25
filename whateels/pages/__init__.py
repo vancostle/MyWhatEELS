@@ -6,7 +6,6 @@ from .metadata import Metadata
 from .clustering import Clustering
 from .multifitting import MultiFitting
 from .quantification import Quantification
-from .demo import DemoPage
 
 __all__ = [
     "HomePage", 
@@ -17,5 +16,4 @@ __all__ = [
     "Clustering", 
     "MultiFitting", 
     "Quantification", 
-    "DemoPage"
 ]

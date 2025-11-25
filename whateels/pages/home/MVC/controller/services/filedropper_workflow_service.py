@@ -7,7 +7,6 @@ Coordinates between file processing, data processing, and visualization services
 
 from .file_processor_service import FileProcessorService
 from .data_processor_service import DataProcessorService
-from whateels.shared_state import AppState
 from whateels.errors.dm.data import (
     DMFileLoadingError, 
     DMFileUploadError, 
@@ -19,6 +18,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import HomePageModel
     from .. import HomePageController
+    from ...view import HomePageView
     from xarray import Dataset
 
 class FileDropperWorkflowService:
@@ -29,7 +29,7 @@ class FileDropperWorkflowService:
     Manages UI state transitions and error handling for the complete pipeline.
     """
 
-    def __init__(self, model: "HomePageModel", controller: "HomePageController"):
+    def __init__(self, model: "HomePageModel", controller: "HomePageController", view: "HomePageView"):
         """
         Initialize with model and controller dependencies.
         
@@ -39,12 +39,13 @@ class FileDropperWorkflowService:
         """
         self._model = model
         self._controller = controller
+        self._view = view
 
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)
         self._data_processor = DataProcessorService(model)
     
-    def handle_file_upload(self, filename: str, file_content: bytes) -> bool:
+    def handle_file_upload(self, filename: str, file_content: bytes):
         """
         Handle complete file upload workflow: process file → create visualizations → update UI.
         
@@ -61,7 +62,7 @@ class FileDropperWorkflowService:
 
         try:
             # Clear any existing datasets and metadata
-            app_state = AppState()
+            app_state = self._model.app_state
             app_state.clear_all()
             
             app_state.filename = filename
@@ -69,7 +70,7 @@ class FileDropperWorkflowService:
             all_datasets: list[Dataset] = []
             
             # Show loading state
-            self._controller.base_layout.loading_main()
+            self._view.main.loading_placeholder()
             
             # Process the file
             all_datasets = self._file_processor.process_upload(filename, file_content)
@@ -79,11 +80,9 @@ class FileDropperWorkflowService:
             
             if not all_datasets:
                 self._handle_file_upload_error(filename)
-                return False
+                return
             
-            self._controller.layout.create_tab_and_dataset_info(all_datasets)
-            
-            return True
+            self._view.create_tab_and_dataset_info(all_datasets)
 
         except DMFileLoadingError as e:
             self._handle_file_upload_error(filename)
@@ -110,18 +109,18 @@ class FileDropperWorkflowService:
         """
         try:
             # Clear UI components
-            self._controller.layout.remove_dataset_info_from_sidebar()
-            self._controller.base_layout.empty_main()
+            self._view.left_sidebar.remove_dataset_info()
+            self._view.main.empty_placeholder()
             
             # Clear in-memory file to free resources
             del self._model.in_memory_file
             
             # Clear global AppState data
-            AppState().clear_all()
+            self._model.app_state.clear_all()
 
         except Exception as e:
             raise DMFileRemovalError(e)
 
     def _handle_file_upload_error(self, filename: str) -> None:
         """Handle file upload errors by showing error UI state."""
-        self._controller.base_layout.error_main()
+        self._view.main.error_placeholder()

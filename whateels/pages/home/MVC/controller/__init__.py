@@ -1,14 +1,11 @@
 from .services import *
-from .managers import HomePageLayoutManager
-from whateels.shared_state import AppState
-from whateels.base.mvc.base_controller import BaseController
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import HomePageModel
     from ..view import HomePageView
 
-class HomePageController(BaseController):
+class HomePageController:
     """
     Controller class for the home page of the WhatEELS application.
 
@@ -19,23 +16,19 @@ class HomePageController(BaseController):
     - Delegate business logic to specialized services
     """
     def __init__(self, model: "HomePageModel", view: "HomePageView"):
-        super().__init__(model, view)
+        self._model = model
+        self._view = view
 
         # Initialize services
-        self._filedorpper_workflow_service = FileDropperWorkflowService(model, self)
-        # Initialize manager
-        self._layout_manager = HomePageLayoutManager(view, self, model)
+        self._filedropper_workflow_service = FileDropperWorkflowService(model, self, view)
 
-        if file_dropper := getattr(self.view, "file_dropper", None):
+        if file_dropper := getattr(self._view.left_sidebar, "file_dropper", None):
             # Set up callbacks for file dropper events directly
-            file_dropper.on_file_uploaded_callback = self._filedorpper_workflow_service.handle_file_upload
-            file_dropper.on_file_removed_callback = self._filedorpper_workflow_service.handle_file_removal
+            file_dropper.on_file_uploaded_callback = self._filedropper_workflow_service.handle_file_upload
+            file_dropper.on_file_removed_callback = self._filedropper_workflow_service.handle_file_removal
+        else:
+            raise AttributeError("HomePageView is missing 'file_dropper' attribute.")
         
-        if all_datasets := getattr(AppState(), "all_datasets", None):
+        if all_datasets := getattr(self._model.app_state, "all_datasets", None):
             # Initial layout setup based on existing datasets
-            self._layout_manager.create_tab_and_dataset_info(all_datasets)
-
-    @property
-    def layout(self) -> HomePageLayoutManager:
-        """Expose the layout manager for external use."""
-        return self._layout_manager
+            self._view.create_tab_and_dataset_info(all_datasets)

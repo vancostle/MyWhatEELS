@@ -7,7 +7,7 @@ import signal
 pn.extension('filedropper', 'floatpanel', 'plotly', theme='default')
 
 from whateels.helpers import LoadCSS, CSS_ROOT
-from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification, NLLS, DemoPage
+from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification, NLLS
 
 class App:
     """

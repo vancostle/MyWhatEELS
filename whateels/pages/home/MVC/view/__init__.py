@@ -1,12 +1,15 @@
-from whateels.helpers import LoadCSS
-from typing import TYPE_CHECKING
-from whateels.components import FileDropper
-from whateels.helpers import CSS_ROOT
-
 import panel as pn
 
+from whateels.errors.dm.data import DMPlotCreationError
+from whateels.helpers import LoadCSS
+from whateels.helpers import CSS_ROOT
+from .plots_factory import PlotsFactory
+from .layouts import HomePageLeftSidebar, HomePageMainLayout
+
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import HomePageModel
+    from xarray import Dataset
     
 class HomePageView:
     
@@ -24,83 +27,102 @@ class HomePageView:
 
         LoadCSS(css_files)
         
-        # Initialize placeholders
-        self._loading_placeholder = pn.pane.HTML(
-            model.placeholders.LOADING_FILE,
-            sizing_mode=self._STRETCH_BOTH
-        )
-        self._no_file_placeholder = pn.pane.HTML(
-            model.placeholders.NO_FILE_LOADED,
-            sizing_mode=self._STRETCH_BOTH
-        )
-        self._error_placeholder = pn.pane.HTML(
-            model.placeholders.ERROR_FILE,
-            sizing_mode=self._STRETCH_BOTH
-        )
-        
-        # Initialize layout components
-        self._dataset_info_layout = pn.Column(sizing_mode=self._STRETCH_WIDTH)
-        self._file_dropper = FileDropper()
-        
         # Layout components
-        self._main = pn.Column(
-            self._no_file_placeholder,
-            sizing_mode=self._STRETCH_BOTH
-        )
-        self._left_sidebar = self._left_sidebar_layout()
+        self._main = HomePageMainLayout(model)
+        self._left_sidebar = HomePageLeftSidebar(model)
+        
+        # Store all dataset information
+        self._all_dataset_info: list[pn.viewable.Viewable] = []
 
     @property
-    def dataset_info(self) -> pn.Column:
-        """Reference to the last dataset info component added to the sidebar."""
-        return self._dataset_info_layout
-    @property
-    def file_dropper(self) -> FileDropper:
-        """FileDropper widget for file upload interactions."""
-        return self._file_dropper
-    @property
-    def main(self) -> pn.Column:
+    def main(self) -> HomePageMainLayout:
         """Main content area layout for displaying plots or placeholders."""
         return self._main
-    @property
-    def left_sidebar(self) -> pn.Column:
-        """Left sidebar layout for controls and options."""
-        return self._left_sidebar
-    @property
-    def loading_placeholder(self) -> pn.pane.HTML:
-        """Loading placeholder layout for displaying loading messages."""
-        return self._loading_placeholder
-    @property
-    def no_file_placeholder(self) -> pn.pane.HTML:
-        """No-file placeholder layout for displaying no file loaded messages."""
-        return self._no_file_placeholder
-    @property
-    def error_placeholder(self) -> pn.pane.HTML:
-        """Error placeholder layout for displaying error messages."""
-        return self._error_placeholder
-
-    @dataset_info.setter
-    def dataset_info(self, component: pn.Column):
-        """Set the last dataset info component (must be a Panel Column)."""
-        self._dataset_info_layout = component
-        
-    def _left_sidebar_layout(self):
-        # Set up the FileDropper with model constants
-        self._file_dropper: FileDropper = FileDropper(
-            valid_extensions=self._model.constants.FILE_DROPPER_VALID_EXTENSIONS,
-            reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
-            success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
-            feedback_message=self._model.constants.FILE_DROPPER_FEEDBACK_MESSAGE,
-        )     
-  
-        self._sidebar_container_layout = pn.Column(
-            self._file_dropper,
-            pn.layout.Divider(),
-            pn.Spacer(height=10),
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        return self._sidebar_container_layout
-    
+    @main.setter
+    def main(self, layout: HomePageMainLayout):
+        """Set the main content area layout."""
+        self._main = layout
     @main.deleter
     def main(self):
         """Delete the main content area layout."""
         self._main.clear()
+        
+    @property
+    def left_sidebar(self) -> HomePageLeftSidebar:
+        """Left sidebar layout for controls and options."""
+        return self._left_sidebar
+    @left_sidebar.setter
+    def left_sidebar(self, layout: HomePageLeftSidebar):
+        """Set the left sidebar layout."""
+        self._left_sidebar = layout
+    @left_sidebar.deleter
+    def left_sidebar(self):
+        """Delete the left sidebar layout."""
+        self._left_sidebar.clear()
+        
+    def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
+        """
+        Create visualizations for all datasets and setup tabbed UI interface.
+        
+        Args:
+            all_datasets: List of processed datasets to visualize
+                        
+        Raises:
+            DMPlotCreationError: When visualization creation fails
+        """
+        DATASET_TYPE = 'dataset_type'
+        IMAGE_NAME_ATTRIBUTE = 'image_name'
+        NOT_AVAILABLE = 'N/A'
+        ACTIVE = 'active'
+        STRETCH_BOTH = 'stretch_both'
+        DEFAULT_TAB_INDEX = 0
+
+        app_state = self._model.app_state
+
+        try:
+            # Clear previous dataset info panels to prevent caching old data
+            self._all_dataset_info.clear()
+            
+            visualizer_factory = PlotsFactory(self._model)
+            plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
+
+            for dataset in all_datasets:
+                dataset_type = dataset.attrs.get(DATASET_TYPE, NOT_AVAILABLE)
+                image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
+
+                # Create plots using the factory
+                chosen_visualizer = visualizer_factory.choose_plots(str(dataset_type), dataset)
+                
+                if chosen_visualizer is None:
+                    raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
+                
+                visualizer_plots = chosen_visualizer.create_plots()
+                
+                plots_tab.append((image_name, visualizer_plots))
+                
+                self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
+
+            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            # Set the active tab based on shared state or default
+            plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
+            
+            # Update UI
+            self._main.update(plots_tab)
+            self._left_sidebar.remove_dataset_info()
+            self._left_sidebar.add_component(self._all_dataset_info[DEFAULT_TAB_INDEX])
+            
+        except Exception as e:
+            raise DMPlotCreationError(e)
+
+    def _on_tab_with_visualizers_change(self, event):
+        """Handle tab changes by updating sidebar with selected dataset info."""
+
+        # Get the selected tab index
+        selected_tab_index = event.new
+
+        # Update shared state
+        self._model.app_state.selected_tab_index_dataset = selected_tab_index 
+
+        # Update sidebar with the corresponding dataset info
+        self._left_sidebar.remove_dataset_info()
+        self._left_sidebar.add_component(self._all_dataset_info[selected_tab_index])

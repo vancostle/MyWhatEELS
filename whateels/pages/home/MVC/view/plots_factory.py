@@ -8,18 +8,18 @@ Features:
 - Handles errors robustly by raising exceptions with clear messages.
 """
 
-from ..view.visualizers import SpectrumLineVisualizer, SpectrumImageVisualizer, SingleSpectrumVisualizer, ImageVisualizer
+from .visualizers import SpectrumLineVisualizer, SpectrumImageVisualizer, SingleSpectrumVisualizer, ImageVisualizer
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import HomePageModel
-    from . import HomePageController
+    from ..controller import HomePageController
     from typing import TYPE_CHECKING
     from xarray import Dataset
 
 import traceback
 
-class VisualizerFactory:
+class PlotsFactory:
     """
     Centralized factory for creating EELS visualizer components.
     
@@ -28,20 +28,19 @@ class VisualizerFactory:
     - Raises exceptions for unknown types or plot creation errors.
     """
     
-    def __init__(self, model: "HomePageModel", controller: "HomePageController") -> None:
+    def __init__(self, model: "HomePageModel") -> None:
         self._model = model
-        self._controller = controller
         
         # Mapping of dataset types to visualizer classes
         # This can be extended with more visualizers as needed
-        self._all_visualizers = {
+        self._all_plots = {
             model.constants.SPECTRUM_LINE: SpectrumLineVisualizer,
             model.constants.SPECTRUM_IMAGE: SpectrumImageVisualizer,
             model.constants.SINGLE_SPECTRUM: SingleSpectrumVisualizer,
             model.constants.IMAGE: ImageVisualizer
         }
 
-    def choose_visualizer(
+    def choose_plots(
         self, 
         dataset_type: str, 
         dataset: "Dataset"
@@ -65,13 +64,13 @@ class VisualizerFactory:
         EXCEPTION_ERROR = "[VisualizerFactory] Exception while creating plot for dataset type '{}': {}"
 
         try:
-            chosen_spectrum_visualizer = self._all_visualizers.get(dataset_type)
+            chosen_spectrum_visualizer = self._all_plots.get(dataset_type)
             if chosen_spectrum_visualizer:
                 chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)
                 return chosen_spectrum_visualizer
             else:
                 chosen_spectrum_visualizer = None
-                error_msg = UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_visualizers.keys()))
+                error_msg = UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_plots.keys()))
                 raise ValueError(error_msg)
         except Exception as e:
             chosen_spectrum_visualizer = None
