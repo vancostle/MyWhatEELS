@@ -22,8 +22,7 @@ class App:
     def __init__(self, title : str = _DEFAULT_TITLE):
         self._title = title
 
-    @staticmethod
-    def _kill_process_on_port(port: int) -> bool:
+    def _kill_process_on_port(self, port: int) -> bool:
         """
         Kill any process using the specified port.
         Args:
