@@ -77,6 +77,8 @@ class HomePageView:
         DEFAULT_TAB_INDEX = 0
 
         app_state = self._model.app_state
+        
+        print("Creating tabs and dataset info panels...")
 
         try:
             # Clear previous dataset info panels to prevent caching old data

@@ -11,7 +11,7 @@ from typing import override, TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class SpectrumLineVisualizer(BaseVisualizer):
+class SpectrumLinePlot(BaseVisualizer):
     """Composes spectrum line visualizations from EELS data (Plotly)."""
 
     _IMAGE_X_LABEL = 'Position'
@@ -88,7 +88,11 @@ class SpectrumLineVisualizer(BaseVisualizer):
             plot_bgcolor='rgba(0,0,0,0)'
         )
 
-        self._heatmap_pane = pn.pane.Plotly(fig_hm.to_plotly_json(), sizing_mode=self._STRETCH_BOTH, config={"responsive": True})
+        self._heatmap_pane = pn.pane.Plotly(
+            fig_hm.to_plotly_json(), 
+            sizing_mode=self._STRETCH_BOTH, 
+            config={"responsive": True}
+        )
         self._heatmap_pane.param.watch(self._on_heatmap_click, "click_data")
 
         # --- Pane espectro vacío ---

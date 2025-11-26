@@ -8,7 +8,7 @@ Features:
 - Handles errors robustly by raising exceptions with clear messages.
 """
 
-from .visualizers import SpectrumLineVisualizer, SpectrumImageVisualizer, SingleSpectrumVisualizer, ImageVisualizer
+from .plots import SpectrumLinePlot, SpectrumImagePlot, SingleSpectrumPlot, ImagePlot
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -34,17 +34,17 @@ class PlotsFactory:
         # Mapping of dataset types to visualizer classes
         # This can be extended with more visualizers as needed
         self._all_plots = {
-            model.constants.SPECTRUM_LINE: SpectrumLineVisualizer,
-            model.constants.SPECTRUM_IMAGE: SpectrumImageVisualizer,
-            model.constants.SINGLE_SPECTRUM: SingleSpectrumVisualizer,
-            model.constants.IMAGE: ImageVisualizer
+            model.constants.SPECTRUM_LINE: SpectrumLinePlot,
+            model.constants.SPECTRUM_IMAGE: SpectrumImagePlot,
+            model.constants.SINGLE_SPECTRUM: SingleSpectrumPlot,
+            model.constants.IMAGE: ImagePlot
         }
 
     def choose_plots(
         self, 
         dataset_type: str, 
         dataset: "Dataset"
-    ) -> SpectrumLineVisualizer | SpectrumImageVisualizer | SingleSpectrumVisualizer | ImageVisualizer | None:
+    ) -> SpectrumLinePlot | SpectrumImagePlot | SingleSpectrumPlot | ImagePlot | None:
         """
         Instantiates and returns the appropriate EELS visualizer for the specified dataset type.
 
@@ -52,7 +52,7 @@ class PlotsFactory:
             dataset_type (str): The dataset type key (e.g., model.constants.SPECTRUM_LINE or SPECTRUM_IMAGE).
 
         Returns:
-            SpectrumLineVisualizer | SpectrumImageVisualizer: An instance of the corresponding visualizer class.
+            SpectrumLinePlot | SpectrumImagePlot | SingleSpectrumPlot | ImagePlot: An instance of the corresponding visualizer class.
 
         Raises:
             ValueError: If the dataset type is not recognized (not mapped in _all_spectrum_visualizer).
@@ -60,20 +60,19 @@ class PlotsFactory:
         """
         
         # Error message constants
-        UNKNOWN_TYPE_ERROR = "[VisualizerFactory] Unknown dataset type: '{}'. Supported types: {}"
-        EXCEPTION_ERROR = "[VisualizerFactory] Exception while creating plot for dataset type '{}': {}"
+        UNKNOWN_TYPE_ERROR = "[PlotsFactory] Unknown dataset type: '{}'. Supported types: {}"
+        EXCEPTION_ERROR = "[PlotsFactory] Exception while creating plot for dataset type '{}': {}"
 
         try:
-            chosen_spectrum_visualizer = self._all_plots.get(dataset_type)
-            if chosen_spectrum_visualizer:
-                chosen_spectrum_visualizer = chosen_spectrum_visualizer(self._model, dataset)
-                return chosen_spectrum_visualizer
-            else:
-                chosen_spectrum_visualizer = None
-                error_msg = UNKNOWN_TYPE_ERROR.format(dataset_type, list(self._all_plots.keys()))
-                raise ValueError(error_msg)
+            chosen_plot = self._all_plots.get(dataset_type)
+            if chosen_plot is None:
+                keys = list(self._all_plots.keys())
+                raise ValueError(UNKNOWN_TYPE_ERROR.format(dataset_type, keys))
+
+            print(f"Chosen plot for dataset type '{dataset_type}': {chosen_plot.__name__}")
+            return chosen_plot(self._model, dataset)
+
         except Exception as e:
-            chosen_spectrum_visualizer = None
             error_msg = EXCEPTION_ERROR.format(dataset_type, e)
             traceback.print_exc()
             raise RuntimeError(error_msg) from e

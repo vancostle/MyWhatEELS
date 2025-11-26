@@ -18,7 +18,7 @@ from typing import override, TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class ImageVisualizer(BaseVisualizer):
+class ImagePlot(BaseVisualizer):
     """Composes image visualizations from EELS data"""
 
     # Constants for sizing modes and plot configuration

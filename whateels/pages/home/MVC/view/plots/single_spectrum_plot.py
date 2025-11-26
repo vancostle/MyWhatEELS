@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ...model import HomePageModel
     from xarray import Dataset
 
-class SingleSpectrumVisualizer(BaseVisualizer):
+class SingleSpectrumPlot(BaseVisualizer):
     """Composes single spectrum visualizations from EELS data (Plotly)."""
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
