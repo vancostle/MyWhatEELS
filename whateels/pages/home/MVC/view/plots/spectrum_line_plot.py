@@ -4,15 +4,15 @@ Spectrum line visualization composer (Plotly version).
 import panel as pn
 import numpy as np
 import plotly.graph_objs as go
-import xarray as xr  # (se mantiene por zeros_like si hiciera falta en extensiones)
+import xarray as xr
 
-from whateels.base.base_visualizer import BaseVisualizer
 from whateels.components import DatasetInformation
+from whateels.interfaces import IPlot
 from typing import override, TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class SpectrumLinePlot(BaseVisualizer):
+class SpectrumLinePlot(IPlot):
     """Composes spectrum line visualizations from EELS data (Plotly)."""
 
     _IMAGE_X_LABEL = 'Position'
@@ -27,7 +27,6 @@ class SpectrumLinePlot(BaseVisualizer):
     _FOCUS_RATIO = 0.5
     
     def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
-        super().__init__(model, dataset)
         self._model = model
         self._dataset = dataset
         self._heatmap_pane = None
@@ -184,7 +183,8 @@ class SpectrumLinePlot(BaseVisualizer):
             plot_bgcolor='rgba(0,0,0,0)'
         )
         self._apply_current_ranges(spec_fig)
-        self._spectrum_pane.object = spec_fig.to_plotly_json()
+        if self._spectrum_pane is not None:
+            self._spectrum_pane.object = spec_fig.to_plotly_json()
 
         # Redibujar línea vertical de selección en heatmap
         self._update_heatmap_selection_line()
@@ -234,7 +234,7 @@ class SpectrumLinePlot(BaseVisualizer):
             return None
 
     def _update_heatmap_selection_line(self):
-        if self._selected_x_value is None:
+        if self._selected_x_value is None or self._heatmap_pane is None:
             return
         try:
             fig = go.Figure(self._heatmap_pane.object)  # dict -> Figure

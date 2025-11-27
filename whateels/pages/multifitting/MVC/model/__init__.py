@@ -15,24 +15,25 @@ class Model:
     def __init__(self):
         self._app_state = AppState()
 
-    def is_dataset_available(self) -> bool:
-        """Check if dataset is available."""
-        return self._app_state.plot_dataset is not None
-
+    @property
+    def app_state(self) -> AppState:
+        """Get the shared application state instance."""
+        return self._app_state
     @property
     def dataset(self):
         """Get raw dataset."""
         return self._app_state.plot_dataset
-
-    def is_multifit_available(self) -> bool:
-        """Check if multifit is available."""
-        return self._app_state.multifit is not None
-
     @property
     def multifit(self):
         """Get raw multifit data."""
         return self._app_state.multifit
     
+    def is_multifit_available(self) -> bool:
+        """Check if multifit is available."""
+        return self._app_state.multifit is not None
+    def is_dataset_available(self) -> bool:
+        """Check if dataset is available."""
+        return self._app_state.plot_dataset is not None
     def perform_multifit(self, dataset, fit_range=None):
         """Perform multifit on the dataset within the specified fit range.
 

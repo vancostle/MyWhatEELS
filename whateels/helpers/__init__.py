@@ -6,3 +6,4 @@ from .spectrum_fitting import SpectrumFitting
 from .in_memory_file import InMemoryFile
 from .safe_converter import SafeConverter
 from .url_utils import URLUtils
+from .kill_process import KillProcess

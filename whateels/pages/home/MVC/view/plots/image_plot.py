@@ -14,13 +14,12 @@ pn.extension(raw_css=[
 ])
 
 from whateels.components import DatasetInformation
-from whateels.base.base_visualizer import BaseVisualizer
-
+from whateels.interfaces import IPlot
 from typing import TYPE_CHECKING, override
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class ImagePlot(BaseVisualizer):
+class ImagePlot(IPlot):
     """Composes image visualizations from EELS data"""
 
     # Constants for sizing modes and plot configuration
@@ -58,7 +57,6 @@ class ImagePlot(BaseVisualizer):
         })
 
         ny, nx = clean_image_data.shape
-        aspect = ny / nx if nx else 1.0
 
         # Build Plotly heatmap (base) and layout with locked aspect
         m_image = np.asarray(clean_image_data)

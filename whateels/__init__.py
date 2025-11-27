@@ -1,13 +1,10 @@
 import panel as pn
-import psutil
-import os
-import signal
 
 # Configure Panel with theme support (only called once here)
 pn.extension('filedropper', 'floatpanel', 'plotly', theme='default')
 
-from whateels.helpers import LoadCSS, CSS_ROOT
-from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification, NLLS
+from whateels.helpers import LoadCSS, CSS_ROOT, KillProcess
+from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification
 
 class App:
     """
@@ -22,34 +19,9 @@ class App:
     def __init__(self, title : str = _DEFAULT_TITLE):
         self._title = title
 
-    def _kill_process_on_port(self, port: int) -> bool:
-        """
-        Kill any process using the specified port.
-        Args:
-            port: The port number to check and free up
-        Returns:
-            True if a process was killed, False otherwise
-        """
-        killed = False
-        for proc in psutil.process_iter(['pid', 'name']):
-            try:
-                connections = proc.net_connections(kind='inet')
-                for conn in connections:
-                    if conn.laddr.port == port:
-                        print(f"Killing process {proc.pid} ({proc.name()}) using port {port}")
-                        if os.name == 'nt':  # Windows
-                            proc.kill()
-                        else:  # Unix/Linux/Mac
-                            os.kill(proc.pid, signal.SIGTERM)
-                        killed = True
-                        break
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
-        return killed
-
     def run(self, port : int = _DEFAULT_PORT, show : bool = True):
         # Kill any process using the port
-        self._kill_process_on_port(port)
+        KillProcess.by_port(port) # Ensure the port is free
         
         # Load custom CSS for the entire app
         LoadCSS([str(CSS_ROOT / "custom_page.css")])

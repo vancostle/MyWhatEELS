@@ -1,9 +1,7 @@
 import panel as pn
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from whateels.components import DatasetInformation
+from whateels.components import DatasetInformation
 
 class IPlot(ABC):
     """

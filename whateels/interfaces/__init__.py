@@ -1,1 +1,1 @@
-from plot_interface import IPlot
+from .plot_interface import IPlot
