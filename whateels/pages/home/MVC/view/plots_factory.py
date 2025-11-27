@@ -69,7 +69,6 @@ class PlotsFactory:
                 keys = list(self._all_plots.keys())
                 raise ValueError(UNKNOWN_TYPE_ERROR.format(dataset_type, keys))
 
-            print(f"Chosen plot for dataset type '{dataset_type}': {chosen_plot.__name__}")
             return chosen_plot(self._model, dataset)
 
         except Exception as e:

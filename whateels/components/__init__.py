@@ -6,6 +6,7 @@ from .error_panel import ErrorPanel
 from .toggle_button import ToggleButton
 from .progress_tracker_mixin import ProgressTrackerMixin
 from .progress_display import ProgressDisplay
+from .dataset_information import DatasetInformation
 
 __all__ = [
     'FileDropper',
@@ -15,5 +16,6 @@ __all__ = [
     'ErrorPanel',
     'ToggleButton',
     'ProgressTrackerMixin',
-    'ProgressDisplay'
+    'ProgressDisplay',
+    'DatasetInformation',
 ]

@@ -13,8 +13,10 @@ pn.extension(raw_css=[
     ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
 ])
 
+from whateels.components import DatasetInformation
 from whateels.base.base_visualizer import BaseVisualizer
-from typing import override, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, override
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
@@ -26,7 +28,6 @@ class ImagePlot(BaseVisualizer):
     _STRETCH_WIDTH = 'stretch_width'
     
     def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
-        super().__init__(model, dataset)
 
         self._model = model
         self._dataset = dataset        
@@ -36,7 +37,6 @@ class ImagePlot(BaseVisualizer):
         self._click_tolerance = 0.5  # Minimum distance to trigger update
 
     # -- Public Methods --
-
     @override
     def create_plots(self):
         """Create layout for spectrum line visualization with Plotly (no HoloViews/Bokeh)."""
@@ -86,6 +86,48 @@ class ImagePlot(BaseVisualizer):
         plots = pn.Column(image_panel, sizing_mode=self._STRETCH_BOTH)
         return plots
 
+    @override
+    def create_dataset_info(self):
+        NOT_AVAILABLE = 'N/A'
+        SHAPE = 'shape'
+        BEAM_ENERGY = 'beam_energy'
+        COLLECTION_ANGLE = 'collection_angle'
+        CONVERGENCE_ANGLE = 'convergence_angle'
+        ANGLE_UNIT = "mrad"
+        ENERGY_UNIT = "keV"
+        
+        app_state = self._model.app_state
+        all_datasets = app_state.all_datasets
+        if not isinstance(all_datasets, list):
+            raise ValueError("all_datasets should be a list of Dataset objects.")
+        
+        dataset = all_datasets[0]
+        
+        attrs = dataset.attrs if dataset is not None else {}
+
+        shape = attrs.get(SHAPE, NOT_AVAILABLE)
+        beam_energy = attrs.get(BEAM_ENERGY, NOT_AVAILABLE)
+        convergence_angle = attrs.get(CONVERGENCE_ANGLE, NOT_AVAILABLE)
+        collection_angle = attrs.get(COLLECTION_ANGLE, NOT_AVAILABLE)
+        
+        beam_energy = f"{beam_energy} {ENERGY_UNIT}" if beam_energy != NOT_AVAILABLE else NOT_AVAILABLE
+        convergence_angle = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
+        collection_angle = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
+        
+        dataset_information = DatasetInformation(
+            title="Dataset Information", 
+            information={
+                "Shape": shape,
+                "Beam Energy": beam_energy,
+                "Convergence Angle": convergence_angle,
+                "Collection Angle": collection_angle,
+            },
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        return dataset_information
+
+    # -- Private Methods --
     def _to_plotly(self, obj):
         """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
         try:
@@ -100,21 +142,11 @@ class ImagePlot(BaseVisualizer):
             pass
         return obj
 
-    @override
-    def create_dataset_info(self):
-       return super().create_dataset_info()
-
-    # -- Private Methods --
-
     def _create_2d_image(self, clean_image_data) -> 'go.Figure':
         """Create a 2D image plot for image data using Plotly (replaces HoloViews).
 
         Returns a plotly.graph_objects.Figure sized to data with preserved aspect ratio.
         """
-        IMAGE_X_LABEL = 'X Position'
-        IMAGE_Y_LABEL = 'Y Position'
-        IMAGE_TITLE = 'Image Data'
-
         MAX_PLOT_SIZE = 600
 
         # Calculate dimensions from the data itself

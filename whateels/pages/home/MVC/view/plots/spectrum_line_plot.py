@@ -7,6 +7,7 @@ import plotly.graph_objs as go
 import xarray as xr  # (se mantiene por zeros_like si hiciera falta en extensiones)
 
 from whateels.base.base_visualizer import BaseVisualizer
+from whateels.components import DatasetInformation
 from typing import override, TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import HomePageModel
@@ -22,6 +23,7 @@ class SpectrumLinePlot(BaseVisualizer):
     _SPECTRUM_TITLE = 'Selected Spectrum'
     _ERR_EMPTY_ELOSS = 'Energy loss coordinates are empty'
     _STRETCH_BOTH = 'stretch_both'
+    _STRETCH_WIDTH = 'stretch_width'
     _FOCUS_RATIO = 0.5
     
     def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
@@ -104,7 +106,44 @@ class SpectrumLinePlot(BaseVisualizer):
 
     @override
     def create_dataset_info(self):
-        return super().create_dataset_info()
+        NOT_AVAILABLE = 'N/A'
+        SHAPE = 'shape'
+        BEAM_ENERGY = 'beam_energy'
+        COLLECTION_ANGLE = 'collection_angle'
+        CONVERGENCE_ANGLE = 'convergence_angle'
+        ANGLE_UNIT = "mrad"
+        ENERGY_UNIT = "keV"
+        
+        app_state = self._model.app_state
+        all_datasets = app_state.all_datasets
+        if not isinstance(all_datasets, list):
+            raise ValueError("all_datasets should be a list of Dataset objects.")
+        
+        dataset = all_datasets[0]
+        
+        attrs = dataset.attrs if dataset is not None else {}
+
+        shape = attrs.get(SHAPE, NOT_AVAILABLE)
+        beam_energy = attrs.get(BEAM_ENERGY, NOT_AVAILABLE)
+        convergence_angle = attrs.get(CONVERGENCE_ANGLE, NOT_AVAILABLE)
+        collection_angle = attrs.get(COLLECTION_ANGLE, NOT_AVAILABLE)
+        
+        beam_energy = f"{beam_energy} {ENERGY_UNIT}" if beam_energy != NOT_AVAILABLE else NOT_AVAILABLE
+        convergence_angle = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
+        collection_angle = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
+        
+        dataset_information = DatasetInformation(
+            title="Dataset Information", 
+            information={
+                "Shape": shape,
+                "Beam Energy": beam_energy,
+                "Convergence Angle": convergence_angle,
+                "Collection Angle": collection_angle,
+            },
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        return dataset_information
 
     # --- Callbacks ---
     def _on_heatmap_click(self, event):

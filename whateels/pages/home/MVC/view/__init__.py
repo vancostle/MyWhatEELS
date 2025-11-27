@@ -19,12 +19,7 @@ class HomePageView:
         self._model = model
         
         # Load any provided CSS files
-        css_files = [
-            str(CSS_ROOT / "home.css"),
-            str(CSS_ROOT / "dataset_info.css")
-        ]
-
-        LoadCSS(css_files)
+        LoadCSS([str(CSS_ROOT / "home.css")])
         
         # Layout components
         self._main = HomePageMainLayout(model)
@@ -77,14 +72,12 @@ class HomePageView:
         DEFAULT_TAB_INDEX = 0
 
         app_state = self._model.app_state
-        
-        print("Creating tabs and dataset info panels...")
 
         try:
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
             
-            visualizer_factory = PlotsFactory(self._model)
+            plots_factory = PlotsFactory(self._model)
             plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
 
             for dataset in all_datasets:
@@ -92,16 +85,16 @@ class HomePageView:
                 image_name = dataset.attrs.get(IMAGE_NAME_ATTRIBUTE, NOT_AVAILABLE)
 
                 # Create plots using the factory
-                chosen_visualizer = visualizer_factory.choose_plots(str(dataset_type), dataset)
+                chosen_plot = plots_factory.choose_plots(str(dataset_type), dataset)
                 
-                if chosen_visualizer is None:
+                if chosen_plot is None:
                     raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
                 
-                visualizer_plots = chosen_visualizer.create_plots()
+                visualizer_plots = chosen_plot.create_plots()
                 
                 plots_tab.append((image_name, visualizer_plots))
                 
-                self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
+                self._all_dataset_info.append(chosen_plot.create_dataset_info())
 
             plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
             # Set the active tab based on shared state or default
@@ -109,8 +102,6 @@ class HomePageView:
             
             # Update UI
             self._main.update(plots_tab)
-            self._left_sidebar.remove_dataset_info()
-            self._left_sidebar.add_component(self._all_dataset_info[DEFAULT_TAB_INDEX])
             
         except Exception as e:
             raise DMPlotCreationError(e)
@@ -122,7 +113,7 @@ class HomePageView:
         selected_tab_index = event.new
 
         # Update shared state
-        self._model.app_state.selected_tab_index_dataset = selected_tab_index 
+        self._model.app_state.selected_tab_index_dataset = selected_tab_index
 
         # Update sidebar with the corresponding dataset info
         self._left_sidebar.remove_dataset_info()
