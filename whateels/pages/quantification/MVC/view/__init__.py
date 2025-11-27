@@ -135,7 +135,6 @@ class QuantificationView(BaseView):
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
             element_item_view[2].end = energy[1] - element_item.chemical_shift
-            element_item_view[3].start = energy[1] - element_item.chemical_shift
             self._controller.plot_elements()
 
 
