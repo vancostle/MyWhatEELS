@@ -81,7 +81,7 @@ class SingleSpectrumPlot(IPlot):
         if not isinstance(all_datasets, list):
             raise ValueError("all_datasets should be a list of Dataset objects.")
         
-        dataset = all_datasets[0]
+        dataset = self._dataset
         
         attrs = dataset.attrs if dataset is not None else {}
 

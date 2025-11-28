@@ -1,0 +1,57 @@
+#input {
+    margin:0px;
+} 
+.bk-input-group {
+    display: flex;
+}
+
+.file-uploader-container {
+    border: 1px solid red;
+    padding: 12px;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.file-uploader-widget {
+    margin: 0;
+}
+
+.file-uploader-widget ~ .success-panel {
+    background-color: #38a170;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    padding: 12px;
+
+    transform: translateX(0%);
+}
+
+.success-message {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.success-message-text {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.remove-file-button{
+    border-radius: 100%;
+    overflow: hidden;
+    width: 22.75px;
+    height: 22.75px;
+    display: grid;
+    place-content: center;
+}

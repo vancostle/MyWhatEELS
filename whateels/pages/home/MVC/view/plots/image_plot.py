@@ -93,13 +93,8 @@ class ImagePlot(IPlot):
         CONVERGENCE_ANGLE = 'convergence_angle'
         ANGLE_UNIT = "mrad"
         ENERGY_UNIT = "keV"
-        
-        app_state = self._model.app_state
-        all_datasets = app_state.all_datasets
-        if not isinstance(all_datasets, list):
-            raise ValueError("all_datasets should be a list of Dataset objects.")
-        
-        dataset = all_datasets[0]
+
+        dataset = self._dataset
         
         attrs = dataset.attrs if dataset is not None else {}
 

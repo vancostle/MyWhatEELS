@@ -7,6 +7,7 @@ from .toggle_button import ToggleButton
 from .progress_tracker_mixin import ProgressTrackerMixin
 from .progress_display import ProgressDisplay
 from .dataset_information import DatasetInformation
+from .file_uploader import FileUploader
 
 __all__ = [
     'FileDropper',
@@ -18,4 +19,5 @@ __all__ = [
     'ProgressTrackerMixin',
     'ProgressDisplay',
     'DatasetInformation',
+    'FileUploader',
 ]

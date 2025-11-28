@@ -1,6 +1,6 @@
 import panel as pn
 
-from whateels.components import FileDropper
+from whateels.components import FileDropper, FileUploader
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -15,6 +15,8 @@ class HomePageLeftSidebar(pn.Column):
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._file_dropper = FileDropper()
+        
+        self._file_uploader = FileUploader()
         
         super().__init__(
             self._create_layout(),
@@ -51,6 +53,7 @@ class HomePageLeftSidebar(pn.Column):
             self._file_dropper,
             pn.layout.Divider(),
             pn.Spacer(height=10),
+            self._file_uploader,
             sizing_mode=self._STRETCH_WIDTH
         )
         return self._sidebar_container_layout
