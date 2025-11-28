@@ -9,7 +9,10 @@ import numpy as np
 import time
 import plotly.graph_objs as go
 
-from whateels.helpers import SpectrumExtractor, SpectrumFitting
+from whateels.helpers import SpectrumExtractor
+from whateels.pages.home.utils.plot_helpers import (
+    get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
+)
 from whateels.components import ResizableColumns, DatasetInformation
 from whateels.shared_state import AppState
 from whateels.interfaces import IPlot
@@ -49,7 +52,7 @@ class SpectrumImagePlot(IPlot):
         self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
 
         # ElectronCount data cube
-        self._electron_count_data: "Dataset" = self._dataset.ElectronCount
+        self._electron_count_data = self._dataset.ElectronCount
         
         # Last selected pixel (x,y)
         self._last_selected = {"x": 0, "y": 0}
@@ -80,7 +83,7 @@ class SpectrumImagePlot(IPlot):
         self._setup_widgets()
         self._setup_plots()
         self._setup_callbacks()
-        
+
     # --- Public layout builders (used by controller) ---
     @override
     def create_plots(self):        
@@ -180,7 +183,7 @@ class SpectrumImagePlot(IPlot):
             self._js_executor,
             sizing_mode=self._STRETCH_WIDTH
         )
-
+        
         # Fila con label y slider para alineación limpia
         self.range_slider_row = pn.Row(
             pn.pane.HTML(
@@ -192,6 +195,44 @@ class SpectrumImagePlot(IPlot):
         )
         self.range_slider_row.visible = False
 
+    def _show_spectrum(self, *, point=None, region_pairs=None, message=None):
+        """
+        Unified helper to extract spectrum (from point or region), apply fitting if needed, and update paneB.
+        If message is provided, shows a message figure instead.
+        """
+        if message is not None:
+            self._update_paneB(self._figB_message(*message))
+            return
+
+        fig = None
+        spec = None
+        if region_pairs is not None:
+            if not region_pairs:
+                # No region selected, show message or hover
+                if self._last_hover_point is not None:
+                    self._show_spectrum(point=self._last_hover_point)
+                else:
+                    self._update_paneB(self._figB_message(" ", "Move the cursor over the image"))
+                return
+            fig = self._figB_region(region_pairs)
+            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, region_pairs)
+            if res is not None:
+                spec, _ = res
+        elif point is not None:
+            fig = self._figB_hover(point)
+            spec = get_pixel_spectrum(self._electron_count_data, point)
+
+        if self._fitting_active and spec is not None:
+            fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+        self._update_paneB(fig)
+    
+
+    # --- Helper methods now imported from utils/plot_helpers.py ---
+    def _update_paneB(self, fig):
+        paneB = getattr(self, 'paneB', None)
+        if paneB is not None:
+            paneB.object = self._set_ranges_and_convert(fig)
+
     def _on_multifit_clicked(self, event):
         """Callback para el botón de multifit"""
         # Publish the dataset now that multifit is requested.
@@ -201,13 +242,14 @@ class SpectrumImagePlot(IPlot):
         except Exception:
             print("Error publishing dataset to AppState for multifit.")
         
-        if self.range_slider is not None and self.range_slider.value is not None and hasattr(self.range_slider.value, "__iter__"):
-            min_val, max_val = self.range_slider.value
-        else:
-            min_val, max_val = 0, 1  # or set to appropriate default values
+        minmax = get_range_slider_value(self.range_slider)
+        min_val, max_val = minmax if len(minmax) == 2 else (0, 1)
         
-        current_port = pn.state.location.port if pn.state.location and hasattr(pn.state.location, 'port') else 5006
-        url_base = f"http://{pn.state.location.hostname}:{current_port}"
+
+        location = getattr(pn.state, 'location', None)
+        current_port = getattr(location, 'port', 5006)
+        hostname = getattr(location, 'hostname', 'localhost')
+        url_base = f"http://{hostname}:{current_port}"
 
         values = f"{min_val},{max_val}"
         url_with_params = f"{url_base}/multifit-details?values={values}"
@@ -232,25 +274,15 @@ class SpectrumImagePlot(IPlot):
             res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
             if res is not None:
                 spec, _ = res
-                range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            if self.paneB is not None:
-                if self.paneB is not None:
-                    if self.paneB is not None:
-                        if self.paneB is not None:
-                            self.paneB.object = self._set_ranges_and_convert(fig)
+                fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            self._update_paneB(fig)
             return
         if self._last_hover_point is not None:
             fig = self._figB_hover(self._last_hover_point)
-            i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-            spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+            spec = get_pixel_spectrum(self._electron_count_data, self._last_hover_point)
             if spec is not None:
-                range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
+                fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            self._update_paneB(fig)
 
 
     # --- Plot / Pane Setup (Plotly) ---
@@ -392,98 +424,34 @@ class SpectrumImagePlot(IPlot):
     def _now_ms(self):
         return int(time.time() * 1000)
 
+
     def _check_inactivity(self):
         # No selection -> nothing to do
         if not self._region_pairs:
-            if self._pc.running:
-                self._pc.stop()
+            stop_pc(self._pc)
             return
 
         # If there is no hover timestamp, ensure selection is shown and timer stopped
         if self._last_hover_ts is None:
-            if self._pc.running:
-                self._pc.stop()
-            fig = self._figB_region(self._region_pairs)
+            stop_pc(self._pc)
             if self._fitting_active:
                 res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
                 if res is not None:
                     spec, _N = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
+                    fig = self._figB_region(self._region_pairs)
+                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+                    self._update_paneB(fig)
             return
 
-        if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
+        if self._last_hover_ts is not None and self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
             fig = self._figB_region(self._region_pairs)
             if self._fitting_active:
                 res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
                 if res is not None:
                     spec, _N = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
-            if self._pc.running:
-                self._pc.stop()
-                
-    def _plot_fit_traces(self, fig, x, y, y_fit):
-        """
-        Add fit and background subtraction traces to a Plotly figure.
-
-        Parameters:
-            fig (plotly.graph_objs.Figure): The Plotly figure to add traces to.
-            x (array-like): Independent variable data.
-            y (array-like): Dependent variable data.
-            y_fit (array-like): Fitted curve values for all x.
-
-        Returns:
-            plotly.graph_objs.Figure: The figure with added fit and subtraction traces.
-        """
-        # Local constants for Plotly and fitting
-        POWERLAW_FIT_NAME = 'PowerLaw Fit'
-        BG_SUBTRACTION_NAME = 'Background Subtraction'
-        CRIMSON = 'crimson'
-        BG_LINE_COLOR = 'rgba(255,160,122,0.2)'
-        BG_FILL_COLOR = 'rgba(255,160,122,0.6)'
-        LEGEND_X = 0.98
-        LEGEND_Y = 0.98
-        LEGEND_XANCHOR = 'right'
-        LEGEND_YANCHOR = 'top'
-        LEGEND_BGCOLOR = 'rgba(255,255,255,0.6)'
-        LEGEND_BORDER_COLOR = 'rgba(0,0,0,0.1)'
-        LEGEND_BORDER_WIDTH = 1
-        FILL_TO_ZEROY = 'tozeroy'
-
-        if y_fit is None:
-            return fig
-        newfig = go.Figure(fig)
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=y_fit,
-            line=dict(color=CRIMSON),
-            name=POWERLAW_FIT_NAME
-        ))
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=(y - y_fit),
-            fill=FILL_TO_ZEROY,
-            line=dict(color=BG_LINE_COLOR),
-            fillcolor=BG_FILL_COLOR,
-            name=BG_SUBTRACTION_NAME
-        ))
-        newfig.update_layout(
-            legend=dict(
-                x=LEGEND_X,
-                y=LEGEND_Y,
-                xanchor=LEGEND_XANCHOR,
-                yanchor=LEGEND_YANCHOR,
-                bgcolor=LEGEND_BGCOLOR,
-                bordercolor=LEGEND_BORDER_COLOR,
-                borderwidth=LEGEND_BORDER_WIDTH,
-            )
-        )
-        return newfig
+                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            self._update_paneB(fig)
+            stop_pc(self._pc)
 
     # --- Pane A event handlers (hover / click / selected) ---
     def _on_paneA_hover(self, event: "Event"):
@@ -492,34 +460,12 @@ class SpectrumImagePlot(IPlot):
             return
         self._last_hover_point = point
         if self._region_pairs:
-            # Temporary hover while a selection exists: show hover spectrum and start/renew timer
-            fig = self._figB_hover(self._last_hover_point)
-            if self._fitting_active:
-                i, j = int(point["y"]), int(point["x"])
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-                if spec is not None:
-                    range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                    y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                    fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)  
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
+            self._show_spectrum(point=point, region_pairs=self._region_pairs)
             self._last_hover_ts = self._now_ms()
-            if not self._pc.running:
-                self._pc.start()
+            start_pc(self._pc)
         else:
-            # No selection: persistent hover view, no inactivity timer
-            fig = self._figB_hover(self._last_hover_point)
-            if self._fitting_active:
-                i, j = int(point["y"]), int(point["x"])
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-                if spec is not None:
-                    range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                    y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                    fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
-            if self._pc.running:
-                self._pc.stop()
+            self._show_spectrum(point=point)
+            stop_pc(self._pc)
             self._last_hover_ts = None
 
     def _on_paneA_click(self, event):
@@ -527,61 +473,21 @@ class SpectrumImagePlot(IPlot):
         if point is None:
             return
         self._last_hover_point = point
-        fig = self._figB_hover(self._last_hover_point)
-        if self._fitting_active:
-            i, j = int(point["y"]), int(point["x"])
-            spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-            if spec is not None:
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
         if self._region_pairs:
+            self._show_spectrum(point=point, region_pairs=self._region_pairs)
             self._last_hover_ts = self._now_ms()
-            if not self._pc.running:
-                self._pc.start()
+            start_pc(self._pc)
         else:
-            if self._pc.running:
-                self._pc.stop()
+            self._show_spectrum(point=point)
+            stop_pc(self._pc)
             self._last_hover_ts = None
 
     def _on_paneA_selected(self, event: "Event"):
         pairs = SpectrumExtractor.extract_region(event)
         self._region_pairs = pairs
-        if not pairs:
-            if self._pc.running:
-                self._pc.stop()
-            self._last_hover_ts = None
-            if self._last_hover_point is not None:
-                fig = self._figB_hover(self._last_hover_point)
-                if self._fitting_active:
-                    y, x = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                    spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, y, x)
-                    if spec is not None:
-                        range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                        y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                        fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-                    if self.paneB is not None:
-                        self.paneB.object = self._set_ranges_and_convert(fig)
-            else:
-                if self.paneB is not None:
-                    self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
-            return
-
-        fig = self._figB_region(self._region_pairs)
-        if self._fitting_active:
-            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-            if res is not None:
-                spec, N = res
-                range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-        if self.paneB is not None:
-            self.paneB.object = self._set_ranges_and_convert(fig)
-
+        self._show_spectrum(region_pairs=pairs)
         # prepare inactivity behaviour: stop periodic callback until next hover
-        if self._pc.running:
-            self._pc.stop()
+        stop_pc(self._pc)
         self._last_hover_ts = None
 
     # --- Pane B relayout (preserve zoom/pan ranges) ---
@@ -653,15 +559,21 @@ class SpectrumImagePlot(IPlot):
     # --- Fitting and range behaviour ---
     def _on_fitting_clicked(self, event):
         self._fitting_active = not self._fitting_active
-        self.fitting_button.name = f"Fitting: {'ON' if self._fitting_active else 'OFF'}"
-        self.fitting_button.button_type = "danger" if self._fitting_active else "primary"
-        if hasattr(self, 'range_slider_row'):
-            self.range_slider_row.visible = self._fitting_active
-        else:
-            self.range_slider.visible = self._fitting_active
+        fitting_button = getattr(self, 'fitting_button', None)
+        if fitting_button is not None:
+            fitting_button.name = f"Fitting: {'ON' if self._fitting_active else 'OFF'}"
+            fitting_button.button_type = "danger" if self._fitting_active else "primary"
+        range_slider_row = getattr(self, 'range_slider_row', None)
+        range_slider = getattr(self, 'range_slider', None)
+        if range_slider_row is not None:
+            range_slider_row.visible = self._fitting_active
+        elif range_slider is not None:
+            range_slider.visible = self._fitting_active
 
         # Mostrar/ocultar botón de multifit (coincide con fitting)
-        self.multifit_button.visible = self._fitting_active
+        multifit_button = getattr(self, 'multifit_button', None)
+        if multifit_button is not None:
+            multifit_button.visible = self._fitting_active
 
         # Refresh current view
         if self._region_pairs:
@@ -670,26 +582,17 @@ class SpectrumImagePlot(IPlot):
                 res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
                 if res is not None:
                     spec, _ = res
-                    range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                    y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                    fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
+                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            self._update_paneB(fig)
             return
 
         if self._last_hover_point is not None:
             fig = self._figB_hover(self._last_hover_point)
             if self._fitting_active:
-                i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+                spec = get_pixel_spectrum(self._electron_count_data, self._last_hover_point)
                 if spec is not None:
-                    range_slider_value = self.range_slider.value if self.range_slider is not None else None
-                    y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=range_slider_value)
-                    fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-                    
-            if self.paneB is not None:
-                self.paneB.object = self._set_ranges_and_convert(fig)
+                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            self._update_paneB(fig)
             return
 
-        if self.paneB is not None:
-            self.paneB.object = self._set_ranges_and_convert(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
+        self._update_paneB(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
