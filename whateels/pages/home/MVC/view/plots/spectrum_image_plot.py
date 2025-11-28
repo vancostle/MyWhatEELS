@@ -228,6 +228,31 @@ class SpectrumImagePlot(IPlot):
     
 
     # --- Helper methods now imported from utils/plot_helpers.py ---
+    def _refresh_paneB(self):
+        """
+        Unified logic to update paneB with the current region or hover point, applying fitting if active.
+        """
+        if self._region_pairs:
+            fig = self._figB_region(self._region_pairs)
+            if self._fitting_active:
+                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
+                if res is not None:
+                    spec, _ = res
+                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            self._update_paneB(fig)
+            return
+
+        if self._last_hover_point is not None:
+            fig = self._figB_hover(self._last_hover_point)
+            if self._fitting_active:
+                spec = get_pixel_spectrum(self._electron_count_data, self._last_hover_point)
+                if spec is not None:
+                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            self._update_paneB(fig)
+            return
+
+        self._update_paneB(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
+        
     def _update_paneB(self, fig):
         paneB = getattr(self, 'paneB', None)
         if paneB is not None:
@@ -269,20 +294,7 @@ class SpectrumImagePlot(IPlot):
         """Refresh paneB when the fit range slider changes (only when fitting is active)."""
         if not self._fitting_active:
             return
-        if self._region_pairs:
-            fig = self._figB_region(self._region_pairs)
-            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-            if res is not None:
-                spec, _ = res
-                fig = apply_fitting(fig, self._energy, spec, self.range_slider)
-            self._update_paneB(fig)
-            return
-        if self._last_hover_point is not None:
-            fig = self._figB_hover(self._last_hover_point)
-            spec = get_pixel_spectrum(self._electron_count_data, self._last_hover_point)
-            if spec is not None:
-                fig = apply_fitting(fig, self._energy, spec, self.range_slider)
-            self._update_paneB(fig)
+        self._refresh_paneB()
 
 
     # --- Plot / Pane Setup (Plotly) ---
@@ -435,22 +447,11 @@ class SpectrumImagePlot(IPlot):
         if self._last_hover_ts is None:
             stop_pc(self._pc)
             if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _N = res
-                    fig = self._figB_region(self._region_pairs)
-                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
-                    self._update_paneB(fig)
+                self._refresh_paneB()
             return
 
         if self._last_hover_ts is not None and self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
-            fig = self._figB_region(self._region_pairs)
-            if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _N = res
-                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
-            self._update_paneB(fig)
+            self._refresh_paneB()
             stop_pc(self._pc)
 
     # --- Pane A event handlers (hover / click / selected) ---
@@ -576,23 +577,4 @@ class SpectrumImagePlot(IPlot):
             multifit_button.visible = self._fitting_active
 
         # Refresh current view
-        if self._region_pairs:
-            fig = self._figB_region(self._region_pairs)
-            if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _ = res
-                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
-            self._update_paneB(fig)
-            return
-
-        if self._last_hover_point is not None:
-            fig = self._figB_hover(self._last_hover_point)
-            if self._fitting_active:
-                spec = get_pixel_spectrum(self._electron_count_data, self._last_hover_point)
-                if spec is not None:
-                    fig = apply_fitting(fig, self._energy, spec, self.range_slider)
-            self._update_paneB(fig)
-            return
-
-        self._update_paneB(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
+        self._refresh_paneB()
