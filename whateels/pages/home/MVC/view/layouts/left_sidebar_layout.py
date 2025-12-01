@@ -14,9 +14,7 @@ class HomePageLeftSidebar(pn.Column):
         self._model = model
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
-        self._file_dropper = FileDropper()
-        
-        self._file_uploader = FileUploader()
+        self._file_uploader: FileUploader = FileUploader() # Placeholder, will be set up below
         
         super().__init__(
             self._create_layout(),
@@ -24,9 +22,9 @@ class HomePageLeftSidebar(pn.Column):
         )
 
     @property
-    def file_dropper(self) -> FileDropper:
-        """FileDropper widget for file upload interactions."""
-        return self._file_dropper
+    def file_uploader(self) -> FileUploader:
+        """FileUploader widget for file upload interactions."""
+        return self._file_uploader
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
@@ -41,19 +39,27 @@ class HomePageLeftSidebar(pn.Column):
         self._dataset_info = None
 
     def _create_layout(self) -> pn.Column:
-        # Set up the FileDropper with model constants
-        self._file_dropper: FileDropper = FileDropper(
-            valid_extensions=self._model.constants.FILE_DROPPER_VALID_EXTENSIONS,
+        forceed_success = False # Set to True for testing purposes
+        all_datasets = self._model.app_state.all_datasets
+        if all_datasets is None:
+            all_datasets = []
+            
+        if isinstance(all_datasets, list) and len(all_datasets) > 0:
+            # If datasets are already loaded, we might want to show different sidebar content
+            forceed_success = True
+        
+        # Set up the FileUploader with model constants
+        self._file_uploader = FileUploader(
+            title="Upload EELS data file",
             reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
             success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
-            feedback_message=self._model.constants.FILE_DROPPER_FEEDBACK_MESSAGE,
-        )     
+            force_success=forceed_success
+        )  
   
         self._sidebar_container_layout = pn.Column(
-            self._file_dropper,
+            self._file_uploader,
             pn.layout.Divider(),
             pn.Spacer(height=10),
-            self._file_uploader,
             sizing_mode=self._STRETCH_WIDTH
         )
         return self._sidebar_container_layout

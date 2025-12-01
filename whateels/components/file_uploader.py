@@ -9,14 +9,17 @@ class FileUploader(pn.Column):
         self,
         on_file_uploaded_callback: Optional[Callable[[str, bytes], None]] = None,
         on_file_removed_callback: Optional[Callable[[str], None]] = None,
+        title: str = "Upload a file",
         success_message: str = "File uploaded successfully.",
         reject_message: str = "File upload failed.",
         valid_extensions: tuple = (".dm3", ".dm4"),
         multiple_files: bool = False,
+        force_success: bool = False,
         **kwargs
     ):
         self._on_file_uploaded_callback = on_file_uploaded_callback
         self._on_file_removed_callback = on_file_removed_callback
+        self._title = title
         self._success_message = success_message
         self._reject_message = reject_message
         self._valid_extensions = valid_extensions
@@ -36,11 +39,18 @@ class FileUploader(pn.Column):
         ) = self._create_file_widget()
         
         super().__init__(
+            pn.pane.Markdown(
+                f"### {self._title}", 
+                sizing_mode="stretch_width", 
+                margin=0
+            ),
             file_widget, # Initialize the Column with the file uploader widget
             **kwargs
         )
         
         self._setup_event_handlers()
+        if force_success:
+            self._show_success_message()
     
     @property
     def on_file_uploaded_callback(self) -> Optional[Callable[[str, bytes], None]]:
@@ -91,6 +101,10 @@ class FileUploader(pn.Column):
         )
         
         def clear_message_handler(type: str = "both"):
+            # Call removal callback if a file was present
+            if self._current_filename and callable(self._on_file_removed_callback):
+                self._on_file_removed_callback(self._current_filename)
+
             # Completely reset by replacing the FileDropper widget
             filedroppper_container.clear()
             new_filedropper = pn.widgets.FileDropper(
@@ -103,7 +117,7 @@ class FileUploader(pn.Column):
             self._filedropper = new_filedropper
             self._current_filename = None
             self._setup_event_handlers()
-            
+
             if type in ("error", "both"):
                 self._clear_error_message()
             if type in ("success", "both"):
