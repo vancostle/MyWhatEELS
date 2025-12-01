@@ -15,6 +15,7 @@ class FileUploader(pn.Column):
         valid_extensions: tuple = (".dm3", ".dm4"),
         multiple_files: bool = False,
         force_success: bool = False,
+        initial_filename: Optional[str] = None,
         **kwargs
     ):
         self._on_file_uploaded_callback = on_file_uploaded_callback
@@ -50,6 +51,7 @@ class FileUploader(pn.Column):
         
         self._setup_event_handlers()
         if force_success:
+            self._current_filename = initial_filename
             self._show_success_message()
     
     @property

@@ -109,6 +109,8 @@ class HomePageController:
             self._view.left_sidebar.remove_dataset_info()
             self._view.main.empty_placeholder()
             
+            # Reset FileUploader to initial state (hide success/error panels)
+            
             # Clear in-memory file to free resources
             del self._model.in_memory_file
             

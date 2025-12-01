@@ -39,23 +39,8 @@ class HomePageLeftSidebar(pn.Column):
         self._dataset_info = None
 
     def _create_layout(self) -> pn.Column:
-        forceed_success = False # Set to True for testing purposes
-        all_datasets = self._model.app_state.all_datasets
-        if all_datasets is None:
-            all_datasets = []
-            
-        if isinstance(all_datasets, list) and len(all_datasets) > 0:
-            # If datasets are already loaded, we might want to show different sidebar content
-            forceed_success = True
-        
-        # Set up the FileUploader with model constants
-        self._file_uploader = FileUploader(
-            title="Upload EELS data file",
-            reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
-            success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
-            force_success=forceed_success
-        )  
-  
+        """Create the sidebar layout with file uploader and spacing."""
+        self._file_uploader = self._create_file_uploader()
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
             pn.layout.Divider(),
@@ -76,3 +61,30 @@ class HomePageLeftSidebar(pn.Column):
         if self.dataset_info in self:
             self.remove(self.dataset_info)
             del self.dataset_info
+            
+    def _create_file_uploader(self) -> FileUploader:
+        """Create the main file uploader widget."""
+        forceed_success = False # Set to True for testing purposes
+        initial_filename = None
+        all_datasets = self._model.app_state.all_datasets
+        if all_datasets is None:
+            all_datasets = []
+            
+        if isinstance(all_datasets, list) and len(all_datasets) > 0:
+            # If datasets are already loaded, we might want to show different sidebar content
+            forceed_success = True
+            filename_candidate = self._model.app_state.filename
+            # Ensure initial_filename is only str or None
+            if isinstance(filename_candidate, str) or filename_candidate is None:
+                initial_filename = filename_candidate
+            else:
+                initial_filename = None
+        
+        # Set up the FileUploader with model constants
+        return FileUploader(
+            title="Upload EELS data file",
+            reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
+            success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
+            force_success=forceed_success,
+            initial_filename=initial_filename
+        )  
