@@ -17,8 +17,8 @@
     margin: 0;
 }
 
-.file-uploader-widget ~ .success-panel {
-    background-color: #38a170;
+.file-uploader-widget ~ .success-panel,
+.file-uploader-widget ~ .error-panel {
     position: absolute;
     top: 0;
     left: 0;
@@ -31,23 +31,34 @@
 
     padding: 12px;
 
-    transform: translateX(0%);
+    z-index: 1;
 }
 
-.success-message {
+.file-uploader-widget ~ .success-panel {
+    background-color: #38a170;
+    transform: translateX(95%);
+}
+
+
+.file-uploader-widget ~ .error-panel {
+    background-color: #e74c3c;
+    transform: translateX(-95%);
+}
+
+.success-message, .error-message {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.success-message-text {
+.success-message-text, .error-message-text {
     color: white;
     font-size: 16px;
     font-weight: 600;
     margin: 0;
 }
 
-.remove-file-button{
+.remove-file-button {
     border-radius: 100%;
     overflow: hidden;
     width: 22.75px;

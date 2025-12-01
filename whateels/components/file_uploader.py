@@ -67,7 +67,22 @@ class FileUploader(pn.Column):
         STRETCH_BOTH = "stretch_both"
         
         error_panel = pn.Column(
-            
+            pn.Row(
+                pn.pane.HTML(
+                    self._success_message,
+                    margin=0,
+                    css_classes=['error-message-text']
+                ),
+                pn.widgets.Button(
+                    name="X",
+                    margin=0,
+                    css_classes=['remove-file-button'],
+                ),
+                sizing_mode=STRETCH_WIDTH,
+                css_classes=['error-message'] 
+            ),
+            sizing_mode=STRETCH_BOTH,
+            css_classes=['error-panel']
         )
         
         filedropper = pn.widgets.FileDropper(
@@ -97,6 +112,7 @@ class FileUploader(pn.Column):
         
         slider = pn.Column(
             filedropper,
+            error_panel,
             success_panel,
             sizing_mode=STRETCH_BOTH,
             css_classes=['file-uploader-container']
