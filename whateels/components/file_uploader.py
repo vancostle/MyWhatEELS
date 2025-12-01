@@ -77,17 +77,49 @@ class FileUploader(pn.Column):
         STRETCH_WIDTH = "stretch_width"
         STRETCH_BOTH = "stretch_both"
         
+        filedropper = pn.widgets.FileDropper(
+            sizing_mode=STRETCH_BOTH,
+            multiple=self._multiple_files,  # Only allow single file uploads
+            css_classes=['filedropper'],
+        )
+        
+        filedroppper_container = pn.Column(
+            filedropper,
+            css_classes=['filedropper-container'],
+            sizing_mode=STRETCH_WIDTH,
+            height=67
+        )
+        
+        def clear_message_handler(type: str = "both"):
+            # Completely reset by replacing the FileDropper widget
+            filedroppper_container.clear()
+            new_filedropper = pn.widgets.FileDropper(
+                sizing_mode=STRETCH_WIDTH,
+                multiple=self._multiple_files,
+                css_classes=['filedropper'],
+            )
+            filedroppper_container.append(new_filedropper)
+            filedroppper_container.height = 67
+            self._filedropper = new_filedropper
+            self._current_filename = None
+            self._setup_event_handlers()
+            
+            if type in ("error", "both"):
+                self._clear_error_message()
+            if type in ("success", "both"):
+                self._clear_success_message()
+
         error_message_button = pn.widgets.Button(
             name="X",
             margin=0,
             css_classes=['remove-file-button'],
         )
-        error_message_button.on_click(lambda _: self._clear_error_message())
+        error_message_button.on_click(lambda event: clear_message_handler("error"))
         
         error_message = pn.Column(
             pn.Row(
                 pn.pane.HTML(
-                    self._success_message,
+                    self._reject_message,
                     margin=0,
                     css_classes=['error-message-text']
                 ),
@@ -99,44 +131,12 @@ class FileUploader(pn.Column):
             css_classes=['error-panel']
         )
         
-        filedropper = pn.widgets.FileDropper(
-            sizing_mode=STRETCH_WIDTH,
-            multiple=self._multiple_files,  # Only allow single file uploads
-            css_classes=['filedropper'],
-        )
-        
-        filedroppper_container = pn.Column(
-            filedropper,
-            css_classes=['filedropper-container'],
-        )
-        
         success_message_button = pn.widgets.Button(
             name="X",
             margin=0,
             css_classes=['remove-file-button'],
         )
-        def clear_success_message_handler(event):            
-            # Completely reset by replacing the FileDropper widget
-            filedroppper_container.clear()
-            
-            new_filedropper = pn.widgets.FileDropper(
-                sizing_mode=STRETCH_WIDTH,
-                multiple=self._multiple_files,
-                css_classes=['filedropper'],
-            )
-            filedroppper_container.append(new_filedropper)
-            
-            # Update reference and reconnect handlers
-            self._filedropper = new_filedropper
-            self._current_filename = None
-            
-            # Setup handlers for the new widget
-            self._setup_event_handlers()
-            
-            self._clear_success_message()
-            print("Clearing success message")
-        
-        success_message_button.on_click(clear_success_message_handler)
+        success_message_button.on_click(lambda event: clear_message_handler("success"))
                 
         success_message = pn.Column(
             pn.Row(
@@ -182,6 +182,8 @@ class FileUploader(pn.Column):
         Args:
             event: Panel parameter change event (unused, but required by Panel)
         """
+        # self._loading_message_panel.styles = {'opacity': '1', 'pointer-events': 'auto'}
+        
         file_widget_value = self._filedropper.value
 
         # If the value is None or not a dict, do nothing
@@ -223,9 +225,7 @@ class FileUploader(pn.Column):
         return filename.lower().endswith(self._valid_extensions)
     
     def _show_success_message(self):
-        # Ensure css_classes is a list before using 'not in'
         self._success_message_panel.styles = {'transform': 'translateX(0%)'}
-        print("Showing success message")
     
     def _show_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(0%)'}
