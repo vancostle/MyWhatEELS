@@ -241,13 +241,13 @@ class FileUploader(pn.Column):
         return filename.lower().endswith(self._valid_extensions)
     
     def _show_success_message(self):
-        self._success_message_panel.styles = {'transform': 'translateX(0%)'}
+        self._success_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
     
     def _show_error_message(self):
-        self._error_message_panel.styles = {'transform': 'translateX(0%)'}
+        self._error_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
     
     def _clear_success_message(self):
-        self._success_message_panel.styles = {'transform': 'translateX(100%)'}
+        self._success_message_panel.styles = {'transform': 'translateX(100%)', 'pointer-events': 'none'}
                 
     def _clear_error_message(self):
-        self._error_message_panel.styles = {'transform': 'translateX(-100%)'}
+        self._error_message_panel.styles = {'transform': 'translateX(-100%)', 'pointer-events': 'none'}
