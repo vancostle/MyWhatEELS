@@ -6,6 +6,7 @@ from xarray import Dataset
 from whateels.helpers.constants import OOS_ROOT
 from whateels.helpers.safe_converter import SafeConverter
 from ..model.element_item import ElementItem
+from ..view.components.ElementItemView import ElementItemView
 
 import panel as pn
 
@@ -201,7 +202,7 @@ class QuantificationController(BaseController):
 
             min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])                
 
-        element_item_view, element_item = self._view.get_new_element_item_view(element_item, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]))
+        element_item_view = ElementItemView(self, element_item, self.model, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]), self.view)
         element_item.set_quant_range(min_eaxis_cs)
         self._model.app_state.quantification_elements.append(element_item)
         self._layout.add_new_element_input(element_item_view)
@@ -229,7 +230,7 @@ class QuantificationController(BaseController):
 
             min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])                
 
-        element_item_view, element_item = self._view.get_new_element_item_view(element_item, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]))
+        element_item_view = ElementItemView(self, element_item, self.model, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]), self.view)
         element_item.set_quant_range(min_eaxis_cs)
         self._layout.add_new_element_input(element_item_view)
         self.view.quanti_input['shells_multiselect'].value = []
