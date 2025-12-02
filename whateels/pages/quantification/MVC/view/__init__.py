@@ -3,6 +3,7 @@ from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton
 from whateels.base.mvc import BaseView
 import panel as pn
+from whateels.pages.quantification.MVC.model.element_item import ElementItem
 
 if TYPE_CHECKING:
     from ..model import QuantificationModel
@@ -103,14 +104,14 @@ class QuantificationView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-            _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'},
-            _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'}
+            _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'success'},
+            _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'primary'}
         }
 
         slider_button = ToggleButton(
             sizing_mode=self._STRETCH_WIDTH,
             states=states,
-            css_classes=["element-toggle-button"]
+            css_classes=["element-toggle-button"],
         )
 
         element_item_view = pn.Column(
@@ -134,7 +135,6 @@ class QuantificationView(BaseView):
         def _chemical_shift_watcher(event):
             element_item.chemical_shift = event.new
             element_item_view[2].end = energy[1] - element_item.chemical_shift
-            element_item_view[3].start = energy[1] - element_item.chemical_shift
             self._controller.plot_elements()
 
 
@@ -142,7 +142,14 @@ class QuantificationView(BaseView):
 
         fit_slider = pn.widgets.EditableRangeSlider(name='fit range', start=energy[0], end=energy[1] - element_item.chemical_shift, 
                 value=(energy[0],energy[1]), step=1, disabled=False, format='0.00a', styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
-        quant_width_input = pn.widgets.FloatInput(name='Quantification Width', value=50., step=1e-1, styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, visible=False)
+        
+        quant_width_input = pn.widgets.FloatInput(
+            name='Quantification Width', 
+            value=50., 
+            step=1e-1, 
+            styles= {"margin": "0", "padding": "0 1rem 1rem 2rem"}, 
+            visible=False
+        )
 
         element_item_view.append(chemical_shift_input)
         element_item_view.append(fit_slider)

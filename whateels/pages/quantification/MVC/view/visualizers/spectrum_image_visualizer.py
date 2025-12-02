@@ -139,7 +139,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 fig = self.plot_quantification_element(fig, element_item, color)
                 i += 1
 
-            self.paneB.object = self._to_plotly(fig)
+            self.paneB.object = self._set_ranges_and_convert(fig)
 
 
     
@@ -149,7 +149,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
             fig = self._plot_fit_traces(fig, element_item.element, self._energy, self.selected_slice, y_fit, color)
             self.plot_shells_cross_section(fig, element_item)
-            fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
+            #fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
 
             return fig
         except Exception as e:
@@ -235,7 +235,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         
 
-        fig.update_layout(xaxis=dict(range=[self._e_axis, self._e_axis]))
+        #fig.update_layout(xaxis=dict(range=[self._e_axis, self._e_axis]))
 
         return fig, (xaxis, yaxis)
     
@@ -621,10 +621,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             else:
                 self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
             return
-        if AppState().quantification_elements:
+        else:
             self.plot_quantification_elements(AppState().quantification_elements)
-            return
-
         # prepare inactivity behaviour: stop periodic callback until next hover
         if self._pc.running:
             self._pc.stop()
