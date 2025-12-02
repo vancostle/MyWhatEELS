@@ -1,5 +1,5 @@
 import panel as pn
-
+import gc
 from whateels.errors.dm.data import DMPlotCreationError
 from whateels.helpers import LoadCSS, CSS_ROOT
 from .plots_factory import PlotsFactory
@@ -27,6 +27,10 @@ class HomePageView:
         
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
+        
+        # Store reference to plots_tab for cleanup
+        self._plots_tab = None
+        self._plots_tab_watcher = None
 
     @property
     def main(self) -> HomePageMainLayout:
@@ -74,8 +78,24 @@ class HomePageView:
         app_state = self._model.app_state
 
         try:
+            # Clean up old visualizers and watchers to prevent memory leaks
+            if self._plots_tab_watcher is not None and self._plots_tab is not None:
+                self._plots_tab.param.unwatch(self._plots_tab_watcher)
+                self._plots_tab_watcher = None
+            elif self._plots_tab_watcher is not None:
+                self._plots_tab_watcher = None
+            
+            # Clear old plots_tab completely
+            if self._plots_tab is not None:
+                self._plots_tab.clear()
+                self._plots_tab = None
+            
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
+            
+            # Force garbage collection to free memory from old visualizers
+            import gc
+            gc.collect()
             
             plots_factory = PlotsFactory(self._model)
             plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
@@ -96,7 +116,12 @@ class HomePageView:
                 
                 self._all_dataset_info.append(chosen_plot.create_dataset_info())
 
-            plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            # Store reference to new plots_tab
+            self._plots_tab = plots_tab
+            
+            # Watch for tab changes (new watcher on new tab object)
+            self._plots_tab_watcher = self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            
             # Set the active tab based on shared state or default
             plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
             
@@ -118,3 +143,30 @@ class HomePageView:
         # Update sidebar with the corresponding dataset info
         self._left_sidebar.remove_dataset_info()
         self._left_sidebar.add_component(self._all_dataset_info[selected_tab_index])
+    
+    def cleanup(self):
+        """Clean up resources before page reload or session end."""
+        
+        # Remove watcher to prevent memory leaks
+        if self._plots_tab_watcher is not None and self._plots_tab is not None:
+            self._plots_tab.param.unwatch(self._plots_tab_watcher)
+            self._plots_tab_watcher = None
+        elif self._plots_tab_watcher is not None:
+            self._plots_tab_watcher = None
+        
+        # Clear plots tab
+        if self._plots_tab is not None:
+            self._plots_tab.clear()
+            self._plots_tab = None
+        
+        # Clear dataset info panels
+        self._all_dataset_info.clear()
+        
+        # Clear layouts
+        if self._main is not None:
+            self._main.clear()
+        if self._left_sidebar is not None:
+            self._left_sidebar.clear()
+        
+        # Force garbage collection
+        gc.collect()

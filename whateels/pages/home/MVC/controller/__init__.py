@@ -1,5 +1,5 @@
+import panel as pn
 from .services import *
-
 from whateels.errors.dm.data import (
     DMFileLoadingError,
     DMFileUploadError,
@@ -25,6 +25,9 @@ class HomePageController:
     def __init__(self, model: "HomePageModel", view: "HomePageView"):
         self._model = model
         self._view = view
+        
+        # Register cleanup function to be called on session end/page reload
+        pn.state.on_session_destroyed(lambda _: self.cleanup())
         
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)
@@ -109,8 +112,6 @@ class HomePageController:
             self._view.left_sidebar.remove_dataset_info()
             self._view.main.empty_placeholder()
             
-            # Reset FileUploader to initial state (hide success/error panels)
-            
             # Clear in-memory file to free resources
             del self._model.in_memory_file
             
@@ -119,3 +120,7 @@ class HomePageController:
 
         except Exception as e:
             raise DMFileRemovalError(e)
+    
+    def cleanup(self):
+        """Clean up resources before page reload or session end."""
+        self._view.cleanup()

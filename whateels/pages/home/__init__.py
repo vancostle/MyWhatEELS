@@ -1,3 +1,4 @@
+import panel as pn
 from whateels.components import CustomPage
 from .MVC import HomePageModel, HomePageController, HomePageView
 

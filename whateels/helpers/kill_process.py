@@ -20,7 +20,6 @@ class KillProcess:
                     connections = proc.net_connections(kind='inet')
                     for conn in connections:
                         if conn.laddr.port == port:
-                            print(f"Killing process {proc.pid} ({proc.name()}) using port {port}")
                             if os.name == 'nt':  # Windows
                                 proc.kill()
                             else:  # Unix/Linux/Mac
