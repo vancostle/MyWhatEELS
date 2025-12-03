@@ -1,4 +1,3 @@
-import panel as pn
 from whateels.components import CustomPage
 from .MVC import HomePageModel, HomePageController, HomePageView
 
@@ -17,4 +16,5 @@ class HomePage(CustomPage):
             title=model.constants.TITLE,
             main=[view.main],
             sidebar=[view.left_sidebar],
+            sidebar_width=300
         )

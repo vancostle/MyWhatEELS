@@ -43,7 +43,6 @@ class HomePageLeftSidebar(pn.Column):
         self._file_uploader = self._create_file_uploader()
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
-            pn.layout.Divider(),
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -82,7 +81,6 @@ class HomePageLeftSidebar(pn.Column):
         
         # Set up the FileUploader with model constants
         return FileUploader(
-            title="Upload EELS data file",
             reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
             success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
             force_success=forceed_success,
