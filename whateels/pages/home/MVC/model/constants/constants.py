@@ -17,6 +17,5 @@ class Constants:
     # FileDropper constants
     FILE_DROPPER_TITLE = "Upload EELS data file"
     FILE_DROPPER_VALID_EXTENSIONS = ('.dm3', '.dm4')
-    FILE_DROPPER_REJECT_MESSAGE = "Invalid file type."
+    FILE_DROPPER_REJECT_MESSAGE = "Only DM3/DM4 files!"
     FILE_DROPPER_SUCCESS_MESSAGE = "File uploaded successfully!"
-    FILE_DROPPER_FEEDBACK_MESSAGE = "No file uploaded yet... :(" # TODO: REMOVE IT

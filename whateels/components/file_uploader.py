@@ -124,7 +124,7 @@ class FileUploader(pn.Column):
                 self._clear_success_message()
 
         error_message_button = pn.widgets.Button(
-            name="X",
+            name="-",
             margin=0,
             css_classes=['remove-file-button'],
         )
@@ -146,7 +146,7 @@ class FileUploader(pn.Column):
         )
         
         success_message_button = pn.widgets.Button(
-            name="X",
+            name="-",
             margin=0,
             css_classes=['remove-file-button'],
         )

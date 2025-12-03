@@ -3,7 +3,7 @@
     list-style-type: none;
     border-radius: 8px;
     background-color: #f8f9fa;
-    margin: 0 10px;
+    margin: 0 0 0 6px;
     opacity: 0;
     overflow: hidden;
     box-shadow: 0px 0px 5px #d8d8d8;
@@ -35,7 +35,7 @@
     background-color: #b63fb5;
     color: white;
     margin: 0;
-    padding: 12px 16px;
+    padding: 16px 16px;
     border: none;
 }
 
@@ -43,7 +43,8 @@
     margin: 0;
     padding: 0;
     font-size: 1.2rem;
-    font-weight: bold;
+    font-weight: normal;
+    letter-spacing: 1px;
     color: white;
 }
 
@@ -52,7 +53,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0;
+    margin: 4px 0 0 0;
     padding: 0;
 }
 
@@ -60,8 +61,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 25px;
-    height: 25px;
+    width: 20px;
+    height: 20px;
     background: #b63fb5;
     color: white;
     border: none;

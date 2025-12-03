@@ -72,7 +72,8 @@ class DatasetInformation(pn.Column):
                     sizing_mode=STRETCH_WIDTH
                 ),
                 pn.pane.Str(str(value)),
-                sizing_mode=STRETCH_WIDTH
+                sizing_mode=STRETCH_WIDTH,
+                margin=(0, 6, 0, 6)
             )
             for key, value in self._information.items()
         ]

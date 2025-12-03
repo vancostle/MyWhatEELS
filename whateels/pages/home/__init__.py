@@ -16,5 +16,5 @@ class HomePage(CustomPage):
             title=model.constants.TITLE,
             main=[view.main],
             sidebar=[view.left_sidebar],
-            sidebar_width=300
+            sidebar_width=320
         )

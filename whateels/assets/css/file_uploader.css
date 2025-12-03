@@ -6,9 +6,9 @@
 #input:has(ul:not(:empty))::before {
     content: 'Reading File...';
 
-    font-size: 18px;
+    font-size: 16px;
     color: black;
-    font-weight: 600;
+    font-weight: normal;
     position: absolute;
     top: 49%;
     left: 50%;
@@ -22,16 +22,16 @@
     display: flex;
     align-items: center;
 
-    padding-left: 20%;
+    padding-left: 30%;
 }
 
 #input:has(ul:not(:empty)):after {
     content: '';
     position: absolute;
     top: 50%;
-    right: 17%;
-    width: 32px;
-    height: 32px;
+    right: 22%;
+    width: 28px;
+    height: 28px;
     transform: translate(-50%, -50%);
     z-index: 99;
     border: 4px solid #ccc;
@@ -99,7 +99,7 @@
 .success-message-text, .error-message-text {
     color: white;
     font-size: 16px;
-    font-weight: 600;
+    font-weight: normal;
     margin: 0;
     width: 100%;
     height: 100%;

@@ -4,6 +4,7 @@ import param
 import csscompressor
 from whateels.helpers.constants import CSS_ROOT, JS_ROOT
 
+# TODO - Check if this class is still used anywhere
 class UploadedFile(JSComponent):
     """
     A class representing an uploaded file with its name.
