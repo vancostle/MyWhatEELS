@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 from whateels.helpers import CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton
+from whateels.components import UploadedFile, ToggleButton, Details
 from whateels.base.mvc import BaseView
 import panel as pn
 from whateels.pages.quantification.MVC.model.element_item import ElementItem
@@ -162,10 +162,6 @@ class QuantificationView(BaseView):
         def _quant_width_watcher(event):   
             element_item.set_quant_width(event.new)
             self._controller.plot_elements()
-        
-        
-
-
 
         def _delete_element_watcher(event):
             self._element_item_view_container.remove(element_item_view)
@@ -259,7 +255,7 @@ class QuantificationView(BaseView):
             button_type='primary',
             height=55,
             margin=(0,0,10,0),
-            sizing_mode=self.STRETCH_WIDTH,
+            sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
         )
 
@@ -271,6 +267,19 @@ class QuantificationView(BaseView):
         self._element_item_view_container = pn.Column(
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["element-container"]
+        )
+        
+        details = Details(
+            title=pn.pane.Markdown(
+                "Quantification Instructions", 
+                sizing_mode=self._STRETCH_WIDTH
+            ),
+            content=pn.Column(
+                *[widget for widget in self._quanti_input.values()],
+                self._quanti_add_element_button,
+                sizing_mode=self._STRETCH_BOTH
+            ),
+            sizing_mode=self._STRETCH_BOTH,
         )
 
             # State identifiers
@@ -312,8 +321,9 @@ class QuantificationView(BaseView):
         )
 
         right_sidebar = pn.Column(
-            self._quanti_element_item,
-            self._quanti_add_element_button,
+            # self._quanti_element_item,
+            # self._quanti_add_element_button,
+            details,
             self._element_item_view_container,
             pn.Row(
                 pn.widgets.TooltipIcon(

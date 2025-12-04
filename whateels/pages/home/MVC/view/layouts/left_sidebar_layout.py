@@ -1,6 +1,6 @@
 import panel as pn
 
-from whateels.components import FileDropper, FileUploader
+from whateels.components import FileUploader, Details
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -41,8 +41,34 @@ class HomePageLeftSidebar(pn.Column):
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
+        
+        # START TESTING CODE
+        
+        title = pn.pane.Markdown(
+            "### Details Title", 
+            sizing_mode="stretch_both", 
+            margin=(0,0,0,0),
+        )
+
+        content = pn.Column(
+            pn.pane.Markdown("This is some details content.", sizing_mode="stretch_both"),
+            sizing_mode="stretch_both",
+            height=100,
+            margin=(0,0,0,0),
+        )
+        
+        details = Details(
+            title=title,
+            content=content,
+            sizing_mode="stretch_both"
+        )
+        
+        # END TESTING CODE
+        
+        
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
+            # details,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )
