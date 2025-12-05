@@ -33,24 +33,7 @@ export const render = ({ model }) => {
         svg.style.transition = 'none';
 
         if (!model.expanded) {
-            const isCollapsed = container.classList.toggle('collapsed');
-            button.querySelector('svg').classList.toggle('rotated');
-            const headerHeight = header.offsetHeight;
-            if (isCollapsed) {
-                container.style.overflow = 'hidden';
-                container.style.maxHeight = headerHeight + 'px';
-            } else {
-                container.style.maxHeight = 'none';
-                void container.offsetHeight;
-                const fullHeight = container.scrollHeight;
-                container.style.maxHeight = headerHeight + 'px';
-                setTimeout(() => {
-                    container.style.maxHeight = fullHeight + 'px';
-                }, 10);
-                setTimeout(() => {
-                    container.style.overflow = 'visible';
-                }, 400);
-            }
+            on_header_click(container, header, button);
         } else {
             // Expanded instantly, no animation
             container.classList.remove('collapsed');
@@ -65,44 +48,42 @@ export const render = ({ model }) => {
     }, 0);
 
     // Toggle content visibility on header click
-    header.addEventListener('click', () => {
-        const isCollapsed = container.classList.toggle('collapsed');
-        button.querySelector('svg').classList.toggle('rotated');
-        const headerHeight = header.offsetHeight;
-        
-        if (isCollapsed) {
-            container.style.overflow = 'hidden';
-            container.style.maxHeight = headerHeight + 'px';
-            
-        } else {
-            // Expand animation - measure full height with proper reflow
-            container.style.maxHeight = 'none';
-            
-            // Force reflow to ensure the browser calculates scrollHeight correctly
-            void container.offsetHeight;
-            
-            const fullHeight = container.scrollHeight;
-            
-            // Set to header height first to prepare for animation
-            container.style.maxHeight = headerHeight + 'px';
-            
-            // Small timeout to ensure the transition is applied
-            setTimeout(() => {
-                container.style.maxHeight = fullHeight + 'px';
-            }, 10);
-            
-            // Reset overflow after animation completes (0.4s)
-            setTimeout(() => {
-                container.style.overflow = 'visible';
-            }, 400);
-        }
-    });
+    header.addEventListener('click', () => on_header_click(container, header, button));
 
     return container;
 }
 
-const on_header_click = (container, header, content, button) => {
+const on_header_click = (container, header, button) => {
+    const isCollapsed = container.classList.toggle('collapsed');
+    button.querySelector('svg').classList.toggle('rotated');
+    const headerHeight = header.offsetHeight;
     
+    if (isCollapsed) {
+        container.style.overflow = 'hidden';
+        container.style.maxHeight = headerHeight + 'px';
+        
+    } else {
+        // Expand animation - measure full height with proper reflow
+        container.style.maxHeight = 'none';
+        
+        // Force reflow to ensure the browser calculates scrollHeight correctly
+        void container.offsetHeight;
+        
+        const fullHeight = container.scrollHeight;
+        
+        // Set to header height first to prepare for animation
+        container.style.maxHeight = headerHeight + 'px';
+        
+        // Small timeout to ensure the transition is applied
+        setTimeout(() => {
+            container.style.maxHeight = fullHeight + 'px';
+        }, 10);
+        
+        // Reset overflow after animation completes (0.4s)
+        setTimeout(() => {
+            container.style.overflow = 'visible';
+        }, 400);
+    }
 }
 
 const get_model_child = (model, value) => {
