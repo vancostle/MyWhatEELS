@@ -23,6 +23,15 @@ export const render = ({ model }) => {
     container.appendChild(header);
     container.appendChild(content);
 
+    // Animation state tracking
+    let isAnimating = false;
+    let animationTimeouts = [];
+
+    // Send header height to Python via the value parameter
+    setTimeout(() => {
+        model.value = header.offsetHeight;
+    }, 0);
+
     // Initialize the container with proper max-height after DOM is ready
     setTimeout(() => {
         // Temporarily disable transition for instant resize
@@ -33,7 +42,7 @@ export const render = ({ model }) => {
         svg.style.transition = 'none';
 
         if (!model.expanded) {
-            on_header_click(container, header, button);
+            on_header_click(container, header, button, model, animationTimeouts, () => isAnimating, (val) => { isAnimating = val; });
         } else {
             // Expanded instantly, no animation
             container.classList.remove('collapsed');
@@ -48,12 +57,23 @@ export const render = ({ model }) => {
     }, 0);
 
     // Toggle content visibility on header click
-    header.addEventListener('click', () => on_header_click(container, header, button));
+    header.addEventListener('click', () => on_header_click(container, header, button, model, animationTimeouts, () => isAnimating, (val) => { isAnimating = val; }));
 
     return container;
 }
 
-const on_header_click = (container, header, button) => {
+const on_header_click = (container, header, button, model, animationTimeouts, getIsAnimating, setIsAnimating) => {
+    // Prevent double-click/rapid clicking during animation
+    if (getIsAnimating()) {
+        return;
+    }
+    
+    // Clear any pending timeouts from previous animations
+    animationTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    animationTimeouts.length = 0;
+    
+    setIsAnimating(true);
+    
     const isCollapsed = container.classList.toggle('collapsed');
     button.querySelector('svg').classList.toggle('rotated');
     const headerHeight = header.offsetHeight;
@@ -61,6 +81,12 @@ const on_header_click = (container, header, button) => {
     if (isCollapsed) {
         container.style.overflow = 'hidden';
         container.style.maxHeight = headerHeight + 'px';
+        
+        // Animation completes in 0.4s
+        const timeoutId = setTimeout(() => {
+            setIsAnimating(false);
+        }, 400);
+        animationTimeouts.push(timeoutId);
         
     } else {
         // Expand animation - measure full height with proper reflow
@@ -75,14 +101,17 @@ const on_header_click = (container, header, button) => {
         container.style.maxHeight = headerHeight + 'px';
         
         // Small timeout to ensure the transition is applied
-        setTimeout(() => {
+        const timeoutId1 = setTimeout(() => {
             container.style.maxHeight = fullHeight + 'px';
         }, 10);
+        animationTimeouts.push(timeoutId1);
         
         // Reset overflow after animation completes (0.4s)
-        setTimeout(() => {
+        const timeoutId2 = setTimeout(() => {
             container.style.overflow = 'visible';
+            setIsAnimating(false);
         }, 400);
+        animationTimeouts.push(timeoutId2);
     }
 }
 

@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 from whateels.helpers import CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton, Details
+from whateels.components import UploadedFile, ToggleButton, Details, WrapperDetails
 from whateels.base.mvc import BaseView
 import panel as pn
 from whateels.pages.quantification.MVC.model.element_item import ElementItem
@@ -268,22 +268,21 @@ class QuantificationView(BaseView):
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["element-container"],
         )
-        
-        details = Details(
-            title=pn.pane.Markdown(
-                "Quantification Instructions", 
-                sizing_mode=self._STRETCH_WIDTH
-            ),
+
+        details = WrapperDetails(
+            title="Quantification Instructions",
             content=pn.Column(
                 *[widget for widget in self._quanti_input.values()],
                 self._quanti_add_element_button,
-                sizing_mode=self._STRETCH_BOTH
+                sizing_mode=self._STRETCH_WIDTH
             ),
             expanded=False,
-            sizing_mode=self._STRETCH_BOTH,
+            margin=(0,0,10,0),
+            height=48,
+            sizing_mode=self._STRETCH_WIDTH,
         )
 
-            # State identifiers
+        # State identifiers
         _ON = 'on'
         _OFF = 'off'
         
@@ -322,11 +321,12 @@ class QuantificationView(BaseView):
         )
 
         right_sidebar = pn.Column(
-            pn.Column(
-                details,
-                height=57,
-                sizing_mode=self._STRETCH_WIDTH
-            ),
+            # pn.Column(
+            #     details,
+            #     height=57,
+            #     sizing_mode=self._STRETCH_WIDTH
+            # ),
+            details,
             self._element_item_view_container,
             pn.Row(
                 pn.widgets.TooltipIcon(

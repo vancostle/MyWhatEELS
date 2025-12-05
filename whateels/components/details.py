@@ -9,7 +9,10 @@ class Details(JSComponent):
 
     title = Child(class_=pn.pane.Markdown)
     content = Child(class_=pn.Column)
-    expanded = param.Boolean(default=False)    
+    expanded = param.Boolean(default=False)
+    
+    value = param.Parameter()
+    
     _FILE_NAME = "details"
     
     _JS_PATH = JS_ROOT / (_FILE_NAME + '.js')
@@ -20,3 +23,43 @@ class Details(JSComponent):
 
     _esm = rjsmin.jsmin(_JS_FILE)
     _stylesheets = [csscompressor.compress(_CSS_FILE)]
+    
+    def __init__(self, **params):
+        super().__init__(**params)
+    
+class WrapperDetails(pn.Column):
+    """ A wrapper around the Details component to simplify its creation. """
+    
+    def __init__(
+        self, 
+        title: str = "Details Title", 
+        content = None, 
+        expanded: bool = False,
+        **params
+    ):
+        if content is None:
+            content = pn.Column(
+                pn.pane.Markdown("Details content goes here.", sizing_mode="stretch_both"),
+                sizing_mode="stretch_both"
+            )
+            
+        self.details = Details(
+            title=pn.pane.Markdown(f"{title}", sizing_mode="stretch_both"),
+            content=content,
+            expanded=expanded,
+            sizing_mode="stretch_both",
+        )
+        
+        super().__init__(
+            self.details,
+            **params
+        )
+        
+        # Watch for value changes (header height) to set wrapper height
+        self.details.param.watch(self._update_height, 'value')
+    
+    def _update_height(self, event):
+        """Update wrapper height when header height is received from JS."""
+        if event.new is not None:
+            self.height = event.new
+            self.styles={'max-height': f'{event.new}px'}
