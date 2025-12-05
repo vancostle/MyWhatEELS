@@ -279,6 +279,7 @@ class QuantificationView(BaseView):
                 self._quanti_add_element_button,
                 sizing_mode=self._STRETCH_BOTH
             ),
+            expanded=False,
             sizing_mode=self._STRETCH_BOTH,
         )
 

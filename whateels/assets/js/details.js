@@ -25,7 +25,39 @@ export const render = ({ model }) => {
 
     // Initialize the container with proper max-height after DOM is ready
     setTimeout(() => {
-        container.style.maxHeight = container.scrollHeight + 'px';
+        // Temporarily disable transition for instant resize
+        const prevTransition = container.style.transition;
+        container.style.transition = 'none';
+
+        if (!model.expanded) {
+            const isCollapsed = container.classList.toggle('collapsed');
+            button.querySelector('svg').classList.toggle('rotated');
+            const headerHeight = header.offsetHeight;
+            if (isCollapsed) {
+                container.style.overflow = 'hidden';
+                container.style.maxHeight = headerHeight + 'px';
+            } else {
+                container.style.maxHeight = 'none';
+                void container.offsetHeight;
+                const fullHeight = container.scrollHeight;
+                container.style.maxHeight = headerHeight + 'px';
+                setTimeout(() => {
+                    container.style.maxHeight = fullHeight + 'px';
+                }, 10);
+                setTimeout(() => {
+                    container.style.overflow = 'visible';
+                }, 400);
+            }
+        } else {
+            // Expanded instantly, no animation
+            container.classList.remove('collapsed');
+            button.querySelector('svg').classList.remove('rotated');
+            container.style.overflow = 'visible';
+            container.style.maxHeight = container.scrollHeight + 'px';
+        }
+        // Force reflow, then restore transition
+        void container.offsetHeight;
+        container.style.transition = prevTransition;
     }, 0);
 
     // Toggle content visibility on header click
@@ -63,6 +95,10 @@ export const render = ({ model }) => {
     });
 
     return container;
+}
+
+const on_header_click = (container, header, content, button) => {
+    
 }
 
 const get_model_child = (model, value) => {

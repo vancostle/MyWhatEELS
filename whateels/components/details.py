@@ -1,4 +1,5 @@
 import panel as pn
+import param
 import csscompressor, rjsmin
 
 from panel.custom import JSComponent, Child
@@ -8,7 +9,7 @@ class Details(JSComponent):
 
     title = Child(class_=pn.pane.Markdown)
     content = Child(class_=pn.Column)
-    
+    expanded = param.Boolean(default=False)    
     _FILE_NAME = "details"
     
     _JS_PATH = JS_ROOT / (_FILE_NAME + '.js')
