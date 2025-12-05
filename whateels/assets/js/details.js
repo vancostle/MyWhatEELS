@@ -28,6 +28,9 @@ export const render = ({ model }) => {
         // Temporarily disable transition for instant resize
         const prevTransition = container.style.transition;
         container.style.transition = 'none';
+        const svg = button.querySelector('svg');
+        const prevSvgTransition = svg.style.transition;
+        svg.style.transition = 'none';
 
         if (!model.expanded) {
             const isCollapsed = container.classList.toggle('collapsed');
@@ -58,6 +61,7 @@ export const render = ({ model }) => {
         // Force reflow, then restore transition
         void container.offsetHeight;
         container.style.transition = prevTransition;
+        svg.style.transition = prevSvgTransition;
     }, 0);
 
     // Toggle content visibility on header click
