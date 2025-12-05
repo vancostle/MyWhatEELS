@@ -1,7 +1,6 @@
 .details-container {
     border-radius: 4px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
     transition: max-height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     max-height: none;
 
@@ -17,6 +16,10 @@
     color: white;
 
     cursor: pointer;
+    border-radius: 4px 4px 0 0;
+}
+.details-header:hover {
+    background-color: var(--header-background-hover);
 }
 .details-dropdown-button {
     display: grid;
@@ -57,6 +60,10 @@
 
 #content {
     padding: .8rem;
+    position: relative;
+    z-index: 2;
+    background-color: white;
+    border-radius: 0 0 4px 4px;
 }
 
 .dropdown-arrow-icon {

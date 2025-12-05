@@ -35,6 +35,7 @@ export const render = ({ model }) => {
         const headerHeight = header.offsetHeight;
         
         if (isCollapsed) {
+            container.style.overflow = 'hidden';
             container.style.maxHeight = headerHeight + 'px';
             
         } else {
@@ -53,6 +54,11 @@ export const render = ({ model }) => {
             setTimeout(() => {
                 container.style.maxHeight = fullHeight + 'px';
             }, 10);
+            
+            // Reset overflow after animation completes (0.4s)
+            setTimeout(() => {
+                container.style.overflow = 'visible';
+            }, 400);
         }
     });
 

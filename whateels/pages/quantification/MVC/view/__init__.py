@@ -266,7 +266,7 @@ class QuantificationView(BaseView):
 
         self._element_item_view_container = pn.Column(
             sizing_mode=self.STRETCH_BOTH,
-            css_classes=["element-container"]
+            css_classes=["element-container"],
         )
         
         details = Details(
@@ -321,9 +321,11 @@ class QuantificationView(BaseView):
         )
 
         right_sidebar = pn.Column(
-            # self._quanti_element_item,
-            # self._quanti_add_element_button,
-            details,
+            pn.Column(
+                details,
+                height=57,
+                sizing_mode=self._STRETCH_WIDTH
+            ),
             self._element_item_view_container,
             pn.Row(
                 pn.widgets.TooltipIcon(

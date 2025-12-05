@@ -41,6 +41,7 @@
 
 .element-container {
     flex: 1;
+    flex-direction: column-reverse;
     overflow-y: auto;
     height: inherit;
 
