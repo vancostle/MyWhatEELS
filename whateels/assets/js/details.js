@@ -59,6 +59,7 @@ export const render = ({ model }) => {
     // Toggle content visibility on header click
     header.addEventListener('click', () => on_header_click(container, header, button, model, animationTimeouts, () => isAnimating, (val) => { isAnimating = val; }));
 
+    model.isComponentLoaded = true;
     return container;
 }
 

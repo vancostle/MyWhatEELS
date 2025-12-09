@@ -12,6 +12,7 @@ class DetailsJS(JSComponent):
     expanded = param.Boolean(default=False)
     
     value = param.Parameter()
+    isComponentLoaded = param.Boolean(default=False)
     
     _FILE_NAME = "details"
     
@@ -36,30 +37,73 @@ class Details(pn.Column):
         content = None, 
         expanded: bool = False,
         **params
-    ):
+    ):        
         if content is None:
             content = pn.Column(
                 pn.pane.Markdown("Details content goes here.", sizing_mode="stretch_both"),
                 sizing_mode="stretch_both"
             )
             
-        self.details = DetailsJS(
+        custom_loading_spinner = pn.Column(
+            width=30,
+            height=30,
+            margin=0,
+            css_classes=["loader"],
+            styles={'background': 'red', 'position': 'absolute', 'right': '10px', 'padding': '0'},
+        )
+        
+        self._loading_panel = pn.Column(
+            pn.pane.Markdown(
+                f"{title}", 
+                sizing_mode="stretch_both", 
+                styles={'margin': '0px', 'padding': '0 0 0 13px', 'color': 'white'}
+            ),
+            # custom_loading_spinner,
+            sizing_mode="stretch_both",
+            styles={
+                'display': 'flex', 
+                'justify-content': 'center', 
+                'align-items': 'center',
+                'width': '100%',
+                'height': '100%',
+                'min-height': '100%',
+                'background-color': 'var(--header-background)',
+                'z-index': '10',
+                'border-radius': '4px',
+                'position': 'absolute',
+                'inset': '0',
+            }
+        )
+            
+        self._details = DetailsJS(
             title=pn.pane.Markdown(f"{title}", sizing_mode="stretch_both"),
             content=content,
             expanded=expanded,
             sizing_mode="stretch_both",
+            styles={'pointer-events': 'none', 'opacity': '0', 'position': 'absolute', 'inset': '0'},  # Initially disable interaction
         )
-        
+                
         super().__init__(
-            self.details,
+            self._loading_panel,
+            self._details,
             **params
         )
         
+        self.styles={'position': 'relative'}
+                
         # Watch for value changes (header height) to set wrapper height
-        self.details.param.watch(self._update_height, 'value')
+        self._details.param.watch(self._update_height, 'value')
+        self._details.param.watch(self._component_loaded, 'isComponentLoaded')
     
     def _update_height(self, event):
         """Update wrapper height when header height is received from JS."""
         if event.new is not None:
             self.height = event.new
             self.styles={'max-height': f'{event.new}px'}
+            
+    def _component_loaded(self, event):
+        """Handle component loaded event."""
+        print("Details component has loaded:", event.new)
+        
+        self._details.styles={'pointer-events': 'auto', 'opacity': '1'}  # Enable interaction
+        self._loading_panel.styles={'display': 'none'}  # Hide loading panel
