@@ -1,6 +1,5 @@
 from panel.widgets import Button
-from typing import Awaitable, Optional, Callable, override
-import param
+from typing import Optional, Callable
 
 class ToggleButton(Button):
     

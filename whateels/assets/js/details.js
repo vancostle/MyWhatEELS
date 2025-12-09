@@ -42,7 +42,7 @@ export const render = ({ model }) => {
         svg.style.transition = 'none';
 
         if (!model.expanded) {
-            on_header_click(container, header, button, model, animationTimeouts, () => isAnimating, (val) => { isAnimating = val; });
+            on_header_click(container, header, button, animationTimeouts, () => isAnimating, (val) => { isAnimating = val; });
         } else {
             // Expanded instantly, no animation
             container.classList.remove('collapsed');
@@ -57,13 +57,13 @@ export const render = ({ model }) => {
     }, 0);
 
     // Toggle content visibility on header click
-    header.addEventListener('click', () => on_header_click(container, header, button, model, animationTimeouts, () => isAnimating, (val) => { isAnimating = val; }));
+    header.addEventListener('click', () => on_header_click(container, header, button, animationTimeouts, () => isAnimating, (val) => { isAnimating = val; }));
 
     model.isComponentLoaded = true;
     return container;
 }
 
-const on_header_click = (container, header, button, model, animationTimeouts, getIsAnimating, setIsAnimating) => {
+const on_header_click = (container, header, button, animationTimeouts, getIsAnimating, setIsAnimating) => {
     // Prevent double-click/rapid clicking during animation
     if (getIsAnimating()) {
         return;

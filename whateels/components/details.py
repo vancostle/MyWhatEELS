@@ -43,14 +43,6 @@ class Details(pn.Column):
                 pn.pane.Markdown("Details content goes here.", sizing_mode="stretch_both"),
                 sizing_mode="stretch_both"
             )
-            
-        custom_loading_spinner = pn.Column(
-            width=30,
-            height=30,
-            margin=0,
-            css_classes=["loader"],
-            styles={'background': 'red', 'position': 'absolute', 'right': '10px', 'padding': '0'},
-        )
         
         self._loading_panel = pn.Column(
             pn.pane.Markdown(
@@ -58,7 +50,6 @@ class Details(pn.Column):
                 sizing_mode="stretch_both", 
                 styles={'margin': '0px', 'padding': '0 0 0 13px', 'color': 'white'}
             ),
-            # custom_loading_spinner,
             sizing_mode="stretch_both",
             styles={
                 'display': 'flex', 
@@ -102,8 +93,6 @@ class Details(pn.Column):
             self.styles={'max-height': f'{event.new}px'}
             
     def _component_loaded(self, event):
-        """Handle component loaded event."""
-        print("Details component has loaded:", event.new)
-        
+        """Handle component loaded event."""        
         self._details.styles={'pointer-events': 'auto', 'opacity': '1'}  # Enable interaction
         self._loading_panel.styles={'display': 'none'}  # Hide loading panel
