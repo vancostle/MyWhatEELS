@@ -5,7 +5,7 @@ import csscompressor, rjsmin
 from panel.custom import JSComponent, Child
 from whateels.helpers.constants import JS_ROOT, CSS_ROOT
 
-class Details(JSComponent):
+class DetailsJS(JSComponent):
 
     title = Child(class_=pn.pane.Markdown)
     content = Child(class_=pn.Column)
@@ -27,7 +27,7 @@ class Details(JSComponent):
     def __init__(self, **params):
         super().__init__(**params)
     
-class WrapperDetails(pn.Column):
+class Details(pn.Column):
     """ A wrapper around the Details component to simplify its creation. """
     
     def __init__(
@@ -43,7 +43,7 @@ class WrapperDetails(pn.Column):
                 sizing_mode="stretch_both"
             )
             
-        self.details = Details(
+        self.details = DetailsJS(
             title=pn.pane.Markdown(f"{title}", sizing_mode="stretch_both"),
             content=content,
             expanded=expanded,

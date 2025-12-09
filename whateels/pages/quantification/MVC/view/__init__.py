@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 from whateels.helpers import CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton, Details, WrapperDetails
+from whateels.components import UploadedFile, ToggleButton, Details
 from whateels.base.mvc import BaseView
 import panel as pn
 from whateels.pages.quantification.MVC.model.element_item import ElementItem
@@ -269,14 +269,14 @@ class QuantificationView(BaseView):
             css_classes=["element-container"],
         )
 
-        details = WrapperDetails(
+        details = Details(
             title="Quantification Instructions",
             content=pn.Column(
                 *[widget for widget in self._quanti_input.values()],
                 self._quanti_add_element_button,
                 sizing_mode=self._STRETCH_WIDTH
             ),
-            expanded=False,
+            expanded=True,
             margin=(0,0,10,0),
             height=48,
             sizing_mode=self._STRETCH_WIDTH,
@@ -321,11 +321,6 @@ class QuantificationView(BaseView):
         )
 
         right_sidebar = pn.Column(
-            # pn.Column(
-            #     details,
-            #     height=57,
-            #     sizing_mode=self._STRETCH_WIDTH
-            # ),
             details,
             self._element_item_view_container,
             pn.Row(

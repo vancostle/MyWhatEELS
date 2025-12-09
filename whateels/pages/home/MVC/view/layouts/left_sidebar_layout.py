@@ -57,11 +57,11 @@ class HomePageLeftSidebar(pn.Column):
             margin=(0,0,0,0),
         )
         
-        details = Details(
-            title=title,
-            content=content,
-            sizing_mode="stretch_both"
-        )
+        # details = Details(
+        #     title=title,
+        #     content=content,
+        #     sizing_mode="stretch_both"
+        # )
         
         # END TESTING CODE
         
