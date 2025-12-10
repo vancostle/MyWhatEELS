@@ -1,6 +1,6 @@
 import panel as pn
 
-from whateels.components import FileUploader, Details
+from whateels.components import FileUploader
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
