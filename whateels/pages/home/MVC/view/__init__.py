@@ -4,6 +4,7 @@ from whateels.errors.dm.data import DMPlotCreationError
 from whateels.helpers import LoadCSS, CSS_ROOT
 from .plots_factory import PlotsFactory
 from .layouts import HomePageLeftSidebar, HomePageMainLayout
+from whateels.components import SimpleDetails
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

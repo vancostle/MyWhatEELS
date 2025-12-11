@@ -5,6 +5,7 @@ import csscompressor, rjsmin
 from panel.custom import JSComponent, Child
 from whateels.helpers.constants import JS_ROOT, CSS_ROOT
 
+# TODO - This component works but actually is not being used anywhere yet. Implement it or remove it with its css and js files.
 class DetailsJS(JSComponent):
 
     title = Child(class_=pn.pane.Markdown)

@@ -1,9 +1,10 @@
-from typing import TYPE_CHECKING, Optional
-from whateels.helpers import CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton, Details
-from whateels.base.mvc import BaseView
 import panel as pn
 
+from whateels.helpers import CSS_ROOT
+from whateels.components import UploadedFile, ToggleButton, SimpleDetails
+from whateels.base.mvc import BaseView
+from .layouts import QuanficationLeftSidebarLayout, QuantificationMainLayout, QuantificationRightSidebarLayout
+from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ..model import QuantificationModel
     from ..controller import QuantificationController
@@ -32,6 +33,10 @@ class QuantificationView(BaseView):
         self._quanti_add_element_button = None
 
         self._element_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH)
+        
+        # self._main_layout = QuantificationMainLayout(model)
+        # self._left_sidebar_layout = QuanficationLeftSidebarLayout(model)
+        # self._right_sidebar_layout = QuantificationRightSidebarLayout(model)
 
         self._init_components()
     
@@ -135,7 +140,7 @@ class QuantificationView(BaseView):
             name='Add Element',
             button_type='primary',
             height=55,
-            margin=(0,0,10,0),
+            margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
         )
@@ -149,8 +154,8 @@ class QuantificationView(BaseView):
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["element-container"],
         )
-
-        details = Details(
+        
+        details = SimpleDetails(
             title="Quantification Instructions",
             content=pn.Column(
                 *[widget for widget in self._quanti_input.values()],
@@ -158,9 +163,8 @@ class QuantificationView(BaseView):
                 sizing_mode=self._STRETCH_WIDTH
             ),
             expanded=False,
-            margin=(0,0,10,0),
-            height=48,
             sizing_mode=self._STRETCH_WIDTH,
+            margin=(0,0,10,0)
         )
 
         # State identifiers

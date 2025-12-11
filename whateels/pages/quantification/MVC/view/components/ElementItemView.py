@@ -1,4 +1,3 @@
-from typing import TYPE_CHECKING
 import panel as pn
 from whateels.components.toggle_button import ToggleButton
 

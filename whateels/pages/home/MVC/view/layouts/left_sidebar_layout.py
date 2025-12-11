@@ -41,7 +41,7 @@ class HomePageLeftSidebar(pn.Column):
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
-        
+
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
             pn.Spacer(height=10),
