@@ -10,12 +10,16 @@ class SimpleDetails(pn.Column):
         title: str, 
         content: pn.Column,
         expanded: bool = False,
+        button_type_on_expand: str = 'success',
+        button_type_on_collapse: str = 'primary',
         **params
     ) -> None:
+        
+        self._title = title
 
         self._button_header = pn.widgets.Button(
-            name=title,
-            button_type='primary',
+            name=str("\u25B2 " if expanded else "\u25BC ") + title,
+            button_type=button_type_on_expand if expanded else button_type_on_collapse,
             on_click=lambda _: self.toggle(),
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
@@ -51,6 +55,11 @@ class SimpleDetails(pn.Column):
     def toggle(self):
         """Toggle the visibility of the details content."""
         if isinstance(self._content.visible, bool):
-            self._content.visible = not self._content.visible            
+            self._content.visible = not self._content.visible
         else:
             self._content.visible = True
+            
+        self._button_header.name = str("\u25B2 " if self._content.visible else "\u25BC ") + self._title
+        self._button_header.button_type = (
+            'success' if self._content.visible else 'primary'
+        )
