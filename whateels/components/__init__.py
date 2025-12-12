@@ -8,6 +8,7 @@ from .progress_tracker_mixin import ProgressTrackerMixin
 from .progress_display import ProgressDisplay
 from .dataset_information import DatasetInformation
 from .file_uploader import FileUploader
+from .simple_details import SimpleDetails
 from .details import Details
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     'ProgressDisplay',
     'DatasetInformation',
     'FileUploader',
-    'Details',
+    'SimpleDetails',
+    'Details'
 ]
