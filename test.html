@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    
+    <div id="split-container" style="height: 300px; width: 100%; display: flex;"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.2/split.min.js"></script>
+    <script>
+        // Create two panes
+        const left = document.createElement('div');
+        left.style.background = '#eee';
+        left.innerText = 'Left Pane';
+        left.style.display = 'flex';
+        left.style.alignItems = 'center';
+        left.style.justifyContent = 'center';
+        left.style.fontSize = '1.2em';
+
+        const right = document.createElement('div');
+        right.style.background = '#ddd';
+        right.innerText = 'Right Pane';
+        right.style.display = 'flex';
+        right.style.alignItems = 'center';
+        right.style.justifyContent = 'center';
+        right.style.fontSize = '1.2em';
+
+        const container = document.getElementById('split-container');
+        container.appendChild(left);
+        container.appendChild(right);
+
+        // Apply Split.js
+        Split([left, right], {
+            sizes: [50, 50],
+            minSize: 150,
+            maxSize: 900,
+            gutterSize: 8,
+            direction: 'horizontal',
+        });
+    </script>
+</body>
+</html>

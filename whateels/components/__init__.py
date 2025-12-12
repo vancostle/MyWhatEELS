@@ -10,6 +10,7 @@ from .dataset_information import DatasetInformation
 from .file_uploader import FileUploader
 from .simple_details import SimpleDetails
 from .details import Details
+from .splitjs import SplitJs, SplitJsWrapper
 
 __all__ = [
     'FileDropper',
@@ -23,5 +24,7 @@ __all__ = [
     'DatasetInformation',
     'FileUploader',
     'SimpleDetails',
-    'Details'
+    'Details',
+    'SplitJs',
+    'SplitJsWrapper',
 ]
