@@ -200,7 +200,12 @@ class QuantificationController(BaseController):
             b = self._layout.get_active_dataset().attrs['collection_angle']
             element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b,), V, b]
 
-            min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])                
+            min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])            
+        if min_eaxis_cs < self._layout.get_energy_range()[0]:
+            add_element_button.disabled = True
+            add_element_button.name = "Bad Energy Range"
+            add_element_button.button_type = "danger"
+            return
 
         element_item_view = ElementItemView(self, element_item, self.model, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]), self.view)
         element_item.set_quant_range(min_eaxis_cs)
