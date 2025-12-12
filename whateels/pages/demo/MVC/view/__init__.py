@@ -3,7 +3,7 @@ import plotly.graph_objs as go
 import plotly.express as px
 import pandas as pd
 
-from whateels.components import ResizableColumns, SplitJsWrapper
+from whateels.components import ResizableColumns
 from whateels.components.splitjs import SplitJs
 
 class DemoPageView:
@@ -32,25 +32,8 @@ class DemoPageView:
             styles={"border": "2px solid #34495e", "border-radius": "5px"}
         )
         
-        left_column = pn.Column(
-            # plot_pane,
-            sizing_mode=self._STRETCH_BOTH,
-            styles={"background-color": "#59b966"}
-        )
-        right_column = pn.Column(
-            pn.pane.Markdown("## Additional Info\nThis is the right sidebar."),
-            sizing_mode=self._STRETCH_BOTH,
-            styles={"background-color": "#f39c12"}
-        )
-        
-        resizable_columns = ResizableColumns(
-            left_column=left_column,
-            right_column=right_column,
-            sizing_mode=self._STRETCH_BOTH
-        )
-        
         self._right_sidebar.append(
-            resizable_columns
+            pn.widgets.Button(name="Right Sidebar Button", button_type="primary", sizing_mode="stretch_width", on_click=lambda event: fig_responsive.update_layout(width=500))
         )
         
         splitjswrapper = SplitJs(
@@ -64,6 +47,7 @@ class DemoPageView:
                 sizing_mode=self._STRETCH_BOTH,
                 styles={'background-color': '#2980b9'}
             ),
+            figure=fig_responsive,
             sizing_mode=self._STRETCH_BOTH,
             styles={'border': '2px solid #34495e', 'border-radius': '5px'} 
         )

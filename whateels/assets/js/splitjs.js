@@ -28,17 +28,26 @@ export function render({ model }) {
         },
         onDragEnd: (sizes) => {
             console.log('Finished resizing', sizes);
-            console.log(window.Plotly.Plots)
-            // Dispatch resize event so Plotly/other components can update
-            // window.dispatchEvent(new Event('resize'));
-            // // Find the first element with both classes 'plot-container' and 'plotly'
-            // const left_shadow_root = left.shadowRoot.querySelector('.bk-panel-models-plotly-PlotlyPlot').shadowRoot.querySelector('.plot-container.plotly').querySelector('.svg-container');
-        
-            // if (left_shadow_root) {
-            //     console.log('Found plotly plot:', left_shadow_root.children);
-            // } else {
-            //     console.log('No plotly plot found');
-            // }
+            
+            // Get actual pixel widths using getBoundingClientRect (more accurate)
+            const leftRect = left.getBoundingClientRect();
+            const rightRect = right.getBoundingClientRect();
+            
+            console.log('Left width:', leftRect.width, 'px');
+            console.log('Right width:', rightRect.width, 'px');
+            
+            // Send drag end event to Python using Panel's messaging API
+            model.send_msg({ 
+                event: 'drag_end', 
+                sizes: sizes,  // percentages from Split.js
+                widths: {
+                    left: leftRect.width,
+                    right: rightRect.width
+                }
+            });
+            
+            // Dispatch window resize event for Plotly plots
+            window.dispatchEvent(new Event('resize'));
         }
     });
 

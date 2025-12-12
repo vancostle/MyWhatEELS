@@ -3,12 +3,15 @@ import csscompressor, rjsmin
 
 from panel.custom import JSComponent, Child # type: ignore
 from whateels.helpers.constants import JS_ROOT, CSS_ROOT
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import plotly.express as px
 
 class SplitJs(JSComponent):
     
-    left_column= Child(class_=pn.Column) # type: ignore
+    left_column = Child(class_=pn.Column) # type: ignore
     right_column = Child(class_=pn.Column) # type: ignore
-    
+        
     _FILE_NAME = "splitjs"
 
     _JS_PATH = JS_ROOT / (_FILE_NAME + '.js')
@@ -24,8 +27,16 @@ class SplitJs(JSComponent):
     }
     _esm = str(rjsmin.jsmin(_JS_FILE))
     _stylesheets = [csscompressor.compress(_CSS_FILE)]
+
+    def __init__(self, figure, **params):
+        super().__init__(**params)
+        self.figure = figure
     
-class SplitJsWrapper(pn.Column):
-    def __init__(self, **params):
-        super().__init__(SplitJs(), **params)
-        
+    def _handle_msg(self, data):
+        """Handle messages from JavaScript"""
+        if data.get('event') == 'drag_end':
+            sizes = data.get('sizes', [])
+            widths = data.get('widths', {})
+            print(f"Drag ended! Sizes: {sizes}%, Widths: left={widths.get('left')}px, right={widths.get('right')}px")
+            
+            self.figure.update_layout(width=widths.get('left'))
