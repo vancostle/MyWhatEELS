@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 
 
 class QuantificationController(BaseController):
+    ELEMENT_EAXIS_THRESHOLD = 50
 
     def __init__(self, model: "QuantificationModel", view: "QuantificationView"):
-        ELEMENT_EAXIS_THRESHOLD = 50
         
         
         super().__init__(model, view)
