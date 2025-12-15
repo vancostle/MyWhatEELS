@@ -17,5 +17,5 @@ class DemoPage(CustomPage):
             main=[view.main],
             sidebar=[view.left_sidebar],
             right_sidebar=[view.right_sidebar],
-            sidebar_width=320
+            sidebar_width=150,
         )

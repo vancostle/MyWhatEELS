@@ -22,42 +22,39 @@ class DemoPageView:
 
         fig_responsive = px.line(data, x="Day", y="Orders")
         fig_responsive.update_traces(mode="lines+markers", marker=dict(size=10), line=dict(width=4))
-        # Don't set width/height in the layout - let autosize work
-        # autosize=True is the default, so the plot will fit its container
 
-        plot_pane = pn.pane.Plotly(
+        left_plot_pane = pn.pane.Plotly(
             fig_responsive,
             sizing_mode=self._STRETCH_BOTH,
             config={"responsive": True},
-            styles={"border": "2px solid #34495e", "border-radius": "5px"}
+            margin=0
         )
         
-        self._right_sidebar.append(
-            pn.widgets.Button(name="Right Sidebar Button", button_type="primary", sizing_mode="stretch_width", on_click=lambda event: fig_responsive.update_layout(width=500))
-        )
+        right_fig_responsive = px.line(data, x="Day", y="Orders")
+        right_fig_responsive.update_traces(mode="lines+markers", marker=dict(size=10), line=dict(width=4))
         
+        right_plot_pane = pn.pane.Plotly(
+            right_fig_responsive,
+            sizing_mode=self._STRETCH_BOTH,
+            config={"responsive": True},
+            margin=0
+        )        
         splitjswrapper = SplitJs(
             left_column=pn.Column(
-                plot_pane,
+                left_plot_pane,
                 sizing_mode=self._STRETCH_BOTH,
-                styles={'background-color': '#8e44ad'}
             ),
             right_column=pn.Column(
-                pn.pane.Markdown("## Right Pane\nThis is the right pane content."),
+                right_plot_pane,
                 sizing_mode=self._STRETCH_BOTH,
-                styles={'background-color': '#2980b9'}
             ),
-            figure=fig_responsive,
             sizing_mode=self._STRETCH_BOTH,
-            styles={'border': '2px solid #34495e', 'border-radius': '5px'} 
         )
         
         self._main = pn.Column(
             splitjswrapper,
             sizing_mode=self._STRETCH_BOTH
         )
-
-
         
     @property
     def main(self) -> pn.Column:
