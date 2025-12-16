@@ -13,7 +13,7 @@ from whateels.helpers import SpectrumExtractor
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
-from whateels.components import ResizableColumns, DatasetInformation
+from whateels.components import ResizableColumns, DatasetInformation, SplitJs
 from whateels.shared_state import AppState
 from whateels.interfaces import IPlot
 
@@ -89,25 +89,27 @@ class SpectrumImagePlot(IPlot):
     def create_plots(self):        
         left_column = pn.Column(
             self.paneA,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
         right_column = pn.Column(
             self.paneB,
             # fila de botones (fitting + multifit)
-            self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
+            # self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
             # slider/range debajo
             self.range_slider_row,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
-        
-        resizable_columns = ResizableColumns(
+
+        splitjs = SplitJs(
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
         )
  
-        return resizable_columns
+        return splitjs
 
     @override
     def create_dataset_info(self):
@@ -269,7 +271,6 @@ class SpectrumImagePlot(IPlot):
         
         minmax = get_range_slider_value(self.range_slider)
         min_val, max_val = minmax if len(minmax) == 2 else (0, 1)
-        
 
         location = getattr(pn.state, 'location', None)
         current_port = getattr(location, 'port', 5006)
@@ -344,7 +345,6 @@ class SpectrumImagePlot(IPlot):
         figA = go.Figure(data=[heat, selectors])
         figA.update_layout(
             title=" ",
-            height=400,  # default initial height as in the original copy
             margin=dict(l=16, r=16, t=50, b=20),
             dragmode="lasso",
             paper_bgcolor='rgba(0,0,0,0)',
@@ -355,13 +355,21 @@ class SpectrumImagePlot(IPlot):
                            showgrid=False, zeroline=False, showticklabels=False)
         figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
-        # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
-        self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
+        # Pane A (heatmap) — width controlled by SplitJs; aspect locked by figure axes
+        self.paneA = pn.pane.Plotly(
+            figA, 
+            config={"responsive": True},
+            sizing_mode='stretch_both', 
+            margin=0,
+        )
 
-        # Pane B initial message (apply stored ranges if any)
+        # Pane B initial message (responsive to container size changes)
         self.paneB = pn.pane.Plotly(
-            self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
-            sizing_mode='stretch_both', config={"responsive": True}
+            # self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
+            self._figB_message(" ", "Move the cursor over the image"),
+            config={"responsive": True},
+            sizing_mode='stretch_both',
+            margin=0,
         )
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---
@@ -380,31 +388,36 @@ class SpectrumImagePlot(IPlot):
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
 
     # --- Helpers / utilities (from si_view.py adapted) ---
-    def _to_plotly(self, obj):
-        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
-        try:
-            if isinstance(obj, go.Figure):
-                return obj.to_plotly_json()
-        except Exception:
-            pass
-        try:
-            if isinstance(obj, dict):
-                return obj
-        except Exception:
-            pass
-        return obj
+    # def _to_plotly(self, obj):
+    #     """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
+    #     try:
+    #         if isinstance(obj, go.Figure):
+    #             return obj.to_plotly_json()
+    #     except Exception:
+    #         pass
+    #     try:
+    #         if isinstance(obj, dict):
+    #             return obj
+    #     except Exception:
+    #         pass
+    #     return obj
 
-    def _figB_message(self, title, subtitle):
-        fig = go.Figure()
-        fig.update_xaxes(visible=False)
-        fig.update_yaxes(visible=False)
-        fig.update_layout(title=title, margin=dict(l=16, r=16, t=48, b=16))
-        fig.add_annotation(
-            x=0.5, y=0.6, xref="paper", yref="paper",
-            text=subtitle, showarrow=False,
-            font=dict(size=22), align="center",
+    def _figB_message(self, title, subtitle) -> go.Figure:
+        self.fig = go.Figure()
+        self.fig.update_xaxes(visible=False)
+        self.fig.update_yaxes(visible=False)
+        self.fig.update_layout(title=title, margin=dict(l=16, r=16, t=48, b=16))
+        self.fig.add_annotation(
+            x=0.5, 
+            y=0.6, 
+            xref="paper", 
+            yref="paper",
+            text=subtitle, 
+            showarrow=False,
+            font=dict(size=22), 
+            align="center",
         )
-        return fig
+        return self.fig
 
     def _figB_hover(self, point):
         if not point:
@@ -555,7 +568,7 @@ class SpectrumImagePlot(IPlot):
             # fallback: empty figure
             fig_obj = go.Figure()
         self._apply_current_ranges(fig_obj)
-        return self._to_plotly(fig_obj)
+        return fig_obj
 
     # --- Fitting and range behaviour ---
     def _on_fitting_clicked(self, event):

@@ -1,4 +1,3 @@
-
 const LEFT_COLUMN = 'left_column';
 const RIGHT_COLUMN = 'right_column';
 const ID = 'id';
@@ -17,24 +16,14 @@ export function render({ model }) {
     Split([left, right], {
         sizes: [50, 50],
         minSize: 0,
-        gutterSize: 8,
+        gutterSize: 10,
         direction: 'horizontal',
-        onDrag: (sizes) => {
-            // Get actual pixel widths using getBoundingClientRect (more accurate)
-            const leftRect = left.getBoundingClientRect();
-            const rightRect = right.getBoundingClientRect();
-            
-            // Send drag end event to Python using Panel's messaging API
-            model.send_msg({ 
-                widths: {
-                    left: leftRect.width - 1,
-                    right: rightRect.width - 1
-                }
-            });
-            
-            // Dispatch window resize event for Plotly plots
-            window.dispatchEvent(new Event('resize'));
+        onDrag: (_) => {
+            resizing(left, right, model, 'dragging');
         },
+        onDragEnd: (_) => {
+            resizing(left, right, model, 'dragend');
+        }
     });
 
     return container;
@@ -44,4 +33,29 @@ const get_model_child = (model, value) => {
     const child = model.get_child(value);
     child.setAttribute(ID, value);
     return child
+}
+
+const resizing = (left, right, model, event) => {
+    // Get actual pixel widths using getBoundingClientRect (more accurate)
+    const leftRect = left.getBoundingClientRect();
+    const rightRect = right.getBoundingClientRect();
+
+    const leftWidth = Math.trunc(leftRect.width);
+    const rightWidth = Math.trunc(rightRect.width);
+
+    if (event === 'dragend') {
+        console.log(`SplitJs drag ended. Left width: ${leftWidth} px, Right width: ${rightWidth} px`);
+    }
+
+    // Send drag end event to Python using Panel's messaging API
+    model.send_msg({
+        event,
+        widths: {
+            left: leftWidth,
+            right: rightWidth
+        }
+    });
+    
+    // Dispatch window resize event for Plotly plots
+    window.dispatchEvent(new Event('resize'));
 }

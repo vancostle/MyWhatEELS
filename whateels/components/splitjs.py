@@ -50,7 +50,7 @@ class SplitJs(JSComponent):
         self._left_column_figure = figure
         
         right_column_children = getattr(self.right_column, 'objects', None)
-        right_column_contains_plotly = self._some_child_is_plotly(left_column_children)
+        right_column_contains_plotly = self._some_child_is_plotly(right_column_children)
         
         figure = None
         if right_column_contains_plotly and right_column_children is not None:
@@ -67,13 +67,21 @@ class SplitJs(JSComponent):
         
         widths = data.get('widths', {})
         
-        print("Widths", widths)
-        
         if self._left_column_figure is not None:
-            self._left_column_figure.update_layout(width=widths.get('left'))
+            with self._left_column_figure.batch_update():
+                self._left_column_figure.update_layout(width=widths.get('left'))
             
         if self._right_column_figure is not None:
-            self._right_column_figure.update_layout(width=widths.get('right'))
+            with self._right_column_figure.batch_update():
+                self._right_column_figure.update_layout(width=widths.get('right'))
+            
+        # if (data.get('event', '') == 'dragend'):
+        #     print(f"SplitJs drag ended. Left width: {widths.get('left')} px, Right width: {widths.get('right')} px")
+        #     if self._right_column_figure is not None:
+        #         self._right_column_figure.update_layout(width=widths.get('right'))
+        #         with self._right_column_figure.batch_update():
+        #             self._right_column_figure.layout.width = widths.get('right')
+        #         print(f"Right width after drag end: {widths.get('right')} px")
             
     def _some_child_is_plotly(self, children) -> bool:
         """Check if any of the children is a Plotly pane"""

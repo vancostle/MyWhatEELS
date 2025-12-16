@@ -2,6 +2,7 @@ import panel as pn
 import plotly.graph_objs as go
 import plotly.express as px
 import pandas as pd
+import numpy as np
 
 from whateels.components import ResizableColumns
 from whateels.components.splitjs import SplitJs
@@ -15,37 +16,60 @@ class DemoPageView:
         self._left_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
-        data = pd.DataFrame([
-            ('Monday', 7), ('Tuesday', 4), ('Wednesday', 9), ('Thursday', 4),
-            ('Friday', 4), ('Saturday', 4), ('Sunday', 4)], columns=['Day', 'Orders']
+        # Simple heatmap (like paneA in spectrum_image_plot)
+        ny, nx = 50, 50
+        m_image = np.random.rand(ny, nx) * 100
+        
+        figA = go.Figure(data=[go.Heatmap(
+            z=m_image,
+            colorscale="Greys_r",
+            showscale=False
+        )])
+        figA.update_layout(
+            margin=dict(l=16, r=16, t=50, b=20),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
         )
-
-        fig_responsive = px.line(data, x="Day", y="Orders")
-        fig_responsive.update_traces(mode="lines+markers", marker=dict(size=10), line=dict(width=4))
-
-        left_plot_pane = pn.pane.Plotly(
-            fig_responsive,
-            sizing_mode=self._STRETCH_BOTH,
+        figA.update_yaxes(autorange="reversed", showgrid=False, zeroline=False, showticklabels=False)
+        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False)
+        
+        self.paneA = pn.pane.Plotly(
+            figA,
             config={"responsive": True},
+            sizing_mode='stretch_both',
             margin=0
         )
         
-        right_fig_responsive = px.line(data, x="Day", y="Orders")
-        right_fig_responsive.update_traces(mode="lines+markers", marker=dict(size=10), line=dict(width=4))
+        # Simple line chart (like paneB in spectrum_image_plot)
+        energy = np.linspace(0, 100, 200)
+        spectrum = np.random.rand(200) * 1000
         
-        right_plot_pane = pn.pane.Plotly(
-            right_fig_responsive,
-            sizing_mode=self._STRETCH_BOTH,
+        figB = go.Figure(data=[go.Scatter(
+            x=energy,
+            y=spectrum,
+            mode="lines"
+        )])
+        figB.update_layout(
+            title="Spectrum",
+            margin=dict(l=16, r=16, t=48, b=16),
+            xaxis_title="Energy Loss (eV)",
+            yaxis_title="Intensity (a.u.)"
+        )
+        
+        self.paneB = pn.pane.Plotly(
+            figB,
             config={"responsive": True},
+            sizing_mode='stretch_both',
             margin=0
-        )        
+        )
+        
         splitjswrapper = SplitJs(
             left_column=pn.Column(
-                left_plot_pane,
+                self.paneA,
                 sizing_mode=self._STRETCH_BOTH,
             ),
             right_column=pn.Column(
-                right_plot_pane,
+                self.paneB,
                 sizing_mode=self._STRETCH_BOTH,
             ),
             sizing_mode=self._STRETCH_BOTH,
