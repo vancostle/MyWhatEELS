@@ -13,7 +13,7 @@ from whateels.helpers import SpectrumExtractor
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
-from whateels.components import ResizableColumns, DatasetInformation, SplitJs
+from whateels.components import DatasetInformation, SplitJs
 from whateels.shared_state import AppState
 from whateels.interfaces import IPlot
 
@@ -96,7 +96,7 @@ class SpectrumImagePlot(IPlot):
         right_column = pn.Column(
             self.paneB,
             # fila de botones (fitting + multifit)
-            # self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
+            self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
             # slider/range debajo
             self.range_slider_row,
             sizing_mode='stretch_both',

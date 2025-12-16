@@ -16,7 +16,7 @@ import numpy as np
 import plotly.graph_objs as go
 
 from whateels.helpers import SpectrumExtractor
-from whateels.components import ResizableColumns
+from whateels.components import SplitJs
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -97,22 +97,25 @@ class SpectrumImagePlot:
         """
         left_column = pn.Column(
             self.paneA,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
         right_column = pn.Column(
             self.paneB,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
-        resizable_columns = ResizableColumns(
+        splitjs = SplitJs(
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
+            margin=0
         )
 
         container = pn.Column( 
-            resizable_columns,
+            splitjs,
             sizing_mode='stretch_both'
         )
 
@@ -276,14 +279,16 @@ class SpectrumImagePlot:
 
         # Create Panel panes (use _to_plotly to avoid Panel<->Plotly relayout issues)
         self.paneA = pn.pane.Plotly(
-            self._to_plotly(figA), 
+            figA, 
             config={"responsive": True}, 
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         self.paneB = pn.pane.Plotly(
-            self._to_plotly(figB), 
+            figB, 
             config={"responsive": True}, 
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
 
     def _setup_callbacks(self):
@@ -295,28 +300,6 @@ class SpectrumImagePlot:
             self.paneA.param.watch(self._on_paneA_selected, "selected_data")
 
     # --- Protected Helper Methods ---
-
-    def _to_plotly(self, obj):
-        """
-        Convert go.Figure to dict to avoid Panel<->Plotly relayout issues.
-        
-        Args:
-            obj: Plotly Figure or dict
-            
-        Returns:
-            dict: Plotly JSON representation
-        """
-        try:
-            if isinstance(obj, go.Figure):
-                return obj.to_plotly_json()
-        except Exception:
-            pass
-        try:
-            if isinstance(obj, dict):
-                return obj
-        except Exception:
-            pass
-        return obj
 
     def _on_paneA_hover(self, event):
         """

@@ -21,7 +21,7 @@ import traceback
 
 from whateels.helpers import SpectrumExtractor
 from whateels.components.plots import SpectrumImagePlot as SharedSpectrumImagePlot
-from whateels.components import ResizableColumns, ProgressDisplay
+from whateels.components import SplitJs, ProgressDisplay
 from typing import override, TYPE_CHECKING
 
 # Import clustering page utilities (OOP classes)
@@ -570,28 +570,30 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     
     @override
     def create_plots(self):
-        """Create the resizable two-column layout."""
+        """Create the splitjs two-column layout."""
         left_column = pn.Column(
             self.paneA,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
         right_column = pn.Column(
             self.paneB,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
-        resizable_columns = ResizableColumns(
+        splitjs = SplitJs(
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
         )
         
         # Store the plots layout so we can restore it after clustering
-        self._plots_layout = resizable_columns
+        self._plots_layout = splitjs
 
         container = pn.Column( 
-            resizable_columns,
+            splitjs,
             sizing_mode='stretch_both'
         )
         return container
