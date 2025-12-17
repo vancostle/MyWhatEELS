@@ -260,7 +260,7 @@ class FileUploader(pn.Column):
         # Use CSS for 2-line clamp and ellipsis
         self._success_message_text.object = (
             f"""
-            <p style='text-align:center;margin:0;color:white;font-weight:bold;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-width:100%;'>
+            <p title="{self._current_filename}" style='text-align:center;margin:0;color:white;font-weight:bold;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-width:100%;'>
                 {self._current_filename}
             </p>
             """
