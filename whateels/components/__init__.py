@@ -1,4 +1,3 @@
-from .file_dropper import FileDropper
 from .custom_page import CustomPage
 from .uploaded_file import UploadedFile
 from .error_panel import ErrorPanel
@@ -12,7 +11,6 @@ from .details import Details
 from .splitjs import SplitJs
 
 __all__ = [
-    'FileDropper',
     'CustomPage',
     'UploadedFile',
     'ErrorPanel',

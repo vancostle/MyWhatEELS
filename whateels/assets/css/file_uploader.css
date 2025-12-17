@@ -4,10 +4,8 @@
 }
 
 #input:has(ul:not(:empty))::before {
-    content: 'Reading File...';
+    content: 'Reading File';
 
-    font-size: 16px;
-    color: var(--panel-on-surface-color, #000);
     font-weight: normal;
     position: absolute;
     top: 49%;
@@ -22,7 +20,7 @@
     display: flex;
     align-items: center;
 
-    padding-left: 30%;
+    padding-left: 35%;
 }
 
 #input:has(ul:not(:empty)):after {
