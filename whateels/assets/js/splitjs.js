@@ -15,7 +15,8 @@ export function render({ model }) {
     // Apply Split.js using direct element references (not selectors)
     Split([left, right], {
         sizes: [50, 50],
-        minSize: 0,
+        minSize: 200,
+        dragInterval: 2,
         gutterSize: 10,
         direction: 'horizontal',
         onDrag: (_) => {
@@ -42,10 +43,6 @@ const resizing = (left, right, model, event) => {
 
     const leftWidth = Math.trunc(leftRect.width);
     const rightWidth = Math.trunc(rightRect.width);
-
-    if (event === 'dragend') {
-        console.log(`SplitJs drag ended. Left width: ${leftWidth} px, Right width: ${rightWidth} px`);
-    }
 
     // Send drag end event to Python using Panel's messaging API
     model.send_msg({

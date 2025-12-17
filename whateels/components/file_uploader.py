@@ -246,10 +246,14 @@ class FileUploader(pn.Column):
     def _show_success_message(self):
         self._success_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
         # Use CSS for 2-line clamp and ellipsis
+        # Truncate filename to 35 characters for display, but show full in tooltip
+        display_name = self._current_filename
+        if display_name and len(display_name) > 35:
+            display_name = display_name[:32] + '...'
         self._success_message_text.object = (
             f"""
-            <p title="{self._current_filename}" style='text-align:center;margin:0;color:white;font-weight:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-width:100%;'>
-                {self._current_filename}
+            <p title=\"{self._current_filename}\" style='text-align:center;margin:0;color:white;font-weight:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-width:100%;'>
+                {display_name}
             </p>
             """
         )

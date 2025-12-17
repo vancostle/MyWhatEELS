@@ -1,11 +1,8 @@
 import panel as pn
 import plotly.graph_objs as go
-import plotly.express as px
-import pandas as pd
 import numpy as np
 
-from whateels.components import ResizableColumns
-from whateels.components.splitjs import SplitJs
+from whateels.components import SplitJs
 
 class DemoPageView:
     
