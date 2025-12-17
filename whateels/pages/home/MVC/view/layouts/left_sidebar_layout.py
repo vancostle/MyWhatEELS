@@ -83,7 +83,7 @@ class HomePageLeftSidebar(pn.Column):
         # Set up the FileUploader with model constants
         return FileUploader(
             reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
-            success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
+            # success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
             force_success=forceed_success,
             initial_filename=initial_filename
         )  
