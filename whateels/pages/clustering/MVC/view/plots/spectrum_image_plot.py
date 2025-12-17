@@ -344,7 +344,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         
         # Update heatmap pane
         if self.paneA is not None:
-            self.paneA.object = self._to_plotly(clustering_fig)
+            self.paneA.object = clustering_fig
             self.paneA.param.trigger('object')
         
         # Update spectrum pane to show cluster centers
