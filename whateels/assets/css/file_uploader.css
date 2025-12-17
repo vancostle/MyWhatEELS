@@ -7,7 +7,7 @@
     content: 'Reading File...';
 
     font-size: 16px;
-    color: black;
+    color: var(--panel-on-surface-color, #000);
     font-weight: normal;
     position: absolute;
     top: 49%;
