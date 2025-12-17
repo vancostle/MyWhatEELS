@@ -252,7 +252,7 @@ class FileUploader(pn.Column):
             display_name = display_name[:32] + '...'
         self._success_message_text.object = (
             f"""
-            <p title=\"{self._current_filename}\" style='text-align:center;margin:0;color:white;font-weight:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-width:100%;'>
+            <p title=\"{self._current_filename}\" style='text-align:left;margin:0;color:white;font-weight:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-width:100%;'>
                 {display_name}
             </p>
             """
@@ -261,7 +261,7 @@ class FileUploader(pn.Column):
         self._error_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
 
     def _clear_success_message(self):
-        self._success_message_panel.styles = {'transform': 'translateX(100%)', 'pointer-events': 'none'}
+        self._success_message_panel.styles = {'transform': 'translateX(calc(100% + var(--inner-panel-padding) * 2))', 'pointer-events': 'none'}
                 
     def _clear_error_message(self):
-        self._error_message_panel.styles = {'transform': 'translateX(-100%)', 'pointer-events': 'none'}
+        self._error_message_panel.styles = {'transform': 'translateX(calc(-100% - var(--inner-panel-padding) * 2))', 'pointer-events': 'none'}
