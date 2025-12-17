@@ -11,7 +11,6 @@ class FileUploader(pn.Column):
         self,
         on_file_uploaded_callback: Optional[Callable[[str, bytes], None]] = None,
         on_file_removed_callback: Optional[Callable[[str], None]] = None,
-        # success_message: str = "File uploaded successfully.",
         reject_message: str = "File upload failed.",
         valid_extensions: tuple = (".dm3", ".dm4"),
         multiple_files: bool = False,
@@ -21,7 +20,6 @@ class FileUploader(pn.Column):
     ):
         self._on_file_uploaded_callback = on_file_uploaded_callback
         self._on_file_removed_callback = on_file_removed_callback
-        # self._success_message = success_message
         self._reject_message = reject_message
         self._valid_extensions = valid_extensions
         self._multiple_files = multiple_files
@@ -31,8 +29,6 @@ class FileUploader(pn.Column):
         
         # Track the currently uploaded filename for removal callback
         self._current_filename = None
-        
-        # self._feedback_message_panel = self._create_feedback_pane()
         
         (
             self._filedropper, # The main file dropper widget
@@ -44,7 +40,6 @@ class FileUploader(pn.Column):
         
         super().__init__(
             file_widget, # Initialize the Column with the file uploader widget
-            # self._feedback_message_panel,
             margin=(0, 0, 0, 5),
             sizing_mode="stretch_width",
             **kwargs
@@ -186,13 +181,6 @@ class FileUploader(pn.Column):
         )
         
         return filedropper, success_message, success_message_text, error_message, widget
-
-    # def _create_feedback_pane(self) -> pn.pane.HTML:
-    #     """Create the feedback message pane for status updates."""
-    #     return pn.pane.HTML(
-    #         f"<p style='text-align:center;margin:10px 0 0 0;color:gray;'>{self._current_filename or "No file uploaded yet... :("}</p>", 
-    #         sizing_mode='stretch_width', 
-    #     )
     
     def _setup_event_handlers(self):
         """Set up event handlers for file upload events."""
@@ -265,27 +253,11 @@ class FileUploader(pn.Column):
             </p>
             """
         )
-        # self._feedback_message_panel.object = f"<p style='text-align:center;margin:10px 0 0 0;color:green;font-weight:bold;'>{self._current_filename}</p>"
     def _show_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
-        # self._feedback_message_panel.object = f"<p style='text-align:center;margin:10px 0 0 0;color:red;font-weight:bold;'>What is that...? :(</p>"
-    
+
     def _clear_success_message(self):
         self._success_message_panel.styles = {'transform': 'translateX(100%)', 'pointer-events': 'none'}
-        # self._clear_feedback("success")
                 
     def _clear_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(-100%)', 'pointer-events': 'none'}
-        # self._clear_feedback("error")
-        
-    # def _clear_feedback(self, type: str = "success"):
-    #     """
-    #     Clear the feedback message and reset to default state.
-        
-    #     Useful for programmatically resetting the component state
-    #     or clearing previous upload status messages.
-    #     """
-    #     if type == "success":
-    #         self._feedback_message_panel.object = f"<p style='text-align:center;margin:10px 0 0 0;color:gray;'>File was removed... :(</p>"
-    #     elif type == "error":
-    #         self._feedback_message_panel.object = f"<p style='text-align:center;margin:10px 0 0 0;color:gray;'>Glad you remove it... :(</p>"
