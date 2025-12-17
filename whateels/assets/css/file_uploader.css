@@ -5,7 +5,7 @@
 #input {
     margin:0px;
     position: relative;
-    background-color: var(--panel-surface-color, #f1f1f1);
+    /* background-color: var(--panel-surface-color, #f1f1f1); */
 }
 
 #input:has(ul:not(:empty))::before {

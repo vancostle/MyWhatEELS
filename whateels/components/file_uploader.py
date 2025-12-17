@@ -42,6 +42,7 @@ class FileUploader(pn.Column):
             file_widget, # Initialize the Column with the file uploader widget
             margin=(0, 0, 0, 5),
             sizing_mode="stretch_width",
+            styles={'background-color': 'var(--panel-surface-color, #f1f1f1)'},
             **kwargs
         )
         
