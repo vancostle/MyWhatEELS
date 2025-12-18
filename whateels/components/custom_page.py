@@ -68,6 +68,8 @@ class CustomPage(pn.template.FastListTemplate):
 
         # Build initialization parameters dynamically
         init_params = {
+            'logo': 'whateels/assets/img/WE_color_logo.svg',
+            'favicon': 'whateels/assets/img/logo.ico',
             'title': title,
             'main': main,
             'header': header,
@@ -100,7 +102,6 @@ class CustomPage(pn.template.FastListTemplate):
         """
         
         LINK_DISABLE_CLASS = "disable-link"
-        LINK_ENABLE_CLASS = "enable-link"
         LINK_ENABLE_ANIMATION_CLASS = "enable-link-animation"
                 
         navigation_links = [
