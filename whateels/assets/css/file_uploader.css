@@ -24,7 +24,7 @@
     display: flex;
     align-items: center;
 
-    padding-left: 35%;
+    padding-left: 30%;
 }
 
 #input:has(ul:not(:empty)):after {
@@ -106,7 +106,7 @@
     color: white;
     font-size: 12px;
     margin: 0;
-    width: 100%;
+    width: 85%;
     height: 100%;
 
     display: flex;

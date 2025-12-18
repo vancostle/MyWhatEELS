@@ -148,7 +148,7 @@ class SpectrumImagePlot(IPlot):
                 "Collection Angle": collection_angle,
             },
             sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 20, 10, 0)
+            margin=0
         )
         
         return dataset_information
