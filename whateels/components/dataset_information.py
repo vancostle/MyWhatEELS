@@ -67,9 +67,9 @@ class DatasetInformation(pn.Column):
             pn.Row(
                 pn.Row(
                     pn.pane.HTML(
-                        f"<span>{key}:</span>",
+                        str(f'{key}:'),
+                        css_classes=["dataset-info-key"],
                     ),
-                    css_classes=["dataset-info-key"],
                     sizing_mode=STRETCH_WIDTH
                 ),
                 pn.pane.HTML(
