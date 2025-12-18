@@ -4,9 +4,9 @@ from whateels.helpers import LoadCSS, CSS_ROOT
 from typing import Callable, Optional, Tuple
 
 class FileUploader(pn.Column):
-    
+
     _FILE_UPDLOADER_HEIGHT = 67
-    
+
     def __init__(
         self,
         on_file_uploaded_callback: Optional[Callable[[str, bytes], None]] = None,
@@ -245,12 +245,13 @@ class FileUploader(pn.Column):
         return filename.lower().endswith(self._valid_extensions)
     
     def _show_success_message(self):
+        MAX_CHARACTERS = 40
         self._success_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
         # Use CSS for 2-line clamp and ellipsis
-        # Truncate filename to 35 characters for display, but show full in tooltip
+        # Truncate filename to 45 characters for display, but show full in tooltip
         display_name = self._current_filename
-        if display_name and len(display_name) > 35:
-            display_name = display_name[:32] + '...'
+        if display_name and len(display_name) > MAX_CHARACTERS:
+            display_name = display_name[:MAX_CHARACTERS] + '...'
         self._success_message_text.object = (
             f"""
             <p title=\"{self._current_filename}\" style='text-align:left;margin:0;color:white;font-weight:normal;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;max-width:100%;'>

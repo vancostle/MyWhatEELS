@@ -5,7 +5,6 @@
 #input {
     margin:0px;
     position: relative;
-    /* background-color: var(--panel-surface-color, #f1f1f1); */
 }
 
 #input:has(ul:not(:empty))::before {
@@ -73,7 +72,7 @@
     justify-content: center;
     align-items: center;
 
-    padding: 0 40px;
+    padding: 0 20px;
 
     z-index: 0;
     transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
@@ -88,7 +87,6 @@
     transform: translateX(calc(100% + var(--inner-panel-padding) * 2));
     z-index: 2;
 }
-    
 
 .filedropper-container ~ .error-panel {
     background-color: #e74c3c;
@@ -100,6 +98,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+
+    position: relative;
 }
 
 .success-message-text, .error-message-text {
@@ -111,7 +111,7 @@
 
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: start;
 }
 
 .remove-file-button {
@@ -119,9 +119,13 @@
     overflow: hidden;
     width: 25px;
     height: 25px;
+    min-height: 25px;
     display: grid;
     place-content: center;
-    position: relative;
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
     font-family: 'Arial', sans-serif;
     font-weight: bold;
     transition: background 0.2s;
