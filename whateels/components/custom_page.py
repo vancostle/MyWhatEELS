@@ -30,7 +30,6 @@ class CustomPage(pn.template.FastListTemplate):
         header: Optional[List[pn.viewable.Viewable]] = None, 
         right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None,
         header_background: str = _DEFAULT_HEADER_BACKGROUND,
-        sidebar_width: int = 275,
         **kwargs,
     ):
         """
@@ -42,6 +41,7 @@ class CustomPage(pn.template.FastListTemplate):
             sidebar: Left sidebar components (optional)
             header: Header navigation components (optional, defaults to standard nav, pass [] for no header)
             right_sidebar: Right sidebar components (optional)
+            modal: Modal area components (optional)
             header_background: Background color for the header (default: green)
             sidebar_width: Width of the left sidebar in pixels (default: 275)
         """        
@@ -76,7 +76,6 @@ class CustomPage(pn.template.FastListTemplate):
             'theme_toggle': False,  # Disable theme toggle for consistency
             'theme': 'default',  # Default theme
             'header_background': header_background,
-            'sidebar_width': sidebar_width,  # Set sidebar width
         }
         
         # Only add sidebar parameters if they have content
