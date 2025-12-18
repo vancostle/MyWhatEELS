@@ -1,9 +1,9 @@
 .dataset-info {
     padding: 0;
     list-style-type: none;
-    border-radius: 8px;
+    border-radius: 4px;
     background-color: #f8f9fa;
-    margin: 0 0 0 6px;
+    margin: 0 11px 0 15px;
     opacity: 0;
     overflow: hidden;
     box-shadow: 0px 0px 5px #d8d8d8;
@@ -35,14 +35,14 @@
     background-color: #b63fb5;
     color: white;
     margin: 0;
-    padding: 16px 16px;
+    padding: 10px 20px;
     border: none;
 }
 
 .dataset-info-title {
     margin: 0;
     padding: 0;
-    font-size: 1.2rem;
+    font-size: 14px;
     font-weight: normal;
     letter-spacing: 1px;
     color: white;
@@ -53,29 +53,33 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 4px 0 0 0;
+    margin: 0;
     padding: 0;
+    color: var(--panel-on-surface-color, #000);
 }
 
 .metadata-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 25px;
+    height: 25px;
     background: #b63fb5;
     color: white;
     border: none;
-    border-radius: 8px;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: bold;
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
-    line-height: 1;
     text-align: center;
     margin: 0;
     padding: 0;
+}
+
+.dataset-info-key, .dataset-info-value {
+    color: var(--panel-on-surface-color, #000);
+    font-size: 12px;
 }
 
 .metadata-button:hover {
@@ -85,8 +89,8 @@
 }
 
 .metadata-button svg {
-    width: 21px;
-    height: 21px;
+    width: 25px;
+    height: 25px;
     fill: white;
 }
 

@@ -123,7 +123,7 @@
     display: grid;
     place-content: center;
     position: absolute;
-    right: -10px;
+    right: -0;
     top: 50%;
     transform: translateY(-50%);
     font-family: 'Arial', sans-serif;

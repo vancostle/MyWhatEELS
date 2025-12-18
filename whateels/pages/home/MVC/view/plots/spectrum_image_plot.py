@@ -147,7 +147,8 @@ class SpectrumImagePlot(IPlot):
                 "Convergence Angle": convergence_angle,
                 "Collection Angle": collection_angle,
             },
-            sizing_mode=self._STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 20, 10, 0)
         )
         
         return dataset_information
@@ -388,19 +389,6 @@ class SpectrumImagePlot(IPlot):
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
 
     # --- Helpers / utilities (from si_view.py adapted) ---
-    # def _to_plotly(self, obj):
-    #     """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
-    #     try:
-    #         if isinstance(obj, go.Figure):
-    #             return obj.to_plotly_json()
-    #     except Exception:
-    #         pass
-    #     try:
-    #         if isinstance(obj, dict):
-    #             return obj
-    #     except Exception:
-    #         pass
-    #     return obj
 
     def _figB_message(self, title, subtitle) -> go.Figure:
         self.fig = go.Figure()
