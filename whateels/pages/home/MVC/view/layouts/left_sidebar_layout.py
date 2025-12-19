@@ -15,7 +15,6 @@ class HomePageLeftSidebar(pn.Column):
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._file_uploader: FileUploader = FileUploader() # Placeholder, will be set up below
-        self._open_modal_btn: pn.widgets.Button
         
         super().__init__(
             self._create_layout(),
@@ -38,22 +37,13 @@ class HomePageLeftSidebar(pn.Column):
     def dataset_info(self):
         """Delete the dataset info component."""
         self._dataset_info = None
-        
-    @property
-    def open_modal_btn(self) -> pn.widgets.Button:
-        """Button widget to open the modal dialog."""
-        return self._open_modal_btn
 
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
-                
-        # Create a button to open modal
-        self._open_modal_btn = pn.widgets.Button(name="Open Modal", button_type="primary")
 
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
-            self._open_modal_btn,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )
