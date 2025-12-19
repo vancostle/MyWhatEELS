@@ -13,17 +13,26 @@ class HomePage(CustomPage):
         view = HomePageView(model)
         HomePageController(model, view)
 
+        # def open_modal(event):
+        view.left_sidebar.open_modal_button.on_click(lambda event: self.open_modal())
+
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.left_sidebar],
-            # modal=[
-            #     pn.Column(
-            #         pn.pane.Markdown("# Welcome to WhatEELS!"),
-            #         pn.pane.Markdown("This is a simple modal example."),
-            #         width=400,
-            #         height=200
-            #     )    
-            # ],
+            sidebar=view.left_sidebar,
+            modal=[
+                pn.Column(
+                    pn.pane.Markdown("# Welcome to WhatEELS!"),
+                    pn.pane.Markdown("This is a simple modal example."),
+                    width=400,
+                    height=200
+                ),
+                    pn.Column(  
+                    pn.pane.Markdown("# Welcome to WhatEELS! 2"),
+                    pn.pane.Markdown("This is a simple modal example."),
+                    width=400,
+                    height=200
+                )     
+            ],
             sidebar_width=260
         )

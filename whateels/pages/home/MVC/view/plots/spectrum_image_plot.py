@@ -360,7 +360,7 @@ class SpectrumImagePlot(IPlot):
         self.paneA = pn.pane.Plotly(
             figA, 
             # config={"responsive": True},
-            sizing_mode='stretch_both', 
+            sizing_mode='stretch_height', 
             margin=0,
         )
 
@@ -368,7 +368,7 @@ class SpectrumImagePlot(IPlot):
         self.paneB = pn.pane.Plotly(
             # self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
             self._figB_message(" ", "Move the cursor over the image"),
-            # config={"responsive": True},
+            config={"responsive": True},
             sizing_mode='stretch_both',
             margin=0,
         )

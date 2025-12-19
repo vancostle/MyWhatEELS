@@ -19,11 +19,38 @@ export function render({ model }) {
         dragInterval: 2,
         gutterSize: 10,
         direction: 'horizontal',
+        onDragStart: (_) => {
+            // Get actual pixel widths using getBoundingClientRect
+            const leftRect = left.getBoundingClientRect();
+            const rightRect = right.getBoundingClientRect();
+            const leftWidth = Math.trunc(leftRect.width);
+            const rightWidth = Math.trunc(rightRect.width);
+            // Send drag start event to Python using Panel's messaging API
+            model.send_msg({
+                event: 'drag_start',
+                widths: {
+                    left: leftWidth,
+                    right: rightWidth
+                }
+            });
+        },
         onDrag: (_) => {
             resizing(left, right, model, 'dragging');
         },
         onDragEnd: (_) => {
-            resizing(left, right, model, 'dragend');
+            // Get actual pixel widths using getBoundingClientRect
+            const leftRect = left.getBoundingClientRect();
+            const rightRect = right.getBoundingClientRect();
+            const leftWidth = Math.trunc(leftRect.width);
+            const rightWidth = Math.trunc(rightRect.width);
+            // Send drag end event to Python using Panel's messaging API
+            model.send_msg({
+                event: 'drag_end',
+                widths: {
+                    left: leftWidth,
+                    right: rightWidth
+                }
+            });
         }
     });
 
@@ -35,7 +62,6 @@ const get_model_child = (model, value) => {
     child.setAttribute(ID, value);
     return child
 }
-
 const resizing = (left, right, model, event) => {
     // Get actual pixel widths using getBoundingClientRect (more accurate)
     const leftRect = left.getBoundingClientRect();
@@ -43,6 +69,8 @@ const resizing = (left, right, model, event) => {
 
     const leftWidth = Math.trunc(leftRect.width);
     const rightWidth = Math.trunc(rightRect.width);
+
+    console.log(`Event: ${event} Resizing: Left Width = ${leftWidth}px, Right Width = ${rightWidth}px`);
 
     // Send drag end event to Python using Panel's messaging API
     model.send_msg({

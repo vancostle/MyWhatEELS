@@ -36,61 +36,105 @@ class SplitJs(JSComponent):
     def __init__(self, **params):
         super().__init__(**params)
         
-        if hasattr(self.left_column, 'styles') and isinstance(self.left_column, pn.Column):
-            self.left_column.styles = {'overflow-x': 'hidden'}
+        # if hasattr(self.left_column, 'styles') and isinstance(self.left_column, pn.Column):
+        #     self.left_column.styles = {'overflow-x': 'hidden'}
         
-        if hasattr(self.right_column, 'styles') and isinstance(self.right_column, pn.Column):
-            self.right_column.styles = {'overflow-x': 'hidden'}
-            
-        left_column_children = getattr(self.left_column, 'objects', None)
-        left_column_contains_plotly = self._some_child_is_plotly(left_column_children)
+        # if hasattr(self.right_column, 'styles') and isinstance(self.right_column, pn.Column):
+        #     self.right_column.styles = {'overflow-x': 'hidden'}
+
+        self._left_column_plotly = self._find_first_plotly_figure(self.left_column)
+        self._right_column_plotly = self._find_first_plotly_figure(self.right_column)
         
-        figure = None
-        if left_column_contains_plotly and left_column_children is not None:
-            for child in left_column_children:
-                plotly_figure = self._extract_figure_in_plotly(child)
-                if plotly_figure is not None:
-                    figure = plotly_figure
-                    break
+        if self._left_column_plotly is None and self._right_column_plotly is None:
+            return
         
-        self._left_column_figure = figure
-        
-        right_column_children = getattr(self.right_column, 'objects', None)
-        right_column_contains_plotly = self._some_child_is_plotly(right_column_children)
-        
-        figure = None
-        if right_column_contains_plotly and right_column_children is not None:
-            for child in right_column_children:
-                plotly_figure = self._extract_figure_in_plotly(child)
-                if plotly_figure is not None:
-                    figure = plotly_figure
-                    break
-                
-        self._right_column_figure = figure
+        self._left_column_plotly_figure = self._extract_figure_in_plotly(self._left_column_plotly)
+        self._right_column_plotly_figure = self._extract_figure_in_plotly(self._right_column_plotly)
+
+    def _find_first_plotly_figure(self, column) -> pn.pane.Plotly | None:
+        """Find the first Plotly figure in a given column, if any."""
+        if self.left_column is not None:
+            children = getattr(column, 'objects', None)
+            if children is not None:
+                for child in children:
+                    if isinstance(child, pn.pane.Plotly):
+                        return child
+        return None
     
     def _handle_msg(self, data):
         """Handle messages from JavaScript"""
         
-        widths = data.get('widths', {})
+        DRAG_START, DRAGGING, DRAG_END = 'dragstart', 'dragging', 'dragend'
+        EVENTS = [DRAG_START, DRAGGING, DRAG_END]
         
-        if self._left_column_figure is not None:
-            with self._left_column_figure.batch_update():
-                self._left_column_figure.update_layout(width=widths.get('left'))
+        event = data.get('event', '')
+
+        if event not in EVENTS:
+            return
+        
+        if event == DRAG_START:
+            self._drag_start_event()
+        elif event == DRAGGING:
+            self._dragging_event(widths=data.get('widths', {}))
+        elif event == DRAG_END:
+            self._drag_end_event()        
+
+        
+    def _drag_start_event(self):
+        """Handle drag start event"""
+        if self._left_column_plotly is not None:
+            self._left_column_plotly.config = {'responsive': False}
+            self._left_column_plotly.sizing_mode = None
+        if self._right_column_plotly is not None:
+            self._right_column_plotly.config = {'responsive': False}
+            self._right_column_plotly.sizing_mode = None
             
-        if self._right_column_figure is not None:
-            with self._right_column_figure.batch_update():
-                self._right_column_figure.update_layout(width=widths.get('right'))
+    def _dragging_event(self, widths: dict):
+        """Handle dragging event"""
+        
+        if self._left_column_plotly is not None:
+            self._left_column_plotly.width = widths.get('left')
+        else:
+            print("No left column Plotly found.")
             
-    def _some_child_is_plotly(self, children) -> bool:
-        """Check if any of the children is a Plotly pane"""
+        if self._right_column_plotly is not None:
+            self._right_column_plotly.width = widths.get('right')
+        else:
+            print("No right column Plotly found.")
+        
+        if self._left_column_plotly_figure is not None:
+            with self._left_column_plotly_figure.batch_update():
+                self._left_column_plotly_figure.update_layout(width=widths.get('left'))
+            
+        if self._right_column_plotly_figure is not None:
+            with self._right_column_plotly_figure.batch_update():
+                self._right_column_plotly_figure.update_layout(width=widths.get('right'))
+    
+    def _drag_end_event(self):
+        """Handle drag end event"""
+        if self._left_column_plotly is not None:
+            self._left_column_plotly.config = {'responsive': True}
+            self._left_column_plotly.sizing_mode = 'stretch_both'
+        if self._right_column_plotly is not None:
+            self._right_column_plotly.config = {'responsive': True}
+            self._right_column_plotly.sizing_mode = 'stretch_both'
+    
+    def _extract_plotly_in_column(self, column) -> "pn.pane.Plotly | None":
+        """Extract Plotly figure from a column if it contains a Plotly pane"""
+        children = getattr(column, 'objects', None)
         if children is None:
-            return False
+            return None
 
         for child in children:
             if isinstance(child, pn.pane.Plotly):
-                return True
-    
-        return False
+                obj = child.object
+                if obj is not None and hasattr(obj, "__class__") and obj.__class__.__name__ == "Plotly":
+                    try:
+                        if isinstance(obj, pn.pane.Plotly):
+                            return obj
+                    except ImportError:
+                        pass
+        return None
     
     def _extract_figure_in_plotly(self, child) -> "go.Figure | None":
         """Extract Plotly figure from a child if it is a Plotly pane"""
