@@ -20,37 +20,13 @@ export function render({ model }) {
         gutterSize: 10,
         direction: 'horizontal',
         onDragStart: (_) => {
-            // Get actual pixel widths using getBoundingClientRect
-            const leftRect = left.getBoundingClientRect();
-            const rightRect = right.getBoundingClientRect();
-            const leftWidth = Math.trunc(leftRect.width);
-            const rightWidth = Math.trunc(rightRect.width);
-            // Send drag start event to Python using Panel's messaging API
-            model.send_msg({
-                event: 'drag_start',
-                widths: {
-                    left: leftWidth,
-                    right: rightWidth
-                }
-            });
+            resizing(left, right, model, 'drag_start');
         },
         onDrag: (_) => {
             resizing(left, right, model, 'dragging');
         },
         onDragEnd: (_) => {
-            // Get actual pixel widths using getBoundingClientRect
-            const leftRect = left.getBoundingClientRect();
-            const rightRect = right.getBoundingClientRect();
-            const leftWidth = Math.trunc(leftRect.width);
-            const rightWidth = Math.trunc(rightRect.width);
-            // Send drag end event to Python using Panel's messaging API
-            model.send_msg({
-                event: 'drag_end',
-                widths: {
-                    left: leftWidth,
-                    right: rightWidth
-                }
-            });
+            resizing(left, right, model, 'drag_end');
         }
     });
 

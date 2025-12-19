@@ -359,8 +359,8 @@ class SpectrumImagePlot(IPlot):
         # Pane A (heatmap) — width controlled by SplitJs; aspect locked by figure axes
         self.paneA = pn.pane.Plotly(
             figA, 
-            # config={"responsive": True},
-            sizing_mode='stretch_height', 
+            config={"responsive": True},
+            sizing_mode='stretch_both', 
             margin=0,
         )
 

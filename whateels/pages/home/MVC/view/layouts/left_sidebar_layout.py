@@ -15,17 +15,11 @@ class HomePageLeftSidebar(pn.Column):
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._file_uploader: FileUploader = FileUploader() # Placeholder, will be set up below
-        self._open_modal_button: pn.widgets.Button = pn.widgets.Button(name="Open Welcome Modal", button_type="primary")
         
         super().__init__(
             self._create_layout(),
             sizing_mode=self._STRETCH_WIDTH
         )
-        
-    @property
-    def open_modal_button(self) -> pn.widgets.Button:
-        """Button widget to open the welcome modal."""
-        return self._open_modal_button
 
     @property
     def file_uploader(self) -> FileUploader:
@@ -50,7 +44,6 @@ class HomePageLeftSidebar(pn.Column):
 
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
-            self._open_modal_button,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )

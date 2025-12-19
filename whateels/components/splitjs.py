@@ -64,7 +64,7 @@ class SplitJs(JSComponent):
     def _handle_msg(self, data):
         """Handle messages from JavaScript"""
         
-        DRAG_START, DRAGGING, DRAG_END = 'dragstart', 'dragging', 'dragend'
+        DRAG_START, DRAGGING, DRAG_END = 'drag_start', 'dragging', 'drag_end'
         EVENTS = [DRAG_START, DRAGGING, DRAG_END]
         
         event = data.get('event', '')
@@ -83,24 +83,26 @@ class SplitJs(JSComponent):
     def _drag_start_event(self):
         """Handle drag start event"""
         if self._left_column_plotly is not None:
-            self._left_column_plotly.config = {'responsive': False}
-            self._left_column_plotly.sizing_mode = None
+            # self._left_column_plotly.config = {'responsive': False}
+            self._left_column_plotly.sizing_mode = 'stretch_height'
         if self._right_column_plotly is not None:
-            self._right_column_plotly.config = {'responsive': False}
-            self._right_column_plotly.sizing_mode = None
+            # self._right_column_plotly.config = {'responsive': False}
+            self._right_column_plotly.sizing_mode = 'stretch_height'
+            
+        print("Drag started.")
             
     def _dragging_event(self, widths: dict):
         """Handle dragging event"""
         
-        if self._left_column_plotly is not None:
-            self._left_column_plotly.width = widths.get('left')
-        else:
-            print("No left column Plotly found.")
+        # if self._left_column_plotly is not None:
+        #     self._left_column_plotly.width = widths.get('left')
+        # else:
+        #     print("No left column Plotly found.")
             
-        if self._right_column_plotly is not None:
-            self._right_column_plotly.width = widths.get('right')
-        else:
-            print("No right column Plotly found.")
+        # if self._right_column_plotly is not None:
+        #     self._right_column_plotly.width = widths.get('right')
+        # else:
+        #     print("No right column Plotly found.")
         
         if self._left_column_plotly_figure is not None:
             with self._left_column_plotly_figure.batch_update():
@@ -109,15 +111,19 @@ class SplitJs(JSComponent):
         if self._right_column_plotly_figure is not None:
             with self._right_column_plotly_figure.batch_update():
                 self._right_column_plotly_figure.update_layout(width=widths.get('right'))
+        
+        print(f"Dragging... Left width: {widths.get('left')}, Right width: {widths.get('right')}")
     
     def _drag_end_event(self):
         """Handle drag end event"""
         if self._left_column_plotly is not None:
-            self._left_column_plotly.config = {'responsive': True}
+            # self._left_column_plotly.config = {'responsive': True}
             self._left_column_plotly.sizing_mode = 'stretch_both'
         if self._right_column_plotly is not None:
-            self._right_column_plotly.config = {'responsive': True}
+            # self._right_column_plotly.config = {'responsive': True}
             self._right_column_plotly.sizing_mode = 'stretch_both'
+            
+        print("Drag ended.")
     
     def _extract_plotly_in_column(self, column) -> "pn.pane.Plotly | None":
         """Extract Plotly figure from a column if it contains a Plotly pane"""
