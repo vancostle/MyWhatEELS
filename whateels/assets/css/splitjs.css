@@ -3,6 +3,10 @@
     flex-direction: row;
     height: 100%;
     width: 100%;
+
+    & .gutter:hover {
+        background-color: var(--secondary-whateels-background);
+    }
 }
 
 #left_column, #right_column {

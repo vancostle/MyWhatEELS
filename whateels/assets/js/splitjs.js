@@ -3,6 +3,7 @@ const RIGHT_COLUMN = 'right_column';
 const ID = 'id';
 
 export function render({ model }) {
+    const MILISECONDS_TO_RESIZE = 150;
     // Get Panel children
     const left = get_model_child(model, LEFT_COLUMN);
     const right = get_model_child(model, RIGHT_COLUMN);
@@ -11,6 +12,7 @@ export function render({ model }) {
     container.className = 'split';
     container.appendChild(left);
     container.appendChild(right);
+    let dragIntervalId = null;
 
     // Apply Split.js using direct element references (not selectors)
     Split([left, right], {
@@ -23,10 +25,19 @@ export function render({ model }) {
             resizing(left, right, model, 'drag_start');
         },
         onDrag: (_) => {
-            resizing(left, right, model, 'dragging');
+            // Start calling resizing every second
+            if (dragIntervalId === null) {
+                dragIntervalId = setInterval(() => {
+                    resizing(left, right, model, 'dragging');
+                }, MILISECONDS_TO_RESIZE);
+            }
         },
         onDragEnd: (_) => {
             resizing(left, right, model, 'drag_end');
+            if (dragIntervalId !== null) {
+                clearInterval(dragIntervalId);
+                dragIntervalId = null;
+            }
         }
     });
 
@@ -43,10 +54,8 @@ const resizing = (left, right, model, event) => {
     const leftRect = left.getBoundingClientRect();
     const rightRect = right.getBoundingClientRect();
 
-    const leftWidth = Math.trunc(leftRect.width);
-    const rightWidth = Math.trunc(rightRect.width);
-
-    console.log(`Event: ${event} Resizing: Left Width = ${leftWidth}px, Right Width = ${rightWidth}px`);
+    const leftWidth = leftRect.width;
+    const rightWidth = rightRect.width;
 
     // Send drag end event to Python using Panel's messaging API
     model.send_msg({
@@ -60,3 +69,4 @@ const resizing = (left, right, model, event) => {
     // Dispatch window resize event for Plotly plots
     window.dispatchEvent(new Event('resize'));
 }
+

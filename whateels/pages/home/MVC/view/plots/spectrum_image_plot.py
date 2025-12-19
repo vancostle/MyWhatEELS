@@ -364,7 +364,7 @@ class SpectrumImagePlot(IPlot):
             margin=0,
         )
 
-        # Pane B initial message (responsive to container size changes)
+        # Pane B initial message (width manually controlled by SplitJs)
         self.paneB = pn.pane.Plotly(
             # self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
             self._figB_message(" ", "Move the cursor over the image"),

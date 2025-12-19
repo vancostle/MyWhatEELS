@@ -27,7 +27,15 @@ class DemoPageView:
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)'
         )
-        figA.update_yaxes(autorange="reversed", showgrid=False, zeroline=False, showticklabels=False)
+        figA.update_yaxes(
+            autorange="reversed", 
+            showgrid=False, 
+            zeroline=False, 
+            showticklabels=False,
+            scaleanchor="x", 
+            scaleratio=1,
+            constrain='domain'
+        )
         figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False)
         
         self.paneA = pn.pane.Plotly(
@@ -72,8 +80,15 @@ class DemoPageView:
             sizing_mode=self._STRETCH_BOTH,
         )
         
+        wrapper = pn.Row(
+            self.paneA,
+            self.paneB,
+            sizing_mode=self._STRETCH_BOTH,
+        )
+        
         self._main = pn.Column(
             splitjswrapper,
+            # wrapper,
             sizing_mode=self._STRETCH_BOTH
         )
         
