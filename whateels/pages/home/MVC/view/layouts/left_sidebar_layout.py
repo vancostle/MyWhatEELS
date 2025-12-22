@@ -15,6 +15,7 @@ class HomePageLeftSidebar(pn.Column):
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._file_uploader: FileUploader = FileUploader() # Placeholder, will be set up below
+        self._welcome_message = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
         super().__init__(
             self._create_layout(),
@@ -41,9 +42,27 @@ class HomePageLeftSidebar(pn.Column):
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
+        
+        self._welcome_message = pn.Column(
+            pn.pane.Markdown(
+                """
+                ### Welcome to WhatEELS!
+                
+                Please upload your EELS datasets using the file uploader above to get started.
+                """,
+                sizing_mode=self._STRETCH_WIDTH
+            ),
+            pn.pane.SVG(
+                'whateels/assets/img/WE_color_logo.svg',
+                height=150,
+                align="center"
+            ),
+            sizing_mode=self._STRETCH_WIDTH
+        )
 
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
+            self._welcome_message,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )
