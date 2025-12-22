@@ -3,7 +3,7 @@ const RIGHT_COLUMN = 'right_column';
 const ID = 'id';
 
 export function render({ model }) {
-    const MILISECONDS_TO_RESIZE = 150;
+    const MILISECONDS_TO_RESIZE = 200;
     // Get Panel children
     const left = get_model_child(model, LEFT_COLUMN);
     const right = get_model_child(model, RIGHT_COLUMN);
@@ -13,9 +13,10 @@ export function render({ model }) {
     container.appendChild(left);
     container.appendChild(right);
     let dragIntervalId = null;
+    let resizeTimeoutId = null;
 
     // Apply Split.js using direct element references (not selectors)
-    Split([left, right], {
+    const splitInstance = Split([left, right], {
         sizes: [50, 50],
         minSize: 200,
         dragInterval: 2,
@@ -40,6 +41,31 @@ export function render({ model }) {
             }
         }
     });
+
+    // Watch for external resizing (browser window, parent container, etc.)
+    const resizeObserver = new ResizeObserver((entries) => {
+        // Debounce the resize events to avoid excessive calls
+        if (resizeTimeoutId !== null) {
+            clearTimeout(resizeTimeoutId);
+        }
+        
+        resizeTimeoutId = setTimeout(() => {
+            // Only trigger if we're not currently dragging
+            if (dragIntervalId === null) {
+                console.log('External resize detected');
+                resizing(left, right, model, 'external_resize');
+            }
+            resizeTimeoutId = null;
+        }, MILISECONDS_TO_RESIZE);
+    });
+
+    // Observe both split panels
+    resizeObserver.observe(left);
+    resizeObserver.observe(right);
+
+    // Store observer for cleanup if needed
+    container._resizeObserver = resizeObserver;
+    container._splitInstance = splitInstance;
 
     return container;
 }
@@ -69,4 +95,3 @@ const resizing = (left, right, model, event) => {
     // Dispatch window resize event for Plotly plots
     window.dispatchEvent(new Event('resize'));
 }
-

@@ -64,8 +64,8 @@ class SplitJs(JSComponent):
     def _handle_msg(self, data):
         """Handle messages from JavaScript"""
         
-        DRAG_START, DRAGGING, DRAG_END = 'drag_start', 'dragging', 'drag_end'
-        EVENTS = [DRAG_START, DRAGGING, DRAG_END]
+        DRAG_START, DRAGGING, DRAG_END, EXTERNAL_RESIZE = 'drag_start', 'dragging', 'drag_end', 'external_resize'
+        EVENTS = [DRAG_START, DRAGGING, DRAG_END, EXTERNAL_RESIZE]
         
         event = data.get('event', '')
 
@@ -74,7 +74,7 @@ class SplitJs(JSComponent):
         
         if event == DRAG_START:
             self._drag_start_event()
-        elif event == DRAGGING:
+        elif event == DRAGGING or event == EXTERNAL_RESIZE:
             self._dragging_event(widths=data.get('widths', {}))
         elif event == DRAG_END:
             self._drag_end_event()        
@@ -108,6 +108,14 @@ class SplitJs(JSComponent):
         if self._right_column_plotly is not None:
             self._right_column_plotly.config = {'responsive': True}
             self._right_column_plotly.sizing_mode = 'stretch_both'
+            
+    def _external_resize_event(self, widths: dict):
+        """Handle external resize event"""
+        self._drag_start_event()
+        self._dragging_event(widths=widths)
+        self._drag_end_event()
+        
+        print("External resize event handled.")
     
     def _extract_plotly_in_column(self, column) -> "pn.pane.Plotly | None":
         """Extract Plotly figure from a column if it contains a Plotly pane"""
