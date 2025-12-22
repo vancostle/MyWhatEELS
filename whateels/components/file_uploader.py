@@ -147,6 +147,7 @@ class FileUploader(pn.Column):
         success_message_button = pn.widgets.Button(
             name="-",
             margin=0,
+            button_type="warning",
             css_classes=['remove-file-button'],
         )
         success_message_button.on_click(lambda _: clear_message_handler("success"))
@@ -202,7 +203,6 @@ class FileUploader(pn.Column):
         Args:
             event: Panel parameter change event (unused, but required by Panel)
         """
-        # self._loading_message_panel.styles = {'opacity': '1', 'pointer-events': 'auto'}
         
         file_widget_value = self._filedropper.value
 

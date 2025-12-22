@@ -52,7 +52,7 @@
     position: relative;
 
     height: 67px;
-    box-shadow: 0 0 5px #d8d8d8;
+    box-shadow: 0px 0px 5px #d8d8d8;
 }
 
 .filedropper {
@@ -114,12 +114,21 @@
     justify-content: start;
 }
 
+button {
+    color: transparent !important;
+    background-color: #1b650c !important;
+    transition: background-color 0.2s;
+}
+button:hover {
+    background-color: white !important;
+}
+
 .remove-file-button {
     border-radius: 100%;
     overflow: hidden;
-    width: 25px;
-    height: 25px;
-    min-height: 25px;
+    width: 20px;
+    height: 20px;
+    min-height: 20px;
     display: grid;
     place-content: center;
     position: absolute;
@@ -132,7 +141,7 @@
 }
 
 .remove-file-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    /* background-color: rgba(255, 255, 255, 0.2); */
     cursor: pointer;
 }
 
@@ -142,9 +151,9 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 16px;
+    width: 14px;
     height: 3px;
-    background: #222;
+    background: white;
     border-radius: 2px;
     transition: background 0.2s, transform 0.2s;
     pointer-events: none;
@@ -157,11 +166,7 @@
 }
 .remove-file-button:hover::before,
 .remove-file-button:hover::after {
-    background: #e74c3c;
-    transform: translate(-50%, -50%) scaleX(1.2) scaleY(1.2) rotate(45deg);
-}
-.remove-file-button:hover::after {
-    transform: translate(-50%, -50%) scaleX(1.2) scaleY(1.2) rotate(-45deg);
+    background: #222;
 }
 
 /* .remove-file-button::before,
