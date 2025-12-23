@@ -23,7 +23,10 @@ class HomePageView:
         
         # Layout components
         self._main = HomePageMainLayout(model)
-        self._left_sidebar = HomePageLeftSidebar(model)
+        self._left_sidebar = HomePageLeftSidebar(
+            model,
+            sizing_mode=self._STRETCH_WIDTH
+        )
         
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
@@ -84,19 +87,18 @@ class HomePageView:
                 self._plots_tab_watcher = None
             elif self._plots_tab_watcher is not None:
                 self._plots_tab_watcher = None
-            
+
             # Clear old plots_tab completely
             if self._plots_tab is not None:
                 self._plots_tab.clear()
                 self._plots_tab = None
-            
+
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
-            
+
             # Force garbage collection to free memory from old visualizers
-            import gc
             gc.collect()
-            
+
             plots_factory = PlotsFactory(self._model)
             plots_tab = pn.Tabs(sizing_mode=STRETCH_BOTH)
 

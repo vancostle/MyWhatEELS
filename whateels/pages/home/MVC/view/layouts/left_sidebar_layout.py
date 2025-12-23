@@ -10,7 +10,7 @@ class HomePageLeftSidebar(pn.Column):
     
     _STRETCH_WIDTH = 'stretch_width'
     
-    def __init__(self, model: "HomePageModel"):
+    def __init__(self, model: "HomePageModel", **kwargs):
         self._model = model
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
@@ -19,7 +19,7 @@ class HomePageLeftSidebar(pn.Column):
         
         super().__init__(
             self._create_layout(),
-            sizing_mode=self._STRETCH_WIDTH
+            **kwargs
         )
 
     @property
@@ -53,8 +53,8 @@ class HomePageLeftSidebar(pn.Column):
                 sizing_mode=self._STRETCH_WIDTH
             ),
             pn.pane.SVG(
-                'whateels/assets/img/WE_color_logo.svg',
-                height=150,
+                'whateels/assets/img/we_logo.svg',
+                height=76,
                 align="center"
             ),
             sizing_mode=self._STRETCH_WIDTH
@@ -98,7 +98,7 @@ class HomePageLeftSidebar(pn.Column):
                 initial_filename = filename_candidate
             else:
                 initial_filename = None
-        
+
         # Set up the FileUploader with model constants
         return FileUploader(
             reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
