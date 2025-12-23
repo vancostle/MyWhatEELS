@@ -54,15 +54,13 @@
     font-weight: bold;
     text-decoration: none;
     cursor: pointer;
-    transition: all 0.2s ease;
     text-align: center;
     margin: 0;
     padding: 0;
-    transition: background 0.2s ease;
 }
 
 .metadata-button:hover {
-    background-color: white !important;
+    background-color: white;
 }
 
 .dataset-info-key, .dataset-info-value {
@@ -84,14 +82,9 @@
     stroke: white;
     stroke-width: 20;
 }
-.metadata-button:hover {
-    background: var(--secondary-whateels-background, #b63fb5);
-    transition: background 0.2s ease;
-}
 
 .metadata-button:hover svg {
     fill: black;
-    transition: background 0.2s ease;
 }
 
 .metadata-button:hover svg path {
