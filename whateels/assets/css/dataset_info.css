@@ -46,7 +46,7 @@
     justify-content: center;
     width: inherit;
     height: auto;
-    background: white;
+    background-color: #7b327b;
     border-radius: 50%;
     color: var(--secondary-whateels-background, #b63fb5);
     border: none;
@@ -58,6 +58,11 @@
     text-align: center;
     margin: 0;
     padding: 0;
+    transition: background 0.2s ease;
+}
+
+.metadata-button:hover {
+    background-color: white !important;
 }
 
 .dataset-info-key, .dataset-info-value {
@@ -69,14 +74,14 @@
 .metadata-button svg {
     width: 20px;
     height: auto;
-    fill: var(--secondary-whateels-background, #b63fb5);
+    fill: white;
     will-change: transform;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
 }
 
 .metadata-button svg path {
-    stroke: var(--secondary-whateels-background, #b63fb5);
+    stroke: white;
     stroke-width: 20;
 }
 .metadata-button:hover {
@@ -85,12 +90,12 @@
 }
 
 .metadata-button:hover svg {
-    fill: white;
+    fill: black;
     transition: background 0.2s ease;
 }
 
 .metadata-button:hover svg path {
-    stroke: white;
+    stroke: black;
 }
 
 /* Light background for content rows */
