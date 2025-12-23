@@ -30,6 +30,10 @@ class HomePageLeftSidebar(pn.Column):
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
         return self._dataset_info
+    @property
+    def welcome_message(self) -> Optional[pn.viewable.Viewable]:
+        """Welcome message component displayed in the sidebar."""
+        return self._welcome_message
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
         """Set the last dataset info component (must be a Panel Viewable)."""
@@ -42,13 +46,14 @@ class HomePageLeftSidebar(pn.Column):
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
-        
+
         self._welcome_message = pn.Column(
             pn.pane.Markdown(
                 """
                 ### Welcome to WhatEELS!
                 
-                Please upload your EELS datasets using the file uploader above to get started.
+                Relax, get yourself a cup of coffee  
+                and get ready to analyse some EELS data.
                 """,
                 sizing_mode=self._STRETCH_WIDTH
             ),
@@ -57,12 +62,12 @@ class HomePageLeftSidebar(pn.Column):
                 height=76,
                 align="center"
             ),
-            sizing_mode=self._STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH,
+                margin=(0, 0, 20, 0)
         )
 
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
-            self._welcome_message,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )

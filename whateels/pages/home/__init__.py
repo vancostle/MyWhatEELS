@@ -1,4 +1,3 @@
-import panel as pn
 from whateels.components import CustomPage
 from .MVC import HomePageModel, HomePageController, HomePageView
 
@@ -16,7 +15,7 @@ class HomePage(CustomPage):
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.left_sidebar],
+            sidebar=[view.left_sidebar, view.left_sidebar.welcome_message],
             # modal=[
             #     pn.Column(
             #         pn.pane.Markdown("# Welcome to WhatEELS!"),

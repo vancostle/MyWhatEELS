@@ -25,7 +25,7 @@ class HomePageView:
         self._main = HomePageMainLayout(model)
         self._left_sidebar = HomePageLeftSidebar(
             model,
-            sizing_mode=self._STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH,
         )
         
         # Store all dataset information
