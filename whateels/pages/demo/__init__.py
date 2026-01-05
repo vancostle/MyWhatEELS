@@ -9,7 +9,7 @@ class DemoPage(CustomPage):
 
     def __init__(self):        
         model = DemoPageModel()
-        view = DemoPageView(model)
+        view = DemoPageView(model, custom_page=self)
         DemoPageController(model, view)
 
         super().__init__(
@@ -17,5 +17,6 @@ class DemoPage(CustomPage):
             main=[view.main],
             sidebar=[view.left_sidebar],
             right_sidebar=[view.right_sidebar],
+            modal=[view.modal_manager.view()],
             sidebar_width=150,
         )

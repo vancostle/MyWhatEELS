@@ -9,6 +9,7 @@ from .file_uploader import FileUploader
 from .simple_details import SimpleDetails
 from .details import Details
 from .splitjs import SplitJs
+from .modal_manager import ModalManager
 
 __all__ = [
     'CustomPage',
@@ -21,5 +22,6 @@ __all__ = [
     'FileUploader',
     'SimpleDetails',
     'Details',
+    'ModalManager',
     'SplitJs',
 ]
