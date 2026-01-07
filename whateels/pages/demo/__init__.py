@@ -1,5 +1,6 @@
 from whateels.components import CustomPage
 from .MVC import DemoPageView, DemoPageController, DemoPageModel
+import panel as pn
 
 class DemoPage(CustomPage):
     """
@@ -17,6 +18,6 @@ class DemoPage(CustomPage):
             main=[view.main],
             sidebar=[view.left_sidebar],
             right_sidebar=[view.right_sidebar],
-            modal=[view.modal_manager.view()],
-            sidebar_width=150,
+
+            sidebar_width=150
         )
