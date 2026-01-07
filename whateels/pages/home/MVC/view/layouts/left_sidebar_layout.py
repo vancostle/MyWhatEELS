@@ -58,7 +58,7 @@ class HomePageLeftSidebar(pn.Column):
                 sizing_mode=self._STRETCH_WIDTH
             ),
             pn.pane.SVG(
-                'whateels/assets/img/we_logo.svg',
+                'whateels/assets/img/we_rainbow_logo.svg',
                 height=76,
                 align="center"
             ),

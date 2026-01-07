@@ -20,21 +20,14 @@ class ModalManager(param.Parameterized):
         if not isinstance(self.modals, dict):
             return
         if modal_id in self.modals:
-            # Set only the selected modal as visible
-            for mid in self.modals:
-                self.modals[mid]['visible'] = (mid == modal_id)
-            # Set the modal content in the template
-            self.custom_page.modal[:] = [self.modals[modal_id]['content']]
-            self.custom_page.open_modal()
+            self.modals[modal_id]['visible'] = True
+        self.custom_page.open_modal()
 
     def close(self):
         if not isinstance(self.modals, dict):
             return
-        # Hide all modals
-        for mid in self.modals:
-            self.modals[mid]['visible'] = False
-        # Clear modal content in the template
-        # self.custom_page.modal.clear()
+        for modal in self.modals.values():
+            modal['visible'] = False
         self.custom_page.close_modal()
 
     def view(self):
