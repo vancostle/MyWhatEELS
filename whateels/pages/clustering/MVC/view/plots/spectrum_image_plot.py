@@ -71,7 +71,9 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         # Double-click timing for toggling cluster display
         self._last_click_time = 0
         self._DOUBLE_CLICK_MS = 400  # Double-click threshold in milliseconds
+        self._frozen_pixel = None  # Store frozen pixel (i, j) from single click
         self._hover_disabled = False  # Disable hover after showing all clusters
+        self._last_hover_point = None  # Store last hover position for re-enabling
 
         # Clustering state
         self._clustering_results = None  # Will store (labels, centres) from clustering
@@ -354,6 +356,8 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             self.paneB.param.trigger('object')
         
         self._clustering_active = True
+        self._frozen_pixel = None  # Reset frozen state
+        self._hover_disabled = False  # Enable hover by default
     
     def _get_current_pane_height(self):
         """Get current paneB height to preserve it."""
@@ -361,7 +365,9 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             if self.paneB is not None and getattr(self.paneB, 'object', None) is not None:
                 obj = self.paneB.object
                 if isinstance(obj, go.Figure):
-                    return obj.layout.height
+
+                    
+                    return obj.layout.height # type: ignore
                 elif isinstance(obj, dict):
                     return obj.get('layout', {}).get('height')
         except Exception:
@@ -702,20 +708,55 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     
     @override
     def _on_paneA_hover(self, event):
-        """Override hover to disable it during clustering."""
-        if self._clustering_active:
-            # Disable hover during clustering
+        """
+        Handle hover on heatmap to show single-pixel spectrum.
+        
+        Shows:
+        1. Original pixel spectrum (if no norm active)
+        2. Normalized pixel spectrum if available_norm != 'none'
+        3. Corresponding cluster center if clustering is active
+        
+        Note: If a pixel is frozen (via single click) or hover is disabled 
+        (after double-click to show all clusters), hover is ignored.
+        """
+        if event.new is None:
             return
-        # Call parent hover implementation for non-clustering mode
-        super()._on_paneA_hover(event)
+        
+        # Store the hover point for later use
+        if 'points' in event.new and len(event.new['points']) > 0:
+            self._last_hover_point = event.new['points'][0]
+        
+        # If pixel is frozen or hover is disabled, don't override
+        if self._frozen_pixel is not None or self._hover_disabled:
+            return
+        
+        if not self._clustering_active:
+            # Before clustering - use parent implementation
+            super()._on_paneA_hover(event)
+            return
+        
+        # After clustering - process hover
+        try:
+            # Extract pixel coordinates from hover event
+            if 'points' in event.new and len(event.new['points']) > 0:
+                point = event.new['points'][0]
+                i, j = int(point['y']), int(point['x'])
+                
+                # Plot the spectrum for the hovered pixel
+                fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
+                if fig is not None and self.paneB is not None:
+                    self.paneB.object = fig
+        except Exception as e:
+            print(f"Error handling hover: {e}")
+            traceback.print_exc()
     
     @override
     def _on_paneA_click(self, event):
         """
-        Handle single/double clicks on the heatmap with clustering features.
+        Handle single/double clicks on the heatmap.
         
-        Single click: Shows the spectrum for the clicked pixel.
-        Double click: Resets to show all cluster centers.
+        Single click: Freezes the current pixel so hovering doesn't change the view.
+        Double click: Toggles between showing all cluster centers and re-enabling hover mode.
         """
         if event.new is None:
             return
@@ -726,33 +767,52 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             
             # Check if this is a double-click
             if time_since_last_click < self._DOUBLE_CLICK_MS:
-                # DOUBLE CLICK: Show all cluster centers
-                if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
-                    _, centres = self._clustering_results
+                # DOUBLE CLICK: Toggle between showing all clusters and re-enabling hover
+                self._frozen_pixel = None  # Always unfreeze on double-click
+                
+                if self._hover_disabled:
+                    # Re-enable hover mode
+                    self._hover_disabled = False
                     
-                    # Create figure with all cluster centers using OOP visualizer
-                    fig = self._visualizer.plot_centers(
-                        centres,
-                        self._energy,
-                        title="All Cluster Centers"
-                    )
-                    
-                    if self.paneB is not None:
-                        self.paneB.object = fig
+                    # Trigger hover for current mouse position if available
+                    if self._last_hover_point is not None and self._clustering_active:
+                        i, j = int(self._last_hover_point['y']), int(self._last_hover_point['x'])
+                        fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
+                        if fig is not None and self.paneB is not None:
+                            self.paneB.object = fig
+                else:
+                    # Show all clusters and disable hover
+                    if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
+                        self._hover_disabled = True  # Disable hover
+                        
+                        _, centres = self._clustering_results
+                        
+                        # Create figure with all cluster centers using OOP visualizer
+                        fig = self._visualizer.plot_centers(
+                            centres,
+                            self._energy,
+                            title="All Cluster Centers (Double Click again to re-enable hover)"
+                        )
+                        
+                        if self.paneB is not None:
+                            self.paneB.object = fig
                 
                 # Reset timer to prevent treating next click as double-click
                 self._last_click_time = current_time - 1000
                 return
                 
             else:
-                # SINGLE CLICK: Show spectrum for clicked pixel
+                # SINGLE CLICK: Freeze pixel
                 self._last_click_time = current_time
                 
                 if self._clustering_active:
                     # Extract coordinates from click event
                     point = event.new['points'][0]
                     i, j = int(point['y']), int(point['x'])
-                    fig = self._plot_pixel_spectrum(i, j, title_prefix="Click")
+                    self._frozen_pixel = (i, j)  # Freeze this pixel
+                    
+                    # Plot the frozen pixel spectrum
+                    fig = self._plot_pixel_spectrum(i, j, title_prefix="Click (Frozen)")
                     if fig is not None and self.paneB is not None:
                         self.paneB.object = fig
                 else:
