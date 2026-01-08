@@ -147,12 +147,21 @@ class DemoPageView:
         self._custom_page.modal.objects = list(self._all_modals.values())
         self._custom_page.open_modal()
     
+    def _close_modal(self, modal_id: str):
+        """Close a specific modal by ID."""
+        print(f"Closing Modal: {modal_id}")
+        if modal_id in self._all_modals:
+            self._all_modals[modal_id].visible = False
+        self._custom_page.close_modal()
+    
     def _modal_0(self):
         return pn.Column(
             pn.pane.Markdown("""
             ## Demo Modal Dialog for Vanessa.
             As you can see..
             """),
+            pn.widgets.Button(name="Close", button_type="primary",
+                              on_click=lambda event: self._close_modal('demo_modal')),
             width=400,
             height=200
         )
@@ -163,6 +172,8 @@ class DemoPageView:
             ## Another modal dialog for Vanessa
             ...it works!
             """),
+            pn.widgets.Button(name="Close", button_type="primary",
+                              on_click=lambda event: self._close_modal('another_modal')),
             width=400,
             height=200
         )
