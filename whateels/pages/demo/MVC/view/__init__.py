@@ -2,7 +2,7 @@ import panel as pn
 import plotly.graph_objs as go
 import numpy as np
 
-from whateels.components import SplitJs, ModalManager
+from whateels.components import SplitJs
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -17,34 +17,27 @@ class DemoPageView:
         self._left_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
-        self._modal_manager = ModalManager(custom_page)
+        self._custom_page = custom_page
         
-        modal_content_0 = pn.Column(
-            pn.pane.Markdown("""
-            ## Demo Modal Dialog
-            This is a demo modal dialog content.
-            """),
-            width=400,
-            height=200
-        )
-        self._modal_manager.add_modal("demo_modal_0", modal_content_0)
+        # Create modal instances once with string IDs
+        modal_0 = self._modal_0()
+        modal_1 = self._modal_1()
         
-        modal_content_1 = pn.Column(
-            pn.pane.Markdown("""
-            ## Another modal dialog
-            This is another modal dialog with different content.
-            """),
-            width=400,
-            height=200
-        )
-        self._modal_manager.add_modal("demo_modal_1", modal_content_1)
+        # Set initial visibility to False
+        modal_0.visible = False
+        modal_1.visible = False
         
-        open_modal_button = pn.widgets.Button(name="Open Modal", button_type="primary")
-        open_modal_button.on_click(lambda event: self._modal_manager.open("demo_modal_0"))
+        self._all_modals = {
+            'demo_modal': modal_0,
+            'another_modal': modal_1
+        }
+                
+        open_modal_button = pn.widgets.Button(name="Open Modal 0", button_type="primary")
+        open_modal_button.on_click(lambda event: self._open_modal('demo_modal'))
         self._left_sidebar.append(open_modal_button)
         
-        open_modal_button_1 = pn.widgets.Button(name="Open Another Modal", button_type="primary")
-        open_modal_button_1.on_click(lambda event: self._modal_manager.open("demo_modal_1"))
+        open_modal_button_1 = pn.widgets.Button(name="Open Modal 1", button_type="primary")
+        open_modal_button_1.on_click(lambda event: self._open_modal('another_modal'))
         self._left_sidebar.append(open_modal_button_1)
         
         # Simple heatmap (like paneA in spectrum_image_plot)
@@ -139,5 +132,41 @@ class DemoPageView:
         return self._right_sidebar
     
     @property
-    def modal_manager(self) -> ModalManager:
-        return self._modal_manager
+    def modal(self):
+        return self._custom_page.modal
+    
+    def _open_modal(self, modal_id: str):
+        """Open a specific modal by ID, hiding all others."""
+        print(f"Opening Modal: {modal_id}")
+        
+        # Hide all modals except the selected one
+        for mid, modal in self._all_modals.items():
+            modal.visible = (mid == modal_id)
+        
+        # Set modal.objects to show all modals (but only visible ones will display)
+        self._custom_page.modal.objects = list(self._all_modals.values())
+        self._custom_page.open_modal()
+    
+    def _modal_0(self):
+        return pn.Column(
+            pn.pane.Markdown("""
+            ## Demo Modal Dialog for Vanessa.
+            As you can see..
+            """),
+            width=400,
+            height=200
+        )
+        
+    def _modal_1(self):
+        return pn.Column(
+            pn.pane.Markdown("""
+            ## Another modal dialog for Vanessa
+            ...it works!
+            """),
+            width=400,
+            height=200
+        )
+        
+    @property
+    def all_modals(self):
+        return self._all_modals

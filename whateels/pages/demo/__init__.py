@@ -18,6 +18,6 @@ class DemoPage(CustomPage):
             main=[view.main],
             sidebar=[view.left_sidebar],
             right_sidebar=[view.right_sidebar],
-
+            modal=list(view.all_modals.values()),
             sidebar_width=150
         )
