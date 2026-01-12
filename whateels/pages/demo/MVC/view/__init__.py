@@ -2,7 +2,7 @@ import panel as pn
 import plotly.graph_objs as go
 import numpy as np
 
-from whateels.components import SplitJs, ModalManager, ColorPickerModal, ConfirmationModal
+from whateels.components import SplitJs, ModalManager, ColorPickerModal, ConfirmationModal, InfoModal
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -41,16 +41,30 @@ class DemoPageView:
             styles={"padding": "16px"}
         )
         
-        self._modal_manager.register_modal('Color Picker', color_picker_modal)
+        info_modal = InfoModal(
+            custom_page=custom_page,
+            title="Info Modal",
+            message="This is an informational modal.",
+            on_close=lambda: print("Info modal closed."),
+            width=300,
+            styles={"padding": "16px"}
+        )
+        
+        self._modal_manager.register_modal('Color Picker Modal', color_picker_modal)
         self._modal_manager.register_modal('Confirmation Modal', confirmation_modal)
+        self._modal_manager.register_modal('Info Modal', info_modal)
         
-        open_modal_button = pn.widgets.Button(name="Open Color Picker", button_type="primary")
-        open_modal_button.on_click(lambda event: self._modal_manager.open_modal('Color Picker'))
-        self._left_sidebar.append(open_modal_button)
+        open_color_picker_button = pn.widgets.Button(name="Open Color Picker Modal", button_type="primary")
+        open_color_picker_button.on_click(lambda event: self._modal_manager.open_modal('Color Picker Modal'))
+        self._left_sidebar.append(open_color_picker_button)
         
-        open_modal_button_1 = pn.widgets.Button(name="Open Another Modal", button_type="primary")
-        open_modal_button_1.on_click(lambda event: self._modal_manager.open_modal('Confirmation Modal'))
-        self._left_sidebar.append(open_modal_button_1)
+        open_confirmation_button = pn.widgets.Button(name="Open Confirmation Modal", button_type="primary")
+        open_confirmation_button.on_click(lambda event: self._modal_manager.open_modal('Confirmation Modal'))
+        self._left_sidebar.append(open_confirmation_button)
+        
+        open_info_button = pn.widgets.Button(name="Open Info Modal", button_type="primary")
+        open_info_button.on_click(lambda event: self._modal_manager.open_modal('Info Modal'))
+        self._left_sidebar.append(open_info_button)
         
         # Simple heatmap (like paneA in spectrum_image_plot)
         ny, nx = 50, 50

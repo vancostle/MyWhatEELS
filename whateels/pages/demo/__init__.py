@@ -1,6 +1,5 @@
 from whateels.components import CustomPage
 from .MVC import DemoPageView, DemoPageController, DemoPageModel
-import panel as pn
 
 class DemoPage(CustomPage):
     """
