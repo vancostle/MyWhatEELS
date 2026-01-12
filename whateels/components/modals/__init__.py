@@ -1,1 +1,2 @@
 from .color_picker_modal import ColorPickerModal
+from .confirmation_modal import ConfirmationModal

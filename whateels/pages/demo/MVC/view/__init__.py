@@ -2,7 +2,7 @@ import panel as pn
 import plotly.graph_objs as go
 import numpy as np
 
-from whateels.components import SplitJs, ModalManager, ColorPickerModal
+from whateels.components import SplitJs, ModalManager, ColorPickerModal, ConfirmationModal
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -18,45 +18,38 @@ class DemoPageView:
         self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
         self._custom_page = custom_page
-        self._modal_manager = ModalManager(custom_page)
-        
-        def on_selected_color(color):
-            print(f"Selected color: {color}")
-            self._modal_manager.close_modal('demo_modal')
-
-        def on_cancel():
-            print("Color selection cancelled.")
-            self._modal_manager.close_modal('demo_modal')
+        self._modal_manager = ModalManager(custom_page)            
         
         # Create modal instances once with string IDs
-        modal_0 = ColorPickerModal(
+        color_picker_modal = ColorPickerModal(
+            custom_page=custom_page,
             title="Select a color:",
             initial_color="cyan",
-            on_color_selected=on_selected_color,
-            on_cancel=on_cancel,
+            on_color_selected=lambda color: print(f"Selected color: {color}"),
+            on_cancel=lambda: print("Color selection cancelled."),
             width=300,
             styles={"padding": "16px"}
         )
-        modal_1 = pn.Column(
-            pn.pane.Markdown("""
-            ## Another modal dialog for Vanessa
-            ...it works!
-            """),
-            pn.widgets.Button(name="Close", button_type="primary",
-                              on_click=lambda event: self._modal_manager.close_modal('another_modal')),
+
+        confirmation_modal = ConfirmationModal(
+            custom_page=custom_page,
+            title="Are you sure?",
+            message="This action cannot be undone.",
+            on_confirm=lambda: print("Confirmed action from confirmation modal."),
+            on_cancel=lambda: print("Cancelled action from confirmation modal."),
             width=400,
-            height=200
+            styles={"padding": "16px"}
         )
         
-        self._modal_manager.register_modal('demo_modal', modal_0)
-        self._modal_manager.register_modal('another_modal', modal_1)
+        self._modal_manager.register_modal('Color Picker', color_picker_modal)
+        self._modal_manager.register_modal('Confirmation Modal', confirmation_modal)
         
-        open_modal_button = pn.widgets.Button(name="Open Modal 0", button_type="primary")
-        open_modal_button.on_click(lambda event: self._modal_manager.open_modal('demo_modal'))
+        open_modal_button = pn.widgets.Button(name="Open Color Picker", button_type="primary")
+        open_modal_button.on_click(lambda event: self._modal_manager.open_modal('Color Picker'))
         self._left_sidebar.append(open_modal_button)
         
-        open_modal_button_1 = pn.widgets.Button(name="Open Modal 1", button_type="primary")
-        open_modal_button_1.on_click(lambda event: self._modal_manager.open_modal('another_modal'))
+        open_modal_button_1 = pn.widgets.Button(name="Open Another Modal", button_type="primary")
+        open_modal_button_1.on_click(lambda event: self._modal_manager.open_modal('Confirmation Modal'))
         self._left_sidebar.append(open_modal_button_1)
         
         # Simple heatmap (like paneA in spectrum_image_plot)
@@ -152,4 +145,4 @@ class DemoPageView:
 
     @property
     def modals(self) -> list:
-        return list(self._modal_manager.modals.values())
+        return self._modal_manager.modals

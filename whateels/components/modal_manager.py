@@ -28,6 +28,6 @@ class ModalManager:
         self._custom_page.close_modal() # Close the modal container
         
     @property
-    def modals(self):
+    def modals(self) -> list:
         """Return the dictionary of registered modals."""
-        return self._modals
+        return list(self._modals.values())

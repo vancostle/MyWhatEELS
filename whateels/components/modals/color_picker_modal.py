@@ -1,14 +1,21 @@
 import panel as pn
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from whateels.components import CustomPage
+
 class ColorPickerModal(pn.Column):
     def __init__(
         self, 
+        custom_page : "CustomPage",
         title="Modal Color Picker", 
         initial_color="#1f77b4", 
         on_color_selected=None,
         on_cancel=None,
         **kwargs
     ):
+        self._custom_page = custom_page
+        
         self.color_picker = pn.widgets.ColorPicker(
             name="Color",
             value=initial_color,
@@ -52,12 +59,14 @@ class ColorPickerModal(pn.Column):
         if self._callback_on_color_selected:
             self._callback_on_color_selected(self._result)
         self.visible = False
+        self._custom_page.close_modal()
 
     def _on_cancel(self, event):
         self._result = None
         if self._callback_on_cancel:
             self._callback_on_cancel()
         self.visible = False
+        self._custom_page.close_modal()
 
     @property
     def result(self):
