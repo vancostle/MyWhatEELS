@@ -2,7 +2,7 @@ import panel as pn
 import plotly.graph_objs as go
 import numpy as np
 
-from whateels.components import SplitJs
+from whateels.components import SplitJs, ModalManager
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -18,26 +18,39 @@ class DemoPageView:
         self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
         self._custom_page = custom_page
-        
+        self._modal_manager = ModalManager(custom_page)
+
         # Create modal instances once with string IDs
-        modal_0 = self._modal_0()
-        modal_1 = self._modal_1()
+        modal_0 = pn.Column(
+            pn.pane.Markdown("""
+            ## Demo Modal Dialog for Vanessa.
+            As you can see..
+            """),
+            pn.widgets.Button(name="Close", button_type="primary",
+                              on_click=lambda event: self._modal_manager.close_modal('demo_modal')),
+            width=400,
+            height=200
+        )
+        modal_1 = pn.Column(
+            pn.pane.Markdown("""
+            ## Another modal dialog for Vanessa
+            ...it works!
+            """),
+            pn.widgets.Button(name="Close", button_type="primary",
+                              on_click=lambda event: self._modal_manager.close_modal('another_modal')),
+            width=400,
+            height=200
+        )
         
-        # Set initial visibility to False
-        modal_0.visible = False
-        modal_1.visible = False
+        self._modal_manager.register_modal('demo_modal', modal_0)
+        self._modal_manager.register_modal('another_modal', modal_1)
         
-        self._all_modals = {
-            'demo_modal': modal_0,
-            'another_modal': modal_1
-        }
-                
         open_modal_button = pn.widgets.Button(name="Open Modal 0", button_type="primary")
-        open_modal_button.on_click(lambda event: self._open_modal('demo_modal'))
+        open_modal_button.on_click(lambda event: self._modal_manager.open_modal('demo_modal'))
         self._left_sidebar.append(open_modal_button)
         
         open_modal_button_1 = pn.widgets.Button(name="Open Modal 1", button_type="primary")
-        open_modal_button_1.on_click(lambda event: self._open_modal('another_modal'))
+        open_modal_button_1.on_click(lambda event: self._modal_manager.open_modal('another_modal'))
         self._left_sidebar.append(open_modal_button_1)
         
         # Simple heatmap (like paneA in spectrum_image_plot)
@@ -130,55 +143,7 @@ class DemoPageView:
     @property
     def right_sidebar(self) -> pn.Column:
         return self._right_sidebar
-    
+
     @property
-    def modal(self):
-        return self._custom_page.modal
-    
-    def _open_modal(self, modal_id: str):
-        """Open a specific modal by ID, hiding all others."""
-        
-        # Hide all modals except the selected one
-        for mid, modal in self._all_modals.items():
-            modal.visible = (mid == modal_id)
-        
-        # Set modal.objects to show all modals (but only visible ones will display)
-        modal_container = getattr(self._custom_page, 'modal', None)
-        if modal_container is not None and hasattr(modal_container, 'objects'):
-            modal_container.objects = list(self._all_modals.values())
-            self._custom_page.open_modal()
-    
-    def _close_modal(self, modal_id: str):
-        """Close a specific modal by ID."""
-        print(f"Closing Modal: {modal_id}")
-        if modal_id in self._all_modals:
-            self._all_modals[modal_id].visible = False
-        self._custom_page.close_modal()
-    
-    def _modal_0(self):
-        return pn.Column(
-            pn.pane.Markdown("""
-            ## Demo Modal Dialog for Vanessa.
-            As you can see..
-            """),
-            pn.widgets.Button(name="Close", button_type="primary",
-                              on_click=lambda event: self._close_modal('demo_modal')),
-            width=400,
-            height=200
-        )
-        
-    def _modal_1(self):
-        return pn.Column(
-            pn.pane.Markdown("""
-            ## Another modal dialog for Vanessa
-            ...it works!
-            """),
-            pn.widgets.Button(name="Close", button_type="primary",
-                              on_click=lambda event: self._close_modal('another_modal')),
-            width=400,
-            height=200
-        )
-        
-    @property
-    def all_modals(self):
-        return self._all_modals
+    def modals(self) -> list:
+        return list(self._modal_manager.modals.values())
