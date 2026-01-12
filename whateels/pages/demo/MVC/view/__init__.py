@@ -2,7 +2,7 @@ import panel as pn
 import plotly.graph_objs as go
 import numpy as np
 
-from whateels.components import SplitJs, ModalManager
+from whateels.components import SplitJs, ModalManager, ColorPickerModal
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -19,17 +19,23 @@ class DemoPageView:
         
         self._custom_page = custom_page
         self._modal_manager = ModalManager(custom_page)
+        
+        def on_selected_color(color):
+            print(f"Selected color: {color}")
+            self._modal_manager.close_modal('demo_modal')
 
+        def on_cancel():
+            print("Color selection cancelled.")
+            self._modal_manager.close_modal('demo_modal')
+        
         # Create modal instances once with string IDs
-        modal_0 = pn.Column(
-            pn.pane.Markdown("""
-            ## Demo Modal Dialog for Vanessa.
-            As you can see..
-            """),
-            pn.widgets.Button(name="Close", button_type="primary",
-                              on_click=lambda event: self._modal_manager.close_modal('demo_modal')),
-            width=400,
-            height=200
+        modal_0 = ColorPickerModal(
+            title="Select a color:",
+            initial_color="cyan",
+            on_color_selected=on_selected_color,
+            on_cancel=on_cancel,
+            width=300,
+            styles={"padding": "16px"}
         )
         modal_1 = pn.Column(
             pn.pane.Markdown("""

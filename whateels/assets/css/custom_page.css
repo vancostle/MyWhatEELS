@@ -2,6 +2,15 @@
     --header-background: #4d4dc9;
     --header-background-hover: #3b3bb8;
     --secondary-whateels-background: #b63fb5;
+    
+}
+
+#pn-Modal {
+    --dialog-width: auto !important;
+}
+
+#pn-closeModal {
+    display: none;
 }
 
 #header .app-header a.title {

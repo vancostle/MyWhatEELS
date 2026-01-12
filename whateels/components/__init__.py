@@ -10,18 +10,4 @@ from .simple_details import SimpleDetails
 from .details import Details
 from .splitjs import SplitJs
 from .modal_manager import ModalManager
-
-__all__ = [
-    'CustomPage',
-    'UploadedFile',
-    'ErrorPanel',
-    'ToggleButton',
-    'ProgressTrackerMixin',
-    'ProgressDisplay',
-    'DatasetInformation',
-    'FileUploader',
-    'SimpleDetails',
-    'Details',
-    'SplitJs',
-    'ModalManager',
-]
+from .modals import * # Import all modals
