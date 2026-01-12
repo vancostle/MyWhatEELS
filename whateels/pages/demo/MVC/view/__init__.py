@@ -137,15 +137,16 @@ class DemoPageView:
     
     def _open_modal(self, modal_id: str):
         """Open a specific modal by ID, hiding all others."""
-        print(f"Opening Modal: {modal_id}")
         
         # Hide all modals except the selected one
         for mid, modal in self._all_modals.items():
             modal.visible = (mid == modal_id)
         
         # Set modal.objects to show all modals (but only visible ones will display)
-        self._custom_page.modal.objects = list(self._all_modals.values())
-        self._custom_page.open_modal()
+        modal_container = getattr(self._custom_page, 'modal', None)
+        if modal_container is not None and hasattr(modal_container, 'objects'):
+            modal_container.objects = list(self._all_modals.values())
+            self._custom_page.open_modal()
     
     def _close_modal(self, modal_id: str):
         """Close a specific modal by ID."""
