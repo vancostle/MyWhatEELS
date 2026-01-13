@@ -13,14 +13,41 @@ class ClusteringRightSidebarLayout(pn.Column):
     def __init__(self, model: "ClusteringModel"):
         self._model = model
         
-        self._background_subtraction_switch = None  # Switch for background-subtraction option
+        self._background_subtraction_switch = pn.widgets.Switch(
+            name="Background-subtraction", 
+            value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
+            sizing_mode='stretch_both',
+            css_classes=["background-subtraction-switch"]
+        )
+    
         self._store_button = None  # Button to store clustering results
+
         self._kmeans_input = None  # Dictionary to hold K-Means input widgets
-        self._kmeans_run_button = None  # Button to run K-Means clustering
+        self._kmeans_run_button = pn.widgets.Button(
+            name='Run K-Means',
+            button_type='success',
+            height=55,
+            margin=(20,0,0,0),
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
         self._agglomerative_input = None  # Dictionary to hold Agglomerative input widgets
-        self._agglomerative_run_button = None  # Button to run Agglomerative clustering
+        self._agglomerative_run_button = pn.widgets.Button(
+            name='Run Agglomerative',
+            button_type='success',
+            height=55,
+            margin=(20,0,0,0),
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
         self._spectral_input = None  # Dictionary to hold Spectral input widgets
-        self._spectral_run_button = None  # Button to run Spectral clustering
+        self._spectral_run_button = pn.widgets.Button(
+            name='Run Spectral',
+            button_type='success',
+            height=55,
+            margin=(20,0,0,0),
+            sizing_mode=self._STRETCH_WIDTH
+        )
 
         super().__init__(
             self._create_layout(),
@@ -28,15 +55,15 @@ class ClusteringRightSidebarLayout(pn.Column):
         )
         
     @property
-    def background_subtraction_switch(self) -> Optional[pn.widgets.Switch]:
+    def background_subtraction_switch(self) -> pn.widgets.Switch:
         """Access the background-subtraction switch widget."""
         return self._background_subtraction_switch
     @property
-    def spectral_run_button(self) -> Optional[pn.widgets.Button]:
+    def spectral_run_button(self) -> pn.widgets.Button:
         """Access the Spectral clustering run button."""
         return self._spectral_run_button
     @property
-    def agglomerative_run_button(self) -> Optional[pn.widgets.Button]:
+    def agglomerative_run_button(self) -> pn.widgets.Button:
         """Access the Agglomerative clustering run button."""
         return self._agglomerative_run_button
     @property
@@ -44,7 +71,7 @@ class ClusteringRightSidebarLayout(pn.Column):
         """Access the store button."""
         return self._store_button
     @property
-    def kmeans_run_button(self) -> Optional[pn.widgets.Button]:
+    def kmeans_run_button(self) -> pn.widgets.Button:
         """Access the K-Means clustering run button."""
         return self._kmeans_run_button
     @property
@@ -204,14 +231,6 @@ class ClusteringRightSidebarLayout(pn.Column):
             ),
         }
         
-        self._kmeans_run_button = pn.widgets.Button(
-            name='Run K-Means',
-            button_type='success',
-            height=55,
-            margin=(20,0,0,0),
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
         k_means_tab = pn.Column(
             pn.Column(
                 *[widget for widget in self._kmeans_input.values()],
@@ -271,14 +290,6 @@ class ClusteringRightSidebarLayout(pn.Column):
                 affinity_widget.disabled = False
 
         agglomerative_input["linkage"].param.watch(_on_linkage_change, 'value')
-        
-        self._agglomerative_run_button = pn.widgets.Button(
-            name='Run Agglomerative',
-            button_type='success',
-            height=55,
-            margin=(20,0,0,0),
-            sizing_mode=self._STRETCH_WIDTH
-        )
         
         agglomerative_tab = pn.Column(
             pn.Column(
@@ -346,14 +357,6 @@ class ClusteringRightSidebarLayout(pn.Column):
                 margin=(10,18,0,18)
             ),
         }
-        
-        self._spectral_run_button = pn.widgets.Button(
-            name='Run Spectral',
-            button_type='success',
-            height=55,
-            margin=(20,0,0,0),
-            sizing_mode=self._STRETCH_WIDTH
-        )
 
         spectral_tab = pn.Column(
             pn.Column(

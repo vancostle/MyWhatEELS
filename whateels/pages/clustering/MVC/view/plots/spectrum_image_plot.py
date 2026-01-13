@@ -86,9 +86,14 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         self._last_clustering_input = None
 
         # Clustering widgets
-        self._kmeans_run_button = None
-        self._agglomerative_run_button = None
-        self._spectral_run_button = None
+        self._kmeans_run_button = self._view.right_sidebar.kmeans_run_button
+        self._kmeans_run_button.on_click(lambda _ : self.run_kmeans_clustering(user_click=True))
+        
+        self._agglomerative_run_button = self._view.right_sidebar.agglomerative_run_button
+        self._agglomerative_run_button.on_click(lambda _ : self.run_agglomerative_clustering(user_click=True))
+        
+        self._spectral_run_button = self._view.right_sidebar.spectral_run_button
+        self._spectral_run_button.on_click(lambda _ : self.run_spectral_clustering(user_click=True))
         
         # OOP utility instances
         self._preprocessor = DataPreprocessor()
@@ -111,9 +116,6 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             data_getter_fn=self._get_data_for_clustering,
             original_heatmap_ref=self._original_heatmap_ref
         )
-
-        # Setup clustering-specific widgets
-        self._setup_clustering_widgets()
 
     # --- Clustering Application Methods ---
     
@@ -171,9 +173,11 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             
             # Finalize
             self._orchestrator.finalize_clustering(n_clusters, "K-Means", self._plots_layout)
+            pn.state.notifications.success("K-Means clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
             self._orchestrator.handle_error(e, "KMeans", self._plots_layout)
+            pn.state.notifications.error(f"K-Means clustering failed: {str(e)}", duration=5000) #type: ignore
         finally:
             self._enable_all_clustering_buttons()
 
@@ -376,8 +380,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     
     def _disable_all_clustering_buttons(self):
         """Disable all clustering buttons."""
-        if self._kmeans_run_button is not None:
-            self._kmeans_run_button.disabled = True
+        self._kmeans_run_button.disabled = True
         if self._agglomerative_run_button is not None:
             self._agglomerative_run_button.disabled = True
         if self._spectral_run_button is not None:
@@ -509,6 +512,7 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     
     def run_kmeans_clustering(self, user_click=False):
         """Handle KMeans clustering button click."""
+        pn.state.notifications.info("K-Means clustering started...", duration=3000) #type: ignore
         self._disable_all_clustering_buttons()
 
         # Unlock Panel I/O for background processing
@@ -557,21 +561,6 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         )
         thread.start()
 
-    # --- Widget Setup ---
-    
-    def _setup_clustering_widgets(self):
-        """Connect clustering buttons to their respective handlers."""
-        if kmeans_run_button := getattr(self._view.right_sidebar, "kmeans_run_button", None):
-            self._kmeans_run_button = kmeans_run_button
-            kmeans_run_button.on_click(lambda _ : self.run_kmeans_clustering(user_click=True))
-
-        if agglomerative_run_button := getattr(self._view.right_sidebar, "agglomerative_run_button", None):
-            self._agglomerative_run_button = agglomerative_run_button
-            agglomerative_run_button.on_click(lambda _ : self.run_agglomerative_clustering(user_click=True))
-
-        if spectral_run_button := getattr(self._view.right_sidebar, "spectral_run_button", None):
-            self._spectral_run_button = spectral_run_button
-            spectral_run_button.on_click(lambda _ : self.run_spectral_clustering(user_click=True))
     # --- Public Layout Builders ---
     
     @override

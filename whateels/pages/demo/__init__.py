@@ -11,7 +11,7 @@ class DemoPage(CustomPage):
         model = DemoPageModel()
         view = DemoPageView(model, custom_page=self)
         DemoPageController(model, view)
-
+        
         super().__init__(
             title="Demo Page",
             main=[view.main],

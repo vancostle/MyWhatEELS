@@ -17,7 +17,9 @@ class DemoPageView:
         self._left_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
+        
         self._custom_page = custom_page
+        
         self._modal_manager = ModalManager(custom_page)            
         
         # Create modal instances once with string IDs
