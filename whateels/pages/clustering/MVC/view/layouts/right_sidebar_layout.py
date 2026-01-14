@@ -20,7 +20,14 @@ class ClusteringRightSidebarLayout(pn.Column):
             css_classes=["background-subtraction-switch"]
         )
     
-        self._store_button = None  # Button to store clustering results
+        self._store_button = pn.widgets.FileDownload(
+            label="Store Last Clustering Results",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
+        )
 
         self._kmeans_input = None  # Dictionary to hold K-Means input widgets
         self._kmeans_run_button = pn.widgets.Button(
@@ -67,7 +74,7 @@ class ClusteringRightSidebarLayout(pn.Column):
         """Access the Agglomerative clustering run button."""
         return self._agglomerative_run_button
     @property
-    def store_button(self) -> Optional[pn.widgets.FileDownload]:
+    def store_button(self) -> pn.widgets.FileDownload:
         """Access the store button."""
         return self._store_button
     @property
@@ -162,21 +169,15 @@ class ClusteringRightSidebarLayout(pn.Column):
             
             if (self._store_button is not None):
                 self._store_button.filename = filename
+                
+            pn.state.notifications.success(f"Clustering results saved as {filename}", duration=5000) #type: ignore
             
             return InMemoryFile(
                 json_str.encode('utf-8'), 
                 name=filename, 
             )
-
-        self._store_button = pn.widgets.FileDownload(
-            label="Store Last Clustering Results",
-            button_type="primary",
-            callback=pn.bind(create_file),
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(10, 0, 0, 0),
-            icon="download",
-            icon_size="20px",
-        )
+        
+        self._store_button.callback = pn.bind(create_file)
 
         right_sidebar = pn.Column(
             background_subtraction_container,

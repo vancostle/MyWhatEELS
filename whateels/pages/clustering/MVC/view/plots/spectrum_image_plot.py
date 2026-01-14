@@ -235,9 +235,11 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             
             # Finalize
             self._orchestrator.finalize_clustering(n_clusters, "Agglomerative", self._plots_layout)
+            pn.state.notifications.success("Agglomerative clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
             self._orchestrator.handle_error(e, "Agglomerative", self._plots_layout)
+            pn.state.notifications.error(f"Agglomerative clustering failed: {str(e)}", duration=5000) #type: ignore
         finally:
             self._enable_all_clustering_buttons()
 
@@ -299,9 +301,11 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
             
             # Finalize
             self._orchestrator.finalize_clustering(n_clusters, "Spectral", self._plots_layout)
+            pn.state.notifications.success("Spectral clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
             self._orchestrator.handle_error(e, "Spectral", self._plots_layout)
+            pn.state.notifications.error(f"Spectral clustering failed: {str(e)}", duration=5000) #type: ignore
         finally:
             self._enable_all_clustering_buttons()
 
@@ -381,19 +385,14 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     def _disable_all_clustering_buttons(self):
         """Disable all clustering buttons."""
         self._kmeans_run_button.disabled = True
-        if self._agglomerative_run_button is not None:
-            self._agglomerative_run_button.disabled = True
-        if self._spectral_run_button is not None:
-            self._spectral_run_button.disabled = True
+        self._agglomerative_run_button.disabled = True
+        self._spectral_run_button.disabled = True
 
     def _enable_all_clustering_buttons(self):
         """Enable all clustering buttons."""
-        if self._kmeans_run_button is not None:
-            self._kmeans_run_button.disabled = False
-        if self._agglomerative_run_button is not None:
-            self._agglomerative_run_button.disabled = False
-        if self._spectral_run_button is not None:
-            self._spectral_run_button.disabled = False
+        self._kmeans_run_button.disabled = False
+        self._agglomerative_run_button.disabled = False
+        self._spectral_run_button.disabled = False
 
     def _get_kmeans_params(self, user_click):
         """Get KMeans clustering parameters from widgets or saved state."""
@@ -512,14 +511,16 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     
     def run_kmeans_clustering(self, user_click=False):
         """Handle KMeans clustering button click."""
-        pn.state.notifications.info("K-Means clustering started...", duration=3000) #type: ignore
         self._disable_all_clustering_buttons()
 
         # Unlock Panel I/O for background processing
         pn.io.unlocked()
-        
+        # pn.io.hold()
+                
         # Get parameters from widgets or saved state
         params = self._get_kmeans_params(user_click)
+        
+        pn.state.notifications.info("K-Means clustering started...", duration=3000) #type: ignore
         
         # Run in background thread with captured values
         thread = threading.Thread(
@@ -531,11 +532,14 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
     def run_agglomerative_clustering(self, user_click=False):
         """Handle Agglomerative clustering button click."""
+
         self._disable_all_clustering_buttons()
         pn.io.unlocked()
         
         # Get parameters from widgets or saved state
         params = self._get_agglomerative_params(user_click)
+        
+        pn.state.notifications.info("Agglomerative clustering started...", duration=3000) #type: ignore
         
         # Run in background thread with captured values
         thread = threading.Thread(
@@ -547,11 +551,14 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
     def run_spectral_clustering(self, user_click=False):
         """Handle Spectral clustering button click."""
+                
         self._disable_all_clustering_buttons()
         pn.io.unlocked()
         
         # Get parameters from widgets or saved state
         params = self._get_spectral_params(user_click)
+        
+        pn.state.notifications.info("Spectral clustering started...", duration=3000) #type: ignore
         
         # Run in background thread with captured values
         thread = threading.Thread(
