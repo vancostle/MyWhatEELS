@@ -24,6 +24,7 @@ from whateels.components.plots import SpectrumImagePlot as SharedSpectrumImagePl
 from whateels.components import SplitJs, ProgressDisplay
 from typing import override, TYPE_CHECKING
 
+
 # Import clustering page utilities (OOP classes)
 from ....utils import (
     DataPreprocessor,
@@ -55,6 +56,9 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
     """
 
     def __init__(self, model: "ClusteringModel", view: "ClusteringView", dataset: "Dataset"):
+        # Set notification position
+        pn.state.notifications.position = 'bottom-left'  # type: ignore
+        
         # Get axis name from model constants
         eloss_name = getattr(model.constants, 'ELOSS', 'Eloss') if hasattr(model, 'constants') else 'Eloss'
         
@@ -515,17 +519,20 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
 
         # Unlock Panel I/O for background processing
         pn.io.unlocked()
-        # pn.io.hold()
-                
-        # Get parameters from widgets or saved state
-        params = self._get_kmeans_params(user_click)
         
         pn.state.notifications.info("K-Means clustering started...", duration=3000) #type: ignore
         
-        # Run in background thread with captured values
+        # Define a wrapper that reads params at execution time (ensures sync)
+        def run_with_params():
+            # Small delay to ensure Panel's parameter system has propagated changes
+            if user_click:
+                time.sleep(0.1)
+            params = self._get_kmeans_params(user_click)
+            self._apply_kmeans_clustering(*params)
+        
+        # Run in background thread
         thread = threading.Thread(
-            target=self._apply_kmeans_clustering,
-            args=params,
+            target=run_with_params,
             daemon=True
         )
         thread.start()
@@ -536,15 +543,19 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         self._disable_all_clustering_buttons()
         pn.io.unlocked()
         
-        # Get parameters from widgets or saved state
-        params = self._get_agglomerative_params(user_click)
-        
         pn.state.notifications.info("Agglomerative clustering started...", duration=3000) #type: ignore
         
-        # Run in background thread with captured values
+        # Define a wrapper that reads params at execution time (ensures sync)
+        def run_with_params():
+            # Small delay to ensure Panel's parameter system has propagated changes
+            if user_click:
+                time.sleep(0.1)
+            params = self._get_agglomerative_params(user_click)
+            self._apply_agglomerative_clustering(*params)
+        
+        # Run in background thread
         thread = threading.Thread(
-            target=self._apply_agglomerative_clustering,
-            args=params,
+            target=run_with_params,
             daemon=True
         )
         thread.start()
@@ -555,15 +566,19 @@ class SpectrumImagePlot(SharedSpectrumImagePlot):
         self._disable_all_clustering_buttons()
         pn.io.unlocked()
         
-        # Get parameters from widgets or saved state
-        params = self._get_spectral_params(user_click)
-        
         pn.state.notifications.info("Spectral clustering started...", duration=3000) #type: ignore
         
-        # Run in background thread with captured values
+        # Define a wrapper that reads params at execution time (ensures sync)
+        def run_with_params():
+            # Small delay to ensure Panel's parameter system has propagated changes
+            if user_click:
+                time.sleep(0.1)
+            params = self._get_spectral_params(user_click)
+            self._apply_spectral_clustering(*params)
+        
+        # Run in background thread
         thread = threading.Thread(
-            target=self._apply_spectral_clustering,
-            args=params,
+            target=run_with_params,
             daemon=True
         )
         thread.start()
