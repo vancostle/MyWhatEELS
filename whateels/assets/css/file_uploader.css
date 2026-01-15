@@ -114,12 +114,13 @@
     justify-content: start;
 }
 
-button {
+:host(.solid) .bk-btn.bk-btn-default {
     color: transparent !important;
     background-color: #1b650c !important;
     transition: background-color 0.2s;
 }
-button:hover {
+
+:host(.solid) .bk-btn.bk-btn-default:hover {
     background-color: white !important;
 }
 
@@ -138,6 +139,8 @@ button:hover {
     font-family: 'Arial', sans-serif;
     font-weight: bold;
     transition: background 0.2s;
+
+    background-color: #1b650c !important;
 }
 
 .remove-file-button:hover {

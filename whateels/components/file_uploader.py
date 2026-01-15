@@ -147,7 +147,6 @@ class FileUploader(pn.Column):
         success_message_button = pn.widgets.Button(
             name="-",
             margin=0,
-            button_type="warning",
             css_classes=['remove-file-button'],
         )
         success_message_button.on_click(lambda _: clear_message_handler("success"))
@@ -257,15 +256,15 @@ class FileUploader(pn.Column):
             """
         )
         
-        pn.state.notifications.success(f"File '{self._current_filename}' uploaded successfully.", duration=3000)
+        pn.state.notifications.success(f"File '{self._current_filename}' uploaded successfully.", duration=3000) # type: ignore
     def _show_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
-        pn.state.notifications.error(f"File upload failed.", duration=3000)
+        pn.state.notifications.error(f"File upload failed.", duration=3000) # type: ignore
 
     def _clear_success_message(self):
         self._success_message_panel.styles = {'transform': 'translateX(calc(100% + var(--inner-panel-padding) * 2))', 'pointer-events': 'none'}
-        pn.state.notifications.info(f"File was removed correctly.", duration=2000)
+        pn.state.notifications.info(f"File was removed correctly.", duration=2000) # type: ignore
                 
     def _clear_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(calc(-100% - var(--inner-panel-padding) * 2))', 'pointer-events': 'none'}
-        pn.state.notifications.info(f"File was removed correctly.", duration=2000)
+        pn.state.notifications.info(f"File was removed correctly.", duration=2000) # type: ignore
