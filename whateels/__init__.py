@@ -4,7 +4,7 @@ import panel as pn
 pn.extension('filedropper', 'floatpanel', 'plotly', notifications=True, theme='default')
 
 from whateels.helpers import LoadCSS, CSS_ROOT, KillProcess
-from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification, DemoPage
+from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification, DemoPage, Login
 
 class App:
     """
@@ -29,7 +29,7 @@ class App:
         # Define the pages for the application
         # Use lambdas to avoid immediate instantiation
         pages = {
-            "/": lambda: HomePage(),
+            "/": lambda: Login(),
             "/metadata-details": lambda: Metadata(),
             "/clustering": lambda: Clustering(),
             "/multifit-details": lambda: MultiFitting(),
