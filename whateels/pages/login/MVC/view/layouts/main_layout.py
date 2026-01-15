@@ -4,14 +4,14 @@ class LoginMainLayout(pn.Column):
     
     def __init__(self, **kwargs):
         
-        form = self._left_column()
-        right_column = self._right_column()
+        form = self._form()
+        logo = self._logo()
         
         wrapper = pn.Row(
+            logo,
             form,
-            width=400,
             margin=0,
-            styles={"padding": "0", "height": "auto", "min-height": "auto"},
+            styles={"padding": "0", "height": "auto", "min-height": "auto", "max-width": "800px", "justify-content": "space-around", "align-items": "center", "gap": "50px"},
             sizing_mode="stretch_height",
         )
              
@@ -20,7 +20,7 @@ class LoginMainLayout(pn.Column):
             **kwargs
         )
         
-    def _left_column(self) -> pn.Column:
+    def _form(self) -> pn.Column:
         title = pn.pane.Markdown(
             "## Login Page", 
             margin=0, 
@@ -38,9 +38,7 @@ class LoginMainLayout(pn.Column):
             sizing_mode="stretch_width", 
             margin=0
         )
-        
-        spacer = pn.Spacer(height=10)
-        
+                
         login_button = pn.widgets.Button(
             name="Login", 
             button_type="primary", 
@@ -50,21 +48,25 @@ class LoginMainLayout(pn.Column):
         
         form = pn.Column(
             title,
+            pn.Spacer(height=10),
             email,
+            pn.Spacer(height=10),
             password,
-            spacer,
+            pn.Spacer(height=20),
             login_button,
-            sizing_mode="stretch_both",
+            width=400,
+            sizing_mode="stretch_height",
         )
         return form
     
-    def _right_column(self) -> pn.Column:
+    def _logo(self) -> pn.Column:
         logo = pn.pane.SVG(
             "whateels/assets/img/we_rainbow_logo.svg", 
-            sizing_mode="scale_both", 
+            sizing_mode="scale_height",
             margin=0
         )
         return pn.Column(
             logo,
             sizing_mode="stretch_both",
+            styles={"display": "flex", "justify-content": "center", "align-items": "center"},
         )

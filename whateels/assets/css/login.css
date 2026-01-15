@@ -5,16 +5,14 @@
     padding: 0 !important;
 }
 
-.main .card-margin.stretch_height {
+.main .card-margin {
     height: 100% !important;
+
+    display: grid;
+    place-content: center;
 }
 
 #main > div > fast-card.pn-wrapper {
     display: grid;
     place-items: center;
 }
-
-/* #main > div > fast-card.pn-wrapper > div.bk-panel-models-layout-Column {
-    height: auto !important;
-    min-height: auto !important;
-} */
