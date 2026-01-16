@@ -22,7 +22,7 @@ class LoginMainLayout(pn.Column):
         
     def _form(self) -> pn.Column:
         title = pn.pane.Markdown(
-            "## Login Page", 
+            "## Login to WhatEEls", 
             margin=0, 
             styles={"padding" : "0"}
         )
@@ -32,11 +32,24 @@ class LoginMainLayout(pn.Column):
             sizing_mode="stretch_width", 
             margin=0
         )
+        
+        email_text_error = pn.pane.Markdown(
+            "Email format is incorrect.",
+            margin=0,
+            styles={"color": "red", "font-size": "12px", "padding": "0"}
+        )
+        
         password = pn.widgets.PasswordInput(
             name="Password", 
             placeholder="Enter your password", 
             sizing_mode="stretch_width", 
             margin=0
+        )
+        
+        password_text_error = pn.pane.Markdown(
+            "Password must be at least 8 characters.",
+            margin=0,
+            styles={"color": "red", "font-size": "12px", "padding": "0"}
         )
                 
         login_button = pn.widgets.Button(
@@ -44,17 +57,37 @@ class LoginMainLayout(pn.Column):
             button_type="primary", 
             sizing_mode="stretch_width", 
             margin=0
-        )   
+        )
+        
+        password_forgot_link = pn.pane.Markdown(
+            "[Forgot your password?](#)", 
+            margin=0,
+            sizing_mode="stretch_width",
+            styles={"padding" : "0", "text-align": "center"}
+        )
+        
+        signup_link = pn.pane.Markdown(
+            "[Don't have an account? Sign up here.](#)", 
+            margin=0, 
+            sizing_mode="stretch_width",
+            styles={"padding" : "0", "text-align": "center"}
+        )
         
         form = pn.Column(
             title,
             pn.Spacer(height=10),
             email,
-            pn.Spacer(height=10),
+            email_text_error,
+            pn.Spacer(height=5),
             password,
-            pn.Spacer(height=20),
+            password_text_error,
+            pn.Spacer(height=5),
+            password_forgot_link,
+            pn.Spacer(height=10),
             login_button,
-            width=400,
+            pn.Spacer(height=10),
+            signup_link,
+            width=300,
             sizing_mode="stretch_height",
         )
         return form
@@ -63,6 +96,7 @@ class LoginMainLayout(pn.Column):
         logo = pn.pane.SVG(
             "whateels/assets/img/we_rainbow_logo.svg", 
             sizing_mode="scale_height",
+            styles={"min-width": "225px"},
             margin=0
         )
         return pn.Column(
