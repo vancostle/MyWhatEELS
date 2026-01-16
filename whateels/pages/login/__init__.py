@@ -1,7 +1,7 @@
-from whateels.components import CustomPage
+from whateels.templates import AuthPageTemplate
 from .MVC import LoginPageView, LoginPageController, LoginPageModel
 
-class Login(CustomPage):
+class Login(AuthPageTemplate):
     """
     Login page class for the WhatEELS application.
     This class extends CustomPage to create a specific login page layout.

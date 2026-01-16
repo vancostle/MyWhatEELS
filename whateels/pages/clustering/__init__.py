@@ -1,7 +1,7 @@
-from whateels.components import CustomPage
+from whateels.templates import GeneralPageTemplate
 from .MVC import ClusteringModel, ClusteringController, ClusteringView
 
-class Clustering(CustomPage):
+class Clustering(GeneralPageTemplate):
     """
     Clustering class for the WhatEELS application.
     This class extends CustomPage to create a specific clustering page layout.

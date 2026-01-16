@@ -10,7 +10,7 @@ from typing import Optional, List, Union
 from whateels.shared_state import AppState
 from whateels.helpers.safe_converter import SafeConverter
 
-class CustomPage(pn.template.FastListTemplate):
+class GeneralPageTemplate(pn.template.FastListTemplate):
     """
     Custom page template extending Panel's FastListTemplate.
     
@@ -18,7 +18,7 @@ class CustomPage(pn.template.FastListTemplate):
     Automatically handles CSS loading and provides default navigation if no header is specified.
     """
     
-    _DEFAULT_TITLE = "Custom Page"
+    _DEFAULT_TITLE = "General Page Template"
     _DEFAULT_HEADER_BACKGROUND = "#4d4dc9"
     _DEFAULT_HEADER_BACKGROUND_HOVER = "#3b3bb8"
 
@@ -33,7 +33,7 @@ class CustomPage(pn.template.FastListTemplate):
         **kwargs,
     ):
         """
-        Initialize CustomPage with enhanced FastListTemplate.
+        Initialize GeneralPageTemplate with enhanced FastListTemplate.
         
         Args:
             title: Page title to display in the template

@@ -1,7 +1,7 @@
-from whateels.components import CustomPage
+from whateels.templates import GeneralPageTemplate
 from .MVC import DemoPageView, DemoPageController, DemoPageModel
 
-class DemoPage(CustomPage):
+class DemoPage(GeneralPageTemplate):
     """
     DemoPage class for the WhatEELS application.
     This class extends CustomPage to create a specific demo page layout.

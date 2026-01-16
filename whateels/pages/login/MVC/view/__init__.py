@@ -12,8 +12,7 @@ class LoginPageView:
             sizing_mode="stretch_both",
             styles={"height": "auto", "min-height": "auto"}
         )
-        
-        
+
     @property
     def main(self):
         return self._main

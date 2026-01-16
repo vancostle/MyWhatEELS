@@ -1,7 +1,7 @@
-from whateels.components import CustomPage
+from whateels.templates import GeneralPageTemplate
 from .MVC import HomePageModel, HomePageController, HomePageView
 
-class HomePage(CustomPage):
+class HomePage(GeneralPageTemplate):
     """
     HomePage class for the WhatEELS application.
     This class extends CustomPage to create a specific home page layout.

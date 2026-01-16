@@ -1,4 +1,3 @@
-from .custom_page import CustomPage
 from .uploaded_file import UploadedFile
 from .error_panel import ErrorPanel
 from .toggle_button import ToggleButton

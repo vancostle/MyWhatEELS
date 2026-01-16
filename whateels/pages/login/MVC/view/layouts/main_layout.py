@@ -22,7 +22,7 @@ class LoginMainLayout(pn.Column):
         
     def _form(self) -> pn.Column:
         title = pn.pane.Markdown(
-            "## Login to WhatEEls", 
+            "## Login to WhatEELS", 
             margin=0, 
             styles={"padding" : "0"}
         )

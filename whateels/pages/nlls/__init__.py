@@ -6,13 +6,13 @@ for the WhatEELS application, implementing the MVC pattern.
 """
 
 import panel as pn
-from whateels.components import CustomPage
+from whateels.templates import GeneralPageTemplate
 from whateels.pages.nlls.MVC.model import NLLSModel
 from whateels.pages.nlls.MVC.view import NLLSView
 from whateels.pages.nlls.MVC.controller import NLLSController
 
 
-class NLLS(CustomPage):
+class NLLS(GeneralPageTemplate):
     """
     NLLS Page class for the WhatEELS application.
     

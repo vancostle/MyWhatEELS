@@ -1,0 +1,2 @@
+from .general_page_template import GeneralPageTemplate
+from .auth_page_template import AuthPageTemplate
