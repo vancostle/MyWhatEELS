@@ -7,6 +7,7 @@ from .multifitting import MultiFitting
 from .quantification import Quantification
 from .demo import DemoPage
 from .login import Login
+from .clustering_2 import Clustering2Page
 
 __all__ = [
     "HomePage", 
@@ -18,4 +19,5 @@ __all__ = [
     "Quantification", 
     "DemoPage",
     "Login",
+    "Clustering2Page"
 ]
