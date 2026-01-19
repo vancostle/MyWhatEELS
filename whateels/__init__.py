@@ -29,7 +29,7 @@ class App:
         # Define the pages for the application
         # Use lambdas to avoid immediate instantiation
         pages = {
-            "/": lambda: Clustering2Page(),
+            "/": lambda: HomePage(),
             "/metadata-details": lambda: Metadata(),
             "/clustering": lambda: Clustering(),
             "/multifit-details": lambda: MultiFitting(),

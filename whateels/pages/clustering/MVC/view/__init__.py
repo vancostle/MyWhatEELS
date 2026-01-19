@@ -101,6 +101,10 @@ class ClusteringView:
             # Create plots using the factory
             chosen_plot = plots_factory.choose_plot(str(dataset_type), dataset)
             
+            ##### TODO LINIa TEMPORAL #####
+            dataset.to_netcdf("no_furula_dataset.nc")
+            #############################
+            
             if chosen_plot is None:
                 print(f"No plot found for dataset type: {dataset_type}")
                 return
