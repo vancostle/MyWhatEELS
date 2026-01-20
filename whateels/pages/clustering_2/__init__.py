@@ -11,7 +11,6 @@ class Clustering2Page(GeneralPageTemplate):
         super().__init__(
             title="Clustering 2 Page",
             main=[view.main],
-            sidebar=[view.left_sidebar],
             right_sidebar=[view.right_sidebar],
             modal=view.modals,
             sidebar_width=200

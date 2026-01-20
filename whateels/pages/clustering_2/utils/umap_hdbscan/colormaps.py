@@ -4,10 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import LinearSegmentedColormap
+from bokeh.models import LinearAxis, FuncTickFormatter
 import colorsys
 
 from dataclasses import dataclass
 from typing import List, Optional
+
 @dataclass
 class CmapObj:
     """Simple container for colormap data."""
@@ -145,7 +147,6 @@ def add_wavelength_axis(plot, element):
     element : holoviews element
         The plot element
     """
-    from bokeh.models import LinearAxis, FuncTickFormatter
 
     fig = plot.state
 

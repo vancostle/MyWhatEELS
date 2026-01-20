@@ -32,6 +32,7 @@ class App:
             "/": lambda: HomePage(),
             "/metadata-details": lambda: Metadata(),
             "/clustering": lambda: Clustering(),
+            "/clustering-2": lambda: Clustering2Page(),
             "/multifit-details": lambda: MultiFitting(),
             "/quantification": lambda: Quantification(),
             # "/nlls": lambda: NLLS(),

@@ -116,6 +116,12 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         
         navigation_links.append((clustering_a_element,"Clustering"))
         
+        clustering_2_href = f'/clustering-2?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
+        clustering_2_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
+        clustering_2_a_element = f'<a href="{clustering_2_href}" class="{clustering_2_class}">Clustering 2</a>'
+        
+        navigation_links.append((clustering_2_a_element,"Clustering 2"))
+        
         quantification_href = f'/quantification?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
         quantification_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
         quantification_a_element = f'<a href="{quantification_href}" class="{quantification_class}">Quantification</a>'
