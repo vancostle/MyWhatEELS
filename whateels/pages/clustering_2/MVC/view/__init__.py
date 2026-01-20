@@ -11,7 +11,7 @@ class Clustering2PageView:
     def __init__(self, model: "Clustering2PageModel", custom_page: "GeneralPageTemplate") -> None:
         
         self._main = Clustering2MainLayout()
-        self._left_sidebar = Clustering2LeftSidebarLayout()
+        # self._left_sidebar = Clustering2LeftSidebarLayout()
         self._right_sidebar = Clustering2RightSidebarLayout()
         
         self._modal_manager = ModalManager(custom_page)
@@ -20,9 +20,9 @@ class Clustering2PageView:
     def main(self):
         return self._main
     
-    @property
-    def left_sidebar(self):
-        return self._left_sidebar
+    # @property
+    # def left_sidebar(self):
+    #     return self._left_sidebar
     
     @property
     def right_sidebar(self):

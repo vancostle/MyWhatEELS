@@ -20,3 +20,19 @@ class Clustering2PageController:
 
         # Set selected dataset in the model
         model.selected_dataset = all_datasets[tab_param]
+        
+        eloss = model.selected_dataset["Eloss"].values # Get Eloss values from the selected dataset
+        eloss_min = float(eloss.min())
+        eloss_max = float(eloss.max())
+        
+        print(f"eloss: {model.selected_dataset["Eloss"]}")
+        print(f"eloss values: {eloss}")
+        print(f"Setting min/max cut signal to dataset Eloss range: {eloss_min} - {eloss_max}")
+        
+        view.right_sidebar.min_cut_signal.value = eloss_min
+        view.right_sidebar.min_cut_signal.start = eloss_min
+        view.right_sidebar.min_cut_signal.end = eloss_max
+        
+        view.right_sidebar.max_cut_signal.value = eloss_max
+        view.right_sidebar.max_cut_signal.start = eloss_min
+        view.right_sidebar.max_cut_signal.end = eloss_max
