@@ -1,6 +1,7 @@
 import panel as pn
 
 from whateels.components import SimpleDetails
+from bokeh.models import Tooltip
 
 class Clustering2RightSidebarLayout(pn.Column):
     
@@ -38,20 +39,33 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode="stretch_width"
         )
         
-        
-        
         n_neighbors_title = pn.pane.Markdown("### Number of Neighbors", margin=0)
-        self._n_neighbors = pn.widgets.IntInput(
+        n_neighbors = pn.widgets.TextInput(
             name="Neighbors",
-            value=15,
-            step=1,
-            start=1,
-            end=100,
+            value="100, 500, 900",
+            placeholder="e.g., 100, 500, 900",
             sizing_mode="stretch_width"
+        )
+        n_neighbors_tooltip = pn.widgets.TooltipIcon(
+            value=Tooltip(
+                content="Pattern is integer number and then a comma and go on.", position="left"
+            ),
+            margin=(16, 0, 0, 0)
+        )
+        
+        n_neighbors_content = pn.Column(
+            n_neighbors_title,
+            pn.Row(
+                n_neighbors,
+                n_neighbors_tooltip,
+                sizing_mode="stretch_width"
+            ),
+            sizing_mode="stretch_width",
         )
         
         super().__init__(
             cut_signal_details,
+            n_neighbors_content,
             sizing_mode="stretch_width",
             margin=0,
         )
