@@ -1,11 +1,11 @@
 import panel as pn
 
+from whateels.components import SimpleDetails
+
 class Clustering2RightSidebarLayout(pn.Column):
     
     def __init__(self):
-        
-        cut_signal_title = pn.pane.Markdown("### Cut Signal", margin=0)
-        
+                
         self._min_cut_signal = pn.widgets.FloatInput(
             name="Min Eloss",
             value=0.1,
@@ -23,8 +23,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode="stretch_width"
         )
         
-        cut_signal_container = pn.Column(
-            cut_signal_title,
+        cut_signal_content = pn.Column(
             pn.Row(
                 self._min_cut_signal,
                 self._max_cut_signal,
@@ -32,8 +31,27 @@ class Clustering2RightSidebarLayout(pn.Column):
             )
         )
         
+        cut_signal_details = SimpleDetails(
+            title="Cut Signal Range",
+            content=cut_signal_content,
+            expanded=False,
+            sizing_mode="stretch_width"
+        )
+        
+        
+        
+        n_neighbors_title = pn.pane.Markdown("### Number of Neighbors", margin=0)
+        self._n_neighbors = pn.widgets.IntInput(
+            name="Neighbors",
+            value=15,
+            step=1,
+            start=1,
+            end=100,
+            sizing_mode="stretch_width"
+        )
+        
         super().__init__(
-            cut_signal_container,
+            cut_signal_details,
             sizing_mode="stretch_width",
             margin=0,
         )
