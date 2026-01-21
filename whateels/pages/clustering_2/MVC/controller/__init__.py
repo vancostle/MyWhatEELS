@@ -36,3 +36,14 @@ class Clustering2PageController:
         view.right_sidebar.max_cut_signal.value = eloss_max
         view.right_sidebar.max_cut_signal.start = eloss_min
         view.right_sidebar.max_cut_signal.end = eloss_max
+        
+    
+    def _get_form_values(self, view: "Clustering2PageView") -> dict:
+        """Helper to get current form values from the view's right sidebar."""
+        form_values = {
+            "min_cut_signal": view.right_sidebar.min_cut_signal.value,
+            "max_cut_signal": view.right_sidebar.max_cut_signal.value,
+            "n_neighbors": view.right_sidebar.n_neighbors.value,
+            "min_dist": view.right_sidebar.min_dist.value,
+        }
+        return form_values
