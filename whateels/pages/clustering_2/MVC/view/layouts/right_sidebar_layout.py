@@ -73,10 +73,24 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         self._n_neighbors = pn.widgets.ArrayInput(
             name=type(self._params).param.n_neighbors.label,
-            value=np.array(self._params.n_neighbors),
+            value=np.array(self._params.n_neighbors, dtype=int),
             placeholder="e.g., 100, 500, 900",
             sizing_mode=self._STRETCH_WIDTH
         )
+        
+        def _validate_n_neighbors(event):
+            arr = event.new
+            # Check if all values are integers
+            if not np.all(np.equal(np.mod(arr, 1), 0)):
+                # Coerce to int if possible
+                try:
+                    arr_int = arr.astype(int)
+                    self._n_neighbors.value = arr_int
+                except Exception:
+                    self._n_neighbors.value = event.old
+        
+        self._n_neighbors.param.watch(_validate_n_neighbors, 'value')
+        
         # self._n_neighbors.param.watch(self._on_n_neighbors_change, 'value')
         n_neighbors_tooltip = pn.widgets.TooltipIcon(
             value=Tooltip(
@@ -92,7 +106,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         self._min_dist = pn.widgets.ArrayInput(
             name=type(self._params).param.min_dist.label,
-            value=np.array(self._params.min_dist),
+            value=np.array(self._params.min_dist, dtype=float),
             placeholder="e.g., 0.1, 0.5, 0.9",
             sizing_mode=self._STRETCH_WIDTH
         )
