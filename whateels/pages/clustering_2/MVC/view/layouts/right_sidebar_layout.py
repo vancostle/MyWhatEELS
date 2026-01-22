@@ -163,10 +163,20 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
+        download_results_button = pn.widgets.Button(
+            name='Download Results',
+            button_type='primary',
+            height=55,
+            margin=(10,0,0,0),
+            sizing_mode=self._STRETCH_WIDTH,
+            disabled=True
+        )
+        
         super().__init__(
             cut_signal_details,
             compute_umap_embedding,
             run_button,
+            download_results_button,
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
         )
