@@ -71,25 +71,28 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(0, 0, 10, 0)
         )
         
-        self._n_neighbors = pn.widgets.ArrayInput(
+        n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)
+        
+        self._n_neighbors = pn.widgets.TextInput(
             name=type(self._params).param.n_neighbors.label,
-            value=np.array(self._params.n_neighbors, dtype=int),
+            value=n_neighbors_str,
             placeholder="e.g., 100, 500, 900",
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        def _validate_n_neighbors(event):
-            arr = event.new
-            # Check if all values are integers
-            if not np.all(np.equal(np.mod(arr, 1), 0)):
-                # Coerce to int if possible
-                try:
-                    arr_int = arr.astype(int)
-                    self._n_neighbors.value = arr_int
-                except Exception:
-                    self._n_neighbors.value = event.old
+        def validate_n_neighbors(event):
+            value = event.new
+            try:
+                str_values = [v.strip() for v in value.split(',')]
+                int_values = [int(v) for v in str_values if v]
+                if all(v > 0 for v in int_values):
+                    self._params.n_neighbors = int_values
+                else:
+                    raise ValueError
+            except ValueError:
+                self._n_neighbors.value = event.old
         
-        self._n_neighbors.param.watch(_validate_n_neighbors, 'value')
+        self._n_neighbors.param.watch(validate_n_neighbors, 'value')
         
         # self._n_neighbors.param.watch(self._on_n_neighbors_change, 'value')
         n_neighbors_tooltip = pn.widgets.TooltipIcon(
@@ -104,12 +107,31 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        self._min_dist = pn.widgets.ArrayInput(
+        min_dist_str = ', '.join(str(d) for d in type(self._params).param.min_dist.default)
+        
+        self._min_dist = pn.widgets.TextInput(
             name=type(self._params).param.min_dist.label,
-            value=np.array(self._params.min_dist, dtype=float),
+            value=min_dist_str,
             placeholder="e.g., 0.1, 0.5, 0.9",
             sizing_mode=self._STRETCH_WIDTH
         )
+        
+        def validate_min_dist(event):
+            value = event.new
+            try:
+                str_values = [v.strip() for v in value.split(',')]
+                float_values = []
+                for v in str_values:
+                    if v:
+                        float_values.append(float(v))
+                self._params.min_dist = float_values
+                # Always reformat the input as floats (e.g., 5 -> 5.0)
+                self._min_dist.value = ', '.join(str(float(v)) for v in float_values)
+            except ValueError:
+                self._min_dist.value = event.old
+
+        self._min_dist.param.watch(validate_min_dist, 'value')
+        
         min_dist_tooltip = pn.widgets.TooltipIcon(
             value=Tooltip(
                 content="Pattern is float number and then a comma and go on.", position="left"
@@ -156,8 +178,8 @@ class Clustering2RightSidebarLayout(pn.Column):
     def max_cut_signal(self) -> pn.widgets.FloatInput:
         return self._max_cut_signal
     @property
-    def n_neighbors(self) -> pn.widgets.ArrayInput:
+    def n_neighbors(self) -> pn.widgets.TextInput:
         return self._n_neighbors
     @property
-    def min_dist(self) -> pn.widgets.ArrayInput:
+    def min_dist(self) -> pn.widgets.TextInput:
         return self._min_dist
