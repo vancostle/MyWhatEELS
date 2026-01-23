@@ -47,6 +47,7 @@ class UMAP_HDBSCAN:
         
         return embedding, umap_data_dict
     
+    # TODO: think if this method is necessary and if it is not, delete it
     def compute_all_umaps_embedding(
         self,
         min_dist_list : list[float] = [0.1, 0.5, 0.9],

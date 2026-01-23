@@ -44,17 +44,19 @@ class Clustering2PageController:
         embeddings = []
         umap_data_dicts = dict()
         
-        t0 = time.time()
-        embedding, umap_data_dict = umap_hdbscan.compute_umap_embedding(
-            min_dist=min_dist_list[0],
-            n_neighbors=n_neighbors_list[0],
-        )
-        t1 = time.time()
-        time_lapsed = round(t1 - t0, 2) # Time in seconds
-        print(f"Initial UMAP computed in {time_lapsed} seconds.")
-        
-        embeddings.append(embedding)
-        umap_data_dicts.update(umap_data_dict)
+        for min_dist in min_dist_list:
+            for n_neighbors in n_neighbors_list:
+                t0 = time.time()
+                embedding, umap_data_dict = umap_hdbscan.compute_umap_embedding(
+                    min_dist=min_dist_list[0],
+                    n_neighbors=n_neighbors_list[0],
+                )
+                t1 = time.time()
+                time_lapsed = round(t1 - t0, 2) # Time in seconds
+                print(f"Initial UMAP computed in {time_lapsed} seconds.")
+                
+                embeddings.append(embedding)
+                umap_data_dicts.update(umap_data_dict)
         
         view.right_sidebar.min_cut_signal.value = eloss_min
         view.right_sidebar.min_cut_signal.start = eloss_min
