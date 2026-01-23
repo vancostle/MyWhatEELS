@@ -36,6 +36,11 @@ class Clustering2PageController:
         min_dist_list = [0.1, 0.5, 0.9]
         n_neighbors_list = [100, 500, 900]
         
+        # TODO: I have to put the same amount of combinations in the controller as in the view by using Splitjs component and with a max of 3 per row
+        amount_of_combinations = len(min_dist_list) * len(n_neighbors_list)
+        
+        # TODO: Adapt the original code to compute umap embedding one by one
+        
         t0 = time.time()
         umap_hdbscan.compute_umap_embedding(
             min_dist=min_dist_list[0],
