@@ -1,20 +1,24 @@
 from .layouts import Clustering2MainLayout, Clustering2LeftSidebarLayout, Clustering2RightSidebarLayout
 from whateels.components import ModalManager
+import panel as pn
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate
     from ...MVC import Clustering2PageModel
-
+    
 class Clustering2PageView:
     
     def __init__(self, model: "Clustering2PageModel", custom_page: "GeneralPageTemplate") -> None:
-        
+        # Set notification position
+        pn.state.notifications.position = 'bottom-left' # type: ignore
+
         self._main = Clustering2MainLayout()
         # self._left_sidebar = Clustering2LeftSidebarLayout()
         self._right_sidebar = Clustering2RightSidebarLayout()
         
         self._modal_manager = ModalManager(custom_page)
+        
         
     @property
     def main(self):
@@ -31,3 +35,14 @@ class Clustering2PageView:
     @property
     def modals(self):
         return self._modal_manager.modals
+    
+    def show_notification(self, message: str, type: str = "info", duration: int = 3000) -> None:
+        """Helper to show notifications."""
+        if type == "info":
+            pn.state.notifications.info(message, duration=duration) # type: ignore
+        elif type == "success":
+            pn.state.notifications.success(message, duration=duration) # type: ignore
+        elif type == "warning":
+            pn.state.notifications.warning(message, duration=duration) # type: ignore
+        elif type == "error":
+            pn.state.notifications.error(message, duration=duration) # type: ignore

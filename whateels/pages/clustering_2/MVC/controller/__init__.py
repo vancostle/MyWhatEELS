@@ -1,10 +1,12 @@
 
 from whateels.helpers import SafeConverter, URLUtils
+import time
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...MVC import Clustering2PageModel, Clustering2PageView
 
+from ...utils import UMAP_HDBSCAN
 class Clustering2PageController:
     
     def __init__(self, model: "Clustering2PageModel", view: "Clustering2PageView") -> None:
@@ -25,9 +27,23 @@ class Clustering2PageController:
         eloss_min = float(eloss.min())
         eloss_max = float(eloss.max())
         
-        # print(f"eloss: {model.selected_dataset["Eloss"]}")
-        # print(f"eloss values: {eloss}")
-        # print(f"Setting min/max cut signal to dataset Eloss range: {eloss_min} - {eloss_max}")
+        electron_count = model.selected_dataset["ElectronCount"]
+        if electron_count is None:
+            print("Warning: 'ElectronCount' attribute not found in the selected dataset.")
+        
+        umap_hdbscan = UMAP_HDBSCAN(electron_count_data=electron_count)
+        
+        min_dist_list = [0.1, 0.5, 0.9]
+        n_neighbors_list = [100, 500, 900]
+        
+        t0 = time.time()
+        umap_hdbscan.compute_umap_embedding(
+            min_dist=min_dist_list[0],
+            n_neighbors=n_neighbors_list[0],
+        )
+        t1 = time.time()
+        time_lapsed = round(t1 - t0, 2) # Time in seconds
+        print(f"Initial UMAP computed in {time_lapsed} seconds.")
         
         view.right_sidebar.min_cut_signal.value = eloss_min
         view.right_sidebar.min_cut_signal.start = eloss_min
@@ -36,8 +52,7 @@ class Clustering2PageController:
         view.right_sidebar.max_cut_signal.value = eloss_max
         view.right_sidebar.max_cut_signal.start = eloss_min
         view.right_sidebar.max_cut_signal.end = eloss_max
-        
-    
+
     def _get_form_values(self, view: "Clustering2PageView") -> dict:
         """Helper to get current form values from the view's right sidebar."""
         form_values = {
