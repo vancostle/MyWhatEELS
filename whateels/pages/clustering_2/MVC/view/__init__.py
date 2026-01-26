@@ -1,4 +1,4 @@
-from .layouts import Clustering2MainLayout, Clustering2LeftSidebarLayout, Clustering2RightSidebarLayout
+from .layouts import Clustering2MainLayout, Clustering2LeftSidebarLayout, Clustering2RightSidebarLayout, UmapEmbeddingPlaceholder
 from whateels.components import ModalManager
 import panel as pn
 
@@ -53,30 +53,20 @@ class Clustering2PageView:
         # Group combinations into rows of 3
         MAX_COLS = 3
         columns = []
+        delay = 0
+        delay_increment = 0.1  # Seconds between each placeholder animation
+        
         for i in range(0, len(combinations), MAX_COLS):
             row_combinations = combinations[i:i+MAX_COLS]
             row = pn.Row(sizing_mode='stretch_width', styles={'gap': '10px'})
             for min_dist, n_neighbors in row_combinations:
-                # Create a placeholder with loading spinner
-                placeholder = pn.Column(
-                    pn.Row(
-                        pn.indicators.LoadingSpinner(value=True, size=50),
-                        sizing_mode='stretch_width',
-                        styles={'justify-content': 'center'}
-                    ),
-                    pn.pane.Markdown(
-                        f"min_dist={min_dist}, n_neighbors={n_neighbors}",
-                        align='center',
-                    ),
-                    align='center',
-                    sizing_mode='stretch_width',
-                    styles={'border': '1px solid #ccc', 'padding': '20px', 'border-radius': '5px', 'display': 'flex', 'flex-direction': 'column', 'justify-content': 'center', 'align-items': 'center'}
-                )
+                # Create a placeholder with loading spinner and increasing delay
+                placeholder = UmapEmbeddingPlaceholder(min_dist, n_neighbors, delay=delay)
                 row.append(placeholder)
+                delay += delay_increment
             columns.append(pn.Column(
                 row, 
                 sizing_mode='stretch_width', 
-                styles={'gap': '10px'},
                 margin=0
             ))
 
