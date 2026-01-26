@@ -39,8 +39,21 @@ class Clustering2PageController:
         view.right_sidebar.max_cut_signal.start = eloss_min
         view.right_sidebar.max_cut_signal.end = eloss_max
         
-        view.right_sidebar.compute_umap_embedding_run_button.on_click(self._compute_umap_embedding_event)
+        view.right_sidebar.compute_umap_embedding_run_button.on_click(self._testing_event)
         
+    def _testing_event(self, _) -> None:
+        min_dist_list = self._view.right_sidebar.params.min_dist
+        n_neighbors_list = self._view.right_sidebar.params.n_neighbors
+        
+        # Ensure both are lists or iterables
+        if not isinstance(min_dist_list, (list, tuple)) or not isinstance(n_neighbors_list, (list, tuple)):
+            raise ValueError("min_dist and n_neighbors must be lists or tuples.")
+        
+        # Generate all combinations of min_dist and n_neighbors
+        combinations = list(itertools.product(min_dist_list, n_neighbors_list))
+        
+        self._view.display_all_combinations_placeholder(combinations)
+                
     def _compute_umap_embedding_event(self, _) -> None:
         """Event handler for computing UMAP embedding when the button is clicked."""
         
@@ -53,7 +66,6 @@ class Clustering2PageController:
         
         # Generate all combinations of min_dist and n_neighbors
         combinations = list(itertools.product(min_dist_list, n_neighbors_list))
-        self._put_all_placeholders_in_main_view(combinations)
         
         electron_count = self._model.selected_dataset["ElectronCount"]
         if electron_count is None:
@@ -78,7 +90,4 @@ class Clustering2PageController:
                 embeddings.append(embedding)
                 umap_data_dicts.update(umap_data_dict)
                 
-    def _put_all_placeholders_in_main_view(self, combinations) -> None:
-        """Put all placeholders in the main view area, one for each parameter combination."""
-        self._view.main.clear()
-
+                # TODO HERE IS CALLE THE METHOD TO UPDATE THE PLACEHOLDER IN THE MAIN VIEW
