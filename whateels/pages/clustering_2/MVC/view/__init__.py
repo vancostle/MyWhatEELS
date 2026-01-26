@@ -54,7 +54,7 @@ class Clustering2PageView:
         MAX_COLS = 3
         columns = []
         delay = 0
-        delay_increment = 0.1  # Seconds between each placeholder animation
+        delay_increment = 0.125  # Seconds between each placeholder animation
         
         for i in range(0, len(combinations), MAX_COLS):
             row_combinations = combinations[i:i+MAX_COLS]
