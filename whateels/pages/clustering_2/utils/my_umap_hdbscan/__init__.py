@@ -43,45 +43,43 @@ class UMAP_HDBSCAN:
         umap_data_dict = dict()
         umap_data_dict['umap_data_{}_{}'.format(min_dist, n_neighbors)] = mapper
         
-        print(f"UMAP computed for min_dist={min_dist}, n_neighbors={n_neighbors} successfully.")
-        
         return embedding, umap_data_dict
     
     # TODO: think if this method is necessary and if it is not, delete it
-    def compute_all_umaps_embedding(
-        self,
-        min_dist_list : list[float] = [0.1, 0.5, 0.9],
-        n_neighbors_list : list[int] = [5, 15, 50],
-        n_components : int = 2,
-    ):
-        """ Compute UMAP embeddings for all combinations of min_dist and n_neighbors. """
-        RANDOM_STATE = 1
+    # def compute_all_umaps_embedding(
+    #     self,
+    #     min_dist_list : list[float] = [0.1, 0.5, 0.9],
+    #     n_neighbors_list : list[int] = [5, 15, 50],
+    #     n_components : int = 2,
+    # ):
+    #     """ Compute UMAP embeddings for all combinations of min_dist and n_neighbors. """
+    #     RANDOM_STATE = 1
 
-        data_2d = self._get_reshaped_data()
-        if data_2d is None:
-            return
+    #     data_2d = self._get_reshaped_data()
+    #     if data_2d is None:
+    #         return
         
-        embeddings = []
-        umap_data_dict = dict()
-        time_lapsed = 0
+    #     embeddings = []
+    #     umap_data_dict = dict()
+    #     time_lapsed = 0
 
-        for min_dist in min_dist_list:
-            for n_neighbor in n_neighbors_list:
-                t0 = time.time()
-                mapper = umap.UMAP(
-                    n_neighbors=n_neighbor,
-                    min_dist=min_dist,
-                    n_components=n_components,
-                    random_state=RANDOM_STATE,
-                )
-                embedding = mapper.fit_transform(data_2d)
-                embeddings.append(embedding)
+    #     for min_dist in min_dist_list:
+    #         for n_neighbor in n_neighbors_list:
+    #             t0 = time.time()
+    #             mapper = umap.UMAP(
+    #                 n_neighbors=n_neighbor,
+    #                 min_dist=min_dist,
+    #                 n_components=n_components,
+    #                 random_state=RANDOM_STATE,
+    #             )
+    #             embedding = mapper.fit_transform(data_2d)
+    #             embeddings.append(embedding)
                 
-                umap_data_dict['umap_data_{}_{}'.format(min_dist, n_neighbor)] = mapper
+    #             umap_data_dict['umap_data_{}_{}'.format(min_dist, n_neighbor)] = mapper
                 
-                t1 = time.time()
-                time_lapsed = round(t1 - t0, 2)
-                print(f"UMAP computed for min_dist={min_dist}, n_neighbors={n_neighbor} in {time_lapsed} seconds.")
+    #             t1 = time.time()
+    #             time_lapsed = round(t1 - t0, 2)
+    #             print(f"UMAP computed for min_dist={min_dist}, n_neighbors={n_neighbor} in {time_lapsed} seconds.")
 
     def _get_reshaped_data(self) -> Optional[np.ndarray]:
         """Reshape electron count data to 2D array for UMAP processing."""

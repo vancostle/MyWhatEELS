@@ -73,7 +73,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)
         
-        self._n_neighbors = pn.widgets.TextInput(
+        n_neighbors = pn.widgets.TextInput(
             name=type(self._params).param.n_neighbors.label,
             value=n_neighbors_str,
             placeholder="e.g., 100, 500, 900",
@@ -90,9 +90,9 @@ class Clustering2RightSidebarLayout(pn.Column):
                 else:
                     raise ValueError
             except ValueError:
-                self._n_neighbors.value = event.old
+                n_neighbors.value = event.old
         
-        self._n_neighbors.param.watch(validate_n_neighbors, 'value')
+        n_neighbors.param.watch(validate_n_neighbors, 'value')
         
         # self._n_neighbors.param.watch(self._on_n_neighbors_change, 'value')
         n_neighbors_tooltip = pn.widgets.TooltipIcon(
@@ -102,14 +102,14 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(16, 0, 0, 0)
         )
         n_neighbors_content = pn.Row(
-            self._n_neighbors,
+            n_neighbors,
             n_neighbors_tooltip,
             sizing_mode=self._STRETCH_WIDTH
         )
         
         min_dist_str = ', '.join(str(d) for d in type(self._params).param.min_dist.default)
         
-        self._min_dist = pn.widgets.TextInput(
+        min_dist = pn.widgets.TextInput(
             name=type(self._params).param.min_dist.label,
             value=min_dist_str,
             placeholder="e.g., 0.1, 0.5, 0.9",
@@ -126,11 +126,11 @@ class Clustering2RightSidebarLayout(pn.Column):
                         float_values.append(float(v))
                 self._params.min_dist = float_values
                 # Always reformat the input as floats (e.g., 5 -> 5.0)
-                self._min_dist.value = ', '.join(str(float(v)) for v in float_values)
+                min_dist.value = ', '.join(str(float(v)) for v in float_values)
             except ValueError:
-                self._min_dist.value = event.old
+                min_dist.value = event.old
 
-        self._min_dist.param.watch(validate_min_dist, 'value')
+        min_dist.param.watch(validate_min_dist, 'value')
         
         min_dist_tooltip = pn.widgets.TooltipIcon(
             value=Tooltip(
@@ -139,7 +139,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(16, 0, 0, 0)
         )
         min_dist_content = pn.Row(
-            self._min_dist, 
+            min_dist, 
             min_dist_tooltip,
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -148,14 +148,14 @@ class Clustering2RightSidebarLayout(pn.Column):
             n_neighbors_content,
             min_dist_content,
         )
-        compute_umap_embedding = SimpleDetails(
+        compute_umap_embedding_details = SimpleDetails(
             title="UMAP",
             content=compute_umap_embedding_content,
             expanded=True,
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        run_button = pn.widgets.Button(
+        self._compute_umap_embedding_run_button = pn.widgets.Button(
             name='Compute umap embedding',
             button_type='success',
             height=55,
@@ -163,7 +163,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        download_results_button = pn.widgets.Button(
+        self._download_results_button = pn.widgets.Button(
             name='Download Results',
             button_type='primary',
             height=55,
@@ -174,13 +174,16 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         super().__init__(
             cut_signal_details,
-            compute_umap_embedding,
-            run_button,
-            download_results_button,
+            compute_umap_embedding_details,
+            self._compute_umap_embedding_run_button,
+            self._download_results_button,
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
         )
-        
+
+    @property
+    def params(self) -> _Clustering2RightSidebarParams:
+        return self._params
     @property
     def min_cut_signal(self) -> pn.widgets.FloatInput:
         return self._min_cut_signal
@@ -188,8 +191,8 @@ class Clustering2RightSidebarLayout(pn.Column):
     def max_cut_signal(self) -> pn.widgets.FloatInput:
         return self._max_cut_signal
     @property
-    def n_neighbors(self) -> pn.widgets.TextInput:
-        return self._n_neighbors
+    def compute_umap_embedding_run_button(self) -> pn.widgets.Button:
+        return self._compute_umap_embedding_run_button
     @property
-    def min_dist(self) -> pn.widgets.TextInput:
-        return self._min_dist
+    def download_results_button(self) -> pn.widgets.Button:
+        return self._download_results_button
