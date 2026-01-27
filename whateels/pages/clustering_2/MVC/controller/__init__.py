@@ -52,7 +52,13 @@ class Clustering2PageController:
         # Generate all combinations of min_dist and n_neighbors
         combinations = list(itertools.product(min_dist_list, n_neighbors_list))
         
-        self._view.display_all_combinations_placeholder(combinations)
+        result_panels: list = self._view.display_all_combinations_placeholder(combinations)
+        self._start_calculation(result_panels)
+        
+    def _start_calculation(self, result_panels : list) -> None:
+        """ Start UMAP calculation. """
+        time.sleep(2)  # Simulate a 2-second calculation delay
+        
                 
     def _compute_umap_embedding_event(self, _) -> None:
         """Event handler for computing UMAP embedding when the button is clicked."""

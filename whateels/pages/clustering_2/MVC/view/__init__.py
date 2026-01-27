@@ -30,7 +30,7 @@ class Clustering2PageView:
     def modals(self):
         return self._modal_manager.modals
             
-    def display_all_combinations_placeholder(self, combinations) -> None:
+    def display_all_combinations_placeholder(self, combinations) -> list:
         """Display placeholders for all parameter combinations in the main view, 3 per row."""
         self._main.clear()
         
@@ -40,7 +40,7 @@ class Clustering2PageView:
         delay = 0
         delay_increment = 0.125  # Seconds between each placeholder animation
         is_first = True
-        placeholders = []
+        result_panels = []
         
         for i in range(0, len(combinations), MAX_COLS):
             row_combinations = combinations[i:i+MAX_COLS]
@@ -52,7 +52,7 @@ class Clustering2PageView:
                     delay=delay,
                     sizing_mode='stretch_width'
                 )
-                placeholders.append(placeholder) # For later use
+                result_panels.append(placeholder) # For later use
                 row.append(placeholder) # Add placeholder to the row
                 delay += delay_increment
                 if is_first:
@@ -62,12 +62,15 @@ class Clustering2PageView:
                 sizing_mode='stretch_width', 
                 margin=0
             ))
-            
-        def set_not_loading():
-            print("Setting placeholders to not loading.")
-            placeholders[0].is_loading = True
+
         # Change state after 2 seconds
-        pn.state.add_periodic_callback(set_not_loading, period=2000, count=1)
+        pn.state.add_periodic_callback(
+            lambda: setattr(result_panels[0], 'is_loading', True), 
+            period=2000, 
+            count=1
+        )
         
         parent_column = pn.Column(*columns, sizing_mode='stretch_both')
         self._main.append(parent_column)
+
+        return result_panels

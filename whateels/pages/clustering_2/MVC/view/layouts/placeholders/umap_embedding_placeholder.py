@@ -5,7 +5,6 @@ _raw_css = """
 .umap-embedding-placeholder {
     background-color: #fafaff;
     box-shadow: 0px 0px 5px #d8d8d8;
-    margin: 0 0 10px 0;
     opacity: 0;
     overflow: hidden;
     aspect-ratio: 1;
@@ -48,8 +47,7 @@ class UmapEmbeddingPlaceholder(pn.Column):
 
         # Build styles with animation delay
         styles = {
-            'border': '1px solid #ccc',
-            'padding': '20px',
+            'margin': '0 0 10px 0',
             'border-radius': '5px',
             'display': 'flex',
             'flex-direction': 'column',
@@ -67,13 +65,15 @@ class UmapEmbeddingPlaceholder(pn.Column):
         indicator = pn.Row(
             self._loading_spinner,
             sizing_mode='stretch_width',
+            margin=0,
             styles={'justify-content': 'center'}
         )
 
         self._title = pn.pane.Markdown(
             f"### {'Calculating UMAP embedding...' if bool(self._params.is_loading) else 'Waiting...'}",
             align='center', 
-            margin=0
+            margin=0,
+            styles={'text-align': 'center'}
         )            
         
         super().__init__(
