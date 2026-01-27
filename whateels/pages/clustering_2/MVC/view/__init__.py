@@ -30,7 +30,7 @@ class Clustering2PageView:
     def modals(self):
         return self._modal_manager.modals
             
-    def display_all_combinations_placeholder(self, combinations) -> list:
+    def display_all_combinations_placeholder(self, combinations):
         """Display placeholders for all parameter combinations in the main view, 3 per row."""
         self._main.clear()
         
@@ -70,7 +70,5 @@ class Clustering2PageView:
             count=1
         )
         
-        parent_column = pn.Column(*columns, sizing_mode='stretch_both')
+        parent_column = pn.Column()
         self._main.append(parent_column)
-
-        return result_panels
