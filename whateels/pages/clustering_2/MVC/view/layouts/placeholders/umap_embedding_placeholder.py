@@ -71,7 +71,7 @@ class UmapEmbeddingPlaceholder(pn.Column):
         )
 
         self._title = pn.pane.Markdown(
-            f"### {'Calculatating UMAP embedding...' if bool(self._params.is_loading) else 'Waiting...'}",
+            f"### {'Calculating UMAP embedding...' if bool(self._params.is_loading) else 'Waiting...'}",
             align='center', 
             margin=0
         )            
@@ -101,4 +101,4 @@ class UmapEmbeddingPlaceholder(pn.Column):
     def _update_loading_state(self, event):
         is_loading = bool(event.new)
         self._loading_spinner.color = "success" if is_loading else "primary"
-        self._title.object = f"### {'Calculatating UMAP embedding...' if is_loading else 'Waiting...'}"
+        self._title.object = f"### {'Calculating UMAP embedding...' if is_loading else 'Waiting...'}"
