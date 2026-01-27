@@ -48,7 +48,7 @@ class UmapEmbeddingPlaceholder(pn.Column):
             'flex-direction': 'column',
             'justify-content': 'center',
             'align-items': 'center',
-            'animation-delay': f'{delay}s',
+            'animation-delay': f'{delay}s'
         }
         
         super().__init__(
@@ -62,7 +62,6 @@ class UmapEmbeddingPlaceholder(pn.Column):
                 align='center',
             ),
             align='center',
-            sizing_mode='stretch_width',
             css_classes=["umap-embedding-placeholder", "animated"],
             styles=styles,
             **kwargs

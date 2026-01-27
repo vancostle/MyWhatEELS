@@ -1,4 +1,4 @@
-from .layouts import Clustering2MainLayout, Clustering2LeftSidebarLayout, Clustering2RightSidebarLayout, UmapEmbeddingPlaceholder
+from .layouts import Clustering2MainLayout, Clustering2RightSidebarLayout, UmapEmbeddingPlaceholder
 from whateels.components import ModalManager
 import panel as pn
 
@@ -14,7 +14,6 @@ class Clustering2PageView:
         pn.state.notifications.position = 'bottom-left' # type: ignore
 
         self._main = Clustering2MainLayout()
-        # self._left_sidebar = Clustering2LeftSidebarLayout()
         self._right_sidebar = Clustering2RightSidebarLayout()
         
         self._modal_manager = ModalManager(custom_page)
@@ -23,10 +22,6 @@ class Clustering2PageView:
     def main(self):
         return self._main
     
-    # @property
-    # def left_sidebar(self):
-    #     return self._left_sidebar
-    
     @property
     def right_sidebar(self):
         return self._right_sidebar
@@ -34,17 +29,6 @@ class Clustering2PageView:
     @property
     def modals(self):
         return self._modal_manager.modals
-    
-    def show_notification(self, message: str, type: str = "info", duration: int = 3000) -> None:
-        """Helper to show notifications."""
-        if type == "info":
-            pn.state.notifications.info(message, duration=duration) # type: ignore
-        elif type == "success":
-            pn.state.notifications.success(message, duration=duration) # type: ignore
-        elif type == "warning":
-            pn.state.notifications.warning(message, duration=duration) # type: ignore
-        elif type == "error":
-            pn.state.notifications.error(message, duration=duration) # type: ignore
             
     def display_all_combinations_placeholder(self, combinations) -> None:
         """Display placeholders for all parameter combinations in the main view, 3 per row."""
@@ -60,8 +44,12 @@ class Clustering2PageView:
             row_combinations = combinations[i:i+MAX_COLS]
             row = pn.Row(sizing_mode='stretch_width', styles={'gap': '10px'})
             for min_dist, n_neighbors in row_combinations:
-                # Create a placeholder with loading spinner and increasing delay
-                placeholder = UmapEmbeddingPlaceholder(min_dist, n_neighbors, delay=delay)
+                placeholder = UmapEmbeddingPlaceholder(
+                    min_dist, 
+                    n_neighbors, 
+                    delay=delay,
+                    sizing_mode='stretch_width'
+                )
                 row.append(placeholder)
                 delay += delay_increment
             columns.append(pn.Column(
