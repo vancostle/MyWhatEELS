@@ -1,4 +1,4 @@
-import panel as pn
+import panel as pn, param
 
 # Inject raw CSS for this component
 _raw_css = """
@@ -8,6 +8,7 @@ _raw_css = """
     margin: 0 0 10px 0;
     opacity: 0;
     overflow: hidden;
+    aspect-ratio: 1;
 }
 
 .umap-embedding-placeholder.animated {
@@ -35,10 +36,16 @@ _raw_css = """
 
 if _raw_css not in pn.config.raw_css: # type: ignore
     pn.config.raw_css.append(_raw_css) # type: ignore
+    
+class _UmapEmbeddingParams(param.Parameterized):
+    is_loading = param.Boolean(default=True, doc="Whether the UMAP embedding is currently loading.")
 
 class UmapEmbeddingPlaceholder(pn.Column):
 
-    def __init__(self, min_dist, n_neighbors, delay:float=0, **kwargs):
+    def __init__(self, min_dist, n_neighbors, delay:float=0, is_loading: bool = False, **kwargs):
+        self._params = _UmapEmbeddingParams(is_loading=is_loading)
+        self._params.param.watch(self._update_loading_state, 'is_loading')
+
         # Build styles with animation delay
         styles = {
             'border': '1px solid #ccc',
@@ -51,19 +58,47 @@ class UmapEmbeddingPlaceholder(pn.Column):
             'animation-delay': f'{delay}s'
         }
         
+        self._loading_spinner = pn.indicators.LoadingSpinner(
+            value=True, 
+            size=50,
+            color="success" if bool(self._params.is_loading) else "primary"
+        )
+        
+        indicator = pn.Row(
+            self._loading_spinner,
+            sizing_mode='stretch_width',
+            styles={'justify-content': 'center'}
+        )
+
+        self._title = pn.pane.Markdown(
+            f"### {'Calculatating UMAP embedding...' if bool(self._params.is_loading) else 'Waiting...'}",
+            align='center', 
+            margin=0
+        )            
+        
         super().__init__(
-            pn.Row(
-                pn.indicators.LoadingSpinner(value=True, size=50),
-                sizing_mode='stretch_width',
-                styles={'justify-content': 'center'}
-            ),
+            indicator,
+            self._title,
             pn.pane.Markdown(
                 f"min_dist={min_dist}, n_neighbors={n_neighbors}",
                 align='center',
+                margin=0
             ),
             align='center',
             css_classes=["umap-embedding-placeholder", "animated"],
             styles=styles,
             **kwargs
         )
-            
+        
+    @property
+    def is_loading(self) -> bool:
+        return bool(self._params.is_loading)
+    
+    @is_loading.setter
+    def is_loading(self, value: bool):
+        self._params.is_loading = value
+        
+    def _update_loading_state(self, event):
+        is_loading = bool(event.new)
+        self._loading_spinner.color = "success" if is_loading else "primary"
+        self._title.object = f"### {'Calculatating UMAP embedding...' if is_loading else 'Waiting...'}"

@@ -39,6 +39,8 @@ class Clustering2PageView:
         columns = []
         delay = 0
         delay_increment = 0.125  # Seconds between each placeholder animation
+        is_first = True
+        placeholders = []
         
         for i in range(0, len(combinations), MAX_COLS):
             row_combinations = combinations[i:i+MAX_COLS]
@@ -50,13 +52,22 @@ class Clustering2PageView:
                     delay=delay,
                     sizing_mode='stretch_width'
                 )
-                row.append(placeholder)
+                placeholders.append(placeholder) # For later use
+                row.append(placeholder) # Add placeholder to the row
                 delay += delay_increment
+                if is_first:
+                    is_first = False
             columns.append(pn.Column(
                 row, 
                 sizing_mode='stretch_width', 
                 margin=0
             ))
-
+            
+        def set_not_loading():
+            print("Setting placeholders to not loading.")
+            placeholders[0].is_loading = True
+        # Change state after 2 seconds
+        pn.state.add_periodic_callback(set_not_loading, period=2000, count=1)
+        
         parent_column = pn.Column(*columns, sizing_mode='stretch_both')
         self._main.append(parent_column)
