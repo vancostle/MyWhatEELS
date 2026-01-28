@@ -1,4 +1,9 @@
-from .layouts import Clustering2MainLayout, Clustering2RightSidebarLayout, UmapEmbeddingPlaceholder
+from .layouts import (
+    Clustering2MainLayout, 
+    Clustering2RightSidebarLayout, 
+    UmapEmbeddingPlaceholder, 
+    UmapEmbeddingSuccessPlaceholder
+)
 from whateels.components import ModalManager
 import panel as pn
 
@@ -17,6 +22,9 @@ class Clustering2PageView:
         self._right_sidebar = Clustering2RightSidebarLayout()
         
         self._modal_manager = ModalManager(custom_page)
+        
+        self._result_panels = []  # Store as instance variable
+        self._result_rows = []  # Store rows for easy access
 
     @property
     def main(self):
@@ -36,11 +44,9 @@ class Clustering2PageView:
         
         # Group combinations into rows of 3
         MAX_COLS = 3
-        columns = []
-        delay = 0
+
+        delay = 0 # Initial delay for staggered animation
         delay_increment = 0.125  # Seconds between each placeholder animation
-        is_first = True
-        result_panels = []
         
         for i in range(0, len(combinations), MAX_COLS):
             row_combinations = combinations[i:i+MAX_COLS]
@@ -50,25 +56,38 @@ class Clustering2PageView:
                     min_dist, 
                     n_neighbors, 
                     delay=delay,
-                    sizing_mode='stretch_width'
+                    sizing_mode='stretch_width',
+                    is_loading=False  # Start in waiting state
                 )
-                result_panels.append(placeholder) # For later use
-                row.append(placeholder) # Add placeholder to the row
+                self._result_panels.append(placeholder)
+                row.append(placeholder)
                 delay += delay_increment
-                if is_first:
-                    is_first = False
-            columns.append(pn.Column(
+            self._result_rows.append(row)
+        
+        parent_column = pn.Column(
+            *[pn.Column(
                 row, 
                 sizing_mode='stretch_width', 
                 margin=0
-            ))
-
-        # Change state after 2 seconds
-        pn.state.add_periodic_callback(
-            lambda: setattr(result_panels[0], 'is_loading', True), 
-            period=2000, 
-            count=1
+            ) for row in self._result_rows], 
+            sizing_mode='stretch_both'
         )
-        
-        parent_column = pn.Column()
         self._main.append(parent_column)
+        
+        return self._result_panels
+    
+    def replace_placeholder_with_success(self, index, min_dist, n_neighbors):
+        """Replace a placeholder at the given index with a success placeholder."""
+        
+        # Find which row this placeholder is in
+        row_index = index // 3
+        col_index = index % 3
+        
+        if row_index < len(self._result_rows) and col_index < len(self._result_rows[row_index]):
+            success_placeholder = UmapEmbeddingSuccessPlaceholder(
+                min_dist,
+                n_neighbors,
+                sizing_mode='stretch_width'
+            )
+            self._result_rows[row_index][col_index] = success_placeholder
+            self._result_panels[index] = success_placeholder

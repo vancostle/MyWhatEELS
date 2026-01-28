@@ -1,2 +1,3 @@
 from .umap_embedding_placeholder import UmapEmbeddingPlaceholder
+from .umap_embedding_success_placeholder import UmapEmbeddingSuccessPlaceholder
 from .main_layout_placeholder import MainLayoutPlaceholder

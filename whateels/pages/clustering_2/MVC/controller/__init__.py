@@ -1,6 +1,6 @@
 
 from whateels.helpers import SafeConverter, URLUtils
-import time, itertools
+import time, itertools, panel as pn
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -52,12 +52,36 @@ class Clustering2PageController:
         # Generate all combinations of min_dist and n_neighbors
         combinations = list(itertools.product(min_dist_list, n_neighbors_list))
         
-        self._view.display_all_combinations_placeholder(combinations)
-        self._start_calculation()
+        # Display all placeholders and get reference to them
+        result_panels = self._view.display_all_combinations_placeholder(combinations)
         
-    def _start_calculation(self) -> None:
-        """ Start UMAP calculation. """
-        time.sleep(2)  # Simulate a 2-second calculation delay
+        # Start sequential calculation
+        self._start_calculation(combinations, result_panels)
+        
+    def _start_calculation(self, combinations, result_panels) -> None:
+        """Start UMAP calculation sequentially for each combination."""
+        
+        def process_next(index):
+            if index >= len(combinations):
+                print("All calculations complete!")
+                return
+            
+            # Set current placeholder to loading state
+            result_panels[index].is_loading = True
+            min_dist, n_neighbors = combinations[index]
+            print(f"Starting calculation {index + 1}/{len(combinations)}: min_dist={min_dist}, n_neighbors={n_neighbors}")
+            
+            # Simulate calculation with 5 second delay, then replace with success
+            def on_complete():
+                print(f"Completed calculation {index + 1}/{len(combinations)}")
+                self._view.replace_placeholder_with_success(index, min_dist, n_neighbors)
+                # Process next placeholder
+                process_next(index + 1)
+            
+            pn.state.add_periodic_callback(on_complete, period=5000, count=1)
+        
+        # Start with the first placeholder
+        process_next(0)
         
                 
     def _compute_umap_embedding_event(self, _) -> None:
