@@ -5,10 +5,10 @@ _raw_css = """
 .umap-embedding-success-placeholder {
     background-color: #f0fff4;
     box-shadow: 0px 0px 5px #d8d8d8;
-    margin: 0 0 10px 0;
     opacity: 0;
     overflow: hidden;
     aspect-ratio: 1;
+    box-sizing: border-box;
 }
 
 .umap-embedding-success-placeholder.animated {
@@ -40,16 +40,17 @@ if _raw_css not in pn.config.raw_css: # type: ignore
 class UmapEmbeddingSuccessPlaceholder(pn.Column):
 
     def __init__(self, min_dist, n_neighbors, delay:float=0, **kwargs):
-        # Build styles with animation delay
+        # Build styles with animation delay (must match UmapEmbeddingPlaceholder)
         styles = {
-            'border': '2px solid #10b981',
-            'padding': '20px',
+            'border': '1px solid #10b981',
             'border-radius': '5px',
             'display': 'flex',
             'flex-direction': 'column',
             'justify-content': 'center',
             'align-items': 'center',
-            'animation-delay': f'{delay}s'
+            'animation-delay': f'{delay}s',
+            'box-sizing': 'border-box',
+            'height': '100%',
         }
         
         # Success indicator with checkmark

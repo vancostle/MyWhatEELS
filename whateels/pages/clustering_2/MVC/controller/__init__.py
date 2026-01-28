@@ -55,8 +55,12 @@ class Clustering2PageController:
         # Display all placeholders and get reference to them
         result_panels = self._view.display_all_combinations_placeholder(combinations)
         
-        # Start sequential calculation
-        self._start_calculation(combinations, result_panels)
+        # Wait a moment for UI to render before starting calculations
+        pn.state.add_periodic_callback(
+            lambda: self._start_calculation(combinations, result_panels),
+            period=500,  # 500ms delay to let UI render
+            count=1
+        )
         
     def _start_calculation(self, combinations, result_panels) -> None:
         """Start UMAP calculation sequentially for each combination."""

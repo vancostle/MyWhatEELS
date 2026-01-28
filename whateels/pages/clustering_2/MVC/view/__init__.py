@@ -25,6 +25,7 @@ class Clustering2PageView:
         
         self._result_panels = []  # Store as instance variable
         self._result_rows = []  # Store rows for easy access
+        self._result_columns = []  # Store column wrappers for isolated updates
 
     @property
     def main(self):
@@ -42,6 +43,11 @@ class Clustering2PageView:
         """Display placeholders for all parameter combinations in the main view, 3 per row."""
         self._main.clear()
         
+        # Reset instance variables
+        self._result_panels = []
+        self._result_rows = []
+        self._result_columns = []
+        
         # Group combinations into rows of 3
         MAX_COLS = 3
 
@@ -56,11 +62,23 @@ class Clustering2PageView:
                     min_dist, 
                     n_neighbors, 
                     delay=delay,
-                    sizing_mode='stretch_width',
+                    sizing_mode='stretch_both',
                     is_loading=False  # Start in waiting state
                 )
+                # Wrap each placeholder in a Column for isolated updates
+                column_wrapper = pn.Column(
+                    placeholder,
+                    sizing_mode='stretch_both',
+                    margin=0,
+                    styles={
+                        'aspect-ratio': '1', 
+                        'margin-bottom': '10px',
+                        'height': '100%'
+                    }
+                )
                 self._result_panels.append(placeholder)
-                row.append(placeholder)
+                self._result_columns.append(column_wrapper)
+                row.append(column_wrapper)
                 delay += delay_increment
             self._result_rows.append(row)
         
@@ -79,15 +97,16 @@ class Clustering2PageView:
     def replace_placeholder_with_success(self, index, min_dist, n_neighbors):
         """Replace a placeholder at the given index with a success placeholder."""
         
-        # Find which row this placeholder is in
-        row_index = index // 3
-        col_index = index % 3
-        
-        if row_index < len(self._result_rows) and col_index < len(self._result_rows[row_index]):
+        if index < len(self._result_columns):
             success_placeholder = UmapEmbeddingSuccessPlaceholder(
                 min_dist,
                 n_neighbors,
                 sizing_mode='stretch_width'
             )
-            self._result_rows[row_index][col_index] = success_placeholder
+            
+            # Replace content in the column wrapper (isolated update)
+            column_wrapper = self._result_columns[index]
+            column_wrapper.objects = [success_placeholder]
+            
+            # Update the reference in result_panels
             self._result_panels[index] = success_placeholder

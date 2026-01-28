@@ -3,11 +3,12 @@ import panel as pn, param
 # Inject raw CSS for this component
 _raw_css = """
 .umap-embedding-placeholder {
-    background-color: #fafaff;
+    background-color: #fafafff;
     box-shadow: 0px 0px 5px #d8d8d8;
     opacity: 0;
     overflow: hidden;
     aspect-ratio: 1;
+    box-sizing: border-box;
 }
 
 .umap-embedding-placeholder.animated {
@@ -47,13 +48,14 @@ class UmapEmbeddingPlaceholder(pn.Column):
 
         # Build styles with animation delay
         styles = {
-            'margin': '0 0 10px 0',
             'border-radius': '5px',
             'display': 'flex',
             'flex-direction': 'column',
             'justify-content': 'center',
             'align-items': 'center',
-            'animation-delay': f'{delay}s'
+            'animation-delay': f'{delay}s',
+            'box-sizing': 'border-box',
+            'height': '100%',
         }
         
         self._loading_spinner = pn.indicators.LoadingSpinner(
