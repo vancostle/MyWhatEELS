@@ -57,6 +57,9 @@ class FittingModel(BaseModel):
         peaks, _ = find_peaks(spectrum[0], heigth=0)
 
         print(f"Peaks found at indices: {peaks}")
+    
+    #def add_component(self):
+        
 
     def create_components(self, spectrum, default_compo_type='gaussian', 
                          flex='medium', name_area='default', excluded_elements=None,

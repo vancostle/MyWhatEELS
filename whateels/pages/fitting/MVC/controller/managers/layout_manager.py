@@ -136,7 +136,7 @@ class LayoutManager:
         """Add a new element input component to the sidebar."""
         self._view.right_sidebar.append(element_input_view)
 
-        self.plot_component()
+        ##self.plot_component()
 
         # plot components
     
