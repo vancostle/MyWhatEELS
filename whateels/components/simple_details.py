@@ -48,7 +48,7 @@ class SimpleDetails(pn.Column):
                 'border-radius': '4px',
                 'box-shadow': '0 0 5px #d8d8d8',
                 'background-color': '#f7f7f7',
-                'overflow': 'hidden',
+                'overflow': 'visible',
             }
         )
         

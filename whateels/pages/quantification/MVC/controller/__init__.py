@@ -6,7 +6,7 @@ from xarray import Dataset
 from whateels.helpers.constants import OOS_ROOT
 from whateels.helpers.safe_converter import SafeConverter
 from ..model.element_item import ElementItem
-from ..view.components.ElementItemView import ElementItemView
+from ..view.components.element_item_view import ElementItemView
 
 import panel as pn
 

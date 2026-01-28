@@ -1,6 +1,6 @@
 from .home import HomePage
 from .gos import GOS
-from .nlls import NLLS
+from .fitting import Fitting
 from .login import Login
 from .metadata import Metadata
 from .clustering import Clustering
@@ -11,11 +11,12 @@ from .demo import DemoPage
 __all__ = [
     "HomePage", 
     "GOS", 
-    "NLLS", 
+    "Fitting", 
     "Login", 
     "Metadata", 
     "Clustering", 
     "MultiFitting", 
     "Quantification", 
     "DemoPage"
+    
 ]

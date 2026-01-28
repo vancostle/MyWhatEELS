@@ -72,3 +72,6 @@ class ToggleButton(Button):
             raise ValueError("on_click cannot be None.")
         # Set the callback for the requested state only
         self._states[state_key][self._ON_CLICK] = on_click
+
+    def set_states(self, states):
+        self._states = states
