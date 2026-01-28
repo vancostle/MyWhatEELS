@@ -58,7 +58,7 @@ class Clustering2PageController:
         # Wait a moment for UI to render before starting calculations
         pn.state.add_periodic_callback(
             lambda: self._start_calculation(combinations, result_panels),
-            period=500,  # 500ms delay to let UI render
+            period=1000,  # 1000ms delay to let UI render
             count=1
         )
         
@@ -73,11 +73,11 @@ class Clustering2PageController:
             # Set current placeholder to loading state
             result_panels[index].is_loading = True
             min_dist, n_neighbors = combinations[index]
-            print(f"Starting calculation {index + 1}/{len(combinations)}: min_dist={min_dist}, n_neighbors={n_neighbors}")
+            # print(f"Starting calculation {index + 1}/{len(combinations)}: min_dist={min_dist}, n_neighbors={n_neighbors}")
             
             # Simulate calculation with 5 second delay, then replace with success
             def on_complete():
-                print(f"Completed calculation {index + 1}/{len(combinations)}")
+                # print(f"Completed calculation {index + 1}/{len(combinations)}")
                 self._view.replace_placeholder_with_success(index, min_dist, n_neighbors)
                 # Process next placeholder
                 process_next(index + 1)
