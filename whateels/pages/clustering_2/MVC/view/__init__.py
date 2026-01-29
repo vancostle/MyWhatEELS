@@ -5,7 +5,7 @@ from .layouts import (
     UmapEmbeddingSuccessPlaceholder
 )
 from whateels.components import ModalManager
-import panel as pn
+import panel as pn, numpy as np, holoviews as hv
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class Clustering2PageView:
     def modals(self):
         return self._modal_manager.modals
             
-    def display_all_combinations_placeholder(self, combinations):
+    def display_all_combination_placeholders(self, combinations):
         """Display placeholders for all parameter combinations in the main view, 3 per row."""
         self._main.clear()
         
@@ -101,7 +101,7 @@ class Clustering2PageView:
             success_placeholder = UmapEmbeddingSuccessPlaceholder(
                 min_dist,
                 n_neighbors,
-                sizing_mode='stretch_width'
+                sizing_mode='stretch_both'
             )
             
             # Replace content in the column wrapper (isolated update)
@@ -110,3 +110,29 @@ class Clustering2PageView:
             
             # Update the reference in result_panels
             self._result_panels[index] = success_placeholder
+
+    def replace_placeholder_with_umap_embedding(self, index, min_dist, n_neighbors, umap_data_dict: dict):
+        """Replace a placeholder at the given index with a UMAP plot."""
+        
+        if index < len(self._result_columns):
+            emb = umap_data_dict[f'umap_data_{min_dist}_{n_neighbors}'].embedding_
+            zers = np.zeros((emb.shape[0], 3))
+            zers[:, :-1] = emb
+            points = hv.Points(zers, vdims=['color']).opts(
+                toolbar=None, 
+                fill_alpha=0.1, 
+                bgcolor='black',
+                line_alpha=0, 
+                line_width=0.15, 
+                size=2.5, 
+                xaxis=None, 
+                yaxis=None,
+                show_legend=True, 
+                color='color', 
+                shared_axes=False,
+                title=f'UMAP on masked data, min_dist={min_dist}, n_neighbors={n_neighbors}'
+            )
+            plot_panel = pn.panel(points, sizing_mode='stretch_both')
+            column_wrapper = self._result_columns[index]
+            column_wrapper.objects = [plot_panel]
+            self._result_panels[index] = plot_panel

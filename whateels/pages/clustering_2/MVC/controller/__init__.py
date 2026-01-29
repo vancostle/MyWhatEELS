@@ -39,9 +39,9 @@ class Clustering2PageController:
         view.right_sidebar.max_cut_signal.start = eloss_min
         view.right_sidebar.max_cut_signal.end = eloss_max
         
-        view.right_sidebar.compute_umap_embedding_run_button.on_click(self._testing_event)
+        view.right_sidebar.compute_umap_embedding_run_button.on_click(self._on_umap_run_button_click)
         
-    def _testing_event(self, _) -> None:
+    def _on_umap_run_button_click(self, _) -> None:
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
         
@@ -53,16 +53,16 @@ class Clustering2PageController:
         combinations = list(itertools.product(min_dist_list, n_neighbors_list))
         
         # Display all placeholders and get reference to them
-        result_panels = self._view.display_all_combinations_placeholder(combinations)
+        result_panels = self._view.display_all_combination_placeholders(combinations)
         
         # Wait a moment for UI to render before starting calculations
         pn.state.add_periodic_callback(
-            lambda: self._start_calculation(combinations, result_panels),
+            lambda: self._start_compute_umap_embedding(combinations, result_panels),
             period=1000,  # 1000ms delay to let UI render
             count=1
         )
         
-    def _start_calculation(self, combinations, result_panels) -> None:
+    def _start_compute_umap_embedding(self, combinations, result_panels) -> None:
         """Start UMAP calculation sequentially for each combination."""
         
         def process_next(index):
@@ -73,33 +73,25 @@ class Clustering2PageController:
             # Set current placeholder to loading state
             result_panels[index].is_loading = True
             min_dist, n_neighbors = combinations[index]
-            # print(f"Starting calculation {index + 1}/{len(combinations)}: min_dist={min_dist}, n_neighbors={n_neighbors}")
+            umap_data_dict = dict()
             
-            # Simulate calculation with 5 second delay, then replace with success
+            umap_data = self._compute_umap_embedding_event(min_dist, n_neighbors)
+            umap_data_dict.update(umap_data) # Get UMAP data
+            
+            #  Callback to be called when calculation is done
             def on_complete():
                 # print(f"Completed calculation {index + 1}/{len(combinations)}")
-                self._view.replace_placeholder_with_success(index, min_dist, n_neighbors)
+                self._view.replace_placeholder_with_umap_embedding(index, min_dist, n_neighbors, umap_data_dict)
                 # Process next placeholder
                 process_next(index + 1)
             
-            pn.state.add_periodic_callback(on_complete, period=5000, count=1)
+            # pn.state.add_periodic_callback(on_complete, period=5000, count=1)
         
         # Start with the first placeholder
-        process_next(0)
+        process_next(index=0)
         
-                
-    def _compute_umap_embedding_event(self, _) -> None:
+    def _compute_umap_embedding_event(self, min_dist: float, n_neighbors: int) -> dict:
         """Event handler for computing UMAP embedding when the button is clicked."""
-        
-        min_dist_list = self._view.right_sidebar.params.min_dist
-        n_neighbors_list = self._view.right_sidebar.params.n_neighbors
-        
-        # Ensure both are lists or iterables
-        if not isinstance(min_dist_list, (list, tuple)) or not isinstance(n_neighbors_list, (list, tuple)):
-            raise ValueError("min_dist and n_neighbors must be lists or tuples.")
-        
-        # Generate all combinations of min_dist and n_neighbors
-        combinations = list(itertools.product(min_dist_list, n_neighbors_list))
         
         electron_count = self._model.selected_dataset["ElectronCount"]
         if electron_count is None:
@@ -110,18 +102,41 @@ class Clustering2PageController:
         embeddings = []
         umap_data_dicts = dict()
         
-        for min_dist in min_dist_list:
-            for n_neighbors in n_neighbors_list:
-                t0 = time.time()
-                embedding, umap_data_dict = umap_hdbscan.compute_umap_embedding(
-                    min_dist,
-                    n_neighbors,
-                )
-                t1 = time.time()
-                time_lapsed = round(t1 - t0, 2) # Time in seconds
-                print(f"Initial UMAP computed in {time_lapsed} seconds.")
+        embedding, umap_data_dict = umap_hdbscan.compute_umap_embedding(
+            min_dist,
+            n_neighbors,
+        )
+        
+        embeddings.append(embedding)
+        umap_data_dicts.update(umap_data_dict)
+        
+        return umap_data_dicts
                 
-                embeddings.append(embedding)
-                umap_data_dicts.update(umap_data_dict)
                 
-                # TODO HERE IS CALLE THE METHOD TO UPDATE THE PLACEHOLDER IN THE MAIN VIEW
+    # def _compute_umap_embedding_event(self, min_dist_list: list, n_neighbors_list: list) -> None:
+    #     """Event handler for computing UMAP embedding when the button is clicked."""
+        
+    #     # Ensure both are lists or iterables
+    #     if not isinstance(min_dist_list, (list, tuple)) or not isinstance(n_neighbors_list, (list, tuple)):
+    #         raise ValueError("min_dist and n_neighbors must be lists or tuples.")
+        
+    #     electron_count = self._model.selected_dataset["ElectronCount"]
+    #     if electron_count is None:
+    #         print("Warning: 'ElectronCount' attribute not found in the selected dataset.")
+        
+    #     umap_hdbscan = UMAP_HDBSCAN(electron_count_data=electron_count)
+
+    #     embeddings = []
+    #     umap_data_dicts = dict()
+        
+    #     for min_dist in min_dist_list:
+    #         for n_neighbors in n_neighbors_list:
+    #             embedding, umap_data_dict = umap_hdbscan.compute_umap_embedding(
+    #                 min_dist,
+    #                 n_neighbors,
+    #             )
+                
+    #             embeddings.append(embedding)
+    #             umap_data_dicts.update(umap_data_dict)
+                
+    #             # TODO HERE IS CALLE THE METHOD TO UPDATE THE PLACEHOLDER IN THE MAIN VIEW
