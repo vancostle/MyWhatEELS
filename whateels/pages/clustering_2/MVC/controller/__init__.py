@@ -1,4 +1,3 @@
-
 from whateels.helpers import SafeConverter, URLUtils
 import itertools, panel as pn, threading
 
@@ -143,4 +142,7 @@ class Clustering2PageController:
         if (self._model.is_umap_computing):
             self._view.right_sidebar.compute_umap_embedding_run_button.disabled = True
         
+        # Trigger disappear animation for all non-loading placeholders
+        self._view.disappear_non_loading_placeholders()
+
         pn.state.notifications.warning("UMAP embedding computations cancellation requested.", duration=5000) # type: ignore

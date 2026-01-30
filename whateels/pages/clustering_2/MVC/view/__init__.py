@@ -121,9 +121,15 @@ class Clustering2PageView:
                 xaxis=None, 
                 yaxis=None,
                 shared_axes=False,
-                title=f'UMAP on masked data, min_dist={min_dist}, n_neighbors={n_neighbors}'
+                title=f'UMAP on min_dist={min_dist}, n_neighbors={n_neighbors}'
             )
             plot_panel = pn.panel(points, sizing_mode='stretch_both')
             column_wrapper = self._result_columns[index]
             column_wrapper.objects = [plot_panel]
             self._result_panels[index] = plot_panel
+
+    def disappear_non_loading_placeholders(self, delay_increment=0.125):
+        """Trigger disappear animation for all non-loading UmapEmbeddingPlaceholder in the grid, staggered by CSS."""
+        non_loading = [ph for ph in self._result_panels if isinstance(ph, UmapEmbeddingPlaceholder) and not ph.is_loading]
+        for i, ph in enumerate(non_loading):
+            ph.disappear(delay=i * delay_increment)
