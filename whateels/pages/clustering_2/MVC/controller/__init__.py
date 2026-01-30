@@ -39,9 +39,15 @@ class Clustering2PageController:
         view.right_sidebar.max_cut_signal.start = eloss_min
         view.right_sidebar.max_cut_signal.end = eloss_max
         
-        view.right_sidebar.compute_umap_embedding_run_button.on_click(self._on_umap_run_button_click)
+        view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(True, self._on_umap_run_button_click)
+        view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(False, self._on_umap_cancel_button_click)
         
-    def _on_umap_run_button_click(self, _) -> None:
+    def _on_umap_run_button_click(self) -> None:
+        """Event handler for UMAP run button click."""
+        # Start UMAP computation for all parameter combinations
+        self._model.is_umap_computing = True
+        self._model.was_umap_computing_canceled = False # Reset cancellation flag
+        
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
         
@@ -67,7 +73,15 @@ class Clustering2PageController:
         
         def process_next(index):
             if index >= len(combinations):
-                print("All calculations complete!")
+                pn.state.notifications.success("UMAP embedding computations completed.") # type: ignore
+                self._model.is_umap_computing = False
+                self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
+                return
+            
+            if self._model.was_umap_computing_canceled:
+                pn.state.notifications.warning("UMAP embedding computations cancelled.", duration=5000) # type: ignore
+                self._model.is_umap_computing = False
+                self._view.right_sidebar.compute_umap_embedding_run_button.disabled = False
                 return
             
             # Set current placeholder to loading state
@@ -88,10 +102,13 @@ class Clustering2PageController:
                 # print(f"Completed calculation {index + 1}/{len(combinations)}")
                 # self._view.replace_placeholder_with_umap_embedding(index, min_dist, n_neighbors, umap_data_dict)
                 self._view.replace_placeholder_with_success(index, min_dist, n_neighbors)
+            
                 # Process next placeholder
                 process_next(index + 1)
             
-            pn.state.add_periodic_callback(on_complete, period=5000, count=1)
+                # threading.Thread(target=compute_and_callback).start()
+    
+            pn.state.add_periodic_callback(on_complete, period=3000, count=1)
             # threading.Thread(target=compute_and_callback).start()
         
         # Start with the first placeholder
@@ -118,32 +135,12 @@ class Clustering2PageController:
         umap_data_dicts.update(umap_data_dict)
         
         return umap_data_dicts
-                
-                
-    # def _compute_umap_embedding_event(self, min_dist_list: list, n_neighbors_list: list) -> None:
-    #     """Event handler for computing UMAP embedding when the button is clicked."""
+    
+    def _on_umap_cancel_button_click(self) -> None:
+        """Event handler for UMAP cancel button click."""
+        self._model.was_umap_computing_canceled = True
         
-    #     # Ensure both are lists or iterables
-    #     if not isinstance(min_dist_list, (list, tuple)) or not isinstance(n_neighbors_list, (list, tuple)):
-    #         raise ValueError("min_dist and n_neighbors must be lists or tuples.")
+        if (self._model.is_umap_computing):
+            self._view.right_sidebar.compute_umap_embedding_run_button.disabled = True
         
-    #     electron_count = self._model.selected_dataset["ElectronCount"]
-    #     if electron_count is None:
-    #         print("Warning: 'ElectronCount' attribute not found in the selected dataset.")
-        
-    #     umap_hdbscan = UMAP_HDBSCAN(electron_count_data=electron_count)
-
-    #     embeddings = []
-    #     umap_data_dicts = dict()
-        
-    #     for min_dist in min_dist_list:
-    #         for n_neighbors in n_neighbors_list:
-    #             embedding, umap_data_dict = umap_hdbscan.compute_umap_embedding(
-    #                 min_dist,
-    #                 n_neighbors,
-    #             )
-                
-    #             embeddings.append(embedding)
-    #             umap_data_dicts.update(umap_data_dict)
-                
-    #             # TODO HERE IS CALLE THE METHOD TO UPDATE THE PLACEHOLDER IN THE MAIN VIEW
+        pn.state.notifications.warning("UMAP embedding computations cancellation requested.", duration=5000) # type: ignore

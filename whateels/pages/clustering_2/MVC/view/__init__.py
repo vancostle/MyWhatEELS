@@ -5,7 +5,7 @@ from .layouts import (
     UmapEmbeddingSuccessPlaceholder
 )
 from whateels.components import ModalManager
-import panel as pn, numpy as np, holoviews as hv
+import panel as pn, holoviews as hv
 
 # Load HoloViews extension for plotting
 hv.extension('bokeh') # type: ignore

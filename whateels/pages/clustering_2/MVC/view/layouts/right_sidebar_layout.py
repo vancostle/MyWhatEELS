@@ -1,6 +1,6 @@
-import panel as pn, param, numpy as np
+import panel as pn, param
 
-from whateels.components import SimpleDetails
+from whateels.components import SimpleDetails, ToggleButton
 from bokeh.models import Tooltip
 
 class _Clustering2RightSidebarParams(param.Parameterized):
@@ -143,22 +143,30 @@ class Clustering2RightSidebarLayout(pn.Column):
             min_dist_tooltip,
             sizing_mode=self._STRETCH_WIDTH
         )
-        
-        compute_umap_embedding_content = pn.Column(
-            n_neighbors_content,
-            min_dist_content,
-        )
-        compute_umap_embedding_details = SimpleDetails(
-            title="UMAP",
-            content=compute_umap_embedding_content,
-            expanded=True,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        self._compute_umap_embedding_run_button = pn.widgets.Button(
-            name='Compute umap embedding',
-            button_type='success',
+    
+        # self._compute_umap_embedding_run_button = pn.widgets.Button(
+        #     name='Compute UMAP embedding',
+        #     button_type='success',
+        #     height=55,
+        #     margin=(20,0,0,0),
+        #     sizing_mode=self._STRETCH_WIDTH
+        # )
+
+        self._compute_umap_embedding_run_button = ToggleButton(
             height=55,
+            initial_state=True,
+            states={
+                "on": {
+                    "label": "Compute UMAP Embedding",
+                    "on_click": lambda : print("UMAP computation started"),
+                    "button_type": "success",
+                },
+                "off": {
+                    "label": "Cancel Next UMAP Computation",
+                    "on_click": lambda : print("UMAP computation cancelled"),
+                    "button_type": "danger",
+                }
+            },
             margin=(20,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -172,11 +180,22 @@ class Clustering2RightSidebarLayout(pn.Column):
             disabled=True
         )
         
+        compute_umap_embedding_content = pn.Column(
+            n_neighbors_content,
+            min_dist_content,
+            self._compute_umap_embedding_run_button,
+            self._download_results_button,
+        )
+        compute_umap_embedding_details = SimpleDetails(
+            title="UMAP",
+            content=compute_umap_embedding_content,
+            expanded=True,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
         super().__init__(
             cut_signal_details,
             compute_umap_embedding_details,
-            self._compute_umap_embedding_run_button,
-            self._download_results_button,
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
         )
@@ -191,7 +210,7 @@ class Clustering2RightSidebarLayout(pn.Column):
     def max_cut_signal(self) -> pn.widgets.FloatInput:
         return self._max_cut_signal
     @property
-    def compute_umap_embedding_run_button(self) -> pn.widgets.Button:
+    def compute_umap_embedding_run_button(self) -> ToggleButton:
         return self._compute_umap_embedding_run_button
     @property
     def download_results_button(self) -> pn.widgets.Button:

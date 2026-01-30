@@ -2,7 +2,27 @@ from panel.widgets import Button
 from typing import Optional, Callable
 
 class ToggleButton(Button):
-    
+    """
+    A two-state toggle button for Panel with customizable labels, colors, and callbacks.
+
+    Parameters
+    ----------
+    initial_state : bool, optional
+        If True, button starts in the 'on' state, else 'off'.
+    states : dict, optional
+        A dictionary specifying the properties for each state. Must have keys 'on' and 'off',
+        each mapping to a dict with at least:
+            - 'label': str, the button label for that state
+            - 'button_type': str, the Panel button_type (e.g. 'success', 'danger')
+            - 'on_click': callable or None, function to call when button is clicked in that state
+        Example:
+            states = {
+                'on': {'label': 'Stop', 'on_click': stop_fn, 'button_type': 'danger'},
+                'off': {'label': 'Start', 'on_click': start_fn, 'button_type': 'success'}
+            }
+    kwargs :
+        Additional keyword arguments passed to Panel's Button.
+    """
     # State identifiers
     _ON = 'on'
     _OFF = 'off'

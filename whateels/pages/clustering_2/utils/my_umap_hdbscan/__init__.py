@@ -37,6 +37,7 @@ class UMAP_HDBSCAN:
             min_dist=min_dist,
             n_components=n_components,
             random_state=RANDOM_STATE,
+            metric='euclidean'
         )
         embedding = mapper.fit_transform(data_2d)
         
