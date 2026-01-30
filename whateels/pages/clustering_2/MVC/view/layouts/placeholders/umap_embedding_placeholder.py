@@ -129,7 +129,12 @@ class UmapEmbeddingPlaceholder(pn.Column):
     def _update_disappear_state(self, event):
         if event.new:
             # Remove animated-in class and add animated-out to avoid conflicts
-            self.styles = {**(self.styles or {}), 'animation-name': 'umap-placeholder-discard'}
+            current_classes = self.css_classes or []
+            new_classes = [c for c in current_classes if c != "animated-in"]
+            if "animated-out" not in new_classes:
+                new_classes.append("animated-out")
+            # Reassign to trigger Panel re-render
+            self.css_classes = new_classes
 
     def disappear(self, delay: float = 0):
         """Trigger a fade-out animation (opacity 0), but do not hide/remove from layout. Optionally stagger with delay."""
