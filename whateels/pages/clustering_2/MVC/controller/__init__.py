@@ -1,6 +1,6 @@
 
 from whateels.helpers import SafeConverter, URLUtils
-import time, itertools, panel as pn
+import itertools, panel as pn, threading
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -75,8 +75,13 @@ class Clustering2PageController:
             min_dist, n_neighbors = combinations[index]
             umap_data_dict = dict()
             
-            umap_data = self._compute_umap_embedding_event(min_dist, n_neighbors)
-            umap_data_dict.update(umap_data) # Get UMAP data
+            def compute_and_callback():
+                # This runs in a separate thread to avoid blocking UI
+                nonlocal umap_data_dict
+                umap_data = self._compute_umap_embedding_event(min_dist, n_neighbors)
+                umap_data_dict.update(umap_data) # Get UMAP data
+                # Execute callback on main thread (thread-safe method for Panel)
+                pn.state.execute(on_complete)
             
             #  Callback to be called when calculation is done
             def on_complete():
@@ -86,6 +91,7 @@ class Clustering2PageController:
                 process_next(index + 1)
             
             # pn.state.add_periodic_callback(on_complete, period=5000, count=1)
+            threading.Thread(target=compute_and_callback).start()
         
         # Start with the first placeholder
         process_next(index=0)

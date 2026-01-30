@@ -7,6 +7,9 @@ from .layouts import (
 from whateels.components import ModalManager
 import panel as pn, numpy as np, holoviews as hv
 
+# Load HoloViews extension for plotting
+hv.extension('bokeh') # type: ignore
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate
@@ -116,19 +119,15 @@ class Clustering2PageView:
         
         if index < len(self._result_columns):
             emb = umap_data_dict[f'umap_data_{min_dist}_{n_neighbors}'].embedding_
-            zers = np.zeros((emb.shape[0], 3))
-            zers[:, :-1] = emb
-            points = hv.Points(zers, vdims=['color']).opts(
+            points = hv.Points(emb, kdims=['x', 'y']).opts(
                 toolbar=None, 
-                fill_alpha=0.1, 
-                bgcolor='black',
+                fill_alpha=0.7, 
+                bgcolor='white',
+                color='steelblue',
                 line_alpha=0, 
-                line_width=0.15, 
-                size=2.5, 
+                size=3, 
                 xaxis=None, 
                 yaxis=None,
-                show_legend=True, 
-                color='color', 
                 shared_axes=False,
                 title=f'UMAP on masked data, min_dist={min_dist}, n_neighbors={n_neighbors}'
             )
