@@ -86,12 +86,13 @@ class Clustering2PageController:
             #  Callback to be called when calculation is done
             def on_complete():
                 # print(f"Completed calculation {index + 1}/{len(combinations)}")
-                self._view.replace_placeholder_with_umap_embedding(index, min_dist, n_neighbors, umap_data_dict)
+                # self._view.replace_placeholder_with_umap_embedding(index, min_dist, n_neighbors, umap_data_dict)
+                self._view.replace_placeholder_with_success(index, min_dist, n_neighbors)
                 # Process next placeholder
                 process_next(index + 1)
             
-            # pn.state.add_periodic_callback(on_complete, period=5000, count=1)
-            threading.Thread(target=compute_and_callback).start()
+            pn.state.add_periodic_callback(on_complete, period=5000, count=1)
+            # threading.Thread(target=compute_and_callback).start()
         
         # Start with the first placeholder
         process_next(index=0)

@@ -43,58 +43,50 @@ class Clustering2PageView:
         return self._modal_manager.modals
             
     def display_all_combination_placeholders(self, combinations):
-        """Display placeholders for all parameter combinations in the main view, 3 per row."""
+        """Display placeholders for all parameter combinations in a Panel GridSpec."""
         self._main.clear()
-        
+
         # Reset instance variables
         self._result_panels = []
-        self._result_rows = []
         self._result_columns = []
-        
-        # Group combinations into rows of 3
-        MAX_COLS = 3
 
-        delay = 0 # Initial delay for staggered animation
-        delay_increment = 0.125  # Seconds between each placeholder animation
-        
-        for i in range(0, len(combinations), MAX_COLS):
-            row_combinations = combinations[i:i+MAX_COLS]
-            row = pn.Row(sizing_mode='stretch_width', styles={'gap': '10px'})
-            for min_dist, n_neighbors in row_combinations:
-                placeholder = UmapEmbeddingPlaceholder(
-                    min_dist, 
-                    n_neighbors, 
-                    delay=delay,
-                    sizing_mode='stretch_both',
-                    is_loading=False  # Start in waiting state
-                )
-                # Wrap each placeholder in a Column for isolated updates
-                column_wrapper = pn.Column(
-                    placeholder,
-                    sizing_mode='stretch_both',
-                    margin=0,
-                    styles={
-                        'aspect-ratio': '1', 
-                        'margin-bottom': '10px',
-                        'height': '100%'
-                    }
-                )
-                self._result_panels.append(placeholder)
-                self._result_columns.append(column_wrapper)
-                row.append(column_wrapper)
-                delay += delay_increment
-            self._result_rows.append(row)
-        
-        parent_column = pn.Column(
-            *[pn.Column(
-                row, 
-                sizing_mode='stretch_width', 
-                margin=0
-            ) for row in self._result_rows], 
-            sizing_mode='stretch_both'
+        MAX_COLS = 3
+        grid = pn.GridSpec(
+            sizing_mode='stretch_both', 
+            mode='override',
+            styles={'grid-gap': '10px'},
         )
-        self._main.append(parent_column)
-        
+
+        delay = 0
+        delay_increment = 0.125
+
+        for idx, (min_dist, n_neighbors) in enumerate(combinations):
+            row = idx // MAX_COLS
+            col = idx % MAX_COLS
+            placeholder = UmapEmbeddingPlaceholder(
+                min_dist,
+                n_neighbors,
+                delay=delay,
+                sizing_mode='stretch_both',
+                is_loading=False
+            )
+            # Wrap in a Column for isolated updates (optional, for compatibility)
+            column_wrapper = pn.Column(
+                placeholder,
+                sizing_mode='stretch_both',
+                margin=0,
+                styles={
+                    'aspect-ratio': '1',
+                    'margin-bottom': '10px',
+                    'height': '100%'
+                }
+            )
+            self._result_panels.append(placeholder)
+            self._result_columns.append(column_wrapper)
+            grid[row, col] = column_wrapper
+            delay += delay_increment
+
+        self._main.append(grid)
         return self._result_panels
     
     def replace_placeholder_with_success(self, index, min_dist, n_neighbors):

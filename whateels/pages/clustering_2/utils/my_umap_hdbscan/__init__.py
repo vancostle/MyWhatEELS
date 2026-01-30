@@ -59,12 +59,3 @@ class UMAP_HDBSCAN:
         except Exception as e:
             print(f"Error processing electron count data: {e}")
             return None
-        
-    def _visulize_umap_embedding(
-        self,
-        min_dist : float,
-        n_neighbors : int,
-        umap_data_dict : dict,
-    ):
-        """ Visualize UMAP embedding (to be implemented). """
-        pass
