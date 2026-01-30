@@ -135,5 +135,5 @@ class UmapEmbeddingPlaceholder(pn.Column):
         """Trigger a fade-out animation (opacity 0), but do not hide/remove from layout. Optionally stagger with delay."""
         if (self.styles is None):
             self.styles = {}
-        self.styles = {**self.styles, 'animation-delay': f'{delay}s'}
+        self.styles = {**self.styles, 'opacity': '1', 'animation-delay': f'{delay}s'}
         self._params.disappear = True
