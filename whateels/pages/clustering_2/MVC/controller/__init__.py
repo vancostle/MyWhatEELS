@@ -147,8 +147,6 @@ class Clustering2PageController:
         embeddings.append(embedding)
         umap_data_dicts.update(umap_data_dict)
         
-        print(f"Umap datta dict keys: {list(umap_data_dicts.keys())}")
-        
         return umap_data_dicts
     
     def _on_umap_cancel_button_click(self) -> None:
