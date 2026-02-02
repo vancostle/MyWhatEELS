@@ -92,7 +92,7 @@ class FittingController(BaseController):
 
         self._layout.add_new_component_input(component_item_view) # modificar aquesta funcio per que els components
         print("Element added programmatically.")
-        self._model.add_component()
+        self._model.add_component(model_select, energy_center)
 
     def _test(self, event):
         self._model._create_model(self._model.dataset, name_area='default', flex='medium')

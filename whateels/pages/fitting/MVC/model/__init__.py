@@ -5,6 +5,7 @@ import copy as cp
 
 from scipy.interpolate import InterpolatedUnivariateSpline
 from scipy.ndimage import gaussian_filter1d
+from lmfit import Model
 from lmfit.models import GaussianModel, LorentzianModel, PseudoVoigtModel, SplitLorentzianModel
 
 import numpy as np
@@ -15,11 +16,10 @@ class FittingModel(BaseModel):
         self._constants = Constants()
         self._app_state = AppState()
 
-        self._fitting_elements = dict()
-        self._models_components = dict()  # Model components per area
-        self._ref_spectra = dict()  # Reference spectra per area
-        self._models = dict()  # Composite models for fitting
-        self._pars = dict()  # Parameters for fitting
+        self._spectra = 0 # Reference spectra
+        self._models = 0 # Composite models for fitting
+        self._pars = 0 # Parameters for fitting
+        self._Eloss = 0 # Energy loss axis
 
     @property
     def constants(self) -> Constants:
@@ -40,26 +40,151 @@ class FittingModel(BaseModel):
     
     def add_element(self, element_item):
         self._fitting_elements[element_item.element_name_short] = element_item
+
     def remove_element(self, element_item):
         self._fitting_elements.pop(element_item.element_name_short)
-
-    def _create_model(slef, spectrum):
-        # spectrum find peaks
-
-        # for peak in spectrum select area
-
-        #   determinar model per zona
-        #   sumar tots els models?
-        #   entrenar els models?
-
-        from scipy.signal import find_peaks
-
-        peaks, _ = find_peaks(spectrum[0], heigth=0)
-
-        print(f"Peaks found at indices: {peaks}")
     
-    #def add_component(self):
+    def add_component(self, compo_type, center, flex='medium'):
+        dictionary = dict()
+        dataset = self.app_state.plot_dataset
+        self._Eloss = dataset.coords['Eloss'].values
+        self._spectra = dataset.coords['x'].values
+        print(f"NLLS Model: add_component() called")
+        dictionary['components'] = []
+        dictionary['const'] = []
+        dictionary['params'] = []
+        # Add ELNES (white line) 
+        dict_var = {
+            'low': [3, 3, 0.1, 0.1],
+            'medium': [7, 7, 1, 1.25],
+            'high': [15, 15, 1, 3],
+            'maximum': [np.inf, np.inf, 1, np.inf]
+        }
+        if flex not in dict_var:
+            flex = 'medium'
+
+        # Determine component parameters
+        cen, sigm, amp = self._determine_compo_parameters(
+                        self._spectra, compo_type, center
+                    )
+                    
+        dictionary['components'].append( {
+            'type_compo': compo_type,
+            'center': cen,
+            'sigma': sigm,
+            'amplitude': amp
+        })
         
+        # Set constraints
+        dictionary['params'].append({
+            'center_min': cen - dict_var[flex][0],
+            'center_max': cen + dict_var[flex][1],
+            'sigma_min': 0.5,
+            'sigma_max': sigm + sigm * dict_var[flex][3],
+            'amplitude_min': 0,
+            'amplitude_max': np.inf
+        })
+
+        mod_list = []
+        params_list = []
+
+        for component in dictionary['components']:
+            tipo = component['type_compo']
+            pref = f'compo_'
+                    
+            # Select model type
+            if tipo == 'gaussian':
+                mod = GaussianModel(prefix=pref)
+            elif tipo == 'lorentzian':
+                mod = LorentzianModel(prefix=pref)
+            elif tipo == 'pseudovoigt':
+                mod = PseudoVoigtModel(prefix=pref)
+            elif tipo == 'splitlorentzian':
+                mod = SplitLorentzianModel(prefix=pref)
+            else:
+                mod = GaussianModel(prefix=pref)
+                    
+            pars = mod.make_params()
+                    
+            # Set parameter values and constraints
+            for key in ['center', 'sigma', 'amplitude']:
+                if key in dictionary['components'][0]:
+                    pars[f'{pref}{key}'].value = component[key]
+                    pars[f'{pref}{key}'].min = dictionary['params'][0][f'{key}_min']
+                    pars[f'{pref}{key}'].max = dictionary['params'][0][f'{key}_max']
+
+            mod_list.append(mod)
+            params_list.append(pars)
+        
+        self._models = mod_list[0]
+        for mod in mod_list[1:]:
+            self._models += mod
+        # Make parameters
+        self._pars = self._models.make_params()
+        # Apply parameter values and constraints
+        for pars in params_list:
+            for par in pars:
+                self._pars[par].value = pars[par].value
+                self._pars[par].min = pars[par].min
+                self._pars[par].max = pars[par].max
+        
+        print(f"NLLS Model: Component added successfully")
+
+        self.fit_reference()
+
+    def _determine_compo_parameters(self, spectrum, tipo, center):
+        """Determine initial parameters for ELNES components"""
+        # Find index closest to center energy
+        idx = np.searchsorted(self._Eloss, center)
+        
+        # Estimate amplitude from spectrum value
+        if idx < len(spectrum):
+            amp = spectrum[idx] * 0.1  # Start with 10% of signal
+        else:
+            amp = np.max(spectrum) * 0.1
+        
+        # Estimate sigma (width)
+        sigm = 5.0  # Default 5 eV width
+        
+        return center, sigm, amp
+    
+    def delete_component(self,element,name,area_name= 'default'):
+        """Method that allows to remove a certain component from the fitting.
+        it also removes the constraints from the model dictionary.
+
+        Args:
+            element (str): Element to which we have attached this component.
+                This helps with the component identification in the inner loop
+            name (str): name of the component to be eliminated.
+            area_name (str, optional): Label of the area from where we want to remove the component.
+                Defaults to 'default'.
+        """
+        list_to_delete = []
+        try:
+            dictionary = self.models_components[area_name][element]
+        except:
+            print('The given element, or name of the area are wrong')
+            print('\nCheck those fields and re-run')
+            raise
+        else:
+            for compType in dictionary:
+                for key in dictionary[compType]:
+                    if name == key:
+                        list_to_delete.append((compType,key))
+                    else: pass
+            for de in list_to_delete:
+                dictionary[de[0]].pop(de[1])
+
+    def fit_reference(self):
+        """
+        Method that carries out the initial fitting for the reference spectra
+        of a certain reference area
+
+        Args:
+            name_area (str, optional): Label of the reference area selected.
+                Defaults to 'default'.
+        """
+        self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
 
     def create_components(self, spectrum, default_compo_type='gaussian', 
                          flex='medium', name_area='default', excluded_elements=None,
@@ -160,22 +285,6 @@ class FittingModel(BaseModel):
                         'amplitude_min': 0,
                         'amplitude_max': np.inf
                     }
-    
-    def _determine_compo_parameters(self, spectrum, tipo, center):
-        """Determine initial parameters for ELNES components"""
-        # Find index closest to center energy
-        idx = np.searchsorted(self._Eloss, center)
-        
-        # Estimate amplitude from spectrum value
-        if idx < len(spectrum):
-            amp = spectrum[idx] * 0.1  # Start with 10% of signal
-        else:
-            amp = np.max(spectrum) * 0.1
-        
-        # Estimate sigma (width)
-        sigm = 5.0  # Default 5 eV width
-        
-        return center, sigm, amp
     
 def create_model(self, name_area='default', flex='medium'):
         """
@@ -283,4 +392,3 @@ def create_model(self, name_area='default', flex='medium'):
                 self._pars[name_area][par].vary = pars[par].vary
         
         _logger.info(f"Created composite model for area '{name_area}'")
-        

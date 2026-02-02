@@ -98,6 +98,7 @@ class LayoutManager:
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
             self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            app_state.plot_dataset = app_state.all_datasets[0]
             
             # Update UI
             self._controller.base_layout.update_main(self._plots_tab)
@@ -124,9 +125,13 @@ class LayoutManager:
         # Get the selected tab index
         selected_tab_index = event.new
 
-        AppState().selected_tab_index_dataset = selected_tab_index  # Update shared state
+        state = AppState()
 
-        AppState().quantification_elements = []
+        state.selected_tab_index_dataset = selected_tab_index  # Update shared state
+
+        state.quantification_elements = []
+
+        state.plot_dataset = state.all_datasets[selected_tab_index]
 
         # Update sidebar with the corresponding dataset info
         self._controller.layout.remove_dataset_info_from_sidebar()
