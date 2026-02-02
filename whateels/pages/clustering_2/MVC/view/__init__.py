@@ -41,7 +41,7 @@ class Clustering2PageView:
     def modals(self):
         return self._modal_manager.modals
             
-    def display_all_combination_placeholders(self, combinations):
+    def display_all_combination_placeholders(self, combinations : list[tuple[float, int]]):
         """Display placeholders for all parameter combinations in a Panel GridSpec."""
         self._main.clear()
 

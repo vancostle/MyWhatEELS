@@ -25,6 +25,7 @@ class UMAP_HDBSCAN:
         min_dist : float = 0.1,
         n_neighbors : int = 15,
         n_components : int = 2,
+        
     ) -> tuple[Any, dict]:
         """ Compute UMAP embedding of the image spectra image. """
         

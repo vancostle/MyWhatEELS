@@ -30,6 +30,21 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="min_dist",
         doc="List of min_dist values for UMAP."
     )
+    n_components = param.Integer(
+        default=2,
+        label="n_components",
+        doc="Number of components for UMAP embedding."
+    )
+    metric = param.String(
+        default="euclidean",
+        label="metric",
+        doc="Distance metric for UMAP."
+    ),
+    random_state = param.Integer(
+        default=2,
+        label="random_state",
+        doc="Random state for UMAP."
+    )
 
 class Clustering2RightSidebarLayout(pn.Column):
     
@@ -143,14 +158,26 @@ class Clustering2RightSidebarLayout(pn.Column):
             min_dist_tooltip,
             sizing_mode=self._STRETCH_WIDTH
         )
-    
-        # self._compute_umap_embedding_run_button = pn.widgets.Button(
-        #     name='Compute UMAP embedding',
-        #     button_type='success',
-        #     height=55,
-        #     margin=(20,0,0,0),
-        #     sizing_mode=self._STRETCH_WIDTH
-        # )
+        
+        n_components = pn.widgets.IntInput(
+            name=type(self._params).param.n_components.label,
+            value=type(self._params).param.n_components.default,
+            step=1,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        def validate_n_components(event):
+            value = event.new
+            try:
+                int_value = int(value)
+                if int_value >= 1:
+                    self._params.n_components = int_value
+                else:
+                    raise ValueError
+            except ValueError:
+                n_components.value = event.old
+        
+        n_components.param.watch(validate_n_components, 'value')
 
         self._compute_umap_embedding_run_button = ToggleButton(
             height=55,
@@ -183,6 +210,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         compute_umap_embedding_content = pn.Column(
             n_neighbors_content,
             min_dist_content,
+            n_components,
             self._compute_umap_embedding_run_button,
             self._download_results_button,
         )
