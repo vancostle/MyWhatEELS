@@ -25,20 +25,19 @@ class UMAP_HDBSCAN:
         min_dist : float = 0.1,
         n_neighbors : int = 15,
         n_components : int = 2,
+        metric : str = 'euclidean',
+        random_state : int = 1
         
     ) -> tuple[Any, dict]:
         """ Compute UMAP embedding of the image spectra image. """
-        
-        RANDOM_STATE = 1
-
         data_2d = self._get_reshaped_data()
         
         mapper = umap.UMAP(
             n_neighbors=n_neighbors,
             min_dist=min_dist,
             n_components=n_components,
-            random_state=RANDOM_STATE,
-            metric='euclidean'
+            random_state=random_state,
+            metric=metric
         )
         embedding = mapper.fit_transform(data_2d)
         

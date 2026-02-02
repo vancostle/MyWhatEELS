@@ -39,7 +39,7 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         default="euclidean",
         label="metric",
         doc="Distance metric for UMAP."
-    ),
+    )
     random_state = param.Integer(
         default=2,
         label="random_state",
@@ -178,6 +178,39 @@ class Clustering2RightSidebarLayout(pn.Column):
                 n_components.value = event.old
         
         n_components.param.watch(validate_n_components, 'value')
+        
+        metric = pn.widgets.Select(
+            name=type(self._params).param.metric.label,
+            options=["euclidean", "manhattan", "chebyshev", "minkowski", "cosine"],
+            value=type(self._params).param.metric.default,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        def on_metric_change(event):
+            value = event.new
+            self._params.metric = value
+        
+        metric.param.watch(on_metric_change, 'value')
+        
+        random_state = pn.widgets.IntInput(
+            name=type(self._params).param.random_state.label,
+            value=type(self._params).param.random_state.default,
+            step=1,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        def validate_random_state(event):
+            value = event.new
+            try:
+                int_value = int(value)
+                if int_value >= 0:
+                    self._params.random_state = int_value
+                else:
+                    raise ValueError
+            except ValueError:
+                random_state.value = event.old
+                
+        random_state.param.watch(validate_random_state, 'value')
 
         self._compute_umap_embedding_run_button = ToggleButton(
             height=55,
@@ -211,6 +244,8 @@ class Clustering2RightSidebarLayout(pn.Column):
             n_neighbors_content,
             min_dist_content,
             n_components,
+            metric,
+            random_state,
             self._compute_umap_embedding_run_button,
             self._download_results_button,
         )
