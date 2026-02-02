@@ -98,9 +98,7 @@ class Clustering2PageController:
             
             #  Callback to be called when calculation is done
             def on_complete():
-                # print(f"Completed calculation {index + 1}/{len(combinations)}")
                 self._view.replace_placeholder_with_umap_embedding(index, min_dist, n_neighbors, umap_data_dict)
-                # self._view.replace_placeholder_with_success(index, min_dist, n_neighbors)
             
                 # Process next placeholder
                 process_next(index + 1)

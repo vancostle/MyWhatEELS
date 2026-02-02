@@ -2,7 +2,6 @@ from .layouts import (
     Clustering2MainLayout, 
     Clustering2RightSidebarLayout, 
     UmapEmbeddingPlaceholder, 
-    UmapEmbeddingSuccessPlaceholder
 )
 from whateels.components import ModalManager
 import panel as pn, holoviews as hv
@@ -88,23 +87,6 @@ class Clustering2PageView:
 
         self._main.append(grid)
         return self._result_panels
-    
-    def replace_placeholder_with_success(self, index, min_dist, n_neighbors):
-        """Replace a placeholder at the given index with a success placeholder."""
-        
-        if index < len(self._result_columns):
-            success_placeholder = UmapEmbeddingSuccessPlaceholder(
-                min_dist,
-                n_neighbors,
-                sizing_mode='stretch_both'
-            )
-            
-            # Replace content in the column wrapper (isolated update)
-            column_wrapper = self._result_columns[index]
-            column_wrapper.objects = [success_placeholder]
-            
-            # Update the reference in result_panels
-            self._result_panels[index] = success_placeholder
 
     def replace_placeholder_with_umap_embedding(self, index, min_dist, n_neighbors, umap_data_dict: dict):
         """Replace a placeholder at the given index with a UMAP plot."""
