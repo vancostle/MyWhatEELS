@@ -2,12 +2,12 @@ import panel as pn
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from whateels.components import CustomPage
+    from whateels.templates import GeneralPageTemplate
 
 class ColorPickerModal(pn.Column):
     def __init__(
         self, 
-        custom_page : "CustomPage",
+        custom_page : "GeneralPageTemplate",
         title="Modal Color Picker", 
         initial_color="#1f77b4", 
         on_color_selected=None,

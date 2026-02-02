@@ -1,10 +1,11 @@
+
 import panel as pn
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate
 
-class InfoModal(pn.Column):
+class ExtraUmapParamsModal(pn.Column):
     def __init__(
         self,
         custom_page : "GeneralPageTemplate",
