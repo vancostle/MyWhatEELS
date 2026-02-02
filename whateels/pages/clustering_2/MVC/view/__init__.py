@@ -4,10 +4,8 @@ from .layouts import (
     UmapEmbeddingPlaceholder, 
 )
 from whateels.components import ModalManager
-import panel as pn, holoviews as hv
-
-# Load HoloViews extension for plotting
-hv.extension('bokeh') # type: ignore
+import panel as pn
+import plotly.graph_objs as go
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -21,7 +19,7 @@ class Clustering2PageView:
         pn.state.notifications.position = 'bottom-left' # type: ignore
 
         self._main = Clustering2MainLayout()
-        self._right_sidebar = Clustering2RightSidebarLayout()
+        self._right_sidebar = Clustering2RightSidebarLayout(model)
         
         self._modal_manager = ModalManager(custom_page)
         
@@ -93,19 +91,30 @@ class Clustering2PageView:
         
         if index < len(self._result_columns):
             emb = umap_data_dict[f'umap_data_{min_dist}_{n_neighbors}'].embedding_
-            points = hv.Points(emb, kdims=['x', 'y']).opts(
-                toolbar=None, 
-                fill_alpha=0.7, 
-                bgcolor='white',
-                color='steelblue',
-                line_alpha=0, 
-                size=3, 
-                xaxis=None, 
-                yaxis=None,
-                shared_axes=False,
-                title=f'UMAP on min_dist={min_dist}, n_neighbors={n_neighbors}'
+            
+            # Create Plotly scatter plot
+            fig = go.Figure(data=go.Scatter(
+                x=emb[:, 0],
+                y=emb[:, 1],
+                mode='markers',
+                marker=dict(
+                    size=3,
+                    color='steelblue',
+                    opacity=0.7,
+                    line=dict(width=0)
+                )
+            ))
+            
+            fig.update_layout(
+                title=f'UMAP on min_dist={min_dist}, n_neighbors={n_neighbors}',
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                plot_bgcolor='white',
+                showlegend=False,
+                margin=dict(l=0, r=0, t=30, b=0)
             )
-            plot_panel = pn.panel(points, sizing_mode='stretch_both')
+            
+            plot_panel = pn.pane.Plotly(fig, sizing_mode='stretch_both')
             column_wrapper = self._result_columns[index]
             column_wrapper.objects = [plot_panel]
             self._result_panels[index] = plot_panel

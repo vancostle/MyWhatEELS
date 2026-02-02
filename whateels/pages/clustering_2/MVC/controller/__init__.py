@@ -69,7 +69,13 @@ class Clustering2PageController:
             count=1
         )
         
-    def _start_compute_umap_embedding(self, combinations : list[tuple[float, int]], result_panels, n_components : int, metric : str) -> None:
+    def _start_compute_umap_embedding(
+        self, 
+        combinations : list[tuple[float, int]], 
+        result_panels, 
+        n_components : int, 
+        metric : str
+    ) -> None:
         """Start UMAP calculation sequentially for each combination."""
         
         n_components = n_components  # Capture n_components for use in nested function
@@ -91,13 +97,13 @@ class Clustering2PageController:
             # Set current placeholder to loading state
             result_panels[index].is_loading = True
             min_dist, n_neighbors = combinations[index]
-            umap_data_dict = dict()
+            self._model.umap_data_dict = dict()  # Reset UMAP data dict for this computation
             
             def compute_and_callback():
                 # This runs in a separate thread to avoid blocking UI
-                nonlocal umap_data_dict, n_components, metric
+                nonlocal n_components, metric
                 umap_data = self._compute_umap_embedding_event(min_dist, n_neighbors, n_components, metric)
-                umap_data_dict.update(umap_data) # Get UMAP data
+                self._model.umap_data_dict.update(umap_data) # Get UMAP data
                 # Execute callback on main thread (thread-safe method for Panel)
                 pn.state.execute(on_complete)
             
@@ -107,7 +113,7 @@ class Clustering2PageController:
                     index, 
                     min_dist, 
                     n_neighbors, 
-                    umap_data_dict,
+                    self._model.umap_data_dict,
                 )
             
                 # Process next placeholder

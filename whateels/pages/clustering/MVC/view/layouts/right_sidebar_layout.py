@@ -1,7 +1,7 @@
 import panel as pn, json, numpy as np
 
 from whateels.helpers.in_memory_file import InMemoryFile
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ....MVC import ClusteringModel
 

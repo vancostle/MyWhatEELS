@@ -1,7 +1,13 @@
-import panel as pn, param
+import panel as pn, param, pickle
 
 from whateels.components import SimpleDetails, ToggleButton
+from whateels.helpers.in_memory_file import InMemoryFile
+
 from bokeh.models import Tooltip
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ...model import Clustering2PageModel
 
 class _Clustering2RightSidebarParams(param.Parameterized):
     min_eloss = param.Number(
@@ -50,8 +56,8 @@ class Clustering2RightSidebarLayout(pn.Column):
     
     _STRETCH_WIDTH = "stretch_width"
     
-    def __init__(self):
-        
+    def __init__(self, model: "Clustering2PageModel"):
+        self._model = model
         self._params = _Clustering2RightSidebarParams()
                 
         self._min_cut_signal = pn.widgets.FloatInput(
@@ -231,14 +237,36 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        self._download_results_button = pn.widgets.Button(
-            name='Download Results',
-            button_type='primary',
-            height=55,
-            margin=(10,0,0,0),
+        self._download_results_button = pn.widgets.FileDownload(
+            label="Download Results",
+            button_type="primary",
             sizing_mode=self._STRETCH_WIDTH,
-            disabled=True
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
         )
+        
+        self._download_results_button.disabled = True
+        
+        def create_file():            
+            umap_data_dict = self._model.umap_data_dict
+            
+            if umap_data_dict is None:
+                return b""
+            
+            filename = f"umap_results.pkl"
+
+            if (self._download_results_button is not None):
+                self._download_results_button.filename = filename
+
+            pn.state.notifications.success(f"Clustering results saved as {filename}", duration=5000) #type: ignore
+
+            return InMemoryFile(
+                pickle.dumps(umap_data_dict), 
+                name=filename, 
+            )
+        
+        self._download_results_button.callback = pn.bind(create_file)
         
         compute_umap_embedding_content = pn.Column(
             n_neighbors_content,
@@ -276,5 +304,5 @@ class Clustering2RightSidebarLayout(pn.Column):
     def compute_umap_embedding_run_button(self) -> ToggleButton:
         return self._compute_umap_embedding_run_button
     @property
-    def download_results_button(self) -> pn.widgets.Button:
+    def download_results_button(self) -> pn.widgets.FileDownload:
         return self._download_results_button
