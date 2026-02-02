@@ -46,6 +46,8 @@ class Clustering2PageController:
         # Start UMAP computation for all parameter combinations
         self._model.is_umap_computing = True
         self._model.was_umap_computing_canceled = False # Reset cancellation flag
+        self._model.completed_umap_count = 0 # Reset completed count
+        self._view.right_sidebar.download_results_button.disabled = True # Disable download button during computation
         
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
@@ -82,16 +84,27 @@ class Clustering2PageController:
         metric = metric  # Capture metric for use in nested function
         
         def process_next(index):
-            if index >= len(combinations):
-                pn.state.notifications.success("UMAP embedding computations completed.") # type: ignore
-                self._model.is_umap_computing = False
-                self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
-                return
-            
+            # Check cancellation first, before checking completion
             if self._model.was_umap_computing_canceled:
+                print("UMAP computation cancelled by user.")
                 pn.state.notifications.warning("UMAP embedding computations cancelled.", duration=5000) # type: ignore
                 self._model.is_umap_computing = False
                 self._view.right_sidebar.compute_umap_embedding_run_button.disabled = False
+                
+                # Only enable download button if at least one computation completed
+                if self._model.completed_umap_count > 0:
+                    self._view.right_sidebar.download_results_button.disabled = False
+                return
+            
+            if index >= len(combinations):
+                pn.state.notifications.success("UMAP embedding computations completed.") # type: ignore
+                
+                self._model.is_umap_computing = False
+                self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
+                
+                # Enable download button if at least one computation completed
+                if self._model.completed_umap_count > 0:
+                    self._view.right_sidebar.download_results_button.disabled = False
                 return
             
             # Set current placeholder to loading state
@@ -115,6 +128,9 @@ class Clustering2PageController:
                     n_neighbors, 
                     self._model.umap_data_dict,
                 )
+                
+                # Increment completed count
+                self._model.completed_umap_count += 1
             
                 # Process next placeholder
                 process_next(index + 1)
