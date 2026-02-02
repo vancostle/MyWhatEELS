@@ -35,7 +35,6 @@ class HomePageMainLayout(pn.Column):
         
     def _create_layout(self) -> pn.Column:
         """Create the main layout structure."""
-
         return pn.Column(
             self._no_file_placeholder,
             sizing_mode=self._STRETCH_BOTH

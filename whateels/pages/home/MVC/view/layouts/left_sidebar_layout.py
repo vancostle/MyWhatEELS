@@ -4,21 +4,22 @@ from whateels.components import FileUploader
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
-    from ....MVC import HomePageModel
+    from ....MVC import HomePageModel  
 
 class HomePageLeftSidebar(pn.Column):
     
     _STRETCH_WIDTH = 'stretch_width'
     
-    def __init__(self, model: "HomePageModel"):
+    def __init__(self, model: "HomePageModel", **kwargs):
         self._model = model
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._file_uploader: FileUploader = FileUploader() # Placeholder, will be set up below
+        self._welcome_message = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
         super().__init__(
             self._create_layout(),
-            sizing_mode=self._STRETCH_WIDTH
+            **kwargs
         )
 
     @property
@@ -29,6 +30,10 @@ class HomePageLeftSidebar(pn.Column):
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
         return self._dataset_info
+    @property
+    def welcome_message(self) -> Optional[pn.viewable.Viewable]:
+        """Welcome message component displayed in the sidebar."""
+        return self._welcome_message
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
         """Set the last dataset info component (must be a Panel Viewable)."""
@@ -41,6 +46,25 @@ class HomePageLeftSidebar(pn.Column):
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
+
+        self._welcome_message = pn.Column(
+            pn.pane.Markdown(
+                """
+                ### Welcome to WhatEELS!
+                
+                Relax, get yourself a cup of coffee  
+                and get ready to analyse some EELS data.
+                """,
+                sizing_mode=self._STRETCH_WIDTH
+            ),
+            pn.pane.SVG(
+                'whateels/assets/img/we_rainbow_logo.svg',
+                height=76,
+                align="center"
+            ),
+            sizing_mode=self._STRETCH_WIDTH,
+                margin=(0, 0, 20, 0)
+        )
 
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
@@ -79,11 +103,10 @@ class HomePageLeftSidebar(pn.Column):
                 initial_filename = filename_candidate
             else:
                 initial_filename = None
-        
+
         # Set up the FileUploader with model constants
         return FileUploader(
             reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
-            success_message=self._model.constants.FILE_DROPPER_SUCCESS_MESSAGE,
             force_success=forceed_success,
             initial_filename=initial_filename
         )  

@@ -12,7 +12,7 @@ import plotly.graph_objs as go
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
-from whateels.components import ResizableColumns
+from whateels.components import SplitJs
 from whateels.shared_state import AppState
 from ...controller.services.oos_loader_service import Loader_OOS
 
@@ -99,7 +99,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     def create_plots(self):        
         left_column = pn.Column(
             self.paneA,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
         right_column = pn.Column(
@@ -108,16 +109,18 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
             # slider/range debajo
             self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
-        resizable_columns = ResizableColumns(
+        splitjs = SplitJs(
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
+            margin=0
         )
  
-        return resizable_columns
+        return splitjs
 
     @override
     def create_dataset_info(self):
@@ -125,7 +128,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     
     def plot_quantification_elements(self, element_items: list["ElementItems"]):
         fig = self._figB_region(self._region_pairs)
-        fig = self._to_plotly(fig)
+        fig = fig
 
         colors = palettes.Category10[10]
         
@@ -297,7 +300,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                     q_list.append((element_item0.element, element_item1.element, q_aux))
                 i += 1
             ##state.paneC.object = pie_plot(q_list)  # Update the pie chart with the results
-            self.paneB.object = self._to_plotly(self.pie_plot(q_list))
+            self.paneB.object = self.pie_plot(q_list)
             print (f" | Quantification result: {q_list}")
         except Exception as e:
             # Handle any errors that occur during quantification
@@ -392,12 +395,19 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
         # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
-        self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
+        self.paneA = pn.pane.Plotly(
+            figA, 
+            config={"responsive": True}, 
+            sizing_mode='stretch_both',
+            margin=0
+        )
 
         # Pane B initial message (apply stored ranges if any)
         self.paneB = pn.pane.Plotly(
             self._set_ranges_and_convert(self._figB_message(" ", "Select a region for ROI")),
-            sizing_mode='stretch_both', config={"responsive": True}
+            sizing_mode='stretch_both', 
+            config={"responsive": True},
+            margin=0
         )
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---
@@ -414,20 +424,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
 
     # --- Helpers / utilities (from si_view.py adapted) ---
-    def _to_plotly(self, obj):
-        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
-        try:
-            if isinstance(obj, go.Figure):
-                return obj.to_plotly_json()
-        except Exception:
-            pass
-        try:
-            if isinstance(obj, dict):
-                return obj
-        except Exception:
-            pass
-        return obj
-
     def _figB_message(self, title, subtitle):
         fig = go.Figure()
         fig.update_xaxes(visible=False)
@@ -692,7 +688,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             # fallback: empty figure
             fig_obj = go.Figure()
         self._apply_current_ranges(fig_obj)
-        return self._to_plotly(fig_obj)
+        return fig_obj
 
 class add_cs:
     """

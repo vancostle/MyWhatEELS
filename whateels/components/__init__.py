@@ -1,6 +1,3 @@
-from .file_dropper import FileDropper
-from .custom_page import CustomPage
-from .resizable_columns import ResizableColumns
 from .uploaded_file import UploadedFile
 from .error_panel import ErrorPanel
 from .toggle_button import ToggleButton
@@ -10,18 +7,6 @@ from .dataset_information import DatasetInformation
 from .file_uploader import FileUploader
 from .simple_details import SimpleDetails
 from .details import Details
-
-__all__ = [
-    'FileDropper',
-    'CustomPage',
-    'ResizableColumns',
-    'UploadedFile',
-    'ErrorPanel',
-    'ToggleButton',
-    'ProgressTrackerMixin',
-    'ProgressDisplay',
-    'DatasetInformation',
-    'FileUploader',
-    'SimpleDetails',
-    'Details'
-]
+from .splitjs import SplitJs
+from .modal_manager import ModalManager
+from .modals import * # Import all modals

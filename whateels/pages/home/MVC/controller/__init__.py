@@ -32,13 +32,10 @@ class HomePageController:
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)
         self._data_processor = DataProcessorService(model)
-
-        if file_uploader := getattr(self._view.left_sidebar, "file_uploader", None):
-            # Set up callbacks for file uploader events directly
-            file_uploader.on_file_uploaded_callback = self._handle_file_upload
-            file_uploader.on_file_removed_callback = self._handle_file_removal
-        else:
-            raise AttributeError("HomePageView is missing 'file_uploader' attribute.")
+        
+        # Set up callbacks for file uploader events
+        self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
+        self._view.left_sidebar.file_uploader.on_file_removed_callback = self._handle_file_removal
         
         if all_datasets := getattr(self._model.app_state, "all_datasets", None):
             # Initial layout setup based on existing datasets

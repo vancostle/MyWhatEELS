@@ -27,8 +27,6 @@ class DatasetInformation(pn.Column):
         """
         Create the dataset information layout.
         """
-        STRONG_TAG_START = "<strong>"
-        STRONG_TAG_END = "</strong>"
         # File and encoding constants
         HTML_FILE = 'metadata_info.html'
         READ_MODE = 'r'
@@ -42,7 +40,7 @@ class DatasetInformation(pn.Column):
         DATASET_INFO_CLASS = ["dataset-info", "animated"]
         
         # HTML content
-        DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
+        DATASET_INFO_TITLE = f"<span class=\"dataset-info-title\">{self._title}</span>"
         
         # Spacing
         SPACER_HEIGHT_SMALL = 5
@@ -68,10 +66,16 @@ class DatasetInformation(pn.Column):
         info_rows = [
             pn.Row(
                 pn.Row(
-                    pn.pane.HTML(f"{STRONG_TAG_START}{key}:{STRONG_TAG_END}"),
+                    pn.pane.HTML(
+                        str(f'{key}:'),
+                        css_classes=["dataset-info-key"],
+                    ),
                     sizing_mode=STRETCH_WIDTH
                 ),
-                pn.pane.Str(str(value)),
+                pn.pane.HTML(
+                    str(value), 
+                    css_classes=["dataset-info-value"]
+                ),
                 sizing_mode=STRETCH_WIDTH,
                 margin=(0, 6, 0, 6)
             )

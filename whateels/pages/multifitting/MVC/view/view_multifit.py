@@ -11,7 +11,7 @@ import plotly.graph_objs as go
 
 from whateels.components.dataset_information import DatasetInformation
 from whateels.helpers import SpectrumExtractor
-from whateels.components import ResizableColumns
+from whateels.components import SplitJs
 from whateels.interfaces import IPlot
 
 from typing import override, TYPE_CHECKING
@@ -81,22 +81,25 @@ class SpectrumImageVisualizer(IPlot):
     def create_plots(self):
         left_column = pn.Column(
             self.paneA,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0,
         )
         
         # Right column: solo el pane de espectro (se eliminan botones y slider)
         right_column = pn.Column(
             self.paneB,
-            sizing_mode='stretch_both'
+            sizing_mode='stretch_both',
+            margin=0
         )
         
-        resizable_columns = ResizableColumns(
+        splitjs = SplitJs(
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
+            margin=0
         )
  
-        return resizable_columns
+        return splitjs
 
     @override
     def create_dataset_info(self):
@@ -198,12 +201,19 @@ class SpectrumImageVisualizer(IPlot):
         figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
         # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
-        self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
+        self.paneA = pn.pane.Plotly(
+            figA, 
+            config={"responsive": True}, 
+            sizing_mode='stretch_both',
+            margin=0
+)
 
         # Pane B initial message (apply stored ranges if any)
         self.paneB = pn.pane.Plotly(
             self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
-            sizing_mode='stretch_both', config={"responsive": True}
+            sizing_mode='stretch_both', 
+            config={"responsive": True},
+            margin=0
         )
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---
@@ -220,19 +230,6 @@ class SpectrumImageVisualizer(IPlot):
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
 
     # --- Helpers / utilities (from si_view.py adapted) ---
-    def _to_plotly(self, obj):
-        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
-        try:
-            if isinstance(obj, go.Figure):
-                return obj.to_plotly_json()
-        except Exception:
-            pass
-        try:
-            if isinstance(obj, dict):
-                return obj
-        except Exception:
-            pass
-        return obj
 
     def _figB_message(self, title, subtitle):
         fig = go.Figure()
@@ -420,4 +417,4 @@ class SpectrumImageVisualizer(IPlot):
             # fallback: empty figure
             fig_obj = go.Figure()
         self._apply_current_ranges(fig_obj)
-        return self._to_plotly(fig_obj)
+        return fig_obj

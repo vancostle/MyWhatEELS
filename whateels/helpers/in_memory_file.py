@@ -5,7 +5,7 @@ _logger = Logger.get_logger("in_memory_file.log", __name__)
 
 class InMemoryFile(io.BytesIO):
     """
-    In-memory file for DM processing. Acts like a file, stores data in RAM.
+    In-memory file. Acts like a file, stores data in RAM.
     """
     
     def __init__(self, data: bytes, name: str = "memory_file"):

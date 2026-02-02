@@ -10,7 +10,7 @@ from typing import Optional, List, Union
 from whateels.shared_state import AppState
 from whateels.helpers.safe_converter import SafeConverter
 
-class CustomPage(pn.template.FastListTemplate):
+class GeneralPageTemplate(pn.template.FastListTemplate):
     """
     Custom page template extending Panel's FastListTemplate.
     
@@ -18,7 +18,7 @@ class CustomPage(pn.template.FastListTemplate):
     Automatically handles CSS loading and provides default navigation if no header is specified.
     """
     
-    _DEFAULT_TITLE = "Custom Page"
+    _DEFAULT_TITLE = "General Page Template"
     _DEFAULT_HEADER_BACKGROUND = "#4d4dc9"
     _DEFAULT_HEADER_BACKGROUND_HOVER = "#3b3bb8"
 
@@ -30,11 +30,10 @@ class CustomPage(pn.template.FastListTemplate):
         header: Optional[List[pn.viewable.Viewable]] = None, 
         right_sidebar: Optional[Union[List, pn.viewable.Viewable]] = None,
         header_background: str = _DEFAULT_HEADER_BACKGROUND,
-        sidebar_width: int = 275,
         **kwargs,
     ):
         """
-        Initialize CustomPage with enhanced FastListTemplate.
+        Initialize GeneralPageTemplate with enhanced FastListTemplate.
         
         Args:
             title: Page title to display in the template
@@ -42,6 +41,7 @@ class CustomPage(pn.template.FastListTemplate):
             sidebar: Left sidebar components (optional)
             header: Header navigation components (optional, defaults to standard nav, pass [] for no header)
             right_sidebar: Right sidebar components (optional)
+            modal: Modal area components (optional)
             header_background: Background color for the header (default: green)
             sidebar_width: Width of the left sidebar in pixels (default: 275)
         """        
@@ -68,13 +68,14 @@ class CustomPage(pn.template.FastListTemplate):
 
         # Build initialization parameters dynamically
         init_params = {
+            'logo': 'whateels/assets/img/we_whole_name_mixed_v0.svg',
+            'favicon': 'whateels/assets/img/we_white_logo.ico',
             'title': title,
             'main': main,
             'header': header,
             'theme_toggle': False,  # Disable theme toggle for consistency
             'theme': 'default',  # Default theme
             'header_background': header_background,
-            'sidebar_width': sidebar_width,  # Set sidebar width
         }
         
         # Only add sidebar parameters if they have content
@@ -100,7 +101,6 @@ class CustomPage(pn.template.FastListTemplate):
         """
         
         LINK_DISABLE_CLASS = "disable-link"
-        LINK_ENABLE_CLASS = "enable-link"
         LINK_ENABLE_ANIMATION_CLASS = "enable-link-animation"
                 
         navigation_links = [
@@ -114,6 +114,12 @@ class CustomPage(pn.template.FastListTemplate):
         clustering_a_element = f'<a href="{clustering_href}" class="{clustering_class}">Clustering</a>'
         
         navigation_links.append((clustering_a_element,"Clustering"))
+        
+        clustering_2_href = f'/clustering-2?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
+        clustering_2_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
+        clustering_2_a_element = f'<a href="{clustering_2_href}" class="{clustering_2_class}">Clustering 2</a>'
+        
+        navigation_links.append((clustering_2_a_element,"Clustering 2"))
         
         quantification_href = f'/quantification?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
         quantification_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS

@@ -1,7 +1,7 @@
-from whateels.components import CustomPage
+from whateels.templates import GeneralPageTemplate
 from .MVC import HomePageModel, HomePageController, HomePageView
 
-class HomePage(CustomPage):
+class HomePage(GeneralPageTemplate):
     """
     HomePage class for the WhatEELS application.
     This class extends CustomPage to create a specific home page layout.
@@ -11,10 +11,10 @@ class HomePage(CustomPage):
         model = HomePageModel()
         view = HomePageView(model)
         HomePageController(model, view)
-
+        
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.left_sidebar],
-            sidebar_width=320
+            sidebar=[view.left_sidebar, view.left_sidebar.welcome_message],
+            sidebar_width=260
         )

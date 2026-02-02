@@ -1,13 +1,15 @@
+:root {
+    --inner-panel-padding: 10px;
+}
+
 #input {
     margin:0px;
     position: relative;
 }
 
 #input:has(ul:not(:empty))::before {
-    content: 'Reading File...';
+    content: 'Reading File';
 
-    font-size: 16px;
-    color: black;
     font-weight: normal;
     position: absolute;
     top: 49%;
@@ -15,14 +17,14 @@
     transform: translate(-50%, -50%);
     z-index: 99;
 
-    background-color: #f7f7f7;
+    background-color: var(--panel-surface-color, #f1f1f1);
     width: 100%;
     height: 101%;
     
     display: flex;
     align-items: center;
 
-    padding-left: 30%;
+    padding-left: 27%;
 }
 
 #input:has(ul:not(:empty)):after {
@@ -50,7 +52,7 @@
     position: relative;
 
     height: 67px;
-    box-shadow: 0 0 5px #d8d8d8;
+    box-shadow: 0px 0px 5px #d8d8d8;
 }
 
 .filedropper {
@@ -63,30 +65,32 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: calc(100% - var(--inner-panel-padding) * 2);
+    height: calc(100% - var(--inner-panel-padding) * 2);
 
     display: flex;
     justify-content: center;
     align-items: center;
 
-    padding: 0 40px;
+    padding: 0 20px;
 
     z-index: 0;
     transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
     will-change: transform;
+
+    margin: var(--inner-panel-padding);
+    border-radius: 4px;
 }
 
 .filedropper-container ~ .success-panel {
     background-color: #38a170;
-    transform: translateX(100%);
+    transform: translateX(calc(100% + var(--inner-panel-padding) * 2));
     z-index: 2;
 }
 
-
 .filedropper-container ~ .error-panel {
     background-color: #e74c3c;
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% - var(--inner-panel-padding) * 2));
     z-index: 2;
 }
 
@@ -94,36 +98,50 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+
+    position: relative;
 }
 
 .success-message-text, .error-message-text {
     color: white;
-    font-size: 16px;
-    font-weight: normal;
+    font-size: 12px;
     margin: 0;
-    width: 100%;
+    width: 85%;
     height: 100%;
 
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: start;
+}
+
+:host(.solid) .bk-btn.bk-btn-default {
+    color: transparent !important;
+    background-color: #1b650c !important;
+    transition: background-color 0.2s;
+}
+
+:host(.solid) .bk-btn.bk-btn-default:hover {
+    background-color: white !important;
 }
 
 .remove-file-button {
     border-radius: 100%;
     overflow: hidden;
-    width: 25px;
-    height: 25px;
+    width: 20px;
+    height: 20px;
+    min-height: 20px;
     display: grid;
     place-content: center;
-    position: relative;
+    position: absolute;
+    right: -0;
+    top: 50%;
+    transform: translateY(-50%);
     font-family: 'Arial', sans-serif;
     font-weight: bold;
     transition: background 0.2s;
 }
 
 .remove-file-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
 }
 
@@ -133,9 +151,9 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 16px;
+    width: 14px;
     height: 3px;
-    background: #222;
+    background: white;
     border-radius: 2px;
     transition: background 0.2s, transform 0.2s;
     pointer-events: none;
@@ -148,11 +166,7 @@
 }
 .remove-file-button:hover::before,
 .remove-file-button:hover::after {
-    background: #e74c3c;
-    transform: translate(-50%, -50%) scaleX(1.2) scaleY(1.2) rotate(45deg);
-}
-.remove-file-button:hover::after {
-    transform: translate(-50%, -50%) scaleX(1.2) scaleY(1.2) rotate(-45deg);
+    background: #222;
 }
 
 /* .remove-file-button::before,

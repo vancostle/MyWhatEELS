@@ -15,7 +15,7 @@ Features:
 import panel as pn
 from typing import Optional, Callable
 
-
+#TODO: Consider delete this mixin if not widely used across views.
 class ProgressTrackerMixin:
     """
     Mixin class providing progress tracking capabilities for View classes.

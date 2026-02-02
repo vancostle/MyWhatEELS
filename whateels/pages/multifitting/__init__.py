@@ -1,7 +1,7 @@
-from whateels.components import CustomPage
+from whateels.templates import GeneralPageTemplate
 from .MVC import Model, Controller, View
 
-class MultiFitting(CustomPage):
+class MultiFitting(GeneralPageTemplate):
     """
     MultiFitting page for the WhatEELS application.
     """
