@@ -49,14 +49,6 @@ class Clustering2PageController:
         self._model.completed_umap_count = 0 # Reset completed count
         self._view.right_sidebar.download_results_button.disabled = True # Disable download button during computation
         
-        # print all params for debugging
-        print("Starting UMAP embedding computations with parameters:")
-        print(f"min_dist: {self._view.right_sidebar.params.min_dist}")
-        print(f"n_neighbors: {self._view.right_sidebar.params.n_neighbors}")
-        print(f"n_components: {self._view.right_sidebar.params.n_components}")
-        print(f"metric: {self._view.right_sidebar.params.metric}")
-        print(f"random_state: {self._view.right_sidebar.params.random_state}")
-        
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
         n_components = SafeConverter.to_int(self._view.right_sidebar.params.n_components, default=2)
