@@ -1,7 +1,7 @@
 from .layouts import (
     Clustering2MainLayout, 
     Clustering2RightSidebarLayout, 
-    UmapEmbeddingPlaceholder, 
+    UmapEmbeddingPlaceholder,
 )
 from whateels.components import ModalManager
 import panel as pn
@@ -21,7 +21,7 @@ class Clustering2PageView:
         self._modal_manager = ModalManager(custom_page)
 
         self._main = Clustering2MainLayout()
-        self._right_sidebar = Clustering2RightSidebarLayout(model, self._modal_manager)
+        self._right_sidebar = Clustering2RightSidebarLayout(model, custom_page, self._modal_manager)
         
         self._result_panels = []  # Store as instance variable
         self._result_rows = []  # Store rows for easy access

@@ -1,5 +1,3 @@
 from .main_layout import Clustering2MainLayout
 from .right_sidebar_layout import Clustering2RightSidebarLayout
 from .placeholders.umap_embedding_placeholder import UmapEmbeddingPlaceholder
-
-from .modals.extra_umap_params_modal import ExtraUmapParamsModal

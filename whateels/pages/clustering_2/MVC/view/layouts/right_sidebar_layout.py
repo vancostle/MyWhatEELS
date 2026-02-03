@@ -2,6 +2,7 @@ import panel as pn, param, pickle
 
 from whateels.components import SimpleDetails, ToggleButton
 from whateels.helpers.in_memory_file import InMemoryFile
+from ..layouts.modals import ExtraUmapParamsModal
 
 from bokeh.models import Tooltip
 
@@ -9,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import Clustering2PageModel
     from whateels.components import ModalManager
+    from whateels.templates import GeneralPageTemplate
 
 class _Clustering2RightSidebarParams(param.Parameterized):
     min_eloss = param.Number(
@@ -57,10 +59,27 @@ class Clustering2RightSidebarLayout(pn.Column):
     
     _STRETCH_WIDTH = "stretch_width"
     
-    def __init__(self, model: "Clustering2PageModel", modal_manager: "ModalManager"):
+    def __init__(self, model: "Clustering2PageModel", custom_page: "GeneralPageTemplate", modal_manager: "ModalManager"):
         self._model = model
         self._modal_manager = modal_manager
         self._params = _Clustering2RightSidebarParams()
+        
+        def on_modal_close(params):
+            # Update the existing params with values from modal
+            self._params.n_components = params.get("n_components", self._params.n_components)
+            self._params.metric = params.get("metric", self._params.metric)
+            self._params.random_state = params.get("random_state", self._params.random_state)
+        
+        self._modal_manager.register_modal(
+            'Extra UMAP Parameters',
+            ExtraUmapParamsModal(
+                custom_page=custom_page,
+                title=model.extra_umap_params_key,
+                on_close=on_modal_close,
+                width=400,
+                styles={"padding": "16px"}
+            )
+        )
                 
         self._min_cut_signal = pn.widgets.FloatInput(
             name=type(self._params).param.min_eloss.label,
@@ -167,59 +186,6 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        n_components = pn.widgets.IntInput(
-            name=type(self._params).param.n_components.label,
-            value=type(self._params).param.n_components.default,
-            step=1,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        def validate_n_components(event):
-            value = event.new
-            try:
-                int_value = int(value)
-                if int_value >= 1:
-                    self._params.n_components = int_value
-                else:
-                    raise ValueError
-            except ValueError:
-                n_components.value = event.old
-        
-        n_components.param.watch(validate_n_components, 'value')
-        
-        metric = pn.widgets.Select(
-            name=type(self._params).param.metric.label,
-            options=["euclidean", "manhattan", "chebyshev", "minkowski", "cosine"],
-            value=type(self._params).param.metric.default,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        def on_metric_change(event):
-            value = event.new
-            self._params.metric = value
-        
-        metric.param.watch(on_metric_change, 'value')
-        
-        random_state = pn.widgets.IntInput(
-            name=type(self._params).param.random_state.label,
-            value=type(self._params).param.random_state.default,
-            step=1,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        def validate_random_state(event):
-            value = event.new
-            try:
-                int_value = int(value)
-                if int_value >= 0:
-                    self._params.random_state = int_value
-                else:
-                    raise ValueError
-            except ValueError:
-                random_state.value = event.old
-                
-        random_state.param.watch(validate_random_state, 'value')
-        
         SVG = """
             <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
@@ -261,6 +227,8 @@ class Clustering2RightSidebarLayout(pn.Column):
                 "border-radius": "6px"
             },
         )
+        
+        extra_umap_inputs_button.on_click(lambda _ : modal_manager.open_modal(model.extra_umap_params_key))
 
         self._compute_umap_embedding_run_button = ToggleButton(
             height=55,
@@ -315,9 +283,6 @@ class Clustering2RightSidebarLayout(pn.Column):
         compute_umap_embedding_content = pn.Column(
             n_neighbors_content,
             min_dist_content,
-            n_components,
-            metric,
-            random_state,
             pn.Row(
                 pn.Column(
                     extra_umap_inputs_button,

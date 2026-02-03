@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..templates.general_page_template import GeneralPageTemplate
+
 class ModalManager:
     def __init__(self, custom_page: "GeneralPageTemplate"):
         self._custom_page = custom_page
