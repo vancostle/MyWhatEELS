@@ -18,10 +18,10 @@ class Clustering2PageView:
         # Set notification position
         pn.state.notifications.position = 'bottom-left' # type: ignore
 
-        self._main = Clustering2MainLayout()
-        self._right_sidebar = Clustering2RightSidebarLayout(model)
-        
         self._modal_manager = ModalManager(custom_page)
+
+        self._main = Clustering2MainLayout()
+        self._right_sidebar = Clustering2RightSidebarLayout(model, self._modal_manager)
         
         self._result_panels = []  # Store as instance variable
         self._result_rows = []  # Store rows for easy access

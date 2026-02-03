@@ -3,184 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Notification Test</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            text-align: center;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        button {
-            padding: 12px 30px;
-            font-size: 16px;
-            margin: 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        #startBtn {
-            background: #10b981;
-            color: white;
-        }
-        #startBtn:hover {
-            background: #059669;
-            transform: scale(1.05);
-        }
-        #stopBtn {
-            background: #ef4444;
-            color: white;
-        }
-        #stopBtn:hover {
-            background: #dc2626;
-            transform: scale(1.05);
-        }
-        #stopBtn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .status {
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        .status.success {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        .status.error {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        .status.info {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-    </style>
+    <title>Document</title>
 </head>
 <body>
-    <div class="container">
-        <h1>Browser Notification Test</h1>
-        <p>Click the button to start receiving notifications every 3 seconds</p>
-        <button id="startBtn">Start Notifications</button>
-        <button id="stopBtn" disabled>Stop Notifications</button>
-        <div id="status" class="status" style="display: none;"></div>
-        <p style="margin-top: 20px; color: #666; font-size: 14px;">
-            Count: <span id="count">0</span>
-        </p>
-    </div>
-
-    <script>
-        let intervalId = null;
-        let count = 0;
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const statusDiv = document.getElementById('status');
-        const countSpan = document.getElementById('count');
-
-        function showStatus(message, type) {
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-            statusDiv.style.display = 'block';
-        }
-
-        function showNotification() {
-            count++;
-            countSpan.textContent = count;
-            
-            if (Notification.permission === "granted") {
-                new Notification("Test Notification #" + count, {
-                    body: `This is notification number ${count}\nTime: ${new Date().toLocaleTimeString()}`,
-                    icon: "https://via.placeholder.com/64/10b981/ffffff?text=✓",
-                    badge: "https://via.placeholder.com/64/10b981/ffffff?text=✓",
-                    requireInteraction: false,
-                    silent: false
-                });
-                showStatus(`Notification ${count} sent!`, 'success');
-            }
-        }
-
-        async function requestPermission() {
-            if (!("Notification" in window)) {
-                showStatus("This browser does not support notifications", 'error');
-                return false;
-            }
-
-            if (Notification.permission === "granted") {
-                return true;
-            }
-
-            if (Notification.permission !== "denied") {
-                const permission = await Notification.requestPermission();
-                if (permission === "granted") {
-                    showStatus("Permission granted! Starting notifications...", 'success');
-                    return true;
-                } else {
-                    showStatus("Permission denied. Cannot show notifications.", 'error');
-                    return false;
-                }
-            } else {
-                showStatus("Notifications are blocked. Enable them in browser settings.", 'error');
-                return false;
-            }
-        }
-
-        startBtn.addEventListener('click', async function() {
-            const hasPermission = await requestPermission();
-            
-            if (hasPermission) {
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
-                
-                // Show first notification immediately
-                showNotification();
-                
-                // Then show one every 20 seconds
-                intervalId = setInterval(showNotification, 20000);
-                showStatus("Notifications running every 20 seconds...", 'info');
-            }
-        });
-
-        stopBtn.addEventListener('click', function() {
-            if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-                startBtn.disabled = false;
-                stopBtn.disabled = true;
-                showStatus("Notifications stopped.", 'info');
-            }
-        });
-
-        // Check permission status on load
-        window.addEventListener('load', function() {
-            if ("Notification" in window) {
-                if (Notification.permission === "granted") {
-                    showStatus("Ready! Click 'Start Notifications' to begin.", 'success');
-                } else if (Notification.permission === "denied") {
-                    showStatus("Notifications blocked. Please enable in browser settings.", 'error');
-                } else {
-                    showStatus("Click 'Start Notifications' to request permission.", 'info');
-                }
-            }
-        });
-    </script>
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="deepskyblue" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+            <circle cx="14" cy="6" r="2" fill="deepskyblue" stroke="deepskyblue" />
+            <line x1="4" y1="6" x2="12" y2="6" />
+            <line x1="16" y1="6" x2="20" y2="6" />
+            <circle cx="8" cy="12" r="2" fill="deepskyblue" stroke="deepskyblue" />
+            <line x1="4" y1="12" x2="6" y2="12" />
+            <line x1="10" y1="12" x2="20" y2="12" />
+            <circle cx="17" cy="18" r="2" fill="deepskyblue" stroke="deepskyblue" />
+            <line x1="4" y1="18" x2="15" y2="18" />
+            <line x1="19" y1="18" x2="20" y2="18" />
+            </svg>
 </body>
 </html>

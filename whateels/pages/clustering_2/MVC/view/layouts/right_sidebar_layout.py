@@ -8,6 +8,7 @@ from bokeh.models import Tooltip
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...model import Clustering2PageModel
+    from whateels.components import ModalManager
 
 class _Clustering2RightSidebarParams(param.Parameterized):
     min_eloss = param.Number(
@@ -56,8 +57,9 @@ class Clustering2RightSidebarLayout(pn.Column):
     
     _STRETCH_WIDTH = "stretch_width"
     
-    def __init__(self, model: "Clustering2PageModel"):
+    def __init__(self, model: "Clustering2PageModel", modal_manager: "ModalManager"):
         self._model = model
+        self._modal_manager = modal_manager
         self._params = _Clustering2RightSidebarParams()
                 
         self._min_cut_signal = pn.widgets.FloatInput(
@@ -217,6 +219,48 @@ class Clustering2RightSidebarLayout(pn.Column):
                 random_state.value = event.old
                 
         random_state.param.watch(validate_random_state, 'value')
+        
+        SVG = """
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+            <circle cx="14" cy="6" r="2" />
+            <line x1="4" y1="6" x2="12" y2="6" />
+            <line x1="16" y1="6" x2="20" y2="6" />
+            <circle cx="8" cy="12" r="2" />
+            <line x1="4" y1="12" x2="6" y2="12" />
+            <line x1="10" y1="12" x2="20" y2="12" />
+            <circle cx="17" cy="18" r="2" />
+            <line x1="4" y1="18" x2="15" y2="18" />
+            <line x1="19" y1="18" x2="20" y2="18" />
+            </svg>
+        """
+        ACTIVE_SVG = """
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" style="--secondary-whateels-background: #b63fb5;" stroke="var(--secondary-whateels-background)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+            <circle cx="14" cy="6" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
+            <line x1="4" y1="6" x2="12" y2="6" />
+            <line x1="16" y1="6" x2="20" y2="6" />
+            <circle cx="8" cy="12" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
+            <line x1="4" y1="12" x2="6" y2="12" />
+            <line x1="10" y1="12" x2="20" y2="12" />
+            <circle cx="17" cy="18" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
+            <line x1="4" y1="18" x2="15" y2="18" />
+            <line x1="19" y1="18" x2="20" y2="18" />
+            </svg>
+        """
+
+        extra_umap_inputs_button = pn.widgets.ButtonIcon(
+            icon=SVG, 
+            active_icon=ACTIVE_SVG, 
+            size='2em',
+            margin=(0, 0, 0, 10),
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px"
+            },
+        )
 
         self._compute_umap_embedding_run_button = ToggleButton(
             height=55,
@@ -233,7 +277,7 @@ class Clustering2RightSidebarLayout(pn.Column):
                     "button_type": "danger",
                 }
             },
-            margin=(20,0,0,0),
+            margin=0,
             sizing_mode=self._STRETCH_WIDTH
         )
         
@@ -274,7 +318,23 @@ class Clustering2RightSidebarLayout(pn.Column):
             n_components,
             metric,
             random_state,
-            self._compute_umap_embedding_run_button,
+            pn.Row(
+                pn.Column(
+                    extra_umap_inputs_button,
+                    margin=0,
+                    height=55,
+                    styles={
+                        "display": "flex", 
+                        "align-items": "center", 
+                        "justify-content": "center",
+                    }
+                ),
+                self._compute_umap_embedding_run_button,
+                sizing_mode=self._STRETCH_WIDTH,
+                height=55,
+                margin=(10, 0, 0, 0),
+                styles={"display": "flex", "justify-content": "center", "align-items": "center", "gap": "10px"}
+            ),
             self._download_results_button,
         )
         compute_umap_embedding_details = SimpleDetails(
