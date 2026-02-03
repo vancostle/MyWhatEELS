@@ -1,5 +1,6 @@
 from .layouts import (
-    Clustering2MainLayout, 
+    Clustering2MainLayout,
+    Clustering2LeftSidebarLayout,
     Clustering2RightSidebarLayout, 
     UmapEmbeddingPlaceholder,
 )
@@ -21,6 +22,7 @@ class Clustering2PageView:
         self._modal_manager = ModalManager(custom_page)
 
         self._main = Clustering2MainLayout()
+        self._left_sidebar = Clustering2LeftSidebarLayout() 
         self._right_sidebar = Clustering2RightSidebarLayout(model, custom_page, self._modal_manager)
         
         self._result_panels = []  # Store as instance variable
@@ -30,11 +32,12 @@ class Clustering2PageView:
     @property
     def main(self):
         return self._main
-    
+    @property
+    def left_sidebar(self):
+        return self._left_sidebar
     @property
     def right_sidebar(self):
         return self._right_sidebar
-    
     @property
     def modals(self):
         return self._modal_manager.modals

@@ -119,7 +119,7 @@ class Clustering2PageController:
                 self._model.umap_data_dict.update(umap_data) # Get UMAP data
                 # Execute callback on main thread (thread-safe method for Panel)
                 pn.state.execute(on_complete)
-            
+
             #  Callback to be called when calculation is done
             def on_complete():
                 self._view.replace_placeholder_with_umap_embedding(
