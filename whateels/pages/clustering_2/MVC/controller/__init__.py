@@ -47,6 +47,7 @@ class Clustering2PageController:
         self._model.is_umap_computing = True
         self._model.was_umap_computing_canceled = False # Reset cancellation flag
         self._model.completed_umap_count = 0 # Reset completed count
+        self._model.umap_data_dict = dict()  # Reset UMAP data dict for all computations
         self._view.right_sidebar.download_results_button.disabled = True # Disable download button during computation
         
         min_dist_list = self._view.right_sidebar.params.min_dist
@@ -110,7 +111,6 @@ class Clustering2PageController:
             # Set current placeholder to loading state
             result_panels[index].is_loading = True
             min_dist, n_neighbors = combinations[index]
-            self._model.umap_data_dict = dict()  # Reset UMAP data dict for this computation
             
             def compute_and_callback():
                 # This runs in a separate thread to avoid blocking UI
