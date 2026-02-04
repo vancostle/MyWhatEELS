@@ -1,4 +1,4 @@
-import panel as pn, param, pickle
+import panel as pn, param, pickle, io, zipfile
 
 from whateels.components import SimpleDetails, ToggleButton
 from whateels.helpers.in_memory_file import InMemoryFile
@@ -266,7 +266,15 @@ class Clustering2RightSidebarLayout(pn.Column):
             if umap_data_dict is None:
                 return b""
             
-            filename = f"umap_results.pkl"
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for key, value in umap_data_dict.items():
+                    file_data = pickle.dumps(value)
+                    safe_key = str(key).replace("/", "_").replace("\\", "_")
+                    filename = f"{safe_key}.pkl"
+                    zip_file.writestr(filename, file_data)
+            zip_buffer.seek(0)        
+            filename = "umap_results.zip"
 
             if (self._download_results_button is not None):
                 self._download_results_button.filename = filename
@@ -274,7 +282,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             pn.state.notifications.success(f"Clustering results saved as {filename}", duration=5000) #type: ignore
 
             return InMemoryFile(
-                pickle.dumps(umap_data_dict), 
+                zip_buffer.read(), 
                 name=filename, 
             )
         
