@@ -188,7 +188,6 @@ class Clustering2PageController:
         combinations = [(min_dist, n_neighbors)]
         self._view.display_all_combination_placeholders(combinations)
         self._view.replace_placeholder_with_umap_embedding(0, min_dist, n_neighbors, umap_data_dict)
-        pn.state.notifications.success(f"UMAP data displayed from {filename}", duration=5000)  # type: ignore
     
     def _on_file_removed(self) -> None:
         """Event handler for when file is removed."""
