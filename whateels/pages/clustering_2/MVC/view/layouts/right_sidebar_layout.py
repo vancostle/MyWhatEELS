@@ -341,6 +341,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         return self._download_results_button
     
     def disable_controls(self):
+        """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
         self._min_cut_signal.disabled = True
         self._max_cut_signal.disabled = True
         
@@ -351,6 +352,8 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._compute_umap_embedding_run_button.disabled = True
         
     def enable_controls(self):
+        """ Enable controls in the right sidebar, typically called when UMAP computation is finished or when UMAP data is removed. Download button is not enabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
+        
         self._min_cut_signal.disabled = False
         self._max_cut_signal.disabled = False
         

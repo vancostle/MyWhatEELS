@@ -6,18 +6,18 @@ class DatasetInformation(pn.Column):
     """ Creates a dataset information panel displaying key metadata attributes. """
 
     def __init__(
-        self, 
-        title: str = "Dataset Information", 
-        link: str = "metadata-details", 
-        information: dict = {"No information available": "None"}, 
+        self,
+        title: str = "Dataset Information",
+        link: str = "metadata-details",
+        information: dict = {"No information available": "None"},
+        show_metadata_button: bool = True,
         **params
     ):
         LoadCSS([str(CSS_ROOT / "dataset_info.css")])
-        
         self._title = title
         self._link = link
         self._information = information
-        
+        self._show_metadata_button = show_metadata_button
         super().__init__(
             self._create_layout(),
             **params
@@ -47,16 +47,16 @@ class DatasetInformation(pn.Column):
         SPACER_HEIGHT_MEDIUM = 10
         MARGIN_ZERO = 0
 
-        # Load metadata button HTML
-        metadata_html_path = HTML_ROOT / HTML_FILE
-        with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
-            metadata_button_html = f.read()
-
-        metadata_button = pn.pane.HTML(metadata_button_html, margin=MARGIN_ZERO)
-        
+        # Optionally load metadata button HTML
+        header_items = [pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=MARGIN_ZERO)]
+        if self._show_metadata_button:
+            metadata_html_path = HTML_ROOT / HTML_FILE
+            with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
+                metadata_button_html = f.read()
+            metadata_button = pn.pane.HTML(metadata_button_html, margin=MARGIN_ZERO)
+            header_items.append(metadata_button)
         header = pn.Row(
-            pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=MARGIN_ZERO),
-            metadata_button,
+            *header_items,
             sizing_mode=STRETCH_WIDTH,
             css_classes=DATASET_INFO_HEADER_CLASS,
             margin=MARGIN_ZERO

@@ -1,7 +1,7 @@
-import panel as pn, pickle, re
+import panel as pn, pickle
 from bokeh.models import Tooltip
 
-from whateels.components import FileUploader
+from whateels.components import FileUploader, DatasetInformation
 
 from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
@@ -12,7 +12,7 @@ class Clustering2LeftSidebarLayout(pn.Column):
         self._model = model
         self._on_umap_loaded_callback: Callable = lambda *args, **kwargs: None  # Placeholder for the callback function
         self._on_file_removed_callback: Callable = lambda *args, **kwargs: None  # Placeholder for file removal callback
-        self._data_info_panel = pn.pane.Markdown("", margin=(10, 0, 0, 0))
+        self._data_info_panel = pn.Column(margin=(10, 0, 0, 0))
         
         self._file_uploader = FileUploader(
             on_file_uploaded_callback=self._on_file_uploaded,
@@ -36,6 +36,7 @@ class Clustering2LeftSidebarLayout(pn.Column):
             ),
             pn.Spacer(height=10),
             self._file_uploader,
+            pn.Spacer(height=10),
             self._data_info_panel,
             **kwargs
         )
@@ -58,16 +59,25 @@ class Clustering2LeftSidebarLayout(pn.Column):
                 f'umap_data_{min_dist}_{n_neighbors}': umap_obj
             }
             
-            # Display info
-            info_text = f"""
-                **Loaded UMAP Data:**
-                - **min_dist**: {min_dist}
-                - **n_neighbors**: {n_neighbors}
-                - **n_components**: {umap_obj.n_components}
-                - **metric**: {umap_obj.metric}
-                - **Embedding shape**: {umap_obj.embedding_.shape}
-            """
-            self._data_info_panel.object = info_text
+            # Display info using DatasetInformation component
+            info_dict = {
+                "min_dist": min_dist,
+                "n_neighbors": n_neighbors,
+                "n_components": umap_obj.n_components,
+                "metric": umap_obj.metric,
+                "random_state": umap_obj.random_state,
+                "Embedding shape": umap_obj.embedding_.shape
+            }
+            
+            dataset_info = DatasetInformation(
+                title="Loaded UMAP Data",
+                information=info_dict,
+                sizing_mode="stretch_width",
+                show_metadata_button=False
+            )
+            
+            self._data_info_panel.clear()
+            self._data_info_panel.append(dataset_info)
             
             # Call controller callback to handle display
             if self._on_umap_loaded_callback:
@@ -76,14 +86,16 @@ class Clustering2LeftSidebarLayout(pn.Column):
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            self._data_info_panel.object = f"**Error processing file**: {str(e)}"
+            error_html = pn.pane.Markdown(f"**Error processing file**: {str(e)}")
+            self._data_info_panel.clear()
+            self._data_info_panel.append(error_html)
             print(f"Error processing pickle file: {e}")
             print(f"Full traceback:\n{error_details}")
     
     def _on_file_removed(self, filename: str):
         """Handle file removal."""
         self._model.loaded_umap_data = None
-        self._data_info_panel.object = ""
+        self._data_info_panel.clear()
         
         # Call controller callback to clear display
         if self._on_file_removed_callback:
