@@ -60,20 +60,18 @@ class Clustering2LeftSidebarLayout(pn.Column):
             
             # Display info
             info_text = f"""
-**Loaded UMAP Data:**
-- **min_dist**: {min_dist}
-- **n_neighbors**: {n_neighbors}
-- **n_components**: {umap_obj.n_components}
-- **metric**: {umap_obj.metric}
-- **Embedding shape**: {umap_obj.embedding_.shape}
+                **Loaded UMAP Data:**
+                - **min_dist**: {min_dist}
+                - **n_neighbors**: {n_neighbors}
+                - **n_components**: {umap_obj.n_components}
+                - **metric**: {umap_obj.metric}
+                - **Embedding shape**: {umap_obj.embedding_.shape}
             """
             self._data_info_panel.object = info_text
             
             # Call controller callback to handle display
             if self._on_umap_loaded_callback:
                 self._on_umap_loaded_callback(min_dist, n_neighbors, umap_data_dict, filename)
-            
-            print(f"✓ Loaded UMAP result from {filename}")
                         
         except Exception as e:
             import traceback
