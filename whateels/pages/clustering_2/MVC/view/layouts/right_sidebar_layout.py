@@ -349,7 +349,6 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._extra_umap_inputs_button.disabled = True
         
         self._compute_umap_embedding_run_button.disabled = True
-        self._download_results_button.disabled = True
         
     def enable_controls(self):
         self._min_cut_signal.disabled = False
@@ -360,4 +359,3 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._extra_umap_inputs_button.disabled = False
         
         self._compute_umap_embedding_run_button.disabled = False
-        self._download_results_button.disabled = False
