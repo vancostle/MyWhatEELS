@@ -9,7 +9,7 @@ import numpy as np
 import time
 import plotly.graph_objs as go
 
-from whateels.components.dataset_information import InfoPanel
+from whateels.components.info_panel import InfoPanel
 from whateels.helpers import SpectrumExtractor
 from whateels.components import SplitJs
 from whateels.interfaces import IPlot

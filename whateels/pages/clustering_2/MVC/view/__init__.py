@@ -5,7 +5,6 @@ from .layouts import (
     UmapEmbeddingPlaceholder,
 )
 from whateels.components import ModalManager
-from whateels.helpers import LoadCSS, CSS_ROOT
 import panel as pn
 import plotly.graph_objs as go
 
@@ -19,8 +18,6 @@ class Clustering2PageView:
     def __init__(self, model: "Clustering2PageModel", custom_page: "GeneralPageTemplate") -> None:
         # Set notification position
         pn.state.notifications.position = 'bottom-left' # type: ignore
-        
-        LoadCSS([str(CSS_ROOT / "dataset_info.css")])
 
         self._modal_manager = ModalManager(custom_page)
 

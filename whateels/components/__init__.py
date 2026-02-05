@@ -3,7 +3,7 @@ from .error_panel import ErrorPanel
 from .toggle_button import ToggleButton
 from .progress_tracker_mixin import ProgressTrackerMixin
 from .progress_display import ProgressDisplay
-from .dataset_information import InfoPanel
+from .info_panel import InfoPanel
 from .file_uploader import FileUploader
 from .simple_details import SimpleDetails
 from .details import Details

@@ -13,11 +13,13 @@ class InfoPanel(pn.Column):
         show_metadata_button: bool = True,
         **params
     ):
-        LoadCSS([str(CSS_ROOT / "dataset_info.css")])
+        LoadCSS([str(CSS_ROOT / "info_panel.css")])
+
         self._title = title
         self._link = link
         self._information = information
         self._show_metadata_button = show_metadata_button
+
         super().__init__(
             self._create_layout(),
             **params
