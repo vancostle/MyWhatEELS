@@ -115,7 +115,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)
         
-        n_neighbors = pn.widgets.TextInput(
+        self._n_neighbors = pn.widgets.TextInput(
             name=type(self._params).param.n_neighbors.label,
             value=n_neighbors_str,
             placeholder="e.g., 100, 500, 900",
@@ -132,9 +132,9 @@ class Clustering2RightSidebarLayout(pn.Column):
                 else:
                     raise ValueError
             except ValueError:
-                n_neighbors.value = event.old
+                self._n_neighbors.value = event.old
         
-        n_neighbors.param.watch(validate_n_neighbors, 'value')
+        self._n_neighbors.param.watch(validate_n_neighbors, 'value')
         
         # self._n_neighbors.param.watch(self._on_n_neighbors_change, 'value')
         n_neighbors_tooltip = pn.widgets.TooltipIcon(
@@ -144,14 +144,14 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(16, 0, 0, 0)
         )
         n_neighbors_content = pn.Row(
-            n_neighbors,
+            self._n_neighbors,
             n_neighbors_tooltip,
             sizing_mode=self._STRETCH_WIDTH
         )
         
         min_dist_str = ', '.join(str(d) for d in type(self._params).param.min_dist.default)
         
-        min_dist = pn.widgets.TextInput(
+        self._min_dist = pn.widgets.TextInput(
             name=type(self._params).param.min_dist.label,
             value=min_dist_str,
             placeholder="e.g., 0.1, 0.5, 0.9",
@@ -168,11 +168,11 @@ class Clustering2RightSidebarLayout(pn.Column):
                         float_values.append(float(v))
                 self._params.min_dist = float_values
                 # Always reformat the input as floats (e.g., 5 -> 5.0)
-                min_dist.value = ', '.join(str(float(v)) for v in float_values)
+                self._min_dist.value = ', '.join(str(float(v)) for v in float_values)
             except ValueError:
-                min_dist.value = event.old
+                self._min_dist.value = event.old
 
-        min_dist.param.watch(validate_min_dist, 'value')
+        self._min_dist.param.watch(validate_min_dist, 'value')
         
         min_dist_tooltip = pn.widgets.TooltipIcon(
             value=Tooltip(
@@ -181,7 +181,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(16, 0, 0, 0)
         )
         min_dist_content = pn.Row(
-            min_dist, 
+            self._min_dist, 
             min_dist_tooltip,
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -215,7 +215,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             </svg>
         """
 
-        extra_umap_inputs_button = pn.widgets.ButtonIcon(
+        self._extra_umap_inputs_button = pn.widgets.ButtonIcon(
             icon=SVG, 
             active_icon=ACTIVE_SVG, 
             size='2em',
@@ -228,7 +228,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             },
         )
         
-        extra_umap_inputs_button.on_click(lambda _ : modal_manager.open_modal(model.extra_umap_params_key))
+        self._extra_umap_inputs_button.on_click(lambda _ : modal_manager.open_modal(model.extra_umap_params_key))
 
         self._compute_umap_embedding_run_button = ToggleButton(
             height=55,
@@ -293,7 +293,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             min_dist_content,
             pn.Row(
                 pn.Column(
-                    extra_umap_inputs_button,
+                    self._extra_umap_inputs_button,
                     margin=0,
                     height=55,
                     styles={
@@ -340,14 +340,24 @@ class Clustering2RightSidebarLayout(pn.Column):
     def download_results_button(self) -> pn.widgets.FileDownload:
         return self._download_results_button
     
-    def _disable_controls(self):
+    def disable_controls(self):
         self._min_cut_signal.disabled = True
         self._max_cut_signal.disabled = True
+        
+        self._n_neighbors.disabled = True
+        self._min_dist.disabled = True
+        self._extra_umap_inputs_button.disabled = True
+        
         self._compute_umap_embedding_run_button.disabled = True
         self._download_results_button.disabled = True
         
-    def _enable_controls(self):
+    def enable_controls(self):
         self._min_cut_signal.disabled = False
         self._max_cut_signal.disabled = False
+        
+        self._n_neighbors.disabled = False
+        self._min_dist.disabled = False
+        self._extra_umap_inputs_button.disabled = False
+        
         self._compute_umap_embedding_run_button.disabled = False
         self._download_results_button.disabled = False

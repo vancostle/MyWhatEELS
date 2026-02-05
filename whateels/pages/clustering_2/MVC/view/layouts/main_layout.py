@@ -8,5 +8,9 @@ class Clustering2MainLayout(pn.Column):
         **kwargs
     ):
         super().__init__(**kwargs)
-        self.placeholder = MainLayoutPlaceholder()
-        self.append(self.placeholder)
+        self._placeholder = MainLayoutPlaceholder()
+        self.append(self._placeholder)
+        
+    def display_placeholder(self):
+        self.clear()
+        self.append(self._placeholder)

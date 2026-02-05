@@ -11,6 +11,7 @@ class Clustering2LeftSidebarLayout(pn.Column):
     def __init__(self, model: "Clustering2PageModel", **kwargs):
         self._model = model
         self._on_umap_loaded_callback: Callable = lambda *args, **kwargs: None  # Placeholder for the callback function
+        self._on_file_removed_callback: Callable = lambda *args, **kwargs: None  # Placeholder for file removal callback
         self._data_info_panel = pn.pane.Markdown("", margin=(10, 0, 0, 0))
         
         self._file_uploader = FileUploader(
@@ -81,11 +82,19 @@ class Clustering2LeftSidebarLayout(pn.Column):
             print(f"Error processing pickle file: {e}")
             print(f"Full traceback:\n{error_details}")
     
-    def _on_file_removed(self, _: str):
+    def _on_file_removed(self, filename: str):
         """Handle file removal."""
         self._model.loaded_umap_data = None
         self._data_info_panel.object = ""
+        
+        # Call controller callback to clear display
+        if self._on_file_removed_callback:
+            self._on_file_removed_callback()
     
     def set_on_umap_loaded_callback(self, callback: Callable):
         """Register callback to be called when UMAP data is loaded."""
         self._on_umap_loaded_callback = callback
+    
+    def set_on_file_removed_callback(self, callback: Callable):
+        """Register callback to be called when file is removed."""
+        self._on_file_removed_callback = callback

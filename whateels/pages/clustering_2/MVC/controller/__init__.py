@@ -43,6 +43,7 @@ class Clustering2PageController:
         
         # Register callback for when UMAP data is loaded from file
         view.left_sidebar.set_on_umap_loaded_callback(self._on_umap_loaded_from_file)
+        view.left_sidebar.set_on_file_removed_callback(self._on_file_removed)
         
     def _on_umap_run_button_click(self) -> None:
         """Event handler for UMAP run button click."""
@@ -182,8 +183,17 @@ class Clustering2PageController:
     
     def _on_umap_loaded_from_file(self, min_dist: float, n_neighbors: int, umap_data_dict: dict, filename: str) -> None:
         """Event handler for when UMAP data is loaded from file."""
+        
+        self._view.right_sidebar.disable_controls()
+        
         combinations = [(min_dist, n_neighbors)]
         self._view.display_all_combination_placeholders(combinations)
         self._view.replace_placeholder_with_umap_embedding(0, min_dist, n_neighbors, umap_data_dict)
         pn.state.notifications.success(f"UMAP data displayed from {filename}", duration=5000)  # type: ignore
         print(f"✓ Displayed UMAP result from {filename}")
+    
+    def _on_file_removed(self) -> None:
+        """Event handler for when file is removed."""
+        self._view.main.display_placeholder()  # Show default placeholder when file is removed
+        self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
+
