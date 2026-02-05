@@ -339,3 +339,15 @@ class Clustering2RightSidebarLayout(pn.Column):
     @property
     def download_results_button(self) -> pn.widgets.FileDownload:
         return self._download_results_button
+    
+    def _disable_controls(self):
+        self._min_cut_signal.disabled = True
+        self._max_cut_signal.disabled = True
+        self._compute_umap_embedding_run_button.disabled = True
+        self._download_results_button.disabled = True
+        
+    def _enable_controls(self):
+        self._min_cut_signal.disabled = False
+        self._max_cut_signal.disabled = False
+        self._compute_umap_embedding_run_button.disabled = False
+        self._download_results_button.disabled = False

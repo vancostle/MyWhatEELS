@@ -60,12 +60,12 @@ class Clustering2LeftSidebarLayout(pn.Column):
             
             # Display info
             info_text = f"""
-**Loaded UMAP Data:**
-- **min_dist**: {min_dist}
-- **n_neighbors**: {n_neighbors}
-- **n_components**: {umap_obj.n_components}
-- **metric**: {umap_obj.metric}
-- **Embedding shape**: {umap_obj.embedding_.shape}
+                **Loaded UMAP Data:**
+                - **min_dist**: {min_dist}
+                - **n_neighbors**: {n_neighbors}
+                - **n_components**: {umap_obj.n_components}
+                - **metric**: {umap_obj.metric}
+                - **Embedding shape**: {umap_obj.embedding_.shape}
             """
             self._data_info_panel.object = info_text
             
@@ -87,5 +87,6 @@ class Clustering2LeftSidebarLayout(pn.Column):
     
     def _on_file_removed(self, _: str):
         """Handle file removal."""
+        self._view.main.clear()  # Clear the main area of the view
         self._model.loaded_umap_data = None
         self._data_info_panel.object = ""
