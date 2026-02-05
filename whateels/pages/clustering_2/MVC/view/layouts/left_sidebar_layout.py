@@ -1,7 +1,7 @@
 import panel as pn, pickle
 from bokeh.models import Tooltip
 
-from whateels.components import FileUploader, DatasetInformation
+from whateels.components import FileUploader, InfoPanel
 
 from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ class Clustering2LeftSidebarLayout(pn.Column):
                 "Embedding shape": umap_obj.embedding_.shape
             }
             
-            dataset_info = DatasetInformation(
+            dataset_info = InfoPanel(
                 title="Loaded UMAP Data",
                 information=info_dict,
                 sizing_mode="stretch_width",

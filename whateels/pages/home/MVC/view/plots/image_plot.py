@@ -13,7 +13,7 @@ pn.extension(raw_css=[
     ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
 ])
 
-from whateels.components import DatasetInformation
+from whateels.components import InfoPanel
 from whateels.interfaces import IPlot
 from typing import TYPE_CHECKING, override
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ class ImagePlot(IPlot):
         convergence_angle = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
         collection_angle = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
         
-        dataset_information = DatasetInformation(
+        dataset_information = InfoPanel(
             title="Dataset Information", 
             information={
                 "Shape": shape,

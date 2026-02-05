@@ -13,7 +13,7 @@ from whateels.helpers import SpectrumExtractor
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
-from whateels.components import DatasetInformation, SplitJs
+from whateels.components import InfoPanel, SplitJs
 from whateels.shared_state import AppState
 from whateels.interfaces import IPlot
 
@@ -139,7 +139,7 @@ class SpectrumImagePlot(IPlot):
         convergence_angle = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
         collection_angle = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
         
-        dataset_information = DatasetInformation(
+        dataset_information = InfoPanel(
             title="Dataset Information", 
             information={
                 "Shape": shape,

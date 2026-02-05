@@ -2,7 +2,7 @@ import panel as pn
 
 from whateels.helpers import CSS_ROOT, HTML_ROOT, LoadCSS
 
-class DatasetInformation(pn.Column):
+class InfoPanel(pn.Column):
     """ Creates a dataset information panel displaying key metadata attributes. """
 
     def __init__(

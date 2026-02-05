@@ -6,7 +6,7 @@ import numpy as np
 import plotly.graph_objs as go
 import xarray as xr
 
-from whateels.components import DatasetInformation
+from whateels.components import InfoPanel
 from whateels.interfaces import IPlot
 from typing import override, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -131,7 +131,7 @@ class SpectrumLinePlot(IPlot):
         convergence_angle = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
         collection_angle = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
         
-        dataset_information = DatasetInformation(
+        dataset_information = InfoPanel(
             title="Dataset Information", 
             information={
                 "Shape": shape,

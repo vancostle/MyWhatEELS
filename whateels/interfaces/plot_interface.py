@@ -1,7 +1,7 @@
 import panel as pn
 
 from abc import ABC, abstractmethod
-from whateels.components import DatasetInformation
+from whateels.components import InfoPanel
 
 class IPlot(ABC):
     """
@@ -31,7 +31,7 @@ class IPlot(ABC):
         raise NotImplementedError("Subclasses should implement create_plots and return a layout object.")
 
     @abstractmethod
-    def create_dataset_info(self) -> DatasetInformation:
+    def create_dataset_info(self) -> InfoPanel:
         """
         Create and return a DatasetInformation panel for this visualizer.
 
