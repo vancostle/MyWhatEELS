@@ -22,7 +22,7 @@ class Clustering2PageView:
         self._modal_manager = ModalManager(custom_page)
 
         self._main = Clustering2MainLayout()
-        self._left_sidebar = Clustering2LeftSidebarLayout(model) 
+        self._left_sidebar = Clustering2LeftSidebarLayout(model, view=self) 
         self._right_sidebar = Clustering2RightSidebarLayout(model, custom_page, self._modal_manager)
         
         self._result_panels = []  # Store as instance variable
