@@ -268,3 +268,11 @@ class FileUploader(pn.Column):
     def _clear_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(calc(-100% - var(--inner-panel-padding) * 2))', 'pointer-events': 'none'}
         pn.state.notifications.info(f"File was removed correctly.", duration=2000) # type: ignore
+        
+    def disable(self):
+        """Disable the file uploader."""
+        self._filedropper.disabled = True
+        
+    def enable(self):
+        """Enable the file uploader."""
+        self._filedropper.disabled = False

@@ -84,13 +84,9 @@ class Clustering2LeftSidebarLayout(pn.Column):
                 self._on_umap_loaded_callback(min_dist, n_neighbors, umap_data_dict, filename)
                         
         except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
             error_html = pn.pane.Markdown(f"**Error processing file**: {str(e)}")
             self._data_info_panel.clear()
             self._data_info_panel.append(error_html)
-            print(f"Error processing pickle file: {e}")
-            print(f"Full traceback:\n{error_details}")
     
     def _on_file_removed(self, filename: str):
         """Handle file removal."""
@@ -108,3 +104,11 @@ class Clustering2LeftSidebarLayout(pn.Column):
     def set_on_file_removed_callback(self, callback: Callable):
         """Register callback to be called when file is removed."""
         self._on_file_removed_callback = callback
+
+    def disable_controls(self):
+        """Disable file uploader controls."""
+        self._file_uploader.disable()
+        
+    def enable_controls(self):
+        """Enable file uploader controls."""
+        self._file_uploader.enable()

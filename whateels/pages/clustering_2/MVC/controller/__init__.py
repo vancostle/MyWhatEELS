@@ -53,6 +53,7 @@ class Clustering2PageController:
         self._model.completed_umap_count = 0 # Reset completed count
         self._model.umap_data_dict = dict()  # Reset UMAP data dict for all computations
         self._view.right_sidebar.download_results_button.disabled = True # Disable download button during computation
+        self._view.left_sidebar.disable_controls()  # Disable controls in the left sidebar during computation
         
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
@@ -93,6 +94,7 @@ class Clustering2PageController:
             if self._model.was_umap_computing_canceled:
                 pn.state.notifications.warning("UMAP embedding computations cancelled.", duration=5000) # type: ignore
                 self._model.is_umap_computing = False
+                self._view.left_sidebar.enable_controls()  # Re-enable controls in the left sidebar
                 self._view.right_sidebar.compute_umap_embedding_run_button.disabled = False
                 
                 # Only enable download button if at least one computation completed
@@ -104,6 +106,7 @@ class Clustering2PageController:
                 pn.state.notifications.success("UMAP embedding computations completed.") # type: ignore
                 
                 self._model.is_umap_computing = False
+                self._view.left_sidebar.enable_controls()  # Re-enable controls in the left sidebar
                 self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
                 
                 # Enable download button if at least one computation completed
