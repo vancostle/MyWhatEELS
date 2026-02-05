@@ -41,6 +41,9 @@ class Clustering2PageController:
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(True, self._on_umap_run_button_click)
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(False, self._on_umap_cancel_button_click)
         
+        # Register callback for when UMAP data is loaded from file
+        view.left_sidebar.set_on_umap_loaded_callback(self._on_umap_loaded_from_file)
+        
     def _on_umap_run_button_click(self) -> None:
         """Event handler for UMAP run button click."""
         # Start UMAP computation for all parameter combinations
@@ -176,3 +179,11 @@ class Clustering2PageController:
         self._view.disappear_non_loading_placeholders()
 
         pn.state.notifications.warning("UMAP embedding computations cancellation requested.", duration=5000) # type: ignore
+    
+    def _on_umap_loaded_from_file(self, min_dist: float, n_neighbors: int, umap_data_dict: dict, filename: str) -> None:
+        """Event handler for when UMAP data is loaded from file."""
+        combinations = [(min_dist, n_neighbors)]
+        self._view.display_all_combination_placeholders(combinations)
+        self._view.replace_placeholder_with_umap_embedding(0, min_dist, n_neighbors, umap_data_dict)
+        pn.state.notifications.success(f"UMAP data displayed from {filename}", duration=5000)  # type: ignore
+        print(f"✓ Displayed UMAP result from {filename}")

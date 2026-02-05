@@ -3,15 +3,14 @@ from bokeh.models import Tooltip
 
 from whateels.components import FileUploader
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from ...model import Clustering2PageModel
-    from .. import Clustering2PageView
 
 class Clustering2LeftSidebarLayout(pn.Column):
-    def __init__(self, model: "Clustering2PageModel", view: "Clustering2PageView", **kwargs):
+    def __init__(self, model: "Clustering2PageModel", **kwargs):
         self._model = model
-        self._view = view
+        self._on_umap_loaded_callback: Callable = lambda *args, **kwargs: None  # Placeholder for the callback function
         self._data_info_panel = pn.pane.Markdown("", margin=(10, 0, 0, 0))
         
         self._file_uploader = FileUploader(
@@ -60,23 +59,20 @@ class Clustering2LeftSidebarLayout(pn.Column):
             
             # Display info
             info_text = f"""
-                **Loaded UMAP Data:**
-                - **min_dist**: {min_dist}
-                - **n_neighbors**: {n_neighbors}
-                - **n_components**: {umap_obj.n_components}
-                - **metric**: {umap_obj.metric}
-                - **Embedding shape**: {umap_obj.embedding_.shape}
+**Loaded UMAP Data:**
+- **min_dist**: {min_dist}
+- **n_neighbors**: {n_neighbors}
+- **n_components**: {umap_obj.n_components}
+- **metric**: {umap_obj.metric}
+- **Embedding shape**: {umap_obj.embedding_.shape}
             """
             self._data_info_panel.object = info_text
             
-            # Display the loaded data using view methods if view is available
-            if self._view:
-                combinations = [(min_dist, n_neighbors)]
-                self._view.display_all_combination_placeholders(combinations)
-                self._view.replace_placeholder_with_umap_embedding(0, min_dist, n_neighbors, umap_data_dict)
-                pn.state.notifications.success(f"UMAP data displayed from {filename}", duration=5000)  # type: ignore
+            # Call controller callback to handle display
+            if self._on_umap_loaded_callback:
+                self._on_umap_loaded_callback(min_dist, n_neighbors, umap_data_dict, filename)
             
-            print(f"✓ Loaded and displayed UMAP result from {filename}")
+            print(f"✓ Loaded UMAP result from {filename}")
                         
         except Exception as e:
             import traceback
@@ -87,6 +83,9 @@ class Clustering2LeftSidebarLayout(pn.Column):
     
     def _on_file_removed(self, _: str):
         """Handle file removal."""
-        self._view.main.clear()  # Clear the main area of the view
         self._model.loaded_umap_data = None
         self._data_info_panel.object = ""
+    
+    def set_on_umap_loaded_callback(self, callback: Callable):
+        """Register callback to be called when UMAP data is loaded."""
+        self._on_umap_loaded_callback = callback
