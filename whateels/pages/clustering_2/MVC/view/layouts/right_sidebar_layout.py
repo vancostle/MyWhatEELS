@@ -66,17 +66,15 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="min_dist",
         doc="List of min_dist values for HDBSCAN."
     )
-    hdbscan_min_samples = param.List(
-        default=[1, 4, 8],
-        item_type=int,
+    hdbscan_min_samples = param.Integer(
+        default=4,
         label="min_samples",
-        doc="List of min_samples values for HDBSCAN."
+        doc="Minimum number of samples for HDBSCAN."
     )
-    hdbscan_min_cluster_size = param.List(
-        default=[100, 300, 500],
-        item_type=int,
+    hdbscan_min_cluster_size = param.Integer(
+        default=100,
         label="min_cluster_size",
-        doc="List of min_cluster_size values for HDBSCAN."
+        doc="Minimum cluster size for HDBSCAN."
     )
 
 class Clustering2RightSidebarLayout(pn.Column):
@@ -148,6 +146,8 @@ class Clustering2RightSidebarLayout(pn.Column):
         # HDBSCAN parameters
         self._hdbscan_n_neighbors = pn.widgets.TextInput()        
         self._hdbscan_min_dist = pn.widgets.TextInput()
+        self._hdbscan_min_samples = pn.widgets.IntInput()
+        self._hdbscan_min_cluster_size = pn.widgets.IntInput()
         self._compute_hdbscan_embedding_run_button = ToggleButton()
         
         # Initialize the layout with the created controls and details
@@ -406,8 +406,22 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
 
-        self._hdbscan_min_dist.param.watch(self._validate_hdbscan_min_dist, 'value') 
+        self._hdbscan_min_dist.param.watch(self._validate_hdbscan_min_dist, 'value')
         
+        self._hdbscan_min_samples = pn.widgets.IntInput(
+            name=type(self._params).param.hdbscan_min_samples.label,
+            value=type(self._params).param.hdbscan_min_samples.default,
+            placeholder="e.g., 1",
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        self._hdbscan_min_cluster_size = pn.widgets.IntInput(
+            name=type(self._params).param.hdbscan_min_cluster_size.label,
+            value=type(self._params).param.hdbscan_min_cluster_size.default,
+            placeholder="e.g., 400",
+            sizing_mode=self._STRETCH_WIDTH
+        )   
+     
         self._compute_hdbscan_embedding_run_button = ToggleButton(
             height=55,
             initial_state=True,
@@ -456,6 +470,8 @@ class Clustering2RightSidebarLayout(pn.Column):
         compute_hdbscan_embedding_content = pn.Column(
             n_neighbors_content,
             min_dist_content,
+            self._hdbscan_min_samples,
+            self._hdbscan_min_cluster_size,
             pn.Row(
                 self._compute_hdbscan_embedding_run_button,
                 sizing_mode=self._STRETCH_WIDTH,
@@ -510,7 +526,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             self._min_dist.value = ', '.join(str(float(v)) for v in float_values)
         except ValueError:
             self._min_dist.value = event.old
-            
+
     def _validate_hdbscan_min_dist(self, event):
         value = event.new
         try:
