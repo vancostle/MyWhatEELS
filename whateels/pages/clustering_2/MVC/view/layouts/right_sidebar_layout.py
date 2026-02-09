@@ -66,6 +66,18 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="min_dist",
         doc="List of min_dist values for HDBSCAN."
     )
+    hdbscan_min_samples = param.List(
+        default=[1, 4, 8],
+        item_type=int,
+        label="min_samples",
+        doc="List of min_samples values for HDBSCAN."
+    )
+    hdbscan_min_cluster_size = param.List(
+        default=[100, 300, 500],
+        item_type=int,
+        label="min_cluster_size",
+        doc="List of min_cluster_size values for HDBSCAN."
+    )
 
 class Clustering2RightSidebarLayout(pn.Column):
     
@@ -121,135 +133,26 @@ class Clustering2RightSidebarLayout(pn.Column):
                 styles={"padding": "16px"}
             )
         )
-                
-        self._min_cut_signal = pn.widgets.FloatInput(
-            name=type(self._params).param.min_eloss.label,
-            value=self._params.min_eloss,
-            step=type(self._params).param.min_eloss.step,
-            start=type(self._params).param.min_eloss.bounds[0],
-            end=type(self._params).param.min_eloss.bounds[1],
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        self._max_cut_signal = pn.widgets.FloatInput(
-            name=type(self._params).param.max_eloss.label,
-            value=self._params.max_eloss,
-            step=type(self._params).param.max_eloss.step,
-            start=type(self._params).param.max_eloss.bounds[0],
-            end=type(self._params).param.max_eloss.bounds[1],
-            sizing_mode=self._STRETCH_WIDTH
-        )
         
-        n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)
+        # Cut signal range inputs
+        self._min_cut_signal = pn.widgets.FloatInput()
+        self._max_cut_signal = pn.widgets.FloatInput()
         
-        self._n_neighbors = pn.widgets.TextInput(
-            name=type(self._params).param.n_neighbors.label,
-            value=n_neighbors_str,
-            placeholder="e.g., 100, 500, 900",
-            sizing_mode=self._STRETCH_WIDTH
-        )
+        # UMAP parameters
+        self._n_neighbors = pn.widgets.TextInput()
+        self._min_dist = pn.widgets.TextInput()
+        self._extra_umap_inputs_button = pn.widgets.ButtonIcon()
+        self._compute_umap_embedding_run_button = ToggleButton()
+        self._download_results_button = pn.widgets.FileDownload()
         
-        self._n_neighbors.param.watch(self._validate_n_neighbors, 'value')
-
-        min_dist_str = ', '.join(str(d) for d in type(self._params).param.min_dist.default)
+        # HDBSCAN parameters
+        self._hdbscan_n_neighbors = pn.widgets.TextInput()        
+        self._hdbscan_min_dist = pn.widgets.TextInput()
+        self._compute_hdbscan_embedding_run_button = ToggleButton()
         
-        self._min_dist = pn.widgets.TextInput(
-            name=type(self._params).param.min_dist.label,
-            value=min_dist_str,
-            placeholder="e.g., 0.1, 0.5, 0.9",
-            sizing_mode=self._STRETCH_WIDTH
-        )
-
-        self._min_dist.param.watch(self._validate_min_dist, 'value')
-
-        self._extra_umap_inputs_button = pn.widgets.ButtonIcon(
-            icon=self._SVG, 
-            active_icon=self._ACTIVE_SVG, 
-            size='2em',
-            margin=(0, 0, 0, 10),
-            styles={
-                "cursor": "pointer",
-                "display": "grid",
-                "place-items": "center",
-                "border-radius": "6px"
-            },
-        )
-        
-        self._extra_umap_inputs_button.on_click(lambda _ : modal_manager.open_modal(model.extra_umap_params_key))
-
-        self._compute_umap_embedding_run_button = ToggleButton(
-            height=55,
-            initial_state=True,
-            states={
-                "on": {
-                    "label": "Compute UMAP Embedding",
-                    "on_click": lambda : print("UMAP computation started"),
-                    "button_type": "success",
-                },
-                "off": {
-                    "label": "Cancel Next UMAP Computation",
-                    "on_click": lambda : print("UMAP computation cancelled"),
-                    "button_type": "danger",
-                }
-            },
-            margin=0,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        self._download_results_button = pn.widgets.FileDownload(
-            label="Download Results",
-            button_type="primary",
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(10, 0, 0, 0),
-            icon="download",
-            icon_size="20px",
-        )
-        
-        self._download_results_button.disabled = True
-        self._download_results_button.callback = pn.bind(self._create_file)
-        
-        hdbscan_n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.hdbscan_n_neighbors.default)
-        
-        self._hdbscan_n_neighbors = pn.widgets.TextInput(
-            name=type(self._params).param.hdbscan_n_neighbors.label,
-            value=hdbscan_n_neighbors_str,
-            placeholder="e.g., 100, 500, 900",
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        self._hdbscan_n_neighbors.param.watch(self._validate_hdbscan_n_neighbors, 'value')
-
-        hdbscan_min_dist_str = ', '.join(str(d) for d in type(self._params).param.hdbscan_min_dist.default)
-        
-        self._hdbscan_min_dist = pn.widgets.TextInput(
-            name=type(self._params).param.hdbscan_min_dist.label,
-            value=hdbscan_min_dist_str,
-            placeholder="e.g., 0.1, 0.5, 0.9",
-            sizing_mode=self._STRETCH_WIDTH
-        )
-
-        self._hdbscan_min_dist.param.watch(self._validate_hdbscan_min_dist, 'value') 
-        
-        self._compute_hdbscan_embedding_run_button = ToggleButton(
-            height=55,
-            initial_state=True,
-            states={
-                "on": {
-                    "label": "Compute HDBSCAN Embedding",
-                    "on_click": lambda : print("HDBSCAN computation started"),
-                    "button_type": "success",
-                },
-                "off": {
-                    "label": "Cancel Next HDBSCAN Computation",
-                    "on_click": lambda : print("HDBSCAN computation cancelled"),
-                    "button_type": "danger",
-                }
-            },
-            margin=0,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
+        # Initialize the layout with the created controls and details
         cut_signal_details = self._create_cut_signal_details()
-        compute_umap_embedding_details = self._create_umap_simple_details()
+        compute_umap_embedding_details = self._create_umap_simple_details(modal_manager, model)
         compute_hdbscan_embedding_details = self._create_hdbscan_simple_details()
         
         self.disable_hdbscan_controls() # HDBSCAN controls are disabled by default, as they depend on UMAP results, but UMAP results are not available at the beginning.
@@ -323,6 +226,23 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._compute_hdbscan_embedding_run_button.disabled = True
         
     def _create_cut_signal_details(self) -> SimpleDetails:
+        self._min_cut_signal = pn.widgets.FloatInput(
+            name=type(self._params).param.min_eloss.label,
+            value=self._params.min_eloss,
+            step=type(self._params).param.min_eloss.step,
+            start=type(self._params).param.min_eloss.bounds[0],
+            end=type(self._params).param.min_eloss.bounds[1],
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        self._max_cut_signal = pn.widgets.FloatInput(
+            name=type(self._params).param.max_eloss.label,
+            value=self._params.max_eloss,
+            step=type(self._params).param.max_eloss.step,
+            start=type(self._params).param.max_eloss.bounds[0],
+            end=type(self._params).param.max_eloss.bounds[1],
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
         cut_signal_content = pn.Column(
             pn.Row(
                 self._min_cut_signal,
@@ -339,7 +259,75 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(0, 0, 10, 0)
         )
         
-    def _create_umap_simple_details(self) -> SimpleDetails:
+    def _create_umap_simple_details(self, modal_manager, model) -> SimpleDetails:
+        n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)
+        
+        self._n_neighbors = pn.widgets.TextInput(
+            name=type(self._params).param.n_neighbors.label,
+            value=n_neighbors_str,
+            placeholder="e.g., 100, 500, 900",
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        self._n_neighbors.param.watch(self._validate_n_neighbors, 'value')
+
+        min_dist_str = ', '.join(str(d) for d in type(self._params).param.min_dist.default)
+        
+        self._min_dist = pn.widgets.TextInput(
+            name=type(self._params).param.min_dist.label,
+            value=min_dist_str,
+            placeholder="e.g., 0.1, 0.5, 0.9",
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
+        self._min_dist.param.watch(self._validate_min_dist, 'value')
+
+        self._extra_umap_inputs_button = pn.widgets.ButtonIcon(
+            icon=self._SVG, 
+            active_icon=self._ACTIVE_SVG, 
+            size='2em',
+            margin=(0, 0, 0, 10),
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px"
+            },
+        )
+        
+        self._extra_umap_inputs_button.on_click(lambda _ : modal_manager.open_modal(model.extra_umap_params_key))
+
+        self._compute_umap_embedding_run_button = ToggleButton(
+            height=55,
+            initial_state=True,
+            states={
+                "on": {
+                    "label": "Compute UMAP Embedding",
+                    "on_click": lambda : print("UMAP computation started"),
+                    "button_type": "success",
+                },
+                "off": {
+                    "label": "Cancel Next UMAP Computation",
+                    "on_click": lambda : print("UMAP computation cancelled"),
+                    "button_type": "danger",
+                }
+            },
+            margin=0,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        self._download_results_button = pn.widgets.FileDownload(
+            label="Download Results",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
+        )
+        
+        self._download_results_button.disabled = True
+        self._download_results_button.callback = pn.bind(self._create_file)
+        
         n_neighbors_tooltip = pn.widgets.TooltipIcon(
             value=Tooltip(
                 content="Pattern is integer number and then a comma and go on.", position="left"
@@ -393,10 +381,52 @@ class Clustering2RightSidebarLayout(pn.Column):
             title="UMAP",
             content=compute_umap_embedding_content,
             expanded=True,
+            margin=(0, 0, 10, 0),
             sizing_mode=self._STRETCH_WIDTH
         )
         
     def _create_hdbscan_simple_details(self) -> SimpleDetails:
+        hdbscan_n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.hdbscan_n_neighbors.default)
+        
+        self._hdbscan_n_neighbors = pn.widgets.TextInput(
+            name=type(self._params).param.hdbscan_n_neighbors.label,
+            value=hdbscan_n_neighbors_str,
+            placeholder="e.g., 100, 500, 900",
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        self._hdbscan_n_neighbors.param.watch(self._validate_hdbscan_n_neighbors, 'value')
+
+        hdbscan_min_dist_str = ', '.join(str(d) for d in type(self._params).param.hdbscan_min_dist.default)
+        
+        self._hdbscan_min_dist = pn.widgets.TextInput(
+            name=type(self._params).param.hdbscan_min_dist.label,
+            value=hdbscan_min_dist_str,
+            placeholder="e.g., 0.1, 0.5, 0.9",
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
+        self._hdbscan_min_dist.param.watch(self._validate_hdbscan_min_dist, 'value') 
+        
+        self._compute_hdbscan_embedding_run_button = ToggleButton(
+            height=55,
+            initial_state=True,
+            states={
+                "on": {
+                    "label": "Compute HDBSCAN Embedding",
+                    "on_click": lambda : print("HDBSCAN computation started"),
+                    "button_type": "success",
+                },
+                "off": {
+                    "label": "Cancel Next HDBSCAN Computation",
+                    "on_click": lambda : print("HDBSCAN computation cancelled"),
+                    "button_type": "danger",
+                }
+            },
+            margin=0,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
         n_neighbors_tooltip = pn.widgets.TooltipIcon(
             value=Tooltip(
                 content="Pattern is integer number and then a comma and go on.", position="left"
@@ -439,6 +469,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             title="HDBSCAN",
             content=compute_hdbscan_embedding_content,
             expanded=False,
+            margin=(0, 0, 10, 0),
             sizing_mode=self._STRETCH_WIDTH
         )
         

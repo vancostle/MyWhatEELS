@@ -1,1 +1,1 @@
-from .my_umap_hdbscan import UMAP_HDBSCAN
+from .umap_hdbscan import UMAP_HDBSCAN
