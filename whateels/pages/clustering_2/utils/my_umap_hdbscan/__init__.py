@@ -60,3 +60,33 @@ class UMAP_HDBSCAN:
         except Exception as e:
             print(f"Error processing electron count data: {e}")
             return None
+        
+    def hdbscan_for_umap(self, umap_data_dict : dict, n_neighbors, min_dist, min_samples=None, min_cluster_size=None):
+        """
+            Simplified HDBSCAn clustering and visualization on UMAP embedding, following class logic.
+        """
+        
+        config_dict = {
+            'dpi': 500,
+            'min_smaple_start': 1,
+            'min_sample_end': 8,
+            'min_cluster_start': 100,
+            'min_cluster_end': 900,
+            'min_cluster_step': 100
+        }
+        
+        spectrum_image = self._electron_count_data
+        
+        if isinstance(umap_data_dict, dict):
+            key = f'umap_data_{min_dist}_{n_neighbors}'
+            if key not in umap_data_dict:
+                raise ValueError(f"UMAP data for min_dist={min_dist} and n_neighbors={n_neighbors} not found in the provided dictionary.")
+            embedding = umap_data_dict[key].embedding_
+        elif isinstance(umap_data_dict, list):
+            embedding = umap_data_dict[0]
+        else:
+            embedding = umap_data_dict
+            
+        print("----------------------- HDBSCAN clustering would be performed here with the following parameters:")
+        
+        

@@ -54,10 +54,51 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="random_state",
         doc="Random state for UMAP."
     )
+    hdbscan_n_neighbors = param.List(
+        default=[15, 50, 100],
+        item_type=int,
+        label="n_neigh",
+        doc="List of n_neighbors values for HDBSCAN."
+    )
+    hdbscan_min_dist = param.List(
+        default=[0.1, 0.5, 0.9],
+        item_type=float,
+        label="min_dist",
+        doc="List of min_dist values for HDBSCAN."
+    )
 
 class Clustering2RightSidebarLayout(pn.Column):
     
     _STRETCH_WIDTH = "stretch_width"
+    
+    _SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+        <circle cx="14" cy="6" r="2" />
+        <line x1="4" y1="6" x2="12" y2="6" />
+        <line x1="16" y1="6" x2="20" y2="6" />
+        <circle cx="8" cy="12" r="2" />
+        <line x1="4" y1="12" x2="6" y2="12" />
+        <line x1="10" y1="12" x2="20" y2="12" />
+        <circle cx="17" cy="18" r="2" />
+        <line x1="4" y1="18" x2="15" y2="18" />
+        <line x1="19" y1="18" x2="20" y2="18" />
+        </svg>
+    """
+    _ACTIVE_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" style="--secondary-whateels-background: #b63fb5;" stroke="var(--secondary-whateels-background)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+        <circle cx="14" cy="6" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
+        <line x1="4" y1="6" x2="12" y2="6" />
+        <line x1="16" y1="6" x2="20" y2="6" />
+        <circle cx="8" cy="12" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
+        <line x1="4" y1="12" x2="6" y2="12" />
+        <line x1="10" y1="12" x2="20" y2="12" />
+        <circle cx="17" cy="18" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
+        <line x1="4" y1="18" x2="15" y2="18" />
+        <line x1="19" y1="18" x2="20" y2="18" />
+        </svg>
+    """
     
     def __init__(self, model: "Clustering2PageModel", custom_page: "GeneralPageTemplate", modal_manager: "ModalManager"):
         self._model = model
@@ -97,21 +138,6 @@ class Clustering2RightSidebarLayout(pn.Column):
             end=type(self._params).param.max_eloss.bounds[1],
             sizing_mode=self._STRETCH_WIDTH
         )
-        cut_signal_content = pn.Column(
-            pn.Row(
-                self._min_cut_signal,
-                self._max_cut_signal,
-                sizing_mode=self._STRETCH_WIDTH,
-            )
-        )
-        
-        cut_signal_details = SimpleDetails(
-            title="Cut Signal Range",
-            content=cut_signal_content,
-            expanded=False,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 0, 10, 0)
-        )
         
         n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)
         
@@ -122,33 +148,8 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        def validate_n_neighbors(event):
-            value = event.new
-            try:
-                str_values = [v.strip() for v in value.split(',')]
-                int_values = [int(v) for v in str_values if v]
-                if all(v > 0 for v in int_values):
-                    self._params.n_neighbors = int_values
-                else:
-                    raise ValueError
-            except ValueError:
-                self._n_neighbors.value = event.old
-        
-        self._n_neighbors.param.watch(validate_n_neighbors, 'value')
-        
-        # self._n_neighbors.param.watch(self._on_n_neighbors_change, 'value')
-        n_neighbors_tooltip = pn.widgets.TooltipIcon(
-            value=Tooltip(
-                content="Pattern is integer number and then a comma and go on.", position="left"
-            ),
-            margin=(16, 0, 0, 0)
-        )
-        n_neighbors_content = pn.Row(
-            self._n_neighbors,
-            n_neighbors_tooltip,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
+        self._n_neighbors.param.watch(self._validate_n_neighbors, 'value')
+
         min_dist_str = ', '.join(str(d) for d in type(self._params).param.min_dist.default)
         
         self._min_dist = pn.widgets.TextInput(
@@ -157,67 +158,12 @@ class Clustering2RightSidebarLayout(pn.Column):
             placeholder="e.g., 0.1, 0.5, 0.9",
             sizing_mode=self._STRETCH_WIDTH
         )
-        
-        def validate_min_dist(event):
-            value = event.new
-            try:
-                str_values = [v.strip() for v in value.split(',')]
-                float_values = []
-                for v in str_values:
-                    if v:
-                        float_values.append(float(v))
-                self._params.min_dist = float_values
-                # Always reformat the input as floats (e.g., 5 -> 5.0)
-                self._min_dist.value = ', '.join(str(float(v)) for v in float_values)
-            except ValueError:
-                self._min_dist.value = event.old
 
-        self._min_dist.param.watch(validate_min_dist, 'value')
-        
-        min_dist_tooltip = pn.widgets.TooltipIcon(
-            value=Tooltip(
-                content="Pattern is float number and then a comma and go on.", position="left"
-            ),
-            margin=(16, 0, 0, 0)
-        )
-        min_dist_content = pn.Row(
-            self._min_dist, 
-            min_dist_tooltip,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        SVG = """
-            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-            <circle cx="14" cy="6" r="2" />
-            <line x1="4" y1="6" x2="12" y2="6" />
-            <line x1="16" y1="6" x2="20" y2="6" />
-            <circle cx="8" cy="12" r="2" />
-            <line x1="4" y1="12" x2="6" y2="12" />
-            <line x1="10" y1="12" x2="20" y2="12" />
-            <circle cx="17" cy="18" r="2" />
-            <line x1="4" y1="18" x2="15" y2="18" />
-            <line x1="19" y1="18" x2="20" y2="18" />
-            </svg>
-        """
-        ACTIVE_SVG = """
-            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" style="--secondary-whateels-background: #b63fb5;" stroke="var(--secondary-whateels-background)" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-            <circle cx="14" cy="6" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
-            <line x1="4" y1="6" x2="12" y2="6" />
-            <line x1="16" y1="6" x2="20" y2="6" />
-            <circle cx="8" cy="12" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
-            <line x1="4" y1="12" x2="6" y2="12" />
-            <line x1="10" y1="12" x2="20" y2="12" />
-            <circle cx="17" cy="18" r="2" fill="var(--secondary-whateels-background)" stroke="var(--secondary-whateels-background)" />
-            <line x1="4" y1="18" x2="15" y2="18" />
-            <line x1="19" y1="18" x2="20" y2="18" />
-            </svg>
-        """
+        self._min_dist.param.watch(self._validate_min_dist, 'value')
 
         self._extra_umap_inputs_button = pn.widgets.ButtonIcon(
-            icon=SVG, 
-            active_icon=ACTIVE_SVG, 
+            icon=self._SVG, 
+            active_icon=self._ACTIVE_SVG, 
             size='2em',
             margin=(0, 0, 0, 10),
             styles={
@@ -259,34 +205,166 @@ class Clustering2RightSidebarLayout(pn.Column):
         )
         
         self._download_results_button.disabled = True
+        self._download_results_button.callback = pn.bind(self._create_file)
         
-        def create_file():            
-            umap_data_dict = self._model.umap_data_dict
-            
-            if umap_data_dict is None:
-                return b""
-            
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                for key, value in umap_data_dict.items():
-                    file_data = pickle.dumps(value)
-                    safe_key = str(key).replace("/", "_").replace("\\", "_")
-                    filename = f"{safe_key}.pkl"
-                    zip_file.writestr(filename, file_data)
-            zip_buffer.seek(0)        
-            filename = "umap_results.zip"
+        hdbscan_n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.hdbscan_n_neighbors.default)
+        
+        self._hdbscan_n_neighbors = pn.widgets.TextInput(
+            name=type(self._params).param.hdbscan_n_neighbors.label,
+            value=hdbscan_n_neighbors_str,
+            placeholder="e.g., 100, 500, 900",
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        self._hdbscan_n_neighbors.param.watch(self._validate_hdbscan_n_neighbors, 'value')
 
-            if (self._download_results_button is not None):
-                self._download_results_button.filename = filename
+        hdbscan_min_dist_str = ', '.join(str(d) for d in type(self._params).param.hdbscan_min_dist.default)
+        
+        self._hdbscan_min_dist = pn.widgets.TextInput(
+            name=type(self._params).param.hdbscan_min_dist.label,
+            value=hdbscan_min_dist_str,
+            placeholder="e.g., 0.1, 0.5, 0.9",
+            sizing_mode=self._STRETCH_WIDTH
+        )
 
-            pn.state.notifications.success(f"Clustering results saved as {filename}", duration=5000) #type: ignore
+        self._hdbscan_min_dist.param.watch(self._validate_hdbscan_min_dist, 'value') 
+        
+        self._compute_hdbscan_embedding_run_button = ToggleButton(
+            height=55,
+            initial_state=True,
+            states={
+                "on": {
+                    "label": "Compute HDBSCAN Embedding",
+                    "on_click": lambda : print("HDBSCAN computation started"),
+                    "button_type": "success",
+                },
+                "off": {
+                    "label": "Cancel Next HDBSCAN Computation",
+                    "on_click": lambda : print("HDBSCAN computation cancelled"),
+                    "button_type": "danger",
+                }
+            },
+            margin=0,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        cut_signal_details = self._create_cut_signal_details()
+        compute_umap_embedding_details = self._create_umap_simple_details()
+        compute_hdbscan_embedding_details = self._create_hdbscan_simple_details()
+        
+        self.disable_hdbscan_controls() # HDBSCAN controls are disabled by default, as they depend on UMAP results, but UMAP results are not available at the beginning.
 
-            return InMemoryFile(
-                zip_buffer.read(), 
-                name=filename, 
+        super().__init__(
+            cut_signal_details,
+            compute_umap_embedding_details,
+            compute_hdbscan_embedding_details,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+        )
+
+    @property
+    def params(self) -> _Clustering2RightSidebarParams:
+        return self._params
+    @property
+    def min_cut_signal(self) -> pn.widgets.FloatInput:
+        return self._min_cut_signal
+    @property
+    def max_cut_signal(self) -> pn.widgets.FloatInput:
+        return self._max_cut_signal
+    @property
+    def compute_umap_embedding_run_button(self) -> ToggleButton:
+        return self._compute_umap_embedding_run_button
+    @property
+    def download_results_button(self) -> pn.widgets.FileDownload:
+        return self._download_results_button
+    @property
+    def compute_hdbscan_embedding_run_button(self) -> ToggleButton:
+        return self._compute_hdbscan_embedding_run_button
+    
+    def disable_controls(self):
+        """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
+        self._min_cut_signal.disabled = True
+        self._max_cut_signal.disabled = True
+        
+        self._n_neighbors.disabled = True
+        self._min_dist.disabled = True
+        
+        self._extra_umap_inputs_button.disabled = True
+        
+        self._compute_umap_embedding_run_button.disabled = True
+
+        self.disable_hdbscan_controls()
+        
+    def enable_controls(self):
+        """ Enable controls in the right sidebar, typically called when UMAP computation is finished or when UMAP data is removed. Download button is not enabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
+        
+        self._min_cut_signal.disabled = False
+        self._max_cut_signal.disabled = False
+        
+        self._n_neighbors.disabled = False
+        self._min_dist.disabled = False
+        
+        self._extra_umap_inputs_button.disabled = False
+        
+        self._compute_umap_embedding_run_button.disabled = False
+        
+        self.enable_hdbscan_controls() # HDBSCAN controls are enabled separately, as they can be enabled even when UMAP data is loaded or being computed, since they are independent of UMAP results.
+        
+    def enable_hdbscan_controls(self):
+        """ Enable only HDBSCAN controls, typically called when HDBSCAN computation is finished or when HDBSCAN data is removed. """
+        self._hdbscan_n_neighbors.disabled = False
+        self._hdbscan_min_dist.disabled = False
+        self._compute_hdbscan_embedding_run_button.disabled = False
+        
+    def disable_hdbscan_controls(self):
+        """ Disable only HDBSCAN controls, typically called when HDBSCAN computation is in progress or when HDBSCAN data is loaded from file. """
+        self._hdbscan_n_neighbors.disabled = True
+        self._hdbscan_min_dist.disabled = True
+        self._compute_hdbscan_embedding_run_button.disabled = True
+        
+    def _create_cut_signal_details(self) -> SimpleDetails:
+        cut_signal_content = pn.Column(
+            pn.Row(
+                self._min_cut_signal,
+                self._max_cut_signal,
+                sizing_mode=self._STRETCH_WIDTH,
             )
+        )
         
-        self._download_results_button.callback = pn.bind(create_file)
+        return SimpleDetails(
+            title="Cut Signal Range",
+            content=cut_signal_content,
+            expanded=False,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 0, 10, 0)
+        )
+        
+    def _create_umap_simple_details(self) -> SimpleDetails:
+        n_neighbors_tooltip = pn.widgets.TooltipIcon(
+            value=Tooltip(
+                content="Pattern is integer number and then a comma and go on.", position="left"
+            ),
+            margin=(16, 0, 0, 0)
+        )
+        
+        n_neighbors_content = pn.Row(
+            self._n_neighbors,
+            n_neighbors_tooltip,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        min_dist_tooltip = pn.widgets.TooltipIcon(
+            value=Tooltip(
+                content="Pattern is float number and then a comma and go on.", position="left"
+            ),
+            margin=(16, 0, 0, 0)
+        )
+        
+        min_dist_content = pn.Row(
+            self._min_dist, 
+            min_dist_tooltip,
+            sizing_mode=self._STRETCH_WIDTH
+        )
         
         compute_umap_embedding_content = pn.Column(
             n_neighbors_content,
@@ -310,55 +388,134 @@ class Clustering2RightSidebarLayout(pn.Column):
             ),
             self._download_results_button,
         )
-        compute_umap_embedding_details = SimpleDetails(
+        
+        return SimpleDetails(
             title="UMAP",
             content=compute_umap_embedding_content,
             expanded=True,
             sizing_mode=self._STRETCH_WIDTH
         )
-
-        super().__init__(
-            cut_signal_details,
-            compute_umap_embedding_details,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=0,
+        
+    def _create_hdbscan_simple_details(self) -> SimpleDetails:
+        n_neighbors_tooltip = pn.widgets.TooltipIcon(
+            value=Tooltip(
+                content="Pattern is integer number and then a comma and go on.", position="left"
+            ),
+            margin=(16, 0, 0, 0)
         )
+        
+        n_neighbors_content = pn.Row(
+            self._hdbscan_n_neighbors,
+            n_neighbors_tooltip,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        min_dist_tooltip = pn.widgets.TooltipIcon(
+            value=Tooltip(
+                content="Pattern is float number and then a comma and go on.", position="left"
+            ),
+            margin=(16, 0, 0, 0)
+        )
+        
+        min_dist_content = pn.Row(
+            self._hdbscan_min_dist, 
+            min_dist_tooltip,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+        compute_hdbscan_embedding_content = pn.Column(
+            n_neighbors_content,
+            min_dist_content,
+            pn.Row(
+                self._compute_hdbscan_embedding_run_button,
+                sizing_mode=self._STRETCH_WIDTH,
+                height=55,
+                margin=(10, 0, 0, 0),
+                styles={"display": "flex", "justify-content": "center", "align-items": "center", "gap": "10px"}
+            ),
+        )
+        
+        return SimpleDetails(
+            title="HDBSCAN",
+            content=compute_hdbscan_embedding_content,
+            expanded=False,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        
+    def _validate_n_neighbors(self, event):
+        value = event.new
+        try:
+            str_values = [v.strip() for v in value.split(',')]
+            int_values = [int(v) for v in str_values if v]
+            if all(v > 0 for v in int_values):
+                self._params.n_neighbors = int_values
+            else:
+                raise ValueError
+        except ValueError:
+            self._n_neighbors.value = event.old
+            
+    def _validate_hdbscan_n_neighbors(self, event):
+        value = event.new
+        try:
+            str_values = [v.strip() for v in value.split(',')]
+            int_values = [int(v) for v in str_values if v]
+            if all(v > 0 for v in int_values):
+                self._params.hdbscan_n_neighbors = int_values
+            else:
+                raise ValueError
+        except ValueError:
+            self._hdbscan_n_neighbors.value = event.old
+            
+    def _validate_min_dist(self, event):
+        value = event.new
+        try:
+            str_values = [v.strip() for v in value.split(',')]
+            float_values = []
+            for v in str_values:
+                if v:
+                    float_values.append(float(v))
+            self._params.min_dist = float_values
+            # Always reformat the input as floats (e.g., 5 -> 5.0)
+            self._min_dist.value = ', '.join(str(float(v)) for v in float_values)
+        except ValueError:
+            self._min_dist.value = event.old
+            
+    def _validate_hdbscan_min_dist(self, event):
+        value = event.new
+        try:
+            str_values = [v.strip() for v in value.split(',')]
+            float_values = []
+            for v in str_values:
+                if v:
+                    float_values.append(float(v))
+            self._params.hdbscan_min_dist = float_values
+            # Always reformat the input as floats (e.g., 5 -> 5.0)
+            self._hdbscan_min_dist.value = ', '.join(str(float(v)) for v in float_values)
+        except ValueError:
+            self._hdbscan_min_dist.value = event.old
+            
+    def _create_file(self):            
+        umap_data_dict = self._model.umap_data_dict
+        
+        if umap_data_dict is None:
+            return b""
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for key, value in umap_data_dict.items():
+                file_data = pickle.dumps(value)
+                safe_key = str(key).replace("/", "_").replace("\\", "_")
+                filename = f"{safe_key}.pkl"
+                zip_file.writestr(filename, file_data)
+        zip_buffer.seek(0)        
+        filename = "umap_results.zip"
 
-    @property
-    def params(self) -> _Clustering2RightSidebarParams:
-        return self._params
-    @property
-    def min_cut_signal(self) -> pn.widgets.FloatInput:
-        return self._min_cut_signal
-    @property
-    def max_cut_signal(self) -> pn.widgets.FloatInput:
-        return self._max_cut_signal
-    @property
-    def compute_umap_embedding_run_button(self) -> ToggleButton:
-        return self._compute_umap_embedding_run_button
-    @property
-    def download_results_button(self) -> pn.widgets.FileDownload:
-        return self._download_results_button
-    
-    def disable_controls(self):
-        """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
-        self._min_cut_signal.disabled = True
-        self._max_cut_signal.disabled = True
-        
-        self._n_neighbors.disabled = True
-        self._min_dist.disabled = True
-        self._extra_umap_inputs_button.disabled = True
-        
-        self._compute_umap_embedding_run_button.disabled = True
-        
-    def enable_controls(self):
-        """ Enable controls in the right sidebar, typically called when UMAP computation is finished or when UMAP data is removed. Download button is not enabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
-        
-        self._min_cut_signal.disabled = False
-        self._max_cut_signal.disabled = False
-        
-        self._n_neighbors.disabled = False
-        self._min_dist.disabled = False
-        self._extra_umap_inputs_button.disabled = False
-        
-        self._compute_umap_embedding_run_button.disabled = False
+        if (self._download_results_button is not None):
+            self._download_results_button.filename = filename
+
+        pn.state.notifications.success(f"Clustering results saved as {filename}", duration=5000) #type: ignore
+
+        return InMemoryFile(
+            zip_buffer.read(), 
+            name=filename, 
+        )

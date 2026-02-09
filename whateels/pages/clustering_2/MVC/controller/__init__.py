@@ -54,6 +54,7 @@ class Clustering2PageController:
         self._model.umap_data_dict = dict()  # Reset UMAP data dict for all computations
         self._view.right_sidebar.download_results_button.disabled = True # Disable download button during computation
         self._view.left_sidebar.disable_controls()  # Disable controls in the left sidebar during computation
+        self._view.right_sidebar.disable_hdbscan_controls()  # Disable hdbscan controls in the right sidebar during computation
         
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
@@ -100,13 +101,16 @@ class Clustering2PageController:
                 # Only enable download button if at least one computation completed
                 if self._model.completed_umap_count > 0:
                     self._view.right_sidebar.download_results_button.disabled = False
+                    self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls if at least one computation completed
                 return
             
+            # Check if all combinations have been processed
             if index >= len(combinations):
                 pn.state.notifications.success("UMAP embedding computations completed.") # type: ignore
                 
                 self._model.is_umap_computing = False
                 self._view.left_sidebar.enable_controls()  # Re-enable controls in the left sidebar
+                self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls after UMAP computations are done
                 self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
                 
                 # Enable download button if at least one computation completed
@@ -187,6 +191,7 @@ class Clustering2PageController:
         """Event handler for when UMAP data is loaded from file."""
         
         self._view.right_sidebar.disable_controls()
+        self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls when UMAP data is loaded from file
         
         combinations = [(min_dist, n_neighbors)]
         self._view.display_all_combination_placeholders(combinations)
@@ -196,4 +201,5 @@ class Clustering2PageController:
         """Event handler for when file is removed."""
         self._view.main.display_placeholder()  # Show default placeholder when file is removed
         self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
+        self._view.right_sidebar.disable_hdbscan_controls()  # Disable HDBSCAN controls when file is removed
 
