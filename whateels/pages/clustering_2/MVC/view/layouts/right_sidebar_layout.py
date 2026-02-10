@@ -217,12 +217,18 @@ class Clustering2RightSidebarLayout(pn.Column):
         """ Enable only HDBSCAN controls, typically called when HDBSCAN computation is finished or when HDBSCAN data is removed. """
         self._hdbscan_n_neighbors.disabled = False
         self._hdbscan_min_dist.disabled = False
+        self._hdbscan_min_samples.disabled = False
+        self._hdbscan_min_cluster_size.disabled = False
+        
         self._compute_hdbscan_embedding_run_button.disabled = False
         
     def disable_hdbscan_controls(self):
         """ Disable only HDBSCAN controls, typically called when HDBSCAN computation is in progress or when HDBSCAN data is loaded from file. """
         self._hdbscan_n_neighbors.disabled = True
         self._hdbscan_min_dist.disabled = True
+        self._hdbscan_min_samples.disabled = True
+        self._hdbscan_min_cluster_size.disabled = True
+        
         self._compute_hdbscan_embedding_run_button.disabled = True
         
     def _create_cut_signal_details(self) -> SimpleDetails:
