@@ -1,7 +1,7 @@
-import panel as pn, param, pickle, io, zipfile
+import panel as pn, param, pickle, io, zipfile, hdbscan
 
 from whateels.components import SimpleDetails, ToggleButton
-from whateels.helpers.in_memory_file import InMemoryFile
+from whateels.helpers import InMemoryFile, SafeConverter
 from ..layouts.modals import ExtraUmapParamsModal
 
 from bokeh.models import Tooltip
@@ -53,12 +53,6 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         default=2,
         label="random_state",
         doc="Random state for UMAP."
-    )
-    hdbscan_select_options = param.List(
-        default=["andry", "alexis"],
-        item_type=str,
-        label="Computed UMAP Embeddings",
-        doc="List of available UMAP embeddings to select for HDBSCAN clustering."
     )
     hdbscan_min_samples = param.Integer(
         default=4,
@@ -387,10 +381,14 @@ class Clustering2RightSidebarLayout(pn.Column):
 
     def _create_hdbscan_simple_details(self) -> SimpleDetails:
         
+        print("Creating HDBSCAN details with UMAP data dict:", self._model.umap_data_dict)
+        umap_data_dict_keys = list(self._model.umap_data_dict.keys()) if self._model.umap_data_dict is not None else []
+        print("UMAP data dict keys for HDBSCAN select options:", umap_data_dict_keys)
+        
+        
         self._hdbscan_selected_umap = pn.widgets.Select(
-            name=type(self._params).param.hdbscan_select_options.label,
-            # options=self._params.param.hdbscan_select_options,  # Options will be populated dynamically based on available UMAP embeddings
-            options=self._model.umap_data_dict,
+            name="Select UMAP embedding",
+            options=umap_data_dict_keys,
             sizing_mode=self._STRETCH_WIDTH
         )
           
@@ -415,11 +413,6 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=0,
             sizing_mode=self._STRETCH_WIDTH
         )
-        
-        def on_select_computed_umap_embedding(event):
-            print(self._model.umap_data_dict)
-        
-        self._compute_hdbscan_on_umap_button.on_click(on_select_computed_umap_embedding)
             
         compute_hdbscan_embedding_content = pn.Column(
             self._hdbscan_selected_umap,
