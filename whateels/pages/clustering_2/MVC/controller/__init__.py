@@ -196,6 +196,7 @@ class Clustering2PageController:
     def _on_umap_loaded_from_file(self, min_dist: float, n_neighbors: int, umap_data_dict: dict, filename: str) -> None:
         """Event handler for when UMAP data is loaded from file."""
         
+        self._view.right_sidebar.hdbscan_selected_umap.options = umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
         self._view.right_sidebar.disable_controls()
         self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls when UMAP data is loaded from file
         

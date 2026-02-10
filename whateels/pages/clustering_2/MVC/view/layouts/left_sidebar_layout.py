@@ -19,7 +19,7 @@ class Clustering2LeftSidebarLayout(pn.Column):
             on_file_removed_callback=self._on_file_removed,
             valid_extensions=(".pkl",),
         )
-        
+
         super().__init__(
             pn.Row(
                 pn.pane.Markdown(
