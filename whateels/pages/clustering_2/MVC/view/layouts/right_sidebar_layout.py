@@ -54,17 +54,11 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="random_state",
         doc="Random state for UMAP."
     )
-    hdbscan_n_neighbors = param.List(
-        default=[15, 50, 100],
-        item_type=int,
-        label="n_neigh",
-        doc="List of n_neighbors values for HDBSCAN."
-    )
-    hdbscan_min_dist = param.List(
-        default=[0.1, 0.5, 0.9],
-        item_type=float,
-        label="min_dist",
-        doc="List of min_dist values for HDBSCAN."
+    hdbscan_select_options = param.List(
+        default=["andry", "alexis"],
+        item_type=str,
+        label="Computed UMAP Embeddings",
+        doc="List of available UMAP embeddings to select for HDBSCAN clustering."
     )
     hdbscan_min_samples = param.Integer(
         default=4,
@@ -144,11 +138,10 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._download_results_button = pn.widgets.FileDownload()
         
         # HDBSCAN parameters
-        self._hdbscan_n_neighbors = pn.widgets.TextInput()        
-        self._hdbscan_min_dist = pn.widgets.TextInput()
+        self._hdbscan_selected_umap = pn.widgets.Select()
         self._hdbscan_min_samples = pn.widgets.IntInput()
         self._hdbscan_min_cluster_size = pn.widgets.IntInput()
-        self._compute_hdbscan_embedding_run_button = ToggleButton()
+        self._compute_hdbscan_on_umap_button = pn.widgets.Button()
         
         # Initialize the layout with the created controls and details
         cut_signal_details = self._create_cut_signal_details()
@@ -181,8 +174,11 @@ class Clustering2RightSidebarLayout(pn.Column):
     def download_results_button(self) -> pn.widgets.FileDownload:
         return self._download_results_button
     @property
-    def compute_hdbscan_embedding_run_button(self) -> ToggleButton:
-        return self._compute_hdbscan_embedding_run_button
+    def compute_hdbscan_embedding_run_button(self) -> pn.widgets.Button:
+        return self._compute_hdbscan_on_umap_button
+    @property
+    def hdbscan_selected_umap(self) -> pn.widgets.Select:
+        return self._hdbscan_selected_umap
     
     def disable_controls(self):
         """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
@@ -215,21 +211,19 @@ class Clustering2RightSidebarLayout(pn.Column):
         
     def enable_hdbscan_controls(self):
         """ Enable only HDBSCAN controls, typically called when HDBSCAN computation is finished or when HDBSCAN data is removed. """
-        self._hdbscan_n_neighbors.disabled = False
-        self._hdbscan_min_dist.disabled = False
+        self._hdbscan_selected_umap.disabled = False
         self._hdbscan_min_samples.disabled = False
         self._hdbscan_min_cluster_size.disabled = False
         
-        self._compute_hdbscan_embedding_run_button.disabled = False
+        self._compute_hdbscan_on_umap_button.disabled = False
         
     def disable_hdbscan_controls(self):
         """ Disable only HDBSCAN controls, typically called when HDBSCAN computation is in progress or when HDBSCAN data is loaded from file. """
-        self._hdbscan_n_neighbors.disabled = True
-        self._hdbscan_min_dist.disabled = True
+        self._hdbscan_selected_umap.disabled = True
         self._hdbscan_min_samples.disabled = True
         self._hdbscan_min_cluster_size.disabled = True
         
-        self._compute_hdbscan_embedding_run_button.disabled = True
+        self._compute_hdbscan_on_umap_button.disabled = True
         
     def _create_cut_signal_details(self) -> SimpleDetails:
         self._min_cut_signal = pn.widgets.FloatInput(
@@ -390,30 +384,16 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(0, 0, 10, 0),
             sizing_mode=self._STRETCH_WIDTH
         )
-        
+
     def _create_hdbscan_simple_details(self) -> SimpleDetails:
-        hdbscan_n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.hdbscan_n_neighbors.default)
         
-        self._hdbscan_n_neighbors = pn.widgets.TextInput(
-            name=type(self._params).param.hdbscan_n_neighbors.label,
-            value=hdbscan_n_neighbors_str,
-            placeholder="e.g., 100, 500, 900",
+        self._hdbscan_selected_umap = pn.widgets.Select(
+            name=type(self._params).param.hdbscan_select_options.label,
+            # options=self._params.param.hdbscan_select_options,  # Options will be populated dynamically based on available UMAP embeddings
+            options=self._model.umap_data_dict,
             sizing_mode=self._STRETCH_WIDTH
         )
-        
-        self._hdbscan_n_neighbors.param.watch(self._validate_hdbscan_n_neighbors, 'value')
-
-        hdbscan_min_dist_str = ', '.join(str(d) for d in type(self._params).param.hdbscan_min_dist.default)
-        
-        self._hdbscan_min_dist = pn.widgets.TextInput(
-            name=type(self._params).param.hdbscan_min_dist.label,
-            value=hdbscan_min_dist_str,
-            placeholder="e.g., 0.1, 0.5, 0.9",
-            sizing_mode=self._STRETCH_WIDTH
-        )
-
-        self._hdbscan_min_dist.param.watch(self._validate_hdbscan_min_dist, 'value')
-        
+          
         self._hdbscan_min_samples = pn.widgets.IntInput(
             name=type(self._params).param.hdbscan_min_samples.label,
             value=type(self._params).param.hdbscan_min_samples.default,
@@ -426,60 +406,27 @@ class Clustering2RightSidebarLayout(pn.Column):
             value=type(self._params).param.hdbscan_min_cluster_size.default,
             placeholder="e.g., 400",
             sizing_mode=self._STRETCH_WIDTH
-        )   
-     
-        self._compute_hdbscan_embedding_run_button = ToggleButton(
+        )
+
+        self._compute_hdbscan_on_umap_button = pn.widgets.Button(
+            name="Compute HDBSCAN on UMAP",
+            button_type="success",
             height=55,
-            initial_state=True,
-            states={
-                "on": {
-                    "label": "Compute HDBSCAN Embedding",
-                    "on_click": lambda : print("HDBSCAN computation started"),
-                    "button_type": "success",
-                },
-                "off": {
-                    "label": "Cancel Next HDBSCAN Computation",
-                    "on_click": lambda : print("HDBSCAN computation cancelled"),
-                    "button_type": "danger",
-                }
-            },
             margin=0,
             sizing_mode=self._STRETCH_WIDTH
         )
         
-        n_neighbors_tooltip = pn.widgets.TooltipIcon(
-            value=Tooltip(
-                content="Pattern is integer number and then a comma and go on.", position="left"
-            ),
-            margin=(16, 0, 0, 0)
-        )
+        def on_select_computed_umap_embedding(event):
+            print(self._model.umap_data_dict)
         
-        n_neighbors_content = pn.Row(
-            self._hdbscan_n_neighbors,
-            n_neighbors_tooltip,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        min_dist_tooltip = pn.widgets.TooltipIcon(
-            value=Tooltip(
-                content="Pattern is float number and then a comma and go on.", position="left"
-            ),
-            margin=(16, 0, 0, 0)
-        )
-        
-        min_dist_content = pn.Row(
-            self._hdbscan_min_dist, 
-            min_dist_tooltip,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
+        self._compute_hdbscan_on_umap_button.on_click(on_select_computed_umap_embedding)
+            
         compute_hdbscan_embedding_content = pn.Column(
-            n_neighbors_content,
-            min_dist_content,
+            self._hdbscan_selected_umap,
             self._hdbscan_min_samples,
             self._hdbscan_min_cluster_size,
             pn.Row(
-                self._compute_hdbscan_embedding_run_button,
+                self._compute_hdbscan_on_umap_button,
                 sizing_mode=self._STRETCH_WIDTH,
                 height=55,
                 margin=(10, 0, 0, 0),
@@ -507,18 +454,6 @@ class Clustering2RightSidebarLayout(pn.Column):
         except ValueError:
             self._n_neighbors.value = event.old
             
-    def _validate_hdbscan_n_neighbors(self, event):
-        value = event.new
-        try:
-            str_values = [v.strip() for v in value.split(',')]
-            int_values = [int(v) for v in str_values if v]
-            if all(v > 0 for v in int_values):
-                self._params.hdbscan_n_neighbors = int_values
-            else:
-                raise ValueError
-        except ValueError:
-            self._hdbscan_n_neighbors.value = event.old
-            
     def _validate_min_dist(self, event):
         value = event.new
         try:
@@ -532,21 +467,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             self._min_dist.value = ', '.join(str(float(v)) for v in float_values)
         except ValueError:
             self._min_dist.value = event.old
-
-    def _validate_hdbscan_min_dist(self, event):
-        value = event.new
-        try:
-            str_values = [v.strip() for v in value.split(',')]
-            float_values = []
-            for v in str_values:
-                if v:
-                    float_values.append(float(v))
-            self._params.hdbscan_min_dist = float_values
-            # Always reformat the input as floats (e.g., 5 -> 5.0)
-            self._hdbscan_min_dist.value = ', '.join(str(float(v)) for v in float_values)
-        except ValueError:
-            self._hdbscan_min_dist.value = event.old
-            
+ 
     def _create_file(self):            
         umap_data_dict = self._model.umap_data_dict
         

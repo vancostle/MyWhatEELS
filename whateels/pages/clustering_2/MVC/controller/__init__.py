@@ -102,6 +102,11 @@ class Clustering2PageController:
                 if self._model.completed_umap_count > 0:
                     self._view.right_sidebar.download_results_button.disabled = False
                     self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls if at least one computation completed
+                    self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
+                    
+                    return
+                
+                self._view.right_sidebar.hdbscan_selected_umap.options = [] # Clear HDBSCAN UMAP selection options when cancelled
                 return
             
             # Check if all combinations have been processed
@@ -112,6 +117,7 @@ class Clustering2PageController:
                 self._view.left_sidebar.enable_controls()  # Re-enable controls in the left sidebar
                 self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls after UMAP computations are done
                 self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
+                self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
                 
                 # Enable download button if at least one computation completed
                 if self._model.completed_umap_count > 0:
@@ -202,4 +208,3 @@ class Clustering2PageController:
         self._view.main.display_placeholder()  # Show default placeholder when file is removed
         self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
         self._view.right_sidebar.disable_hdbscan_controls()  # Disable HDBSCAN controls when file is removed
-
