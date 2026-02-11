@@ -205,3 +205,71 @@ class UMAP_HDBSCAN:
         fig.update_yaxes(showgrid=True, gridcolor='gray')
         
         return fig
+
+    def plot_umap_embedding_with_labels(self, embedding, labels, cmap_obj, min_samp, min_clust) -> go.Figure:
+        """
+        Create and return a Plotly figure displaying the UMAP embedding colored by cluster labels.
+        
+        Args:
+            embedding: UMAP embedding array with shape (n_points, 2)
+            labels: Cluster labels array with shape (n_points,)
+            cmap_obj: dict with 'colors' key containing list of hex colors
+            min_samp: min_samples parameter used in HDBSCAN
+            min_clust: min_cluster_size parameter used in HDBSCAN
+            
+        Returns:
+            Plotly figure object
+        """
+        # Extract x and y coordinates from embedding
+        x = embedding[:, 0]
+        y = embedding[:, 1]
+        
+        # Get unique labels and create color mapping
+        unique_labels = np.unique(labels)
+        color_list = cmap_obj["colors"]
+        
+        # Create figure
+        fig = go.Figure()
+        
+        # Add scatter trace for each cluster
+        for idx, label in enumerate(unique_labels):
+            mask = (labels == label)
+            color = color_list[idx] if idx < len(color_list) else color_list[-1]
+            
+            fig.add_trace(go.Scatter(
+                x=x[mask],
+                y=y[mask],
+                mode='markers',
+                name=f'Cluster {label}' if label != -1 else 'Noise',
+                marker=dict(
+                    color=color,
+                    size=4,
+                    opacity=0.6,
+                    line=dict(width=0, color=color)
+                ),
+                showlegend=True
+            ))
+        
+        # Update layout to match original styling
+        fig.update_layout(
+            title=dict(
+                text=f'UMAP embedding min_samples={min_samp}, min_cluster_size={min_clust}',
+                x=0.5,
+                xanchor='center',
+                y=0.98,
+                yanchor='top',
+                font=dict(size=14)
+            ),
+            width=650,
+            height=300,
+            plot_bgcolor='black',
+            paper_bgcolor='black',
+            font=dict(color='white'),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            showlegend=True,
+            legend=dict(orientation='v', x=1.02, y=1),
+            margin=dict(l=0, r=100, t=40, b=0)
+        )
+        
+        return fig
