@@ -209,9 +209,10 @@ class Clustering2PageController:
         
         self._view.main.hdbscan_wrapper.append(
             pn.Row(
-                pn.Column(hdbscan_map_plot, sizing_mode='stretch_both'),
-                pn.Column(hdbscan_mean_spectra_plot, sizing_mode='stretch_both'),
-                sizing_mode='stretch_width'
+                pn.pane.Plotly(hdbscan_map_plot, sizing_mode='stretch_both', margin=0),
+                pn.pane.Plotly(hdbscan_mean_spectra_plot, sizing_mode='stretch_both', margin=0),
+                sizing_mode='stretch_width',
+                margin=0,
             )
         )
         

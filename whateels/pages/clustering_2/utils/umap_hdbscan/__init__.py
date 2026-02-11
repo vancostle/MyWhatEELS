@@ -139,6 +139,8 @@ class UMAP_HDBSCAN:
             coloraxis_colorbar=dict(title="Cluster"),
             xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
             yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            margin=dict(l=0, r=0, t=30, b=0),
+            title=dict(text="HDBSCAN Map", x=0.5, xanchor='center', y=0.98, yanchor='top', font=dict(size=14)),
         )
         
         return fig
@@ -187,7 +189,7 @@ class UMAP_HDBSCAN:
         
         # Update layout
         fig.update_layout(
-            title='Centroids of HDBSCAN on the UMAP embedding',
+            title=dict(text='Centroids of HDBSCAN on the UMAP embedding', x=0.5, xanchor='center', y=0.98, yanchor='top', font=dict(size=14)),
             xaxis_title='Energy Loss (eV)',
             yaxis_title='Intensity (counts)',
             plot_bgcolor='black',
@@ -195,6 +197,7 @@ class UMAP_HDBSCAN:
             font=dict(color='white'),
             showlegend=True,
             legend=dict(orientation='v', x=1.02, y=1),
+            margin=dict(l=50, r=100, t=40, b=40)
         )
         
         # Update axes styling
