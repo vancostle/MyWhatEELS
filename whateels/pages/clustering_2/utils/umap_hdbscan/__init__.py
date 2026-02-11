@@ -1,5 +1,10 @@
 
 import copy, numpy as np, umap, hdbscan
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+
 from typing import TYPE_CHECKING, Optional, Any
 if TYPE_CHECKING:
     from xarray import DataArray
@@ -10,6 +15,7 @@ class UMAP_HDBSCAN:
         
         self._electron_count_data = copy.deepcopy(electron_count_data) # Deep copy to avoid modifying original data
         self._eloss = self._electron_count_data.coords["Eloss"].values
+        self._data = np.array(self._electron_count_data)
     
     def cut_signal(self, min_eloss, max_eloss) -> bool:
         """Cuts the signal range based on min and max eloss values."""
@@ -71,33 +77,128 @@ class UMAP_HDBSCAN:
             min_cluster_size=min_cluster_size
         ).fit(umap_embedding)
         
-        return hdbscan_results        
+        return hdbscan_results  
 
+    def get_nclusters_cmap(self, hdbscan_results, n_clusters, cmap='tab20b'):
+        """
+        Create a colormap with n_clusters colors based on a colormap with 20 colors, such as 'tab20b'.
+        Returns a dict con .colors en formato hexadecimal para Bokeh/Holoviews.
+        """
+        original_cmap = plt.cm.get_cmap(cmap)
+        hex_colors = []
+        # Obtener las labels presentes en el clustering actual
+        labels = getattr(hdbscan_results, 'labels_', None)
+        if labels is not None and -1 in np.unique(labels):
+            # Si hay outlier, el primer color es lightgray
+            hex_colors.append('lightgray')
+            n_valid = n_clusters - 1
+        else:
+            n_valid = n_clusters
+        if n_valid > 0:
+            indices = np.linspace(0, 19, n_valid, dtype=int)
+            colors = [original_cmap(i) for i in indices]
+            hex_colors.extend([mcolors.to_hex(c) for c in colors])
+
+        return {"colors": hex_colors}
+    
+    def plot_hdbscan_map(self, hdbscan_results, cmap_obj) -> go.Figure:
+        """
+        Create and return a Plotly figure displaying the HDBSCAN clustering map.
         
-    # def hdbscan_for_umap(self, umap_data_dict : dict, n_neighbors, min_dist, min_samples=None, min_cluster_size=None):
-    #     """
-    #         Simplified HDBSCAn clustering and visualization on UMAP embedding, following class logic.
-    #     """
-        
-    #     config_dict = {
-    #         'dpi': 500,
-    #         'min_smaple_start': 1,
-    #         'min_sample_end': 8,
-    #         'min_cluster_start': 100,
-    #         'min_cluster_end': 900,
-    #         'min_cluster_step': 100
-    #     }
-        
-    #     spectrum_image = self._electron_count_data
-        
-    #     if isinstance(umap_data_dict, dict):
-    #         key = f'umap_data_{min_dist}_{n_neighbors}'
-    #         if key not in umap_data_dict:
-    #             raise ValueError(f"UMAP data for min_dist={min_dist} and n_neighbors={n_neighbors} not found in the provided dictionary.")
-    #         embedding = umap_data_dict[key].embedding_
-    #     elif isinstance(umap_data_dict, list):
-    #         embedding = umap_data_dict[0]
-    #     else:
-    #         embedding = umap_data_dict
+        Args:
+            hdbscan_results: HDBSCAN results object with labels_ attribute
+            cmap_obj: dict with 'colors' key containing list of hex colors
             
-    #     print("----------------------- HDBSCAN clustering would be performed here with the following parameters:")
+        Returns:
+            Plotly figure object
+        """
+        # Reshape labels to 2D clustering array using electron count data shape
+        shape = self._electron_count_data.shape
+        clustering = hdbscan_results.labels_.reshape(shape[0], shape[1])
+        
+        color_list = cmap_obj["colors"]
+        n_colors = len(color_list)
+        
+        # Create a discrete color scale for Plotly
+        color_scale = []
+        for i, color in enumerate(color_list):
+            frac = i / max(n_colors - 1, 1)
+            color_scale.append([frac, color])
+        
+        # Create the figure
+        fig = px.imshow(
+            clustering,
+            color_continuous_scale=color_scale,
+            aspect="equal",
+            origin="upper",
+            title="HDBSCAN Map"
+        )
+        
+        # Update layout
+        fig.update_layout(
+            coloraxis_colorbar=dict(title="Cluster"),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+        )
+        
+        return fig
+    
+    def plot_mean_spectra_per_cluster(self, hdbscan_results, cmap_obj) -> go.Figure:
+        """
+        Create and return a Plotly figure displaying mean spectra for each cluster.
+        
+        Args:
+            hdbscan_results: HDBSCAN results object with labels_ attribute
+            cmap_obj: dict with 'colors' key containing list of hex colors
+            
+        Returns:
+            Plotly figure object
+        """
+        # Reshape labels to clustering array
+        shape = self._electron_count_data.shape
+        clustering = hdbscan_results.labels_.reshape(shape[0], shape[1])
+        
+        energy_axis = self._eloss
+        flat_clustering = clustering.reshape(-1)
+        flat_spectra = self._data.reshape(-1, energy_axis.size)
+        unique_labels = np.unique(flat_clustering)
+        
+        print('Shapes: flat_clustering', flat_clustering.shape, 'flat_spectra', flat_spectra.shape)
+        
+        # Create figure
+        fig = go.Figure()
+        
+        for idx, label in enumerate(unique_labels):
+            cluster_mask = (flat_clustering == label)
+            spectra_cluster = flat_spectra[cluster_mask]
+            mean_spectrum = np.mean(spectra_cluster, axis=0)
+            
+            # Get color for this cluster
+            color = cmap_obj["colors"][idx]
+            
+            # Add trace for this cluster
+            fig.add_trace(go.Scatter(
+                x=energy_axis,
+                y=mean_spectrum,
+                mode='lines',
+                name=f'Label {label}',
+                line=dict(color=color)
+            ))
+        
+        # Update layout
+        fig.update_layout(
+            title='Centroids of HDBSCAN on the UMAP embedding',
+            xaxis_title='Energy Loss (eV)',
+            yaxis_title='Intensity (counts)',
+            plot_bgcolor='black',
+            paper_bgcolor='black',
+            font=dict(color='white'),
+            showlegend=True,
+            legend=dict(orientation='v', x=1.02, y=1),
+        )
+        
+        # Update axes styling
+        fig.update_xaxes(showgrid=True, gridcolor='gray')
+        fig.update_yaxes(showgrid=True, gridcolor='gray')
+        
+        return fig

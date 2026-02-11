@@ -1,4 +1,5 @@
 from whateels.helpers import SafeConverter, URLUtils
+from whateels.components import SplitJs
 import itertools, panel as pn, threading
 
 from typing import TYPE_CHECKING
@@ -185,6 +186,9 @@ class Clustering2PageController:
     
     def _compute_hdbscan_on_umap_event(self, event):
         """Event handler for computing HDBSCAN on UMAP embedding when the button is clicked."""
+        
+        self._view.main.hdbscan_wrapper.clear() # Clear previous HDBSCAN results from the main layout
+        
         # Extract the first embedding from the model's UMAP data dict
         umap_dict = self._model.umap_data_dict
 
@@ -196,12 +200,25 @@ class Clustering2PageController:
         # Get HDBSCAN parameters from UI
         min_samples = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_samples, default=4)
         min_cluster_size = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_cluster_size, default=100)
-        # hdbscan_results = self._hdbscan.compute_hdbscan_on_umap(embedding, min_samples, min_cluster_size)
+        hdbscan_results = self._hdbscan.compute_hdbscan_on_umap(embedding, min_samples, min_cluster_size)
+        cmap_obj = self._hdbscan.get_nclusters_cmap(hdbscan_results, n_clusters=len(set(hdbscan_results.labels_)))
         
-        print("Computing HDBSCAN on UMAP embedding with parameters:")
-        print("Min samples:", min_samples)
-        print("Min cluster size:", min_cluster_size)
-        print("UMAP embedding shape:", embedding.shape)
+        # Create the Plotly figures and wrap them in Panel panes
+        hdbscan_map_plot = self._hdbscan.plot_hdbscan_map(hdbscan_results, cmap_obj)
+        hdbscan_mean_spectra_plot = self._hdbscan.plot_mean_spectra_per_cluster(hdbscan_results, cmap_obj)
+        
+        self._view.main.hdbscan_wrapper.append(
+            pn.Row(
+                pn.Column(hdbscan_map_plot, sizing_mode='stretch_both'),
+                pn.Column(hdbscan_mean_spectra_plot, sizing_mode='stretch_both'),
+                sizing_mode='stretch_width'
+            )
+        )
+        
+        # print("Computing HDBSCAN on UMAP embedding with parameters:")
+        # print("Min samples:", min_samples)
+        # print("Min cluster size:", min_cluster_size)
+        # print("UMAP embedding shape:", embedding.shape)
 
         # return hdbscan_results
     
@@ -230,6 +247,8 @@ class Clustering2PageController:
     
     def _on_file_removed(self) -> None:
         """Event handler for when file is removed."""
-        self._view.main.display_placeholder()  # Show default placeholder when file is removed
+        main_placeholder = self._view.main.placeholder
+        self._view.main.clear()  # Show default placeholder when file is removed
+        self._view.main.append(main_placeholder)  # Re-append the main placeholder after clearing
         self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
         self._view.right_sidebar.disable_hdbscan_controls()  # Disable HDBSCAN controls when file is removed

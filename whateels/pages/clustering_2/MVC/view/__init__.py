@@ -21,7 +21,7 @@ class Clustering2PageView:
 
         self._modal_manager = ModalManager(custom_page)
 
-        self._main = Clustering2MainLayout()
+        self._main = Clustering2MainLayout(sizing_mode='stretch_both')
         self._left_sidebar = Clustering2LeftSidebarLayout(model) 
         self._right_sidebar = Clustering2RightSidebarLayout(model, custom_page, self._modal_manager)
         
@@ -86,7 +86,7 @@ class Clustering2PageView:
             grid[row, col] = column_wrapper
             delay += delay_increment
 
-        self._main.append(grid)
+        self._main.umap_wrapper.append(grid)
         return self._result_panels
 
     def replace_placeholder_with_umap_embedding(self, index, min_dist, n_neighbors, umap_data_dict: dict):
