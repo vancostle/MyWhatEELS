@@ -18,7 +18,7 @@ class ClusteringView:
         # Load any provided CSS files
         css_files = [
             str(CSS_ROOT / "clustering.css"),
-            str(CSS_ROOT / "dataset_info.css")
+            str(CSS_ROOT / "info_panel.css")
         ]
 
         LoadCSS(css_files)

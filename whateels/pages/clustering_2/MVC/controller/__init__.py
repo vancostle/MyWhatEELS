@@ -202,8 +202,7 @@ class Clustering2PageController:
         print("Min samples:", min_samples)
         print("Min cluster size:", min_cluster_size)
         print("UMAP embedding shape:", embedding.shape)
-        
-        
+
         # return hdbscan_results
     
     def _on_umap_cancel_button_click(self) -> None:
