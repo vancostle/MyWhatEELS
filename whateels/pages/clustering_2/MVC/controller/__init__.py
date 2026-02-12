@@ -209,12 +209,12 @@ class Clustering2PageController:
         self._view.main.hdbscan_wrapper.append(
             pn.Column(
                 pn.Row(
-                    pn.pane.Plotly(hdbscan_map_plot, sizing_mode='stretch_both', margin=0),
+                    pn.pane.Plotly(hdbscan_map_plot, sizing_mode='stretch_both', margin=(0, 10, 0, 0)),
                     pn.pane.Plotly(hdbscan_mean_spectra_plot, sizing_mode='stretch_both', margin=0),
                     sizing_mode='stretch_width',
                     margin=0,
                 ),
-                pn.pane.Plotly(hdbscan_umap_embedding_width_labels_plot, sizing_mode='stretch_width', margin=0),
+                pn.pane.Plotly(hdbscan_umap_embedding_width_labels_plot, sizing_mode='stretch_width', margin=(10, 0, 10, 0)),
                 sizing_mode='stretch_width',
                 margin=0,
             )
