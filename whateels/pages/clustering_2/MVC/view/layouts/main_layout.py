@@ -12,8 +12,8 @@ class Clustering2MainLayout(pn.Column):
     ):
         super().__init__(**kwargs, margin=0)
         self._placeholder = MainLayoutPlaceholder()
-        self._umap_wrapper = pn.Column(sizing_mode='stretch_width', styles={'border': '1px solid red'}, margin=0)
-        self._hdbscan_wrapper = pn.Column(sizing_mode='stretch_width', styles={'border': '1px solid green'}, margin=0)    
+        self._umap_wrapper = pn.Column(sizing_mode='stretch_width', margin=0)
+        self._hdbscan_wrapper = pn.Column(sizing_mode='stretch_width', margin=0)    
         
         self.append(self._placeholder)
         self.append(self._hdbscan_wrapper)    

@@ -117,7 +117,7 @@ class Clustering2PageView:
                 margin=dict(l=0, r=0, t=30, b=0)
             )
             
-            plot_panel = pn.pane.Plotly(fig, sizing_mode='stretch_both')
+            plot_panel = pn.pane.Plotly(fig, sizing_mode='stretch_both', margin=0)
             column_wrapper = self._result_columns[index]
             column_wrapper.objects = [plot_panel]
             self._result_panels[index] = plot_panel
