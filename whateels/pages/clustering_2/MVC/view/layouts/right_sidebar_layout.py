@@ -381,16 +381,20 @@ class Clustering2RightSidebarLayout(pn.Column):
 
     def _create_hdbscan_simple_details(self) -> SimpleDetails:
         
-        print("Creating HDBSCAN details with UMAP data dict:", self._model.umap_data_dict)
         umap_data_dict_keys = list(self._model.umap_data_dict.keys()) if self._model.umap_data_dict is not None else []
-        print("UMAP data dict keys for HDBSCAN select options:", umap_data_dict_keys)
-        
         
         self._hdbscan_selected_umap = pn.widgets.Select(
             name="Select UMAP embedding",
             options=umap_data_dict_keys,
             sizing_mode=self._STRETCH_WIDTH
         )
+        
+        def update_hdbscan_min_samples(event):
+            new_value = event.new
+            if new_value is not None and new_value > 0:
+                self._params.hdbscan_min_samples = new_value
+            else:
+                self._hdbscan_min_samples.value = event.old  # Revert to old value if new value is invalid
           
         self._hdbscan_min_samples = pn.widgets.IntInput(
             name=type(self._params).param.hdbscan_min_samples.label,
@@ -399,12 +403,23 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
+        self._hdbscan_min_samples.param.watch(update_hdbscan_min_samples, 'value')
+        
         self._hdbscan_min_cluster_size = pn.widgets.IntInput(
             name=type(self._params).param.hdbscan_min_cluster_size.label,
             value=type(self._params).param.hdbscan_min_cluster_size.default,
             placeholder="e.g., 400",
             sizing_mode=self._STRETCH_WIDTH
         )
+
+        def update_hdbscan_min_cluster_size(event):
+            new_value = event.new
+            if new_value is not None and new_value > 0:
+                self._params.hdbscan_min_cluster_size = new_value
+            else:
+                self._hdbscan_min_cluster_size.value = event.old  # Revert to old value if new value is invalid
+
+        self._hdbscan_min_cluster_size.param.watch(update_hdbscan_min_cluster_size, 'value')
 
         self._compute_hdbscan_on_umap_button = pn.widgets.Button(
             name="Compute HDBSCAN on UMAP",

@@ -71,7 +71,7 @@ class UMAP_HDBSCAN:
     def compute_hdbscan_on_umap(self, umap_embedding, min_samples, min_cluster_size):
         """Compute HDBSCAN clustering on the provided UMAP embedding."""
         
-        print(f"Computing HDBSCAN with min_samples={min_samples} and min_cluster_size={min_cluster_size}...")
+        print(f"Computing HDBSCAN with min_samples={min_samples} and min_cluster_size={min_cluster_size} and umap embedding={umap_embedding}")
         hdbscan_results = hdbscan.HDBSCAN(
             min_samples=min_samples,
             min_cluster_size=min_cluster_size

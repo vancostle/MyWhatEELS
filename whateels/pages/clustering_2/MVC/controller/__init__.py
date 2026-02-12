@@ -110,8 +110,6 @@ class Clustering2PageController:
                     self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls if at least one computation completed
                     self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
                     
-                    print("keys in umap_data_dict:", self._model.umap_data_dict.keys())
-                    
                     return
                 
                 self._view.right_sidebar.hdbscan_selected_umap.options = [] # Clear HDBSCAN UMAP selection options when cancelled
@@ -130,7 +128,6 @@ class Clustering2PageController:
                 if self._model.completed_umap_count > 0:
                     self._view.right_sidebar.download_results_button.disabled = False
                     self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
-                    print("keys in umap_data_dict:", self._model.umap_data_dict.keys())
                 return
             
             # Set current placeholder to loading state
@@ -186,15 +183,12 @@ class Clustering2PageController:
     
     def _compute_hdbscan_on_umap_event(self, event):
         """Event handler for computing HDBSCAN on UMAP embedding when the button is clicked."""
-        
-        self._view.main.hdbscan_wrapper.clear() # Clear previous HDBSCAN results from the main layout
-        
-        # Extract the first embedding from the model's UMAP data dict
-        umap_dict = self._model.umap_data_dict
 
-        # Get the first embedding object
-        first_key = next(iter(umap_dict))
-        embedding_obj = umap_dict[first_key]
+        self._view.main.hdbscan_wrapper.clear() # Clear previous HDBSCAN results from the main layout
+
+        selected_umap_dict = self._view.right_sidebar.hdbscan_selected_umap.value
+        
+        embedding_obj = selected_umap_dict
         # If embedding_obj is a dict or has 'embedding_' attribute, extract the array
         embedding = getattr(embedding_obj, 'embedding_', embedding_obj)
         # Get HDBSCAN parameters from UI
@@ -225,13 +219,6 @@ class Clustering2PageController:
                 margin=0,
             )
         )
-        
-        # print("Computing HDBSCAN on UMAP embedding with parameters:")
-        # print("Min samples:", min_samples)
-        # print("Min cluster size:", min_cluster_size)
-        # print("UMAP embedding shape:", embedding.shape)
-
-        # return hdbscan_results
     
     def _on_umap_cancel_button_click(self) -> None:
         """Event handler for UMAP cancel button click."""
