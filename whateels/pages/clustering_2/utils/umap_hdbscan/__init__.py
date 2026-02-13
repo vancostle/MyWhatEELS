@@ -250,7 +250,7 @@ class UMAP_HDBSCAN:
                 x=x[mask],
                 y=y[mask],
                 mode='markers',
-                name=f'Cluster {label}' if label != -1 else 'Noise',
+                name=f'Cluster {label}' if label != -1 else 'Cluster -1 (outliers)',
                 marker=dict(
                     color=color,
                     size=4,

@@ -11,18 +11,23 @@ class Clustering2PageController:
     
     def __init__(self, model: "Clustering2PageModel", view: "Clustering2PageView") -> None:
         TAB_PARAM = "tab"
+        
+        self._is_valid_tab = False
 
         self._model = model
         self._view = view
         
         tab_param = URLUtils.get_query_param(TAB_PARAM) # Get tab index from URL
         tab_param = SafeConverter.to_int(tab_param, default=-1) # Get tab index as int, default to -1 if invalid
+        
         all_datasets = self._model.app_state.all_datasets
 
         # Display nothing if no valid tab or datasets
         if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
             print("No valid datasets or tab index.")
             return
+
+        self._is_valid_tab = True
 
         # Set selected dataset in the model
         self._model.selected_dataset = all_datasets[tab_param]
@@ -52,6 +57,10 @@ class Clustering2PageController:
         # Register callback for when UMAP data is loaded from file
         view.left_sidebar.set_on_umap_loaded_callback(self._on_umap_loaded_from_file)
         view.left_sidebar.set_on_file_removed_callback(self._on_file_removed)
+        
+    def is_valid_tab(self) -> bool:
+        """Returns True if the controller was initialized with a valid tab and dataset, else False."""
+        return self._is_valid_tab
         
     def _on_umap_run_button_click(self) -> None:
         """Event handler for UMAP run button click."""
