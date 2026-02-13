@@ -123,6 +123,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         # Cut signal range inputs
         self._min_cut_signal = pn.widgets.FloatInput()
         self._max_cut_signal = pn.widgets.FloatInput()
+        self._reset_cut_signal_button = pn.widgets.Button()
         
         # UMAP parameters
         self._n_neighbors = pn.widgets.TextInput()
@@ -161,6 +162,9 @@ class Clustering2RightSidebarLayout(pn.Column):
     @property
     def max_cut_signal(self) -> pn.widgets.FloatInput:
         return self._max_cut_signal
+    @property
+    def reset_cut_signal_button(self) -> pn.widgets.Button:
+        return self._reset_cut_signal_button
     @property
     def compute_umap_embedding_run_button(self) -> ToggleButton:
         return self._compute_umap_embedding_run_button
@@ -237,12 +241,18 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
+        self._reset_cut_signal_button = pn.widgets.Button(
+            name="Reset Eloss Range",
+            button_type="warning",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0, 0, 0)
+        )
+        
         cut_signal_content = pn.Column(
-            pn.Row(
-                self._min_cut_signal,
-                self._max_cut_signal,
-                sizing_mode=self._STRETCH_WIDTH,
-            )
+            self._min_cut_signal,
+            self._max_cut_signal,
+            self._reset_cut_signal_button,
+            sizing_mode=self._STRETCH_WIDTH,
         )
         
         return SimpleDetails(

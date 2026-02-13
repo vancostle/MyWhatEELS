@@ -42,6 +42,8 @@ class Clustering2PageController:
         view.right_sidebar.max_cut_signal.start = eloss_min
         view.right_sidebar.max_cut_signal.end = eloss_max
         
+        view.right_sidebar.reset_cut_signal_button.on_click(self._reset_cut_signal_event) # Register callback for reset cut signal button
+        
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(True, self._on_umap_run_button_click)
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(False, self._on_umap_cancel_button_click)
         
@@ -163,8 +165,19 @@ class Clustering2PageController:
         # Start with the first placeholder
         process_next(index=0)
         
+    def _reset_cut_signal_event(self, _) -> None:
+        """Reset the cut signal to the original eloss range."""
+        original_min_eloss, original_max_eloss = self._hdbscan.get_original_eloss_range()
+        self._view.right_sidebar.min_cut_signal.value = original_min_eloss
+        self._view.right_sidebar.max_cut_signal.value = original_max_eloss
+        
     def _compute_umap_embedding_event(self, min_dist: float, n_neighbors: int, n_components: int, metric: str) -> dict:
         """Event handler for computing UMAP embedding when the button is clicked."""
+        
+        self._hdbscan.cut_signal(
+            min_eloss=self._view.right_sidebar.params.min_eloss,
+            max_eloss=self._view.right_sidebar.params.max_eloss
+        ) # Cut signal range in the data based on user input before computing UMAP embedding
         
         embeddings = []
         umap_data_dicts = dict()
@@ -183,6 +196,11 @@ class Clustering2PageController:
     
     def _compute_hdbscan_on_umap_event(self, event):
         """Event handler for computing HDBSCAN on UMAP embedding when the button is clicked."""
+        
+        self._hdbscan.cut_signal(
+            min_eloss=self._view.right_sidebar.params.min_eloss,
+            max_eloss=self._view.right_sidebar.params.max_eloss
+        ) # Cut signal range in the data based on user input before computing UMAP embedding
 
         self._view.main.hdbscan_wrapper.clear() # Clear previous HDBSCAN results from the main layout
 
