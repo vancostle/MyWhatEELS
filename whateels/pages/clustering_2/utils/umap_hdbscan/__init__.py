@@ -2,8 +2,11 @@
 import copy, numpy as np, umap, hdbscan
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.graph_objects as go
+import holoviews as hv
+import xarray as xr
+
+# Initialize Holoviews with Bokeh backend
+hv.extension('bokeh') # type: ignore
 
 from typing import TYPE_CHECKING, Optional, Any
 if TYPE_CHECKING:
@@ -113,60 +116,47 @@ class UMAP_HDBSCAN:
 
         return {"colors": hex_colors}
     
-    def plot_hdbscan_map(self, hdbscan_results, cmap_obj) -> go.Figure:
+    def plot_hdbscan_map(self, hdbscan_results, cmap_obj):
         """
-        Create and return a Plotly figure displaying the HDBSCAN clustering map.
+        Create and return a Holoviews Image displaying the HDBSCAN clustering map.
         
         Args:
             hdbscan_results: HDBSCAN results object with labels_ attribute
             cmap_obj: dict with 'colors' key containing list of hex colors
             
         Returns:
-            Plotly figure object
+            Holoviews Image object
         """
         # Reshape labels to 2D clustering array using electron count data shape
         shape = self._electron_count_data.shape
         clustering = hdbscan_results.labels_.reshape(shape[0], shape[1])
         
-        color_list = cmap_obj["colors"]
-        n_colors = len(color_list)
-        
-        # Create a discrete color scale for Plotly
-        color_scale = []
-        for i, color in enumerate(color_list):
-            frac = i / max(n_colors - 1, 1)
-            color_scale.append([frac, color])
-        
-        # Create the figure
-        fig = px.imshow(
-            clustering,
-            color_continuous_scale=color_scale,
-            aspect="equal",
-            origin="upper",
-            title="HDBSCAN Map"
+        # Create Holoviews Image
+        img = hv.Image(
+            xr.Dataset(
+                {'Labels': (['y', 'x'], clustering)},
+                coords={'x': np.arange(shape[1]),
+                        'y': np.arange(shape[0])}
+            ),
+            kdims=['x', 'y']
+        ).opts(
+            xaxis=None, yaxis=None, colorbar=True, tools=['hover', 'lasso_select'], toolbar='right',
+            invert_yaxis=True, aspect='equal', responsive=True, frame_height=400, cmap=cmap_obj["colors"],
+            title='HDBSCAN map'
         )
         
-        # Update layout
-        fig.update_layout(
-            coloraxis_colorbar=dict(title="Cluster"),
-            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-            margin=dict(l=0, r=0, t=30, b=0),
-            title=dict(text="HDBSCAN Map", x=0.5, xanchor='center', y=0.98, yanchor='top', font=dict(size=14)),
-        )
-        
-        return fig
+        return img
     
-    def plot_mean_spectra_per_cluster(self, hdbscan_results, cmap_obj) -> go.Figure:
+    def plot_mean_spectra_per_cluster(self, hdbscan_results, cmap_obj):
         """
-        Create and return a Plotly figure displaying mean spectra for each cluster.
+        Create and return a Holoviews NdOverlay displaying mean spectra for each cluster.
         
         Args:
             hdbscan_results: HDBSCAN results object with labels_ attribute
             cmap_obj: dict with 'colors' key containing list of hex colors
             
         Returns:
-            Plotly figure object
+            Holoviews NdOverlay object
         """
         # Reshape labels to clustering array
         shape = self._electron_count_data.shape
@@ -176,10 +166,11 @@ class UMAP_HDBSCAN:
         flat_clustering = clustering.reshape(-1)
         flat_spectra = self._data.reshape(-1, energy_axis.size)
         unique_labels = np.unique(flat_clustering)
-                
-        # Create figure
-        fig = go.Figure()
         
+        print('Shapes: flat_clustering', flat_clustering.shape, 'flat_spectra', flat_spectra.shape)
+        
+        # Create curves for each cluster
+        mean_spectra_overlay = {}
         for idx, label in enumerate(unique_labels):
             cluster_mask = (flat_clustering == label)
             spectra_cluster = flat_spectra[cluster_mask]
@@ -188,37 +179,33 @@ class UMAP_HDBSCAN:
             # Get color for this cluster
             color = cmap_obj["colors"][idx]
             
-            # Add trace for this cluster
-            fig.add_trace(go.Scatter(
-                x=energy_axis,
-                y=mean_spectrum,
-                mode='lines',
-                name=f'Label {label}',
-                line=dict(color=color)
-            ))
+            # Create curve
+            curve = hv.Curve(
+                (energy_axis, mean_spectrum),
+                'Eloss',
+                f'Intensity (Label {label})'
+            ).opts(color=color)
+            mean_spectra_overlay[f'Label_{label}'] = curve
         
-        # Update layout
-        fig.update_layout(
-            title=dict(text='Centroids of HDBSCAN on the UMAP embedding', x=0.5, xanchor='center', y=0.98, yanchor='top', font=dict(size=14)),
-            xaxis_title='Energy Loss (eV)',
-            yaxis_title='Intensity (counts)',
-            plot_bgcolor='black',
-            paper_bgcolor='black',
-            font=dict(color='white'),
-            showlegend=True,
-            legend=dict(orientation='v', x=1.02, y=1),
-            margin=dict(l=50, r=100, t=40, b=40)
+        # Create NdOverlay
+        overlay = hv.NdOverlay(mean_spectra_overlay).opts(
+            bgcolor='black',
+            legend_cols=False,
+            legend_position='right',
+            show_grid=True,
+            ylabel='Intensity (counts)',
+            xlabel='Energy Loss (eV)',
+            title='Centroids of HDBSCAN on the UMAP embedding',
+            tools=['lasso_select', 'box_select'],
+            responsive=True,
+            frame_height=400,
         )
         
-        # Update axes styling
-        fig.update_xaxes(showgrid=True, gridcolor='gray')
-        fig.update_yaxes(showgrid=True, gridcolor='gray')
-        
-        return fig
+        return overlay
 
-    def plot_umap_embedding_with_labels(self, embedding, labels, cmap_obj, min_samp, min_clust) -> go.Figure:
+    def plot_umap_embedding_with_labels(self, embedding, labels, cmap_obj, min_samp, min_clust):
         """
-        Create and return a Plotly figure displaying the UMAP embedding colored by cluster labels.
+        Create and return a Holoviews Points plot displaying the UMAP embedding colored by cluster labels.
         
         Args:
             embedding: UMAP embedding array with shape (n_points, 2)
@@ -228,58 +215,27 @@ class UMAP_HDBSCAN:
             min_clust: min_cluster_size parameter used in HDBSCAN
             
         Returns:
-            Plotly figure object
+            Holoviews Points object
         """
-        # Extract x and y coordinates from embedding
-        x = embedding[:, 0]
-        y = embedding[:, 1]
-        
-        # Get unique labels and create color mapping
-        unique_labels = np.unique(labels)
-        color_list = cmap_obj["colors"]
-        
-        # Create figure
-        fig = go.Figure()
-        
-        # Add scatter trace for each cluster
-        for idx, label in enumerate(unique_labels):
-            mask = (labels == label)
-            color = color_list[idx] if idx < len(color_list) else color_list[-1]
-            
-            fig.add_trace(go.Scatter(
-                x=x[mask],
-                y=y[mask],
-                mode='markers',
-                name=f'Cluster {label}' if label != -1 else 'Cluster -1 (outliers)',
-                marker=dict(
-                    color=color,
-                    size=4,
-                    opacity=0.6,
-                    line=dict(width=0, color=color)
-                ),
-                showlegend=True
-            ))
-        
-        # Update layout to match original styling
-        fig.update_layout(
-            title=dict(
-                text=f'UMAP embedding min_samples={min_samp}, min_cluster_size={min_clust}',
-                x=0.5,
-                xanchor='center',
-                y=0.98,
-                yanchor='top',
-                font=dict(size=14)
-            ),
-            width=650,
-            height=300,
-            plot_bgcolor='black',
-            paper_bgcolor='black',
-            font=dict(color='white'),
-            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
-            showlegend=True,
-            legend=dict(orientation='v', x=1.02, y=1),
-            margin=dict(l=0, r=100, t=40, b=0)
+        zers = np.zeros((embedding.shape[0], 3))
+        zers[:, :-1] = embedding
+        zers[:, -1] = labels
+        points = hv.Points(zers, vdims=['color']).opts(
+            toolbar='right',
+            fill_alpha=0.6,
+            bgcolor='black',
+            line_alpha=0,
+            line_width=0.15,
+            size=2.5,
+            xaxis=None,
+            yaxis=None,
+            cmap=cmap_obj["colors"],
+            show_legend=True,
+            color='color',
+            shared_axes=False,
+            title=f'UMAP embedding min_samples={min_samp}, min_cluster_size={min_clust}',
+            tools=['lasso_select', 'box_select'],
+            responsive=True,
+            frame_height=400,
         )
-        
-        return fig
+        return points

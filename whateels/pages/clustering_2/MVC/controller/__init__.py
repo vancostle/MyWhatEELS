@@ -224,7 +224,7 @@ class Clustering2PageController:
         hdbscan_results = self._hdbscan.compute_hdbscan_on_umap(embedding, min_samples, min_cluster_size)
         cmap_obj = self._hdbscan.get_nclusters_cmap(hdbscan_results, n_clusters=len(set(hdbscan_results.labels_)))
         
-        # Create the Plotly figures and wrap them in Panel panes
+        # Create the Holoviews figures and wrap them in Panel panes
         hdbscan_map_plot = self._hdbscan.plot_hdbscan_map(hdbscan_results, cmap_obj)
         hdbscan_mean_spectra_plot = self._hdbscan.plot_mean_spectra_per_cluster(hdbscan_results, cmap_obj)
         hdbscan_umap_embedding_width_labels_plot = self._hdbscan.plot_umap_embedding_with_labels(
@@ -236,12 +236,12 @@ class Clustering2PageController:
         self._view.main.hdbscan_wrapper.append(
             pn.Column(
                 pn.Row(
-                    pn.pane.Plotly(hdbscan_map_plot, sizing_mode='stretch_both', margin=(0, 10, 0, 0)),
-                    pn.pane.Plotly(hdbscan_mean_spectra_plot, sizing_mode='stretch_both', margin=0),
+                    hdbscan_map_plot,
+                    hdbscan_mean_spectra_plot,
                     sizing_mode='stretch_width',
                     margin=0,
                 ),
-                pn.pane.Plotly(hdbscan_umap_embedding_width_labels_plot, sizing_mode='stretch_width', margin=(10, 0, 10, 0)),
+                hdbscan_umap_embedding_width_labels_plot,
                 sizing_mode='stretch_width',
                 margin=0,
             )
