@@ -8,7 +8,7 @@ class Clustering2Page(GeneralPageTemplate):
         view = Clustering2PageView(model, custom_page=self)
         controller = Clustering2PageController(model, view)
         
-        if controller.is_valid_tab():
+        if controller.is_valid_tab_and_dataset():
             super().__init__(
                 title="Clustering 2 Page",
                 main=[view.main],
