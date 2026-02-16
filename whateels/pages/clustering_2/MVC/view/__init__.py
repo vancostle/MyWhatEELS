@@ -6,7 +6,8 @@ from .layouts import (
 )
 from whateels.components import ModalManager
 import panel as pn
-import plotly.graph_objs as go
+import holoviews as hv
+import numpy as np
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -95,29 +96,27 @@ class Clustering2PageView:
         if index < len(self._result_columns):
             emb = umap_data_dict[f'umap_data_{min_dist}_{n_neighbors}'].embedding_
             
-            # Create Plotly scatter plot
-            fig = go.Figure(data=go.Scatter(
-                x=emb[:, 0],
-                y=emb[:, 1],
-                mode='markers',
-                marker=dict(
-                    size=3,
-                    color='steelblue',
-                    opacity=0.7,
-                    line=dict(width=0)
-                )
-            ))
+            # Create Holoviews Points plot
+            zers = np.zeros((emb.shape[0], 3))
+            zers[:, :-1] = emb
             
-            fig.update_layout(
+            points = hv.Points(zers, vdims=['color']).opts(
+                toolbar='right',
+                fill_alpha=0.7,
+                bgcolor='white',
+                line_alpha=0,
+                line_width=0,
+                size=3,
+                xaxis=None,
+                yaxis=None,
+                color='steelblue',
+                show_legend=False,
+                shared_axes=False,
                 title=f'UMAP on min_dist={min_dist}, n_neighbors={n_neighbors}',
-                xaxis=dict(visible=False),
-                yaxis=dict(visible=False),
-                plot_bgcolor='white',
-                showlegend=False,
-                margin=dict(l=0, r=0, t=30, b=0)
+                responsive=True
             )
             
-            plot_panel = pn.pane.Plotly(fig, sizing_mode='stretch_both', margin=0)
+            plot_panel = pn.pane.HoloViews(points, sizing_mode='stretch_both', margin=0)
             column_wrapper = self._result_columns[index]
             column_wrapper.objects = [plot_panel]
             self._result_panels[index] = plot_panel
