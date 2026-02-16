@@ -1,6 +1,6 @@
 import panel as pn
 
-class MainLayoutPlaceholder(pn.Column):
+class DMFileUploadedPlaceholder(pn.Column):
     
     def __init__(
         self,

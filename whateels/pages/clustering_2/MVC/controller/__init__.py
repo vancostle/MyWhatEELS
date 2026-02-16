@@ -26,12 +26,18 @@ class Clustering2PageController:
         view.left_sidebar.set_on_umap_loaded_callback(self._on_umap_loaded_from_file)
         view.left_sidebar.set_on_file_removed_callback(self._on_file_removed)
 
-        # Display nothing if no valid tab or datasets
+        # Check if valid tab and datasets exist
         if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
-            print("No valid datasets or tab index.")
+            # Show placeholder for when no DM file is uploaded
+            main_placeholder = self._view.main.none_dm_file_uploaded_placeholder
+            self._view.main.append(main_placeholder)
             return
 
         self._is_valid_tab_and_dataset = True
+        
+        # Show placeholder for when DM file is uploaded
+        main_placeholder = self._view.main.dm_file_uploaded_placeholder
+        self._view.main.append(main_placeholder)
 
         # Set selected dataset in the model
         self._model.selected_dataset = all_datasets[tab_param]
@@ -272,7 +278,13 @@ class Clustering2PageController:
     
     def _on_file_removed(self) -> None:
         """Event handler for when file is removed."""
-        main_placeholder = self._view.main.placeholder
+        
+        # Reset model state related to UMAP data
+        if (self._is_valid_tab_and_dataset):
+            main_placeholder = self._view.main.dm_file_uploaded_placeholder
+        else:
+            main_placeholder = self._view.main.none_dm_file_uploaded_placeholder
+
         self._view.main.clear()  # Show default placeholder when file is removed
         self._view.main.append(main_placeholder)  # Re-append the main placeholder after clearing
         self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
