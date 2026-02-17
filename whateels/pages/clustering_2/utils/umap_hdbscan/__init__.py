@@ -256,11 +256,8 @@ class UMAP_HDBSCAN:
         hv.HeatMap : Holoviews HeatMap object
             The created heatmap with labeled text annotations
         """
-        # Create cluster matrix for heatmap
-        min_samples_unique = sorted(set([d[0] for d in data]))
-        min_cluster_size_unique = sorted(set([d[1] for d in data]))
-
         # Build data list for HeatMap: (x, y, value) format
+        # Holoviews automatically handles unique values and positioning
         heatmap_data = []
         for d in data:
             min_samples = d[0]
