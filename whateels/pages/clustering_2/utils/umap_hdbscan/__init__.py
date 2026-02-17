@@ -239,3 +239,63 @@ class UMAP_HDBSCAN:
             frame_height=400,
         )
         return points
+
+    def plot_cluster_heatmap(self, data, cmap='rainbow'):
+        """
+        Create a heatmap visualization of clustering results for different parameter combinations.
+        
+        Parameters:
+        -----------
+        data : list of tuples
+            Each tuple should contain (min_samples, min_cluster_size, num_clusters, num_outliers, outlier_percentage)
+        cmap : str, optional
+            Colormap name for the heatmap. Default is 'rainbow'
+            
+        Returns:
+        --------
+        hv.HeatMap : Holoviews HeatMap object
+            The created heatmap with labeled text annotations
+        """
+        # Create cluster matrix for heatmap
+        min_samples_unique = sorted(set([d[0] for d in data]))
+        min_cluster_size_unique = sorted(set([d[1] for d in data]))
+
+        # Build data list for HeatMap: (x, y, value) format
+        heatmap_data = []
+        for d in data:
+            min_samples = d[0]
+            min_cluster_size = d[1]
+            num_clusters = d[2]
+            heatmap_data.append((min_cluster_size, min_samples, num_clusters))
+
+        # Create HeatMap
+        heatmap = hv.HeatMap(heatmap_data, kdims=['min_cluster_size', 'min_samples'], vdims=['num_clusters'])
+        
+        # Add text labels overlay
+        labels_data = [(d[1], d[0], str(int(d[2]))) for d in data]
+        labels = hv.Labels(labels_data, kdims=['min_cluster_size', 'min_samples'], vdims=['text'])
+        
+        # Combine heatmap with labels
+        overlay = (heatmap * labels).opts(
+            hv.opts.HeatMap(
+                cmap=cmap,
+                colorbar=True,
+                toolbar='right',
+                xlabel='min_cluster_size',
+                ylabel='min_samples',
+                title='Number of Clusters by Parameters',
+                width=600,
+                height=400,
+                tools=['hover'],
+                clabel='Number of Clusters',
+                responsive=True,
+            ),
+            hv.opts.Labels(
+                text_color='black',
+                text_font_size='9pt',
+                text_align='center',
+                text_baseline='middle'
+            )
+        )
+        
+        return overlay
