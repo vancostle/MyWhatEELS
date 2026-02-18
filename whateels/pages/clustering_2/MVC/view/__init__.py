@@ -9,6 +9,9 @@ import panel as pn
 import holoviews as hv
 import numpy as np
 
+# Initialize Holoviews with Bokeh backend
+hv.extension('bokeh') # type: ignore
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate

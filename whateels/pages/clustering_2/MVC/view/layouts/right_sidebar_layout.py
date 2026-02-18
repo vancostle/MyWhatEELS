@@ -134,6 +134,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         # HDBSCAN parameters
         self._hdbscan_selected_umap = pn.widgets.Select()
+        self._hdbscan_active_button = pn.widgets.Button()
         self._hdbscan_min_samples = pn.widgets.IntInput()
         self._hdbscan_min_cluster_size = pn.widgets.IntInput()
         self._compute_hdbscan_on_umap_button = pn.widgets.Button()
@@ -177,6 +178,9 @@ class Clustering2RightSidebarLayout(pn.Column):
     @property
     def hdbscan_selected_umap(self) -> pn.widgets.Select:
         return self._hdbscan_selected_umap
+    @property
+    def hdbscan_activate_button(self) -> pn.widgets.Button:
+        return self._hdbscan_active_button
     
     def disable_controls(self):
         """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
@@ -399,6 +403,13 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
+        self._hdbscan_active_button = pn.widgets.Button(
+            name="Evaluate",
+            button_type="warning",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(6, 10, 10, 10)
+        )
+        
         def update_hdbscan_min_samples(event):
             new_value = event.new
             if new_value is not None and new_value > 0:
@@ -441,6 +452,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             
         compute_hdbscan_embedding_content = pn.Column(
             self._hdbscan_selected_umap,
+            self._hdbscan_active_button,
             self._hdbscan_min_samples,
             self._hdbscan_min_cluster_size,
             pn.Row(

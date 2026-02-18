@@ -59,6 +59,8 @@ class Clustering2PageController:
         
         view.right_sidebar.reset_cut_signal_button.on_click(self._reset_cut_signal_event) # Register callback for reset cut signal button
         
+        view.right_sidebar.hdbscan_activate_button.on_click(self._hdbscan_active_button_event) # Register callback for HDBSCAN activate button click
+        
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(True, self._on_umap_run_button_click)
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(False, self._on_umap_cancel_button_click)
         
@@ -289,3 +291,16 @@ class Clustering2PageController:
         self._view.main.append(main_placeholder)  # Re-append the main placeholder after clearing
         self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
         self._view.right_sidebar.disable_hdbscan_controls()  # Disable HDBSCAN controls when file is removed
+        
+    def _hdbscan_active_button_event(self, event):
+        """Event handler for HDBSCAN activate button click."""
+        selected_umap_dict = self._view.right_sidebar.hdbscan_selected_umap.value
+        
+        embedding_obj = selected_umap_dict
+        embedding = getattr(embedding_obj, 'embedding_', embedding_obj)
+        
+        data : list[tuple[int, int, int, int, float]] = self._hdbscan.evaluate_umap(embedding)
+        heatmap_overlay = self._hdbscan.plot_cluster_heatmap(data)
+        
+        self._view.main.heatmap_wrapper.clear() # Clear previous heatmap from the main layout
+        self._view.main.heatmap_wrapper.append(heatmap_overlay)

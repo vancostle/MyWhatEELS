@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 import holoviews as hv
 import xarray as xr
 
-# Initialize Holoviews with Bokeh backend
-hv.extension('bokeh') # type: ignore
-
 from typing import TYPE_CHECKING, Optional, Any
 if TYPE_CHECKING:
     from xarray import DataArray
@@ -116,6 +113,26 @@ class UMAP_HDBSCAN:
 
         return {"colors": hex_colors}
     
+    def evaluate_umap(self, embedding) -> list[tuple[int, int, int, int, float]]:
+        """ Evaluate UMAP embedding with HDBSCAN for a range of min_samples and min_cluster_size parameters, returning a list of results. """
+        MIN_SAMPLE_START = 1
+        MIN_SAMPLE_END = 8  
+        MIN_CLUSTER_START = 100
+        MIN_CLUSTER_END = 900
+        MIN_CLUSTER_STEP = 100     
+
+        data = []
+
+        for i in range(MIN_SAMPLE_START, MIN_SAMPLE_END):
+            for j in range(MIN_CLUSTER_START, MIN_CLUSTER_END + 1, MIN_CLUSTER_STEP):
+                hdbscan_results = hdbscan.HDBSCAN(min_cluster_size=j, min_samples=i)
+                hdbscan_results.fit(embedding)
+                outliers = np.count_nonzero(hdbscan_results.labels_ == -1)
+                total_points = hdbscan_results.labels_.size
+                data.append((i, j, len(np.unique(hdbscan_results.labels_)), outliers, (outliers/total_points)*100))
+
+        return data
+
     def plot_hdbscan_map(self, hdbscan_results, cmap_obj):
         """
         Create and return a Holoviews Image displaying the HDBSCAN clustering map.
@@ -281,7 +298,6 @@ class UMAP_HDBSCAN:
                 xlabel='min_cluster_size',
                 ylabel='min_samples',
                 title='Number of Clusters by Parameters',
-                width=600,
                 height=400,
                 tools=['hover'],
                 clabel='Number of Clusters',
