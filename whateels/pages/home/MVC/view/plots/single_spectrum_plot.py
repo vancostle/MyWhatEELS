@@ -1,9 +1,11 @@
 """
-Single spectrum visualization composer (Plotly version).
+Single spectrum visualization composer.
 """
 import panel as pn
 import numpy as np
-import plotly.graph_objs as go
+import holoviews as hv
+
+hv.extension('bokeh')  # type: ignore
 
 from typing import override, TYPE_CHECKING
 from whateels.interfaces import IPlot
@@ -14,7 +16,7 @@ if TYPE_CHECKING:
     from xarray import Dataset
 
 class SingleSpectrumPlot(IPlot):
-    """Composes single spectrum visualizations from EELS data (Plotly)."""
+    """Composes single spectrum visualizations from EELS data."""
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
@@ -37,30 +39,21 @@ class SingleSpectrumPlot(IPlot):
         energy = self._dataset.coords[self._model.constants.ELOSS].values
         spectrum = spectrum_data.values
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=energy,
-            y=spectrum,
-            mode="lines",
-            line=dict(color="black", width=2),
-            name="Spectrum"
-        ))
-        fig.update_layout(
-            title="EELS Spectrum",
-            margin=dict(l=40, r=20, t=40, b=40),
-            xaxis_title=self._X_AXIS_SPECTRUM_TITLE,
-            yaxis_title=self._Y_AXIS_SPECTRUM_TITLE,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+        curve = hv.Curve(
+            (energy, spectrum),
+            self._X_AXIS_SPECTRUM_TITLE,
+            self._Y_AXIS_SPECTRUM_TITLE
+        ).opts(
+            color='black',
+            line_width=2,
+            title='EELS Spectrum',
+            responsive=True,
+            tools=['hover'],
+            shared_axes=False,
         )
-        
-        # Convert to Panel
-        spectrum_pane = pn.pane.Plotly(
-            fig.to_plotly_json(), 
-            sizing_mode=self._STRETCH_BOTH, 
-            config={"responsive": True}
-        )
-        
+
+        spectrum_pane = pn.pane.HoloViews(curve, sizing_mode=self._STRETCH_BOTH)
+
         return pn.Column(
             spectrum_pane,
             sizing_mode=self._STRETCH_BOTH

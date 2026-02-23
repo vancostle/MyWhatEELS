@@ -1,7 +1,9 @@
 import panel as pn
 import numpy as np
 import time
-import plotly.graph_objs as go
+import holoviews as hv
+
+hv.extension('bokeh')  # type: ignore
 
 from whateels.helpers import SpectrumExtractor
 from whateels.pages.home.utils.plot_helpers import (
@@ -19,9 +21,8 @@ if TYPE_CHECKING:
 
 class SpectrumImagePlot(IPlot):
     """
-    Version Plotly / Panel del visualizador de Spectrum Image.
-    Mantiene la lógica de datos del visualizador original y reemplaza
-    HoloViews por Plotly panes y callbacks (hover / click / select).
+    HoloViews / Panel visualizer for Spectrum Image.
+    Uses hv.Image + hv.Points overlay with streams for hover, click and lasso/box selection.
     """
     
     # Panel sizing modes
@@ -51,16 +52,13 @@ class SpectrumImagePlot(IPlot):
         # Last selected pixel (x,y)
         self._last_selected = {"x": 0, "y": 0}
 
-        # Range state for paneB (to preserve zoom/pan)
+        # None = unknown / leave HoloViews default; tuple = explicit (x0, x1) / (y0, y1)
         self._current_x_range = None
         self._current_y_range = None
-        # None = unknown / leave Plotly default; True/False = explicitly requested autorange
-        self._current_x_autorange = None
-        self._current_y_autorange = None
 
-        # Selection / hover / fitting state (inspired by si_view.py)
-        self._region_pairs = []         # lista de (i,j) seleccionados por lasso/box
-        self._last_hover_point = None   # último hover {x,y,curve}
+        # Selection / hover / fitting state
+        self._region_pairs = []         # list of (i,j) selected by lasso/box
+        self._last_hover_point = None   # last hover {x,y}
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
         self._fitting_active = False
@@ -68,10 +66,17 @@ class SpectrumImagePlot(IPlot):
         # Widgets / panes placeholders
         self.range_slider = None
         self.fitting_button = None
-        self.paneA = None  # Plotly heatmap pane
-        self.paneB = None  # Plotly spectrum pane
+        self.paneA = None  # HoloViews heatmap pane
+        self.paneB = None  # HoloViews spectrum pane
         self._pc = None    # periodic callback handle
         self._js_executor = None  # invisible HTML pane to run JS
+
+        # HoloViews streams
+        self._pointer_stream = None
+        self._tap_stream = None
+        self._selection_stream = None
+        self._point_x_values = None  # meshgrid x coords (flattened) for Selection1D mapping
+        self._point_y_values = None  # meshgrid y coords (flattened) for Selection1D mapping
 
         # Setup widgets, plots and callbacks
         self._setup_widgets()
@@ -253,7 +258,7 @@ class SpectrumImagePlot(IPlot):
     def _update_paneB(self, fig):
         paneB = getattr(self, 'paneB', None)
         if paneB is not None:
-            paneB.object = self._set_ranges_and_convert(fig)
+            paneB.object = fig
 
     def _on_multifit_clicked(self, event):
         """Callback para el botón de multifit"""
@@ -293,18 +298,14 @@ class SpectrumImagePlot(IPlot):
         self._refresh_paneB()
 
 
-    # --- Plot / Pane Setup (Plotly) ---
+    # --- Plot / Pane Setup (HoloViews) ---
     def _setup_plots(self):
-        # Build image (m_image) from data cube in the canonical way used in this class
-        # ElectronCount dims assumed (y, x, E)
-        # Use self._electron_count_data from constructor
         m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
         m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
         if m_image.ndim != 2:
-            raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
+            raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
 
         ny, nx = m_image.shape
-        # energy axis
         try:
             energy = np.asarray(self._e_axis)
             if energy.shape[0] != self._electron_count_data.shape[-1]:
@@ -313,119 +314,123 @@ class SpectrumImagePlot(IPlot):
             energy = np.arange(self._electron_count_data.shape[-1])
         self._energy = energy
 
-        # Build Plotly heatmap (figA) and selectors scatter for box/lasso selections
-        heat = go.Heatmap(
-            z=m_image,
-            x=np.arange(nx),
-            y=np.arange(ny),
-            colorscale="Greys_r",
-            showscale=False,
-            name="m_image",
-            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+        # HoloViews Image (background heatmap)
+        img = hv.Image(
+            (np.arange(nx), np.arange(ny), m_image),
+            kdims=['x', 'y'],
+            vdims=['Intensity']
+        ).opts(
+            cmap='Greys_r',
+            colorbar=False,
+            xaxis=None,
+            yaxis=None,
+            invert_yaxis=True,
+            responsive=True,
+            tools=['hover'],
+            shared_axes=False,
         )
 
+        # Invisible Points layer for lasso/box selection
         XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
-        selectors = go.Scattergl(
-            x=XX.ravel(),
-            y=YY.ravel(),
-            mode="markers",
-            name="selectors",
-            marker=dict(size=6, opacity=0.01),
-            hoverinfo="skip",
-            selected=dict(marker=dict(opacity=0.3, size=8)),
-            unselected=dict(marker=dict(opacity=0.01)),
+        points_data = np.column_stack([XX.ravel().astype(float), YY.ravel().astype(float)])
+        self._point_x_values = points_data[:, 0]
+        self._point_y_values = points_data[:, 1]
+
+        points = hv.Points(points_data, kdims=['x', 'y']).opts(
+            size=0,
+            alpha=0,
+            nonselection_alpha=0,
+            tools=['lasso_select', 'box_select'],
+            shared_axes=False,
         )
 
-        # Create figure with default size but lock aspect ratio so it doesn't deform
-        figA = go.Figure(data=[heat, selectors])
-        figA.update_layout(
-            title=" ",
-            margin=dict(l=16, r=16, t=50, b=20),
-            dragmode="lasso",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
-        figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
-                           showgrid=False, zeroline=False, showticklabels=False)
-        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
+        # Streams
+        self._pointer_stream = hv.streams.PointerXY(source=img, x=0.0, y=0.0)
+        self._tap_stream = hv.streams.Tap(source=img, x=None, y=None)
+        self._selection_stream = hv.streams.Selection1D(source=points, index=[])
 
-        # Pane A (heatmap) — width controlled by SplitJs; aspect locked by figure axes
-        self.paneA = pn.pane.Plotly(
-            figA, 
-            config={"responsive": True},
-            sizing_mode='stretch_both', 
-            margin=0,
+        # Overlay: image + invisible selection points
+        overlay = (img * points).opts(
+            hv.opts.Overlay(responsive=True, shared_axes=False)
         )
 
-        # Pane B initial message (width manually controlled by SplitJs)
-        self.paneB = pn.pane.Plotly(
-            # self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image")),
+        self.paneA = pn.pane.HoloViews(overlay, sizing_mode='stretch_both', margin=0)
+
+        # Initial paneB message
+        self.paneB = pn.pane.HoloViews(
             self._figB_message(" ", "Move the cursor over the image"),
-            config={"responsive": True},
             sizing_mode='stretch_both',
             margin=0,
         )
 
-    # --- Callbacks setup (connect pane watchers & periodic callback) ---
+    # --- Callbacks setup (connect HoloViews streams & periodic callback) ---
     def _setup_callbacks(self):
-        # Attach panel watchers to figA and paneB
-        if self.paneA is not None:
-            self.paneA.param.watch(self._on_paneA_hover, "hover_data")
-            self.paneA.param.watch(self._on_paneA_click, "click_data")
-            self.paneA.param.watch(self._on_paneA_selected, "selected_data")
-
-        # relayout_data is emitted by pn.pane.Plotly on axis changes
-        if self.paneB is not None:
-            self.paneB.param.watch(self._on_paneB_relayout, "relayout_data")
+        # Connect HoloViews streams to event handlers
+        if self._pointer_stream is not None:
+            self._pointer_stream.param.watch(self._on_pointer_moved, ['x', 'y'])
+        if self._tap_stream is not None:
+            self._tap_stream.param.watch(self._on_tap, ['x', 'y'])
+        if self._selection_stream is not None:
+            self._selection_stream.param.watch(self._on_selection, ['index'])
 
         # Periodic callback for inactivity logic (stopped by default)
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
 
-    # --- Helpers / utilities (from si_view.py adapted) ---
+    # --- Helpers / utilities ---
 
-    def _figB_message(self, title, subtitle) -> go.Figure:
-        self.fig = go.Figure()
-        self.fig.update_xaxes(visible=False)
-        self.fig.update_yaxes(visible=False)
-        self.fig.update_layout(title=title, margin=dict(l=16, r=16, t=48, b=16))
-        self.fig.add_annotation(
-            x=0.5, 
-            y=0.6, 
-            xref="paper", 
-            yref="paper",
-            text=subtitle, 
-            showarrow=False,
-            font=dict(size=22), 
-            align="center",
+    def _figB_message(self, title, subtitle) -> "hv.Element":
+        label = f"{title} — {subtitle}" if title.strip() else subtitle
+        return hv.Curve(
+            [], kdims=[self._X_AXIS_SPECTRUM_TITLE], vdims=[self._Y_AXIS_SPECTRUM_TITLE]
+        ).opts(
+            title=label,
+            responsive=True,
+            shared_axes=False,
+            xaxis=None,
+            yaxis=None,
         )
-        return self.fig
 
-    def _figB_hover(self, point):
+    def _figB_hover(self, point) -> "hv.Element":
         if not point:
             return self._figB_message("Hover", "Move the cursor over the image")
-        i, j = int(point["y"]), int(point["x"])
+        i, j = int(round(point["y"])), int(round(point["x"]))
         spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"(i={i}, j={j})"))
-        fig.update_layout(title="Hover", margin=dict(l=16, r=16, t=48, b=16),
-                          xaxis_title=self._X_AXIS_SPECTRUM_TITLE, yaxis_title=self._Y_AXIS_SPECTRUM_TITLE)
-        return fig
+        xlim = self._current_x_range if self._current_x_range else (None, None)
+        ylim = self._current_y_range if self._current_y_range else (None, None)
+        return hv.Curve(
+            (self._energy, spec),
+            kdims=[self._X_AXIS_SPECTRUM_TITLE],
+            vdims=[self._Y_AXIS_SPECTRUM_TITLE],
+        ).opts(
+            title=f"Hover (i={i}, j={j})",
+            color='black',
+            line_width=1.5,
+            responsive=True,
+            shared_axes=False,
+            xlim=xlim,
+            ylim=ylim,
+        )
 
-    def _figB_region(self, pairs):
+    def _figB_region(self, pairs) -> "hv.Element":
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
         if res is None:
             return self._figB_message("ROI", "Select with lasso/box...")
         spec, n_points = res
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"sum (points={n_points})"))
-        fig.update_layout(
+        xlim = self._current_x_range if self._current_x_range else (None, None)
+        ylim = self._current_y_range if self._current_y_range else (None, None)
+        return hv.Curve(
+            (self._energy, spec),
+            kdims=[self._X_AXIS_SPECTRUM_TITLE],
+            vdims=[self._Y_AXIS_SPECTRUM_TITLE],
+        ).opts(
             title=f"ROI — sum (points={n_points})",
-            margin=dict(l=16, r=16, t=48, b=16), 
-            xaxis_title=self._X_AXIS_SPECTRUM_TITLE, 
-            yaxis_title=self._Y_AXIS_SPECTRUM_TITLE
+            color='steelblue',
+            line_width=1.5,
+            responsive=True,
+            shared_axes=False,
+            xlim=xlim,
+            ylim=ylim,
         )
-        return fig
 
     # --- Inactivity logic (restaurar selección tras inactivity) ---
     def _now_ms(self):
@@ -449,14 +454,17 @@ class SpectrumImagePlot(IPlot):
             self._refresh_paneB()
             stop_pc(self._pc)
 
-    # --- Pane A event handlers (hover / click / selected) ---
-    def _on_paneA_hover(self, event: "Event"):
-        point = SpectrumExtractor.extract_point(event)
-        if point is None:
+    # --- Pane A event handlers (pointer / tap / selection via HoloViews streams) ---
+    def _on_pointer_moved(self, event):
+        """Called when pointer moves over paneA (PointerXY stream)."""
+        x = self._pointer_stream.x
+        y = self._pointer_stream.y
+        if x is None or y is None:
             return
+        point = {"x": x, "y": y}
         self._last_hover_point = point
         if self._region_pairs:
-            self._show_spectrum(point=point, region_pairs=self._region_pairs)
+            self._show_spectrum(point=point)
             self._last_hover_ts = self._now_ms()
             start_pc(self._pc)
         else:
@@ -464,13 +472,16 @@ class SpectrumImagePlot(IPlot):
             stop_pc(self._pc)
             self._last_hover_ts = None
 
-    def _on_paneA_click(self, event):
-        point = SpectrumExtractor.extract_point(event)
-        if point is None:
+    def _on_tap(self, event):
+        """Called when user taps/clicks on paneA (Tap stream)."""
+        x = self._tap_stream.x
+        y = self._tap_stream.y
+        if x is None or y is None:
             return
+        point = {"x": x, "y": y}
         self._last_hover_point = point
         if self._region_pairs:
-            self._show_spectrum(point=point, region_pairs=self._region_pairs)
+            self._show_spectrum(point=point)
             self._last_hover_ts = self._now_ms()
             start_pc(self._pc)
         else:
@@ -478,79 +489,21 @@ class SpectrumImagePlot(IPlot):
             stop_pc(self._pc)
             self._last_hover_ts = None
 
-    def _on_paneA_selected(self, event: "Event"):
-        pairs = SpectrumExtractor.extract_region(event)
+    def _on_selection(self, event):
+        """Called when user draws lasso/box selection on paneA (Selection1D stream)."""
+        indices = self._selection_stream.index
+        if not indices:
+            pairs = []
+        else:
+            pairs = [
+                (int(round(self._point_y_values[i])), int(round(self._point_x_values[i])))
+                for i in indices
+                if i < len(self._point_x_values)
+            ]
         self._region_pairs = pairs
         self._show_spectrum(region_pairs=pairs)
-        # prepare inactivity behaviour: stop periodic callback until next hover
         stop_pc(self._pc)
         self._last_hover_ts = None
-
-    # --- Pane B relayout (preserve zoom/pan ranges) ---
-    def _on_paneB_relayout(self, event):
-        # Robustly extract ranges/autorange from relayout payloads emitted by Plotly
-        try:
-            data = event.new or {}
-
-            # X axis: support 'xaxis.range', 'xaxis.range[0/1]', 'xaxis.autorange'
-            if 'xaxis.range[0]' in data and 'xaxis.range[1]' in data:
-                self._current_x_range = (float(data['xaxis.range[0]']), float(data['xaxis.range[1]']))
-                self._current_x_autorange = False
-            elif 'xaxis.range' in data:
-                rng = data.get('xaxis.range')
-                if isinstance(rng, (list, tuple)) and len(rng) == 2:
-                    self._current_x_range = (float(rng[0]), float(rng[1]))
-                    self._current_x_autorange = False
-            elif 'xaxis.autorange' in data:
-                # autorange True means clear explicit range
-                self._current_x_autorange = bool(data.get('xaxis.autorange'))
-                if self._current_x_autorange:
-                    self._current_x_range = None
-
-            # Y axis: same logic
-            if 'yaxis.range[0]' in data and 'yaxis.range[1]' in data:
-                self._current_y_range = (float(data['yaxis.range[0]']), float(data['yaxis.range[1]']))
-                self._current_y_autorange = False
-            elif 'yaxis.range' in data:
-                rng = data.get('yaxis.range')
-                if isinstance(rng, (list, tuple)) and len(rng) == 2:
-                    self._current_y_range = (float(rng[0]), float(rng[1]))
-                    self._current_y_autorange = False
-            elif 'yaxis.autorange' in data:
-                self._current_y_autorange = bool(data.get('yaxis.autorange'))
-                if self._current_y_autorange:
-                    self._current_y_range = None
-
-            # Some Plotly versions emit nested keys or different payload shapes; handled permissively above.
-        except Exception:
-            # Ignore noisy relayout payloads
-            pass
-
-    def _apply_current_ranges(self, fig):
-        """Apply stored ranges to fig if present."""
-        try:
-            # Only set explicit ranges when available. Only set autorange when explicitly known.
-            if self._current_x_range is not None:
-                fig.update_xaxes(range=self._current_x_range)
-            elif self._current_x_autorange is not None:
-                fig.update_xaxes(autorange=bool(self._current_x_autorange))
-            if self._current_y_range is not None:
-                fig.update_yaxes(range=self._current_y_range)
-            elif self._current_y_autorange is not None:
-                fig.update_yaxes(autorange=bool(self._current_y_autorange))
-        except Exception:
-            pass
-        return fig
-
-    def _set_ranges_and_convert(self, fig):
-        # Ensure we operate on a go.Figure to apply ranges reliably
-        try:
-            fig_obj = fig if isinstance(fig, go.Figure) else go.Figure(fig)
-        except Exception:
-            # fallback: empty figure
-            fig_obj = go.Figure()
-        self._apply_current_ranges(fig_obj)
-        return fig_obj
 
     # --- Fitting and range behaviour ---
     def _on_fitting_clicked(self, event):
