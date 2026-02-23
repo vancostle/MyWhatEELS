@@ -37,12 +37,8 @@ class HomePageController:
         self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
         self._view.left_sidebar.file_uploader.on_file_removed_callback = self._handle_file_removal
         
-        # if all_datasets := getattr(self._model.app_state, "all_datasets", None):
-        #     # Initial layout setup based on existing datasets
-        #     self._view.create_tab_and_dataset_info(all_datasets)
-        
-        all_datasets = self._model.app_state.all_datasets
-        if isinstance(all_datasets, list) and all_datasets:
+        if all_datasets := getattr(self._model.app_state, "all_datasets", None):
+            # Initial layout setup based on existing datasets
             self._view.create_tab_and_dataset_info(all_datasets)
             
     def _handle_file_upload(self, filename: str, file_content: bytes):
@@ -78,7 +74,7 @@ class HomePageController:
             # Update AppState with all loaded datasets for global access
             app_state.all_datasets = all_datasets
             
-            if not isinstance(all_datasets, list) or not all_datasets:
+            if not all_datasets:
                 self._view.main.error_placeholder()
                 return
             
