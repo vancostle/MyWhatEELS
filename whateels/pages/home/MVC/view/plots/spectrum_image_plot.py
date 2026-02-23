@@ -1,9 +1,3 @@
-"""
-Spectrum image (datacube) visualization composer.
-Se reemplaza HoloViews por Panel + Plotly usando la lógica de si_view.py,
-pero manteniendo la lógica de acceso a datos y widgets de SpectrumImageVisualizer.
-"""
-
 import panel as pn
 import numpy as np
 import time
