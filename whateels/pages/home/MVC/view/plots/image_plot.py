@@ -1,12 +1,17 @@
 """
-Image visualization composer.
+Spectrum line visualization composer.
 """
 import panel as pn
-import holoviews as hv
+import plotly.graph_objects as go
 import numpy as np
 import xarray as xr
 
-hv.extension('bokeh')  # type: ignore
+# Make Plotly modebar transparent
+pn.extension(raw_css=[
+    ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
+    ".plotly .modebar-btn { background: transparent !important; }",
+    ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
+])
 
 from whateels.components import InfoPanel
 from whateels.interfaces import IPlot
@@ -33,7 +38,7 @@ class ImagePlot(IPlot):
     # -- Public Methods --
     @override
     def create_plots(self):
-        """Create layout for image visualization with HoloViews."""
+        """Create layout for spectrum line visualization with Plotly (no HoloViews/Bokeh)."""
 
         # Prepare cleaned image data and coordinates
         image_data = self._dataset.ElectronCount.squeeze()
@@ -51,27 +56,31 @@ class ImagePlot(IPlot):
             self._model.constants.AXIS_Y: y_coords
         })
 
+        ny, nx = clean_image_data.shape
+
+        # Build Plotly heatmap (base) and layout with locked aspect
         m_image = np.asarray(clean_image_data)
-        ny, nx = m_image.shape
-
-        # Build HoloViews Image with 1:1 pixel aspect and top-left origin
-        img = hv.Image(
-            (np.arange(nx), np.arange(ny), m_image),
-            kdims=['x', 'y'],
-            vdims=['Intensity']
-        ).opts(
-            cmap='Greys_r',
-            colorbar=False,
-            xaxis=None,
-            yaxis=None,
-            aspect='equal',
-            invert_yaxis=True,
-            responsive=True,
-            tools=['hover'],
-            shared_axes=False,
+        heat = go.Heatmap(
+            z=m_image,
+            x=np.arange(nx),
+            y=np.arange(ny-1, -1, -1),
+            colorscale='Greys_r',
+            showscale=False,
+            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )
+        fig_base = go.Figure(data=[heat])
+        fig_base.update_layout(
+            margin=dict(l=0, r=0, t=0, b=0),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
+        fig_base.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
+                             showgrid=False, zeroline=False, showticklabels=False)
+        fig_base.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
-        image_panel = pn.pane.HoloViews(img, sizing_mode='stretch_both')
+        # Use a responsive Plotly pane that fills the parent container to avoid resize loops
+        image_panel = pn.pane.Plotly(self._to_plotly(fig_base), sizing_mode='stretch_both', config={'responsive': True})
         plots = pn.Column(image_panel, sizing_mode=self._STRETCH_BOTH)
         return plots
 
@@ -111,4 +120,54 @@ class ImagePlot(IPlot):
         
         return dataset_information
 
+    # -- Private Methods --
+    def _to_plotly(self, obj):
+        """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
+        try:
+            if isinstance(obj, go.Figure):
+                return obj.to_plotly_json()
+        except Exception:
+            pass
+        try:
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+        return obj
 
+    def _create_2d_image(self, clean_image_data) -> 'go.Figure':
+        """Create a 2D image plot for image data using Plotly (replaces HoloViews).
+
+        Returns a plotly.graph_objects.Figure sized to data with preserved aspect ratio.
+        """
+        MAX_PLOT_SIZE = 600
+
+        # Calculate dimensions from the data itself
+        data_height, data_width = clean_image_data.shape
+        scale_factor = min(MAX_PLOT_SIZE / data_width, MAX_PLOT_SIZE / data_height)
+        plot_width = int(data_width * scale_factor)
+        plot_height = int(data_height * scale_factor)
+
+        # Build Plotly heatmap; invert Y so origin is top-left
+        m_image = np.asarray(clean_image_data)
+        heat = go.Heatmap(
+            z=m_image,
+            x=np.arange(data_width),
+            y=np.arange(data_height-1, -1, -1),
+            colorscale='Greys_r',
+            showscale=False,
+            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+        )
+
+        fig = go.Figure(data=[heat])
+        fig.update_layout(
+            width=plot_width,
+            height=plot_height,
+            margin=dict(l=0, r=0, t=0, b=0),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        fig.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain", fixedrange=True)
+        fig.update_yaxes(scaleanchor="x", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False, constrain="domain", fixedrange=True)
+
+        return fig
