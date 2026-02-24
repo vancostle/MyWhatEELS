@@ -84,6 +84,8 @@ class SpectrumImagePlot(IPlot):
         self._tap_stream = None
         self._selection_stream = None
         self._rangexy_stream = None  # HoloViews RangeXY stream for paneB zoom/pan
+        self._paneB_pipe = None      # Pipe stream to push elements into paneB without full rebuild
+        self._paneB_dmap = None      # DynamicMap backed by _paneB_pipe
 
         # Setup widgets, plots and callbacks
         self._setup_widgets()
@@ -98,33 +100,25 @@ class SpectrumImagePlot(IPlot):
             sizing_mode='stretch_both',
             align='center',
             margin=0,
-            styles={'width': '40%'}
+            # styles={'width': '40%'}
         )
         
         right_column = pn.Column(
             self.paneB,
-            # fila de botones (fitting + multifit)
-            self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
-            # slider/range debajo
-            self.range_slider_row,
+            self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button, # show fitting button if buttons_row not ready yet
+            self.range_slider_row, # show range slider row if ready
             sizing_mode='stretch_both',
+            align='center',
             margin=0
         )
 
-        # splitjs = SplitJs(
-        #     left_column=left_column,
-        #     right_column=right_column,
-        #     sizing_mode='stretch_both',
-        # )
- 
-        # return splitjs
-        
-        return pn.Row(
-            left_column,
-            right_column,
+        splitjs = SplitJs(
+            left_column=left_column,
+            right_column=right_column,
             sizing_mode='stretch_both',
-            margin=0
         )
+ 
+        return splitjs
 
     @override
     def create_dataset_info(self):
@@ -271,13 +265,10 @@ class SpectrumImagePlot(IPlot):
         self._update_paneB(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
         
     def _update_paneB(self, fig):
-        paneB = getattr(self, 'paneB', None)
-        if paneB is not None:
-            converted = self._set_ranges_and_convert(fig)
-            # Re-source the RangeXY stream to the new element so zoom/pan events are captured
-            if self._rangexy_stream is not None and converted is not None:
-                self._rangexy_stream.source = converted
-            paneB.object = converted
+        if self._paneB_pipe is not None:
+            # Push the new element through the pipe — Bokeh updates data in-place
+            # without rebuilding the whole model tree, avoiding the stale-reference warning.
+            self._paneB_pipe.send(self._set_ranges_and_convert(fig))
 
     def _on_multifit_clicked(self, event):
         """Callback para el botón de multifit"""
@@ -375,12 +366,17 @@ class SpectrumImagePlot(IPlot):
             styles={'margin': 'auto'}
         )
 
-        # Pane B initial message (width manually controlled by SplitJs)
+        # Pane B: use a Pipe + DynamicMap so hover updates only push new data
+        # into the existing Bokeh renderer instead of replacing the whole model tree.
+        self._paneB_pipe = hv_streams.Pipe(data=None)
+        self._paneB_dmap = hv.DynamicMap(lambda data: data, streams=[self._paneB_pipe])
         self.paneB = pn.pane.HoloViews(
-            self._figB_message(" ", "Move the cursor over the image"),
+            self._paneB_dmap,
             sizing_mode='stretch_both',
             margin=0,
         )
+        # Seed the pipe with an empty curve so DynamicMap has a stable type from the start.
+        self._paneB_pipe.send(self._figB_message(" ", "Move the cursor over the image"))
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---
     def _setup_callbacks(self):
@@ -393,8 +389,8 @@ class SpectrumImagePlot(IPlot):
             self._tap_stream.add_subscriber(self._on_paneA_click)
             self._selection_stream.add_subscriber(self._on_paneA_selected)
 
-        # Wire RangeXY stream to capture paneB zoom/pan and preserve ranges across updates
-        self._rangexy_stream = hv_streams.RangeXY()
+        # Wire RangeXY stream to capture paneB zoom/pan — source the DynamicMap once
+        self._rangexy_stream = hv_streams.RangeXY(source=self._paneB_dmap)
         self._rangexy_stream.add_subscriber(self._on_paneB_range_changed)
 
         # Periodic callback for inactivity logic (stopped by default)
@@ -403,14 +399,17 @@ class SpectrumImagePlot(IPlot):
     # --- Helpers / utilities (from si_view.py adapted) ---
 
     def _figB_message(self, title, subtitle):
-        return hv.Text(0.5, 0.5, subtitle).opts(
-            xlim=(0, 1),
-            ylim=(0, 1),
-            xaxis=None,
-            yaxis=None,
-            title=title,
-            text_font_size='16pt',
-            text_align='center',
+        """Return an empty hv.Curve used as a placeholder/message in paneB.
+        Uses hv.Curve (same type as hover/region) so DynamicMap type stays consistent.
+        """
+        return hv.Curve(
+            ([], []),
+            kdims=['x'],
+            vdims=['y']
+        ).opts(
+            title=f"{title} — {subtitle}" if title.strip() else subtitle,
+            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
             shared_axes=False,
         )

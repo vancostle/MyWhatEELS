@@ -1,12 +1,8 @@
 import panel as pn
 import csscompressor, rjsmin
-import plotly.graph_objs as go
 
 from panel.custom import JSComponent, Child # type: ignore
 from whateels.helpers.constants import JS_ROOT, CSS_ROOT
-# from typing import TYPE_CHECKING
-# if TYPE_CHECKING:
-#     import plotly.express as px
 
 class SplitJs(JSComponent):
     
@@ -42,25 +38,19 @@ class SplitJs(JSComponent):
         if hasattr(self.right_column, 'styles') and isinstance(self.right_column, pn.Column):
             self.right_column.styles = {'overflow-x': 'hidden'}
 
-        self._left_column_plotly = self._find_first_plotly_figure(self.left_column)
-        self._right_column_plotly = self._find_first_plotly_figure(self.right_column)
-        
-        if self._left_column_plotly is None and self._right_column_plotly is None:
-            return
-        
-        self._left_column_plotly_figure = self._extract_figure_in_plotly(self._left_column_plotly)
-        self._right_column_plotly_figure = self._extract_figure_in_plotly(self._right_column_plotly)
+        self._left_column_hv = self._find_first_holoviews_pane(self.left_column)
+        self._right_column_hv = self._find_first_holoviews_pane(self.right_column)
 
-    def _find_first_plotly_figure(self, column) -> pn.pane.Plotly | None:
-        """Find the first Plotly figure in a given column, if any."""
-        if self.left_column is not None:
+    def _find_first_holoviews_pane(self, column) -> "pn.pane.HoloViews | None":
+        """Find the first HoloViews pane in a given column, if any."""
+        if column is not None:
             children = getattr(column, 'objects', None)
             if children is not None:
                 for child in children:
-                    if isinstance(child, pn.pane.Plotly):
+                    if isinstance(child, pn.pane.HoloViews):
                         return child
         return None
-    
+
     def _handle_msg(self, data):
         """Handle messages from JavaScript"""
         
@@ -77,71 +67,29 @@ class SplitJs(JSComponent):
         elif event == DRAGGING or event == EXTERNAL_RESIZE:
             self._dragging_event(widths=data.get('widths', {}))
         elif event == DRAG_END:
-            self._drag_end_event()        
+            self._drag_end_event()
 
-        
     def _drag_start_event(self):
-        """Handle drag start event"""
-        if self._left_column_plotly is not None:
-            self._left_column_plotly.config = {'responsive': False}
-            self._left_column_plotly.sizing_mode = 'stretch_height'
-        if self._right_column_plotly is not None:
-            self._right_column_plotly.config = {'responsive': False}
-            self._right_column_plotly.sizing_mode = 'stretch_height'
-            
+        """Handle drag start event.
+        HoloViews/Bokeh plots with responsive=True auto-reflow when the container
+        resizes, so no manual intervention is needed during drag.
+        """
+        pass
+
     def _dragging_event(self, widths: dict):
-        """Handle dragging event"""
-        
-        if self._left_column_plotly_figure is not None:
-            with self._left_column_plotly_figure.batch_update():
-                self._left_column_plotly_figure.update_layout(width=widths.get('left'))
-            
-        if self._right_column_plotly_figure is not None:
-            with self._right_column_plotly_figure.batch_update():
-                self._right_column_plotly_figure.update_layout(width=widths.get('right'))
-    
+        """Handle dragging event.
+        Bokeh handles responsive resizing automatically — no pixel-width push needed.
+        """
+        pass
+
     def _drag_end_event(self):
-        """Handle drag end event"""
-        if self._left_column_plotly is not None:
-            self._left_column_plotly.config = {'responsive': True}
-            self._left_column_plotly.sizing_mode = 'stretch_both'
-        if self._right_column_plotly is not None:
-            self._right_column_plotly.config = {'responsive': True}
-            self._right_column_plotly.sizing_mode = 'stretch_both'
-            
+        """Handle drag end event.
+        No cleanup needed; Bokeh restores to container size automatically.
+        """
+        pass
+
     def _external_resize_event(self, widths: dict):
         """Handle external resize event"""
         self._drag_start_event()
         self._dragging_event(widths=widths)
         self._drag_end_event()
-        
-        print("External resize event handled.")
-    
-    def _extract_plotly_in_column(self, column) -> "pn.pane.Plotly | None":
-        """Extract Plotly figure from a column if it contains a Plotly pane"""
-        children = getattr(column, 'objects', None)
-        if children is None:
-            return None
-
-        for child in children:
-            if isinstance(child, pn.pane.Plotly):
-                obj = child.object
-                if obj is not None and hasattr(obj, "__class__") and obj.__class__.__name__ == "Plotly":
-                    try:
-                        if isinstance(obj, pn.pane.Plotly):
-                            return obj
-                    except ImportError:
-                        pass
-        return None
-    
-    def _extract_figure_in_plotly(self, child) -> "go.Figure | None":
-        """Extract Plotly figure from a child if it is a Plotly pane"""
-        if isinstance(child, pn.pane.Plotly):
-            obj = child.object
-            if obj is not None and hasattr(obj, "__class__") and obj.__class__.__name__ == "Figure":
-                try:
-                    if isinstance(obj, go.Figure):
-                        return obj
-                except ImportError:
-                    pass
-        return None
