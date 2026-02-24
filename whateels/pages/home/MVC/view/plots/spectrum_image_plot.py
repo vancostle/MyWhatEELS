@@ -262,7 +262,7 @@ class SpectrumImagePlot(IPlot):
             self._update_paneB(fig)
             return
 
-        self._update_paneB(self._figB_message("Fitting", "Modo fitting: " + ("activado" if self._fitting_active else "desactivado")))
+        self._update_paneB(self._figB_hover(self._last_hover_point or {"x": 0, "y": 0}))
         
     def _update_paneB(self, fig):
         if self._paneB_pipe is not None:
@@ -375,8 +375,8 @@ class SpectrumImagePlot(IPlot):
             sizing_mode='stretch_both',
             margin=0,
         )
-        # Seed the pipe with an empty curve so DynamicMap has a stable type from the start.
-        self._paneB_pipe.send(self._figB_message(" ", "Move the cursor over the image"))
+        # Seed the pipe with the top-left pixel spectrum so the chart is visible immediately.
+        self._paneB_pipe.send(self._figB_hover({"x": 0, "y": 0}))
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---
     def _setup_callbacks(self):
@@ -398,26 +398,10 @@ class SpectrumImagePlot(IPlot):
 
     # --- Helpers / utilities (from si_view.py adapted) ---
 
-    def _figB_message(self, title, subtitle):
-        """Return an empty hv.Curve used as a placeholder/message in paneB.
-        Uses hv.Curve (same type as hover/region) so DynamicMap type stays consistent.
-        """
-        return hv.Curve(
-            ([], []),
-            kdims=['x'],
-            vdims=['y']
-        ).opts(
-            title=f"{title} — {subtitle}" if title.strip() else subtitle,
-            xlabel=self._X_AXIS_SPECTRUM_TITLE,
-            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
-            responsive=True,
-            shared_axes=False,
-        )
-
     def _figB_hover(self, point):
         """Extract spectrum from a single pixel hover and return an hv.Curve."""
         if not point:
-            return self._figB_message("Hover", "Move the cursor over the image")
+            point = {"x": 0, "y": 0}
 
         i, j = round(point["y"]), round(point["x"])
         spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
@@ -429,11 +413,12 @@ class SpectrumImagePlot(IPlot):
         ).opts(
             color='black',
             line_width=1.5,
-            title="Hover",
+            title=f"Hover (x={j}, y={i})",
             xlabel=self._X_AXIS_SPECTRUM_TITLE,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
             shared_axes=False,
+            framewise=True,
         )
 
     def _figB_region(self, pairs):
@@ -441,7 +426,7 @@ class SpectrumImagePlot(IPlot):
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
 
         if res is None:
-            return self._figB_message("ROI", "Select with lasso/box...")
+            return self._figB_hover({"x": 0, "y": 0})
 
         spec, n_points = res
 
@@ -457,6 +442,7 @@ class SpectrumImagePlot(IPlot):
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
             shared_axes=False,
+            framewise=True,
         )
 
     # --- Inactivity logic (restaurar selección tras inactivity) ---
@@ -528,21 +514,39 @@ class SpectrumImagePlot(IPlot):
         self._last_hover_ts = None
 
     # --- Pane B range change (preserve zoom/pan ranges) ---
+    @staticmethod
+    def _is_valid_range(r):
+        """Return True only if r is a 2-tuple of finite, distinct values."""
+        if r is None:
+            return False
+        try:
+            lo, hi = r
+            return (
+                lo is not None and hi is not None
+                and lo == lo and hi == hi  # NaN check
+                and abs(hi - lo) > 1e-12
+            )
+        except Exception:
+            return False
+
     def _on_paneB_range_changed(self, x_range=None, y_range=None):
         # HoloViews RangeXY delivers x_range and y_range as tuples (min, max) or None.
-        # None means no range captured yet (initial / reset state) → treat as autorange.
-        if x_range is not None:
+        # Ignore degenerate (zero-width / NaN) ranges that come from the empty seed curve.
+        if self._is_valid_range(x_range):
             self._current_x_range = x_range
             self._current_x_autorange = False
-        else:
+        elif x_range is None:
             self._current_x_autorange = True
             self._current_x_range = None
-        if y_range is not None:
+        # else: degenerate range — keep whatever was stored before
+
+        if self._is_valid_range(y_range):
             self._current_y_range = y_range
             self._current_y_autorange = False
-        else:
+        elif y_range is None:
             self._current_y_autorange = True
             self._current_y_range = None
+        # else: degenerate range — keep whatever was stored before
 
     def _apply_current_ranges(self, fig):
         """Apply stored zoom/pan ranges to the HoloViews element as xlim/ylim opts."""
