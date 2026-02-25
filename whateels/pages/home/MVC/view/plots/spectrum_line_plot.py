@@ -32,7 +32,7 @@ class SpectrumLinePlot(IPlot):
         self._heatmap_pane = None
         self._spectrum_pane = None
         self._selected_x_value = None
-        # Ranges for spectrum (preserva zoom)
+        # Ranges for spectrum (it keeps zoom)
         self._current_x_range = None
         self._current_y_range = None
         self._current_x_autorange = None
@@ -40,7 +40,7 @@ class SpectrumLinePlot(IPlot):
 
     @override
     def create_plots(self):
-        # --- Datos base ---
+        # --- Base data ---
         img_da = self._dataset.ElectronCount.squeeze().fillna(0.0)
         img_da = img_da.where(np.isfinite(img_da), 0.0)
 
@@ -50,14 +50,14 @@ class SpectrumLinePlot(IPlot):
         x_coords = self._dataset.coords[x_name].where(np.isfinite(self._dataset.coords[x_name]), 0.0)
         e_coords = self._dataset.coords[e_name].where(np.isfinite(self._dataset.coords[e_name]), 0.0)
 
-        data2d = img_da.values  # shape (x, E) o (E, x); asumimos dims en orden (x, E)
-        # Asegurar orden esperado: y (energía) primero para Plotly Heatmap
+        data2d = img_da.values  # shape (x, E) or (E, x); assume dims in order (x, E)
+        # Ensure expected order: y (energy) first for Plotly Heatmap
         if img_da.dims[0] == x_name and img_da.dims[1] == e_name:
-            z = data2d.T  # pasar a (E, x)
+            z = data2d.T  # transpose to (E, x)
         elif img_da.dims[0] == e_name and img_da.dims[1] == x_name:
-            z = data2d  # ya (E, x)
+            z = data2d  # already (E, x)
         else:
-            # fallback: intentar transponer si encuentra ambos
+            # fallback: try transposing if both dimensions are found but in unexpected order
             z = data2d.T
 
         # --- Rango focal de energía (como antes) ---
@@ -96,7 +96,7 @@ class SpectrumLinePlot(IPlot):
         )
         self._heatmap_pane.param.watch(self._on_heatmap_click, "click_data")
 
-        # --- Pane espectro vacío ---
+        # --- Empty spectrum pane ---
         spec_fig = self._empty_spectrum_figure()
         self._spectrum_pane = pn.pane.Plotly(spec_fig.to_plotly_json(), sizing_mode=self._STRETCH_BOTH, config={"responsive": True})
         self._spectrum_pane.param.watch(self._on_spectrum_relayout, "relayout_data")
@@ -153,7 +153,7 @@ class SpectrumLinePlot(IPlot):
         x_name = self._model.constants.AXIS_X
         e_name = self._model.constants.ELOSS
 
-        # Seleccionar x más cercana
+        # Select nearest x slice and extract spectrum
         try:
             spectrum = self._dataset.ElectronCount.sel({x_name: x_clicked}, method="nearest")
         except Exception:
@@ -165,7 +165,7 @@ class SpectrumLinePlot(IPlot):
         values = spectrum.fillna(0.0).where(np.isfinite(spectrum), 0.0).values
         self._selected_x_value = float(spectrum.coords[x_name]) if x_name in spectrum.coords else float(x_clicked)
 
-        # Actualizar espectro
+        # Update spectrum
         spec_fig = go.Figure()
         spec_fig.add_trace(go.Scatter(
             x=energy,
@@ -186,7 +186,7 @@ class SpectrumLinePlot(IPlot):
         if self._spectrum_pane is not None:
             self._spectrum_pane.object = spec_fig.to_plotly_json()
 
-        # Redibujar línea vertical de selección en heatmap
+        # Redraw vertical selection line on heatmap
         self._update_heatmap_selection_line()
 
     def _on_spectrum_relayout(self, event):
@@ -240,10 +240,10 @@ class SpectrumLinePlot(IPlot):
             fig = go.Figure(self._heatmap_pane.object)  # dict -> Figure
         except Exception:
             return
-        # Eliminar shapes previos tipo selección
+        # Remove previous selection line shapes
         shapes = [s for s in fig.layout.shapes] if fig.layout.shapes else []
         shapes = [s for s in shapes if s.get("name") != "selection_line"]
-        # Añadir nueva línea
+        # Add new selection line
         shapes.append(dict(
             type="line",
             x0=self._selected_x_value,

@@ -64,8 +64,8 @@ class SplitJs(JSComponent):
         
         if event == DRAG_START:
             self._drag_start_event()
-        elif event == DRAGGING or event == EXTERNAL_RESIZE:
-            self._dragging_event(widths=data.get('widths', {}))
+        # elif event == DRAGGING or event == EXTERNAL_RESIZE:
+            # self._dragging_event(widths=data.get('widths', {}))
         elif event == DRAG_END:
             self._drag_end_event()
 
@@ -74,22 +74,30 @@ class SplitJs(JSComponent):
         HoloViews/Bokeh plots with responsive=True auto-reflow when the container
         resizes, so no manual intervention is needed during drag.
         """
-        pass
+        pass # No action needed at drag start since Bokeh handles resizing automatically
 
     def _dragging_event(self, widths: dict):
         """Handle dragging event.
         Bokeh handles responsive resizing automatically — no pixel-width push needed.
         """
-        pass
+        pass # No action needed during dragging since Bokeh handles resizing automatically
 
     def _drag_end_event(self):
         """Handle drag end event.
         No cleanup needed; Bokeh restores to container size automatically.
         """
-        pass
+        print("Drag ended - HoloViews panes should be correctly sized within container.")
+        self.force_holoviews_resize()  # Final refresh to ensure everything is up-to-date after drag
 
     def _external_resize_event(self, widths: dict):
-        """Handle external resize event"""
-        self._drag_start_event()
-        self._dragging_event(widths=widths)
-        self._drag_end_event()
+        """ Handle external resize event (e.g., window resize).
+        This can be triggered by JavaScript when the window is resized, allowing us to refresh HoloViews panes if needed.
+        """
+        pass # No action needed during external resize since Bokeh handles resizing automatically, but we could call force_holoviews_resize() if we find it necessary
+        
+    def force_holoviews_resize(self):
+        """Force a refresh on HoloViews panes in both columns."""
+        if self._left_column_hv is not None and isinstance(self._left_column_hv, pn.pane.HoloViews):
+            self._left_column_hv.object = self._left_column_hv.object
+        if self._right_column_hv is not None and isinstance(self._right_column_hv, pn.pane.HoloViews):
+            self._right_column_hv.object = self._right_column_hv.object

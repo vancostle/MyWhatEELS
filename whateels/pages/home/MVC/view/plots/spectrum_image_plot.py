@@ -100,7 +100,6 @@ class SpectrumImagePlot(IPlot):
             sizing_mode='stretch_both',
             align='center',
             margin=0,
-            # styles={'width': '40%'}
         )
         
         right_column = pn.Column(
@@ -206,14 +205,10 @@ class SpectrumImagePlot(IPlot):
         )
         self.range_slider_row.visible = False
 
-    def _show_spectrum(self, *, point=None, region_pairs=None, message=None):
+    def _show_spectrum(self, *, point=None, region_pairs=None):
         """
         Unified helper to extract spectrum (from point or region), apply fitting if needed, and update paneB.
-        If message is provided, shows a message figure instead.
         """
-        if message is not None:
-            self._update_paneB(self._figB_message(*message))
-            return
 
         fig = None
         spec = None
@@ -222,8 +217,6 @@ class SpectrumImagePlot(IPlot):
                 # No region selected, show message or hover
                 if self._last_hover_point is not None:
                     self._show_spectrum(point=self._last_hover_point)
-                else:
-                    self._update_paneB(self._figB_message(" ", "Move the cursor over the image"))
                 return
             fig = self._figB_region(region_pairs)
             res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, region_pairs)
@@ -550,9 +543,6 @@ class SpectrumImagePlot(IPlot):
 
     def _apply_current_ranges(self, fig):
         """Apply stored zoom/pan ranges to the HoloViews element as xlim/ylim opts."""
-        if fig is None:
-            # Fallback to empty placeholder — mirrors original go.Figure() fallback
-            return self._figB_message(" ", " ")
         try:
             opts = {}
             # Only apply explicit ranges; when autorange is True, omit xlim/ylim so
@@ -575,11 +565,14 @@ class SpectrumImagePlot(IPlot):
     def _on_fitting_clicked(self, event):
         self._fitting_active = not self._fitting_active
         fitting_button = getattr(self, 'fitting_button', None)
+
         if fitting_button is not None:
             fitting_button.name = f"Fitting: {'ON' if self._fitting_active else 'OFF'}"
             fitting_button.button_type = "danger" if self._fitting_active else "primary"
+
         range_slider_row = getattr(self, 'range_slider_row', None)
         range_slider = getattr(self, 'range_slider', None)
+
         if range_slider_row is not None:
             range_slider_row.visible = self._fitting_active
         elif range_slider is not None:
