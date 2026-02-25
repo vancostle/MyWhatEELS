@@ -35,6 +35,7 @@ class FittingController(BaseController):
 
         self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
         view.set_controller(self)
+        model.set_controller(self)
         print("Loader_OOS initialized.")
         
         # Get 'tab' query parameter from URL
@@ -71,9 +72,6 @@ class FittingController(BaseController):
 
         view._fitting_add_compontent_button.on_click(self._add_component_item_button_callback)
 
-        view.model_button.on_click(self._run_model_nlls_fitting)
-        view.config_button.on_click(self._test)
-
     def _energy_center_watcher(self, event):
         energy_center = self.view.component_input["energy_center"]
 
@@ -90,7 +88,7 @@ class FittingController(BaseController):
         component_item = ComponentItem(energy_center, model_select)
         component_item_view = ComponentItemView(self, component_item, self.model, (self._layout.get_energy_range()[0], self._layout.get_energy_range()[-1]), self.view)
 
-        self._layout.add_new_component_input(component_item_view) # modificar aquesta funcio per que els components
+        #self._layout.add_new_component_input(component_item_view) # modificar aquesta funcio per que els components
         print("Element added programmatically.")
         self._model.add_component(model_select, energy_center)
 
@@ -114,6 +112,9 @@ class FittingController(BaseController):
         if isinstance(value, list):
             return value[0]
         return value
+    
+    def update_plot(self, fitting_results):
+        self.layout.update_plot(fitting_results)
     
     def _run_model_nlls_fitting(self):
         """Trigger the NLLS fitting process in the model."""

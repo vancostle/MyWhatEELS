@@ -15,6 +15,7 @@ class FittingModel(BaseModel):
         super().__init__()
         self._constants = Constants()
         self._app_state = AppState()
+        self._controller = 0
 
         self._spectra = 0 # Reference spectra
         self._models = 0 # Composite models for fitting
@@ -28,6 +29,9 @@ class FittingModel(BaseModel):
     @property
     def app_state(self) -> AppState:
         return self._app_state
+    
+    def set_controller(self, controller):
+        self._controller = controller
 
     def get_uploaded_filename(self) -> str:
         """
@@ -48,7 +52,9 @@ class FittingModel(BaseModel):
         dictionary = dict()
         dataset = self.app_state.plot_dataset
         self._Eloss = dataset.coords['Eloss'].values
-        self._spectra = dataset.coords['x'].values
+        self._spectra = AppState().spectra
+
+        print(self._spectra.shape, self._Eloss.shape)
         print(f"NLLS Model: add_component() called")
         dictionary['components'] = []
         dictionary['const'] = []
@@ -131,23 +137,60 @@ class FittingModel(BaseModel):
         print(f"NLLS Model: Component added successfully")
 
         self.fit_reference()
-
-    def _determine_compo_parameters(self, spectrum, tipo, center):
-        """Determine initial parameters for ELNES components"""
-        # Find index closest to center energy
-        idx = np.searchsorted(self._Eloss, center)
-        
-        # Estimate amplitude from spectrum value
-        if idx < len(spectrum):
-            amp = spectrum[idx] * 0.1  # Start with 10% of signal
-        else:
-            amp = np.max(spectrum) * 0.1
-        
-        # Estimate sigma (width)
-        sigm = 5.0  # Default 5 eV width
-        
-        return center, sigm, amp
     
+    def _determine_compo_parameters(self,spectrum,compo_type,Eloss_center):
+        """This method makes an estimation of the initial parameter values (pre_fit) 
+        of a certain component of the model, knowing only the type of component
+        and the energy loss (aprox.) of the center for that component
+
+        Args:
+            compo_type (str): Type of component to be created/ whose parameters need guessing
+                3 categories:
+                symetrical-gaussian     : -str- gaussian
+                symmetrical-nonGaussian : -str- lorentzian, pseudovoigt
+                asymmetrical            : -str- splitlorentzian 
+            Eloss_center ([type]): Energy Loss position in which we stimate the center of the component
+                e.g. CeM5 - Eloss_center = 884.0 (Ce4+ in non reduced CeO2)
+        """
+        #If no ZeroLoss was analysed or included, let's guess
+        fwhm      = 1.2 * 4  # Standard ELoss resolution ... around 1.2 eV in NonCorrected non FEG
+        #fwhm_min = 0.7 * 2  # Going to Cold_FEG ranges of resolution in non monochromated
+        #fwhm_max = 2.5 * 2  # Really badly calibrated acquisition or poor instrumentation 
+        #Let's analyse the possible cases
+
+        
+        e_idx  = np.searchsorted(self._Eloss,Eloss_center) #Positional index E axis
+        
+        #delta_e = self._Eloss[1]-self._Eloss[1]
+        cent = Eloss_center 
+        print(self._Eloss[0],self._Eloss[-1],cent,e_idx,self._Eloss.size)
+        print(f"Determining component parameters for type '{compo_type}' at Eloss {Eloss_center} eV (index {e_idx})")
+
+        h_eidx = max(0,spectrum[e_idx])
+        if compo_type == 'GaussianModel':
+            sig = fwhm / np.sqrt(np.log(256))                 # fwhm   = 2*np.sqrt(2*log(2)) * sigma
+            amp = h_eidx * max(2E-16,sig) * np.sqrt(2*np.pi)  # height = 1/sqrt(2*pi) * A / max(0,sigma)
+            return [cent,sig,amp]
+        elif compo_type == 'lorentzian':
+            sig = fwhm / 2                                    # sigma  = 2*np.sqrt(2*log(2))
+            amp = h_eidx * max(2E-16,sig) * np.pi
+            return [cent,sig,amp]             # height = 1/pi * A / max(0,sigma)
+        elif compo_type == 'pseudovoigt':
+            sig = fwhm / 2                                    # sigma  = 2*np.sqrt(2*log(2))
+            factor1 = max(2E-16,(sig*np.sqrt(np.pi/np.log(2))))
+            factor2 = max(2E-16,(np.pi*sig))
+            amp = 2 * h_eidx * factor1 * factor2 / (factor1 + factor2) 
+            #As given by lmfit relation if fraction = 0.5
+            return [cent,sig,amp]
+        elif compo_type == 'splitlorentzian':
+            #We start with a symmetric distrib -sigma = sigma_r = fwhm/2
+            sig = fwhm / 2                             # fwhm = sigma + sigma_r
+            amp = np.pi*h_eidx*max(2E-16,sig*2) / 2    # h = 2*A/pi/max(0,sigma+sigma_r)
+            return [cent,sig,amp]
+        else:
+            print('NO valid component given')
+            raise KeyError
+
     def delete_component(self,element,name,area_name= 'default'):
         """Method that allows to remove a certain component from the fitting.
         it also removes the constraints from the model dictionary.
@@ -185,6 +228,9 @@ class FittingModel(BaseModel):
                 Defaults to 'default'.
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
+        print(self.ref_results.fit_report())
+        print(self.ref_results.best_fit.shape)
+        self._controller.update_plot(fitting_results = self.ref_results.best_fit)
 
     def create_components(self, spectrum, default_compo_type='gaussian', 
                          flex='medium', name_area='default', excluded_elements=None,

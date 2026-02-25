@@ -12,7 +12,7 @@ import plotly.graph_objs as go
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
-from whateels.components import ResizableColumns
+from whateels.components import SplitJs
 from whateels.shared_state import AppState
 from ...controller.services.oos_loader_service import Loader_OOS
 
@@ -111,10 +111,11 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             sizing_mode='stretch_both'
         )
         
-        resizable_columns = ResizableColumns(
+        resizable_columns = SplitJs(
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
+            margin = 0
         )
  
         return resizable_columns
@@ -122,6 +123,60 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     @override
     def create_dataset_info(self):
         return super().create_dataset_info()
+    
+    def plot_fitting(self, x, y_fit):
+        """
+        Add fit and background subtraction traces to a Plotly figure.
+
+        Parameters:
+            fig (plotly.graph_objs.Figure): The Plotly figure to add traces to.
+            x (array-like): Independent variable data.
+            y (array-like): Dependent variable data.
+            y_fit (array-like): Fitted curve values for all x.
+
+        Returns:
+            plotly.graph_objs.Figure: The figure with added fit and subtraction traces.
+        """
+        
+        # Local constants for Plotly and fitting
+        FIT_NAME = f'Fit'
+        BG_LINE_COLOR = 'rgba(255,0,255,0.6)'
+        BG_FILL_COLOR = 'rgba(255,0,255,0.6)'
+        LEGEND_X = 0.98
+        LEGEND_Y = 0.98
+        LEGEND_XANCHOR = 'right'
+        LEGEND_YANCHOR = 'top'
+        LEGEND_BGCOLOR = 'rgba(255,255,255,0.6)'
+        LEGEND_BORDER_COLOR = 'rgba(0,0,0,0.1)'
+        LEGEND_BORDER_WIDTH = 1
+        FILL_TO_ZEROY = 'tozeroy'
+        fig = self.paneB.object
+        newfig = go.Figure(fig)
+        print(y_fit)
+        newfig.add_trace(go.Scatter(
+            x=x,
+            y=y_fit,
+            fill=FILL_TO_ZEROY,
+            line=dict(color=BG_LINE_COLOR),
+            fillcolor=BG_FILL_COLOR,
+            name=FIT_NAME
+        ))
+        newfig.update_layout(
+            legend=dict(
+                x=LEGEND_X,
+                y=LEGEND_Y,
+                xanchor=LEGEND_XANCHOR,
+                yanchor=LEGEND_YANCHOR,
+                bgcolor=LEGEND_BGCOLOR,
+                bordercolor=LEGEND_BORDER_COLOR,
+                borderwidth=LEGEND_BORDER_WIDTH,
+            )
+        )
+        self.paneB.object = self._set_ranges_and_convert(newfig)
+        return newfig
+
+
+
     
     def plot_quantification_elements(self, element_items: list["ElementItems"]):
         fig = self._figB_region(self._region_pairs)
@@ -455,7 +510,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
         if res is None:
             return self._figB_message("ROI", "Select with lasso/box...")
+       
         spec, n_points = res
+        AppState().spectra = spec
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"sum (points={n_points})"))
         fig.update_layout(

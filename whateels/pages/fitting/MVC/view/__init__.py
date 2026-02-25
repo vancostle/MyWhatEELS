@@ -141,26 +141,8 @@ class FittingView(BaseView):
             margin=(0,0,10,0)
         )
 
-        self.config_button = pn.widgets.Button(
-            name = 'Configure Model',
-            button_type='primary',
-            height=55,
-            margin=(20,0,10,0),
-            sizing_mode=self.STRETCH_WIDTH
-        )
-
-        self.model_button = pn.widgets.Button(
-            name = 'View Model Summary',
-            button_type='primary',
-            height=55,
-            margin=(20,0,10,0),
-            sizing_mode=self.STRETCH_WIDTH
-        )
-
         right_sidebar = pn.Column(
             details,
-            self.config_button,
-            self.model_button,
             sizing_mode=self.STRETCH_BOTH,
         )
         return right_sidebar

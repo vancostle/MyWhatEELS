@@ -39,6 +39,9 @@ class AppState(param.Parameterized):
         SpectrumImageVisualizer. Stored here so other pages (e.g. multifitting)
         can access the same dataset instance.
     """)
+    spectra = param.Parameter(default=None, doc="""
+        Spectra of selected data
+    """)
 
     # Reactive parameter for all loaded datasets
     all_datasets = param.List(default=list(), doc="""

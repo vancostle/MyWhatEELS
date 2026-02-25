@@ -1,5 +1,4 @@
 from .home import HomePage
-from .gos import GOS
 from .fitting import Fitting
 from .login import Login
 from .metadata import Metadata

@@ -144,6 +144,10 @@ class LayoutManager:
         ##self.plot_component()
 
         # plot components
+
+    def update_plot(self, fitting_results):
+        state = AppState()
+        self._chosen_visualizers[state.selected_tab_index_dataset].plot_fitting(state.plot_dataset.coords['Eloss'].values, fitting_results)
     
     def plot_component(self):
         # ho faig a la tarda
