@@ -12,7 +12,7 @@ import plotly.graph_objs as go
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
-from whateels.components import ResizableColumns
+from whateels.components import SplitJs
 from whateels.shared_state import AppState
 from ...controller.services.oos_loader_service import Loader_OOS
 
@@ -111,7 +111,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             sizing_mode='stretch_both'
         )
         
-        resizable_columns = ResizableColumns(
+        resizable_columns = SplitJs(
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',

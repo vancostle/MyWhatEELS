@@ -1,8 +1,8 @@
-from whateels.components import CustomPage
+from whateels.templates import GeneralPageTemplate
 from .MVC import FittingModel, FittingController, FittingView
 from whateels.shared_state import AppState
 
-class Fitting(CustomPage):
+class Fitting(GeneralPageTemplate):
     """
     Quantification class for the WhatEELS application.
     This class extends CustomPage to create a specific quantification page layout.
