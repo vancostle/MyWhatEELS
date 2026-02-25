@@ -22,6 +22,11 @@ class FittingModel(BaseModel):
         self._pars = 0 # Parameters for fitting
         self._Eloss = 0 # Energy loss axis
 
+        self.dictionary = dict()
+        self.dictionary['components'] = []
+        self.dictionary['const'] = []
+        self.dictionary['params'] = []
+
     @property
     def constants(self) -> Constants:
         return self._constants
@@ -57,17 +62,10 @@ class FittingModel(BaseModel):
     def remove_element(self, element_item):
         self._fitting_elements.pop(element_item.element_name_short)
     
-    def add_component(self, compo_type, center, flex='medium'):
-        dictionary = dict()
+    def add_component(self, component_item, flex='medium'):
         dataset = self.app_state.plot_dataset
         self._Eloss = dataset.coords['Eloss'].values
         self._spectra = AppState().spectra
-
-        print(self._spectra.shape, self._Eloss.shape)
-        print(f"NLLS Model: add_component() called")
-        dictionary['components'] = []
-        dictionary['const'] = []
-        dictionary['params'] = []
         # Add ELNES (white line) 
         dict_var = {
             'low': [3, 3, 0.1, 0.1],
@@ -80,18 +78,22 @@ class FittingModel(BaseModel):
 
         # Determine component parameters
         cen, sigm, amp = self._determine_compo_parameters(
-                        self._spectra, compo_type, center
+                        self._spectra, component_item.compo_type, component_item.energy_center
                     )
+        
+        component_item.set_parameters(cen, sigm, amp)
                     
-        dictionary['components'].append( {
-            'type_compo': compo_type,
+        self.dictionary['components'].append( {
+            'type_compo': component_item.compo_type,
             'center': cen,
             'sigma': sigm,
             'amplitude': amp
         })
+
+
         
         # Set constraints
-        dictionary['params'].append({
+        self.dictionary['params'].append({
             'center_min': cen - dict_var[flex][0],
             'center_max': cen + dict_var[flex][1],
             'sigma_min': 0.5,
@@ -100,12 +102,17 @@ class FittingModel(BaseModel):
             'amplitude_max': np.inf
         })
 
+        component_item.set_center_range(self.dictionary['params'][0]['center_min'], self.dictionary['params'][0]['center_max'])
+        component_item.set_sigma_range(self.dictionary['params'][0]['sigma_min'], self.dictionary['params'][0]['sigma_max'])
+        component_item.set_amplitude_range(self.dictionary['params'][0]['amplitude_min'], self.dictionary['params'][0]['amplitude_max'])
+
+
         mod_list = []
         params_list = []
 
-        for component in dictionary['components']:
+        for idx, component in enumerate(self.dictionary['components']):
             tipo = component['type_compo']
-            pref = f'compo_'
+            pref = f'compo_{idx}_'
                     
             # Select model type
             if tipo == 'gaussian':
@@ -123,10 +130,10 @@ class FittingModel(BaseModel):
                     
             # Set parameter values and constraints
             for key in ['center', 'sigma', 'amplitude']:
-                if key in dictionary['components'][0]:
+                if key in component:
                     pars[f'{pref}{key}'].value = component[key]
-                    pars[f'{pref}{key}'].min = dictionary['params'][0][f'{key}_min']
-                    pars[f'{pref}{key}'].max = dictionary['params'][0][f'{key}_max']
+                    pars[f'{pref}{key}'].min = self.dictionary['params'][idx][f'{key}_min']
+                    pars[f'{pref}{key}'].max = self.dictionary['params'][idx][f'{key}_max']
 
             mod_list.append(mod)
             params_list.append(pars)
@@ -237,8 +244,6 @@ class FittingModel(BaseModel):
                 Defaults to 'default'.
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
-        print(self.ref_results.fit_report())
-        print(self.ref_results.best_fit.shape)
         self._controller.update_plot(fitting_results = self.ref_results.best_fit)
 
     def create_components(self, spectrum, default_compo_type='gaussian', 

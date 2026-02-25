@@ -129,7 +129,7 @@ class FittingView(BaseView):
             "energy_center": pn.widgets.IntInput(
                 name='Energy Center',
                 sizing_mode=self.STRETCH_WIDTH,
-                value=1,
+                value=500,
                 start=1,
                 end=10000,
                 margin=(0,0,10,0),
@@ -152,7 +152,7 @@ class FittingView(BaseView):
             height=55,
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
-            disabled=True,
+            disabled=False,
         )
 
         self._quanti_element_item = pn.Column(

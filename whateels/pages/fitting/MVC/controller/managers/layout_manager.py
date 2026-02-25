@@ -145,10 +145,10 @@ class LayoutManager:
 
         # plot components
 
-    def update_plot(self, fitting_results):
+    def update_plot(self, fitting_results=None):
         state = AppState()
-        self._chosen_visualizers[state.selected_tab_index_dataset].plot_fitting(state.plot_dataset.coords['Eloss'].values, fitting_results)
-    
-    def plot_component(self):
-        # ho faig a la tarda
-        return
+        if fitting_results is None:
+            self._chosen_visualizers[state.selected_tab_index_dataset].update_plot()
+        else:
+            self._chosen_visualizers[state.selected_tab_index_dataset].update_plot()
+            self._chosen_visualizers[state.selected_tab_index_dataset].plot_fitting(state.plot_dataset.coords['Eloss'].values, fitting_results)

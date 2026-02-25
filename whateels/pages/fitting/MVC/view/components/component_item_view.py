@@ -48,13 +48,52 @@ class ComponentItemView(pn.Column):
             visible=False
         )
 
-        self.component_item.set_energy_range([energy[0], energy[1]])
-
         self.energy_range_slider = pn.widgets.EditableRangeSlider(
             name='Energy Range',
             start=energy[0],
-            end=energy[1],
-            value=(energy[0], energy[1]),
+            end=energy[-1],
+            value=component_item.center_range,
+            step=1,
+            disabled=False,
+            format='0.00a',
+            styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
+            visible=False
+        )
+
+        self.amplitude_input = pn.widgets.FloatInput(
+            name='Amplitude',
+            value=component_item.amplitude,
+            step=1e-1,
+            styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
+            visible=False
+        )
+
+        self.amplitude_slider = pn.widgets.EditableRangeSlider(
+            name='Amplitude Range',
+            start=0,
+            end=10000,
+            value=component_item.amplitude_range,
+            step=1,
+            disabled=False,
+            format='0.00a',
+            styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
+            visible=False
+        )
+
+        self.sigma_input = pn.widgets.FloatInput(
+            name='Sigma',
+            value=component_item.sigma,
+            step=1e-1,
+            styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
+            visible=False
+        )
+
+
+        self.sigma_slider = pn.widgets.EditableRangeSlider(
+            name='Sigma Range',
+            start=0,
+            end=10000,
+            value=component_item.sigma_range,
             step=1,
             disabled=False,
             format='0.00a',
@@ -93,33 +132,18 @@ class ComponentItemView(pn.Column):
         self.energy_range_input.param.watch(self._energy_center_watcher, 'value')
 
     def _energy_center_watcher(self, event):
-
-        # State identifiers
-        _ON = 'on'
-        _OFF = 'off'
-
-        # Dictionary keys for state properties
-        _NAME = 'label'
-        _ON_CLICK = 'on_click'
-        _BUTTON_TYPE = 'button_type'
-
         self.component_item.energy_center = event.new
-        self[2].end = self.energy[1]
-        self.slider_button.set_states({
-            _ON: {_NAME: "\u25B2 " + self.component_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'success'},
-            _OFF: {_NAME: "\u25BC " + self.component_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'primary'}
-        })
 
-         ##dself._controller.plot_elements()
+        self._controller.update_plot()
 
     def _energy_range_watcher(self, event):
-        self.component_item.set_energy_range(event.new)
-        ##self._controller.plot_elements()
+        self.component_item.set_center_range(event.new[0], event.new[1])
+        self._controller.update_plot()
 
     def _delete_element_watcher(self, event):
         self._right_sidebar.remove(self)
 
-        self._model.remove_element(self.element_item)
+        self._model.remove_component(self.component_item)
 
         add_element_button = self._quanti_add_element_button
         if add_element_button is None:

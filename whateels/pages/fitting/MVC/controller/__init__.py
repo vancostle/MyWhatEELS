@@ -7,7 +7,6 @@ from whateels.helpers.constants import OOS_ROOT
 from whateels.helpers.safe_converter import SafeConverter
 from ..model.element_item import ElementItem
 from ..model.component_item import ComponentItem
-from ..view.components.element_item_view import ElementItemView
 from ..view.components.component_item_view import ComponentItemView
 
 import panel as pn
@@ -88,11 +87,14 @@ class FittingController(BaseController):
         model_select = self.view.component_input["model_select"].value
 
         component_item = ComponentItem(energy_center, model_select)
-        component_item_view = ComponentItemView(self, component_item, self.model, (self._layout.get_energy_range()[0], self._layout.get_energy_range()[-1]), self.view)
+        self._model.add_component(component_item)
 
-        #self._layout.add_new_component_input(component_item_view) # modificar aquesta funcio per que els components
-        print("Element added programmatically.")
-        self._model.add_component(model_select, energy_center)
+        component_item_view = ComponentItemView(self, component_item,   
+                                                self._model, 
+                                                self._layout.get_energy_range(), 
+                                                self._view)
+        self._layout.add_new_component_input(component_item_view)
+        
 
     def _test(self, event):
         self._model._create_model(self._model.dataset, name_area='default', flex='medium')
@@ -120,6 +122,7 @@ class FittingController(BaseController):
 
     def _background_subtraction_switch_watcher(self, event):
         AppState().is_multifit = event.new
+        self.layout.update_plot()  # Trigger plot update to reflect background subtraction change
     
     def _run_model_nlls_fitting(self):
         """Trigger the NLLS fitting process in the model."""
