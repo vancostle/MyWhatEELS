@@ -42,6 +42,15 @@ class FittingModel(BaseModel):
         """
         return str(self.app_state.filename) if self.app_state.filename is not None else "No file uploaded"
     
+    def is_multifit_available(self) -> bool:
+        """
+        Check if multifit data is available in the application state.
+        
+        Returns:
+            bool: True if multifit data exists, False otherwise
+        """
+        return self.app_state.multifit is not None
+    
     def add_element(self, element_item):
         self._fitting_elements[element_item.element_name_short] = element_item
 

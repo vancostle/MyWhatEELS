@@ -43,6 +43,10 @@ class AppState(param.Parameterized):
         Spectra of selected data
     """)
 
+    is_multifit = param.Boolean(default=False, doc="""
+        Flag indicating whether background subtraction (multifit) is enabled.
+    """)
+
     # Reactive parameter for all loaded datasets
     all_datasets = param.List(default=list(), doc="""
         List of all loaded EELS datasets (xarray.Dataset).

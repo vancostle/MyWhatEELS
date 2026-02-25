@@ -1,0 +1,72 @@
+.bk-body {
+    --switch-width: 50px;
+    --bar-height: 25px;
+    --switch-size: 25px;
+}
+
+.bk-bar {
+    transition-property: background-color;
+}
+
+.bk-knob {
+    border-radius: 100%;
+    transition-property: left, background-color;
+}
+
+.bk-bar, .bk-knob {
+    transition-duration: 0.3s;
+    transition-timing-function: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+#right-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+
+    box-sizing: border-box;
+    overflow-y: hidden;
+
+    & > .nav.flex-column {
+        flex: 1;
+
+    }
+    & > ul {
+        height: 100%;
+    }
+}
+
+#right-sidebar .bk-panel-models-layout-Column {
+    height: 100%;
+}
+
+.element-container {
+    flex: 1;
+    flex-direction: column;
+    overflow-y: auto;
+    height: inherit;
+
+    box-sizing: border-box;
+    border: 1px dashed gray;
+
+    padding: 0;
+
+    border-radius: 4px;
+}
+
+.element-item {
+    padding: 0.5rem 0;
+    border-top: 1px dashed gray;
+}
+
+.element-toogle-button :last-child {
+    text-align: left;
+}
+
+.background-subtraction-switch {
+    display: grid;
+    place-content: center;
+}
+
+.background-subtraction-container {
+    max-height: 65px;
+}

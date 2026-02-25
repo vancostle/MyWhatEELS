@@ -8,6 +8,7 @@ import panel as pn
 import numpy as np
 import time
 import plotly.graph_objs as go
+import xarray as xr
 
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
@@ -507,7 +508,11 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         return fig
 
     def _figB_region(self, pairs):
-        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
+        if AppState().is_multifit:
+            multifit_electron_count_data = xr.DataArray(AppState().multifit)
+            res = SpectrumExtractor.get_spectrum_from_indices(multifit_electron_count_data, pairs)
+        else:
+            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
         if res is None:
             return self._figB_message("ROI", "Select with lasso/box...")
        

@@ -18,13 +18,13 @@ class FittingView(BaseView):
         super().__init__(
             model, 
             css_files=[
-                str(CSS_ROOT / "quantification.css"),
+                str(CSS_ROOT / "fitting.css"),
                 str(CSS_ROOT / "dataset_info.css")
             ]
         )
 
         self._model = model
-        self._controller: Optional["NllsController"] = None
+        self._controller: Optional["FittingController"] = None
 
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
@@ -92,6 +92,39 @@ class FittingView(BaseView):
         return self._main_container_layout
     
     def _right_sidebar_layout(self) -> pn.Column:
+
+        
+
+        background_subtraction_label = pn.pane.Markdown(
+            "### Background-subtraction", 
+        )
+
+        self._background_subtraction_switch = pn.widgets.Switch(
+            name="Background-subtraction", 
+            value=False, 
+            sizing_mode='stretch_both',
+            css_classes=["background-subtraction-switch"]
+        )
+
+        is_multifitting_available = self._model.is_multifit_available()
+        self._background_subtraction_switch.disabled = not is_multifitting_available
+
+        subtraction_bg_tooltip = (
+            "Enable background-subtraction from multifit results." 
+            if is_multifitting_available else "Must do Multifitting to enable the switch."
+        )
+        background_subtraction_container = pn.Row(
+            pn.widgets.TooltipIcon(
+                value=subtraction_bg_tooltip, 
+                css_classes=["tooltip-icon"]
+            ),
+            background_subtraction_label,
+            self._background_subtraction_switch,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["background-subtraction-container"]
+        )
+
+
         self._component_model_input = {
             "energy_center": pn.widgets.IntInput(
                 name='Energy Center',
@@ -142,6 +175,7 @@ class FittingView(BaseView):
         )
 
         right_sidebar = pn.Column(
+            background_subtraction_container,
             details,
             sizing_mode=self.STRETCH_BOTH,
         )

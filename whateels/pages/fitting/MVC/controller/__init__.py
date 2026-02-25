@@ -72,6 +72,8 @@ class FittingController(BaseController):
 
         view._fitting_add_compontent_button.on_click(self._add_component_item_button_callback)
 
+        view._background_subtraction_switch.param.watch(self._background_subtraction_switch_watcher, 'value')
+
     def _energy_center_watcher(self, event):
         energy_center = self.view.component_input["energy_center"]
 
@@ -115,6 +117,9 @@ class FittingController(BaseController):
     
     def update_plot(self, fitting_results):
         self.layout.update_plot(fitting_results)
+
+    def _background_subtraction_switch_watcher(self, event):
+        AppState().is_multifit = event.new
     
     def _run_model_nlls_fitting(self):
         """Trigger the NLLS fitting process in the model."""
