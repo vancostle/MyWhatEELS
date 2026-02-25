@@ -31,24 +31,22 @@ class SplitJs(JSComponent):
 
     def __init__(self, **params):
         super().__init__(**params)
-        
-        if hasattr(self.left_column, 'styles') and isinstance(self.left_column, pn.Column):
-            self.left_column.styles = {'overflow-x': 'hidden'}
-        
-        if hasattr(self.right_column, 'styles') and isinstance(self.right_column, pn.Column):
-            self.right_column.styles = {'overflow-x': 'hidden'}
 
         self._left_column_hv = self._find_first_holoviews_pane(self.left_column)
         self._right_column_hv = self._find_first_holoviews_pane(self.right_column)
 
     def _find_first_holoviews_pane(self, column) -> "pn.pane.HoloViews | None":
         """Find the first HoloViews pane in a given column, if any."""
-        if column is not None:
-            children = getattr(column, 'objects', None)
-            if children is not None:
-                for child in children:
-                    if isinstance(child, pn.pane.HoloViews):
-                        return child
+        if column is None:
+            return None
+
+        children = getattr(column, 'objects', None)
+        if children is None:
+            return None
+    
+        for child in children:
+            if isinstance(child, pn.pane.HoloViews):
+                return child
         return None
 
     def _handle_msg(self, data):
@@ -86,7 +84,6 @@ class SplitJs(JSComponent):
         """Handle drag end event.
         No cleanup needed; Bokeh restores to container size automatically.
         """
-        print("Drag ended - HoloViews panes should be correctly sized within container.")
         self.force_holoviews_resize()  # Final refresh to ensure everything is up-to-date after drag
 
     def _external_resize_event(self, widths: dict):

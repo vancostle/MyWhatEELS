@@ -20,7 +20,6 @@ class ImagePlot(IPlot):
     _STRETCH_WIDTH = 'stretch_width'
     
     def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
-
         self._model = model
         self._dataset = dataset        
         
