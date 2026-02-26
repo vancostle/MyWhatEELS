@@ -30,3 +30,7 @@ class ComponentItem:
     
     def set_amplitude_range(self, amplitude_min, amplitude_max):
         self.amplitude_range = (amplitude_min, amplitude_max)
+
+
+# crear fills dauqest per els parametres de cada model "GaussianModel","LorentzianModel","PseudoVoigtModel","SplitLorentzianModel"
+

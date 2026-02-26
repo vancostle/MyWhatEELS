@@ -117,11 +117,12 @@ class FittingController(BaseController):
         return value
     
     def update_plot(self, fitting_results = None):
-        
+
         self.layout.update_plot(fitting_results)
 
     def _background_subtraction_switch_watcher(self, event):
         AppState().is_multifit = event.new
+        self.update_plot()  # Update plot to reflect background subtraction change
         self._model.create_model()  # Recreate model to reflect background subtraction change
         self._model.fit_reference()  # Refit with updated model
     

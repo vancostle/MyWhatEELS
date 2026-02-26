@@ -17,6 +17,10 @@ class FittingModel(BaseModel):
         self._app_state = AppState()
         self._controller = 0
 
+        self._app_state.spectra = None
+        self._app_state.fitting_results = None  # Initialize fitting results in shared state
+        self._app_state.is_multifit = False  # Initialize multifit flag in shared state
+
         self._spectra = 0 # Reference spectra
         self._models = 0 # Composite models for fitting
         self._pars = 0 # Parameters for fitting

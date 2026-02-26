@@ -4,6 +4,8 @@ from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton, SimpleDetails
 from whateels.base.mvc import BaseView
 from typing import TYPE_CHECKING, Optional
+
+from whateels.shared_state import AppState
 if TYPE_CHECKING:
     from ..model import FittingModel
     from ..controller import FittingController
