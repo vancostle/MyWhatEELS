@@ -71,7 +71,7 @@ class ComponentItemView(pn.Column):
         self.amplitude_slider = pn.widgets.EditableRangeSlider(
             name='Amplitude Range',
             start=0,
-            end=10000000,
+            end=50000000,
             value=component_item.amplitude_range,
             step=1,
             disabled=False,

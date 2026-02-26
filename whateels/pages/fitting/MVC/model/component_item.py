@@ -3,10 +3,6 @@ class ComponentItem:
         self.energy_center = energy_center
         self.compo_type = compo_type
         self.center_range = (0, 0)
-        self.sigma = 0
-        self.sigma_range = (0, 0)
-        self.amplitude = 0
-        self.amplitude_range = (0, 0)
 
     def __str__(self):
         return f"{self.compo_type}({self.energy_center})"
@@ -33,4 +29,3 @@ class ComponentItem:
 
 
 # crear fills dauqest per els parametres de cada model "GaussianModel","LorentzianModel","PseudoVoigtModel","SplitLorentzianModel"
-

@@ -92,6 +92,9 @@ class FittingModel(BaseModel):
         self.fit_reference()  # Refit reference spectrum with updated model
 
     def create_model(self):
+        if not self.dictionary['components']:
+            print("NLLS Model: No components to create model")
+            return
         mod_list = []
         self._spectra = AppState().spectra
 
@@ -100,13 +103,13 @@ class FittingModel(BaseModel):
             pref = f'compo_{idx}_'
                     
             # Select model type
-            if tipo == 'gaussian':
+            if tipo == 'GaussianModel':
                 mod = GaussianModel(prefix=pref)
-            elif tipo == 'lorentzian':
+            elif tipo == 'LorentzianModel':
                 mod = LorentzianModel(prefix=pref)
-            elif tipo == 'pseudovoigt':
+            elif tipo == 'PseudoVoigtModel':
                 mod = PseudoVoigtModel(prefix=pref)
-            elif tipo == 'splitlorentzian':
+            elif tipo == 'SplitLorentzianModel':
                 mod = SplitLorentzianModel(prefix=pref)
             else:
                 mod = GaussianModel(prefix=pref)
@@ -141,9 +144,9 @@ class FittingModel(BaseModel):
         Args:
             compo_type (str): Type of component to be created/ whose parameters need guessing
                 3 categories:
-                symetrical-gaussian     : -str- gaussian
-                symmetrical-nonGaussian : -str- lorentzian, pseudovoigt
-                asymmetrical            : -str- splitlorentzian 
+                symetrical-gaussian     : -str- GaussianModel
+                symmetrical-nonGaussian : -str- LorentzianModel, PseudoVoigtModel
+                asymmetrical            : -str- SplitLorentzianModel 
             Eloss_center ([type]): Energy Loss position in which we stimate the center of the component
                 e.g. CeM5 - Eloss_center = 884.0 (Ce4+ in non reduced CeO2)
         """
@@ -162,22 +165,23 @@ class FittingModel(BaseModel):
         print(f"Determining component parameters for type '{compo_type}' at Eloss {Eloss_center} eV (index {e_idx})")
 
         h_eidx = max(0,spectrum[e_idx])
+
         if compo_type == 'GaussianModel':
             sig = fwhm / np.sqrt(np.log(256))                 # fwhm   = 2*np.sqrt(2*log(2)) * sigma
             amp = h_eidx * max(2E-16,sig) * np.sqrt(2*np.pi)  # height = 1/sqrt(2*pi) * A / max(0,sigma)
             return [cent,sig,amp]
-        elif compo_type == 'lorentzian':
+        elif compo_type == 'LorentzianModel':
             sig = fwhm / 2                                    # sigma  = 2*np.sqrt(2*log(2))
             amp = h_eidx * max(2E-16,sig) * np.pi
             return [cent,sig,amp]             # height = 1/pi * A / max(0,sigma)
-        elif compo_type == 'pseudovoigt':
+        elif compo_type == 'PseudoVoigtModel':
             sig = fwhm / 2                                    # sigma  = 2*np.sqrt(2*log(2))
             factor1 = max(2E-16,(sig*np.sqrt(np.pi/np.log(2))))
             factor2 = max(2E-16,(np.pi*sig))
             amp = 2 * h_eidx * factor1 * factor2 / (factor1 + factor2) 
             #As given by lmfit relation if fraction = 0.5
             return [cent,sig,amp]
-        elif compo_type == 'splitlorentzian':
+        elif compo_type == 'SplitLorentzianModel':
             #We start with a symmetric distrib -sigma = sigma_r = fwhm/2
             sig = fwhm / 2                             # fwhm = sigma + sigma_r
             amp = np.pi*h_eidx*max(2E-16,sig*2) / 2    # h = 2*A/pi/max(0,sigma+sigma_r)
