@@ -259,6 +259,10 @@ class SpectrumImagePlot(IPlot):
         
     def _update_paneB(self, fig):
         if self._paneB_pipe is not None:
+            # Always send an hv.Overlay so the DynamicMap type stays consistent
+            # (mixing plain Curve and Overlay causes an AssertionError in the cache).
+            if fig is not None and not isinstance(fig, hv.Overlay):
+                fig = hv.Overlay([fig])
             # Push the new element through the pipe — Bokeh updates data in-place
             # without rebuilding the whole model tree, avoiding the stale-reference warning.
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
@@ -369,7 +373,8 @@ class SpectrumImagePlot(IPlot):
             margin=0,
         )
         # Seed the pipe with the top-left pixel spectrum so the chart is visible immediately.
-        self._paneB_pipe.send(self._figB_hover({"x": 0, "y": 0}))
+        # Always seed with an Overlay so the DynamicMap type is consistent from the start.
+        self._paneB_pipe.send(hv.Overlay([self._figB_hover({"x": 0, "y": 0})]))
 
     # --- Callbacks setup (connect pane watchers & periodic callback) ---
     def _setup_callbacks(self):

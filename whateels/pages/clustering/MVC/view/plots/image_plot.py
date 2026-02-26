@@ -9,10 +9,10 @@ If clustering-specific image features are needed in the future, they can be
 added to this file by extending the shared component.
 """
 
-from whateels.components.plots import ImagePlot as SharedImagePlot
+from whateels.base.plots import BaseImagePlot
 
 
-class ImagePlot(SharedImagePlot):
+class ImagePlot(BaseImagePlot):
     """
     Clustering page's image visualizer.
 
