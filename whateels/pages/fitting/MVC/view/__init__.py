@@ -29,8 +29,9 @@ class FittingView(BaseView):
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
 
-        self._fitting_add_compontent_button = None
-        self._quanti_element_item = None
+        self._fitting_add_compontent_button: Optional[pn.widgets.Button] = None
+        self._component_model_input: dict[str, pn.widgets.Widget] = {}
+        self._background_subtraction_switch: Optional[pn.widgets.Switch] = None
         
         # self._main_layout = NllsMainLayout(model)
         # self._left_sidebar_layout = QuanficationLeftSidebarLayout(model)
@@ -48,13 +49,20 @@ class FittingView(BaseView):
         return self._dataset_info_layout
     
     @property
-    def component_input(self):
+    def component_input(self) -> dict[str, pn.widgets.Widget]:
         """Access the K-Means input widgets."""
         return self._component_model_input
     @property
-    def fitting_add_component_button(self):
+    def fitting_add_component_button(self) -> Optional[pn.widgets.Button]:
         """Access the K-Means 'Add Element' button."""
         return self._fitting_add_compontent_button
+    
+    @property
+    def background_subtraction_switch(self) -> pn.widgets.Switch:
+        """Access the background subtraction switch."""
+        return self._background_subtraction_switch
+    
+
 
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
@@ -153,11 +161,6 @@ class FittingView(BaseView):
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=False,
-        )
-
-        self._quanti_element_item = pn.Column(
-            *[widget for widget in self._component_model_input.values()],
-            sizing_mode=self.STRETCH_WIDTH
         )
         
         details = SimpleDetails(

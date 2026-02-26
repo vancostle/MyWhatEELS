@@ -56,12 +56,6 @@ class FittingModel(BaseModel):
         """
         return self.app_state.multifit is not None
     
-    def add_element(self, element_item):
-        self._fitting_elements[element_item.element_name_short] = element_item
-
-    def remove_element(self, element_item):
-        self._fitting_elements.pop(element_item.element_name_short)
-    
     def add_component(self, component_item, flex='medium'):
         dataset = self.app_state.plot_dataset
         self._Eloss = dataset.coords['Eloss'].values
@@ -82,36 +76,23 @@ class FittingModel(BaseModel):
                     )
         
         component_item.set_parameters(cen, sigm, amp)
-                    
-        self.dictionary['components'].append( {
-            'type_compo': component_item.compo_type,
-            'center': cen,
-            'sigma': sigm,
-            'amplitude': amp
-        })
+        component_item.set_center_range(cen - dict_var[flex][0], cen + dict_var[flex][1],)
+        component_item.set_sigma_range(0.5, sigm + sigm * dict_var[flex][3])
+        component_item.set_amplitude_range(0, np.inf)
 
-
+        self.dictionary['components'].append(component_item)
         
-        # Set constraints
-        self.dictionary['params'].append({
-            'center_min': cen - dict_var[flex][0],
-            'center_max': cen + dict_var[flex][1],
-            'sigma_min': 0.5,
-            'sigma_max': sigm + sigm * dict_var[flex][3],
-            'amplitude_min': 0,
-            'amplitude_max': np.inf
-        })
+        print(f"NLLS Model: Component added successfully")
 
-        component_item.set_center_range(self.dictionary['params'][0]['center_min'], self.dictionary['params'][0]['center_max'])
-        component_item.set_sigma_range(self.dictionary['params'][0]['sigma_min'], self.dictionary['params'][0]['sigma_max'])
-        component_item.set_amplitude_range(self.dictionary['params'][0]['amplitude_min'], self.dictionary['params'][0]['amplitude_max'])
+        self.create_model()  # Recreate model with new component
+        self.fit_reference()  # Refit reference spectrum with updated model
 
-
+    def create_model(self):
         mod_list = []
-        params_list = []
+        self._spectra = AppState().spectra
 
         for idx, component in enumerate(self.dictionary['components']):
-            tipo = component['type_compo']
+            tipo = component.compo_type
             pref = f'compo_{idx}_'
                     
             # Select model type
@@ -125,18 +106,8 @@ class FittingModel(BaseModel):
                 mod = SplitLorentzianModel(prefix=pref)
             else:
                 mod = GaussianModel(prefix=pref)
-                    
-            pars = mod.make_params()
-                    
-            # Set parameter values and constraints
-            for key in ['center', 'sigma', 'amplitude']:
-                if key in component:
-                    pars[f'{pref}{key}'].value = component[key]
-                    pars[f'{pref}{key}'].min = self.dictionary['params'][idx][f'{key}_min']
-                    pars[f'{pref}{key}'].max = self.dictionary['params'][idx][f'{key}_max']
 
             mod_list.append(mod)
-            params_list.append(pars)
         
         self._models = mod_list[0]
         for mod in mod_list[1:]:
@@ -144,15 +115,19 @@ class FittingModel(BaseModel):
         # Make parameters
         self._pars = self._models.make_params()
         # Apply parameter values and constraints
-        for pars in params_list:
-            for par in pars:
-                self._pars[par].value = pars[par].value
-                self._pars[par].min = pars[par].min
-                self._pars[par].max = pars[par].max
+        for idx, component in enumerate(self.dictionary['components']):
+            pref = f'compo_{idx}_'
+            self._pars[f'{pref}center'].value = component.energy_center
+            self._pars[f'{pref}center'].min = component.center_range[0]
+            self._pars[f'{pref}center'].max = component.center_range[1]
+            self._pars[f'{pref}sigma'].value = component.sigma
+            self._pars[f'{pref}sigma'].min = component.sigma_range[0]
+            self._pars[f'{pref}sigma'].max = component.sigma_range[1]
+            self._pars[f'{pref}amplitude'].value = component.amplitude
+            self._pars[f'{pref}amplitude'].min = component.amplitude_range[0]
+            self._pars[f'{pref}amplitude'].max = component.amplitude_range[1]
         
-        print(f"NLLS Model: Component added successfully")
-
-        self.fit_reference()
+        
     
     def _determine_compo_parameters(self,spectrum,compo_type,Eloss_center):
         """This method makes an estimation of the initial parameter values (pre_fit) 
@@ -206,6 +181,14 @@ class FittingModel(BaseModel):
         else:
             print('NO valid component given')
             raise KeyError
+    
+    def remove_component(self, component_item):
+        self.dictionary['components'] = [comp for comp in self.dictionary['components'] if comp != component_item]
+        if not self.dictionary['components']:
+            self._controller.update_plot(fitting_results=None)  # Clear fitting results if no components remain
+            self.app_state.fitting_results = None  # Clear fitting results in shared state as well
+        self.create_model()  # Recreate model with updated components
+        self.fit_reference()
 
     def delete_component(self,element,name,area_name= 'default'):
         """Method that allows to remove a certain component from the fitting.

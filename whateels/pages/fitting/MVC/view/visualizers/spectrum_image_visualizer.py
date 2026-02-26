@@ -153,7 +153,6 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         FILL_TO_ZEROY = 'tozeroy'
         fig = self.paneB.object
         newfig = go.Figure(fig)
-        print(y_fit)
         newfig.add_trace(go.Scatter(
             x=x,
             y=y_fit,
@@ -338,13 +337,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             if self._pc.running:
                 self._pc.stop()
             fig = self._figB_region(self._region_pairs)
-            if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _N = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
             self.paneB.object = self._set_ranges_and_convert(fig)
+            if AppState().fitting_results is not None:
+                self.plot_fitting(self._energy, AppState().fitting_results)
             return
 
         if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
@@ -352,81 +347,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             self.paneB.object = self._set_ranges_and_convert(fig)
             if self._pc.running:
                 self._pc.stop()
-
-    # funcio que entra un color hex i un alpha i retorna el color amb rgba amb alpha
-    def _hex_to_rgba(self, hex_color, alpha):
-        """
-        Convert a hex color string to an rgba color string with the given alpha.
-
-        Parameters:
-            hex_color (str): The hex color string (e.g., '#RRGGBB').
-            alpha (float): The alpha value (0.0 to 1.0).
-
-        Returns:
-            str: The rgba color string (e.g., 'rgba(r, g, b, a)').
-        """
-        hex_color = hex_color.lstrip('#')
-        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        return f'rgba({r}, {g}, {b}, {alpha})'
-        
-    
-    
-    def _plot_fit_traces(self, fig, element, x, y, y_fit, color):
-        """
-        Add fit and background subtraction traces to a Plotly figure.
-
-        Parameters:
-            fig (plotly.graph_objs.Figure): The Plotly figure to add traces to.
-            x (array-like): Independent variable data.
-            y (array-like): Dependent variable data.
-            y_fit (array-like): Fitted curve values for all x.
-
-        Returns:
-            plotly.graph_objs.Figure: The figure with added fit and subtraction traces.
-        """
-        # Local constants for Plotly and fitting
-        POWERLAW_FIT_NAME = f'{element} PowerLaw Fit'
-        BG_SUBTRACTION_NAME = f'{element} Background Subtraction'
-        BG_LINE_COLOR = self._hex_to_rgba(color, 0.2)
-        BG_FILL_COLOR = self._hex_to_rgba(color, 0.6)
-        LEGEND_X = 0.98
-        LEGEND_Y = 0.98
-        LEGEND_XANCHOR = 'right'
-        LEGEND_YANCHOR = 'top'
-        LEGEND_BGCOLOR = 'rgba(255,255,255,0.6)'
-        LEGEND_BORDER_COLOR = 'rgba(0,0,0,0.1)'
-        LEGEND_BORDER_WIDTH = 1
-        FILL_TO_ZEROY = 'tozeroy'
-
-        if y_fit is None:
-            return fig
-        newfig = go.Figure(fig)
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=y_fit,
-            line=dict(color=color),
-            name=POWERLAW_FIT_NAME
-        ))
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=(y - y_fit),
-            fill=FILL_TO_ZEROY,
-            line=dict(color=BG_LINE_COLOR),
-            fillcolor=BG_FILL_COLOR,
-            name=BG_SUBTRACTION_NAME
-        ))
-        newfig.update_layout(
-            legend=dict(
-                x=LEGEND_X,
-                y=LEGEND_Y,
-                xanchor=LEGEND_XANCHOR,
-                yanchor=LEGEND_YANCHOR,
-                bgcolor=LEGEND_BGCOLOR,
-                bordercolor=LEGEND_BORDER_COLOR,
-                borderwidth=LEGEND_BORDER_WIDTH,
-            )
-        )
-        return newfig
+            if AppState().fitting_results is not None:
+                self.plot_fitting(self._energy, AppState().fitting_results)
 
     # --- Pane A event handlers (hover / click / selected) ---
     def _on_paneA_hover(self, event: "Event"):

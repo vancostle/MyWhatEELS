@@ -82,7 +82,6 @@ class FittingController(BaseController):
 
 
     def _add_component_item_button_callback(self, event):
-        # crear lelement del component del model
         energy_center = self.view.component_input["energy_center"].value
         model_select = self.view.component_input["model_select"].value
 
@@ -117,12 +116,14 @@ class FittingController(BaseController):
             return value[0]
         return value
     
-    def update_plot(self, fitting_results):
+    def update_plot(self, fitting_results = None):
+        
         self.layout.update_plot(fitting_results)
 
     def _background_subtraction_switch_watcher(self, event):
         AppState().is_multifit = event.new
-        self.layout.update_plot()  # Trigger plot update to reflect background subtraction change
+        self._model.create_model()  # Recreate model to reflect background subtraction change
+        self._model.fit_reference()  # Refit with updated model
     
     def _run_model_nlls_fitting(self):
         """Trigger the NLLS fitting process in the model."""

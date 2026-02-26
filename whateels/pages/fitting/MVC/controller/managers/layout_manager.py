@@ -150,5 +150,6 @@ class LayoutManager:
         if fitting_results is None:
             self._chosen_visualizers[state.selected_tab_index_dataset].update_plot()
         else:
+            state.fitting_results = fitting_results
             self._chosen_visualizers[state.selected_tab_index_dataset].update_plot()
             self._chosen_visualizers[state.selected_tab_index_dataset].plot_fitting(state.plot_dataset.coords['Eloss'].values, fitting_results)
