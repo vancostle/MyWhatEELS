@@ -5,10 +5,10 @@ These are base/common visualizers that can be reused across different pages.
 Page-specific features should extend these base components.
 """
 
-from .image_plot import ImagePlot
-from .spectrum_image_plot import SpectrumImagePlot
+from .base_image_plot import BaseImagePlot
+from .base_spectrum_image_plot import BaseSpectrumImagePlot
 
 __all__ = [
-    'ImagePlot',
-    'SpectrumImagePlot',
+    'BaseImagePlot',
+    'BaseSpectrumImagePlot',
 ]

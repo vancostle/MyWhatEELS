@@ -138,7 +138,8 @@ class KMeansClusteringAlgorithm(ClusteringAlgorithm):
     
     def _fit_impl(self, matrix: "ndarray") -> tuple["ndarray", "ndarray"]:
         """Run K-Means clustering."""
-        assert self._sclust_norm is not None, "Data must be normalized before clustering"
+        if self._sclust_norm is None:
+            raise RuntimeError("Data must be normalized before clustering")
         
         init_val: Literal['k-means++', 'random'] = self.init_method  # type: ignore
         kmeans = KMeans(
@@ -189,7 +190,8 @@ class AgglomerativeClusteringAlgorithm(ClusteringAlgorithm):
     
     def _fit_impl(self, matrix: "ndarray") -> tuple["ndarray", "ndarray"]:
         """Run Agglomerative clustering."""
-        assert self._sclust_norm is not None, "Data must be normalized before clustering"
+        if self._sclust_norm is None:
+            raise RuntimeError("Data must be normalized before clustering")
         
         # Handle 'ward' linkage constraint
         affinity = self.affinity
@@ -260,7 +262,8 @@ class SpectralClusteringAlgorithm(ClusteringAlgorithm):
     
     def _fit_impl(self, matrix: "ndarray") -> tuple["ndarray", "ndarray"]:
         """Run Spectral clustering."""
-        assert self._sclust_norm is not None, "Data must be normalized before clustering"
+        if self._sclust_norm is None:
+            raise RuntimeError("Data must be normalized before clustering")
         
         assign_val: Literal['kmeans', 'discretize', 'cluster_qr'] = self.assign_labels  # type: ignore
         spectral = SpectralClustering(

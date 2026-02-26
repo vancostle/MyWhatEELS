@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from xarray import Dataset
 
-class SpectrumImagePlot:
+class BaseSpectrumImagePlot:
     """
     Base component for spectrum image (datacube) visualization.
     
@@ -32,23 +32,8 @@ class SpectrumImagePlot:
     Can be extended by page-specific visualizers for additional features
     like clustering, fitting, etc.
     """
-    
-    # Panel sizing modes
-    _STRETCH_WIDTH = "stretch_width"
-    
-    # CSS classes and constants for dataset info panel
-    _DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
-    _DATASET_INFO_CLASS = ["dataset-info", "animated"]
-    _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
-    
-    _NOT_AVAILABLE = 'N/A'
-    
-    # Default axis names
-    _DEFAULT_ELOSS = 'Eloss'
-    _DEFAULT_AXIS_X = 'x'
-    _DEFAULT_AXIS_Y = 'y'
 
-    def __init__(self, dataset: "Dataset", eloss_name: str = _DEFAULT_ELOSS):
+    def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss'):
         """
         Initialize spectrum image visualizer.
         
@@ -90,36 +75,9 @@ class SpectrumImagePlot:
     # --- Public layout builders ---
     def create_plots(self) -> pn.Column:
         """
-        Create the resizable two-column layout with heatmap and spectrum.
-        
-        Returns:
-            ResizableColumns: Two-column layout with heatmap (left) and spectrum (right)
+        Abstract method: must be implemented by subclasses to create the layout with heatmap and spectrum.
         """
-        left_column = pn.Column(
-            self.paneA,
-            sizing_mode='stretch_both',
-            margin=0
-        )
-        
-        right_column = pn.Column(
-            self.paneB,
-            sizing_mode='stretch_both',
-            margin=0
-        )
-        
-        splitjs = SplitJs(
-            left_column=left_column,
-            right_column=right_column,
-            sizing_mode='stretch_both',
-            margin=0
-        )
-
-        container = pn.Column( 
-            splitjs,
-            sizing_mode='stretch_both'
-        )
-
-        return container
+        raise NotImplementedError("Subclasses must implement create_plots() in BaseSpectrumImagePlot.")
 
     def create_dataset_info(self, dataset_attrs: dict | None = None):
         """

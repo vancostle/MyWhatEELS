@@ -20,7 +20,7 @@ import threading
 import traceback
 
 from whateels.helpers import SpectrumExtractor
-from whateels.components.plots import SpectrumImagePlot as SharedSpectrumImagePlot
+from whateels.base.plots import BaseSpectrumImagePlot
 from whateels.components import SplitJs, ProgressDisplay
 from typing import override, TYPE_CHECKING
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from xarray import Dataset
 
 
-class SpectrumImagePlot(SharedSpectrumImagePlot):
+class SpectrumImagePlot(BaseSpectrumImagePlot):
     """
     Clustering-enhanced Spectrum Image Visualizer.
     
