@@ -684,6 +684,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._frozen_pixel = None
                 if self._hover_disabled:
                     self._hover_disabled = False
+                    self._region_pairs = []  # Clear lasso selection when unfreeze
                     if self._last_hover_point is not None and self._clustering_active:
                         i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
                         fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
@@ -711,3 +712,46 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         except Exception as e:
             print(f"Error handling click: {e}")
             traceback.print_exc()
+
+    @override
+    def _on_paneA_selected(self, index=None):
+        """
+        Handle lasso/box selection.
+
+        - No clustering active: falls back to base (summed ROI spectrum).
+        - Clustering active: shows all cluster center curves (one per cluster color)
+          and freezes hover, matching the old Plotly-based behavior.
+          Double-click anywhere on paneA to unfreeze hover.
+        """
+        if not self._clustering_active or self._visualizer is None or self._clustering_results is None:
+            # No clustering — standard base behavior (summed ROI spectrum)
+            super()._on_paneA_selected(index=index)
+            return
+
+        if not index:
+            # Selection cleared — re-enable hover and restore pixel spectrum
+            self._region_pairs = []
+            self._hover_disabled = False
+            if self._last_hover_point is not None:
+                i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
+                fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
+                self._update_paneB(fig)
+            return
+
+        # Record pairs so hover handler can check whether a selection is active
+        self._region_pairs = list(dict.fromkeys(
+            (idx // self._nx, idx % self._nx) for idx in index
+        ))
+
+        # Show all cluster centers — same view as the "double-click to show all" action
+        _, centres = self._clustering_results
+        fig = self._visualizer.plot_centers(
+            centres,
+            self._energy,
+            title="All Cluster Centers (double-click to re-enable hover)"
+        )
+        self._update_paneB(fig)
+
+        # Freeze hover so mouse movement doesn't overwrite this view
+        self._hover_disabled = True
+        self._frozen_pixel = None
