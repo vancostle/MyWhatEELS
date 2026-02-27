@@ -133,8 +133,8 @@ class FittingView(BaseView):
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-subtraction-container"]
         )
-
-
+        # get dataset energy range for setting the energy range slider limits
+        energy_range = AppState().plot_dataset
         self._component_model_input = {
             "energy_center": pn.widgets.IntInput(
                 name='Energy Center',
@@ -154,6 +154,20 @@ class FittingView(BaseView):
                 sizing_mode=self.STRETCH_WIDTH,
                 margin=(0,0,10,0)
             ),
+            "energy_range": pn.widgets.EditableRangeSlider(
+                name='Energy Range',
+                sizing_mode=self.STRETCH_WIDTH,
+                value=(0, 1000),
+                start=0,
+                end=1000,
+                margin=(0,0,10,0),
+            ),
+            "flexibility": pn.widgets.Select(
+                name="Flexibility",
+                options=["Low", "Medium", "High", "Maximum"],  
+                sizing_mode=self.STRETCH_WIDTH,
+                margin=(0,0,10,0)
+                )
         }
 
         self._fitting_add_compontent_button = pn.widgets.Button(

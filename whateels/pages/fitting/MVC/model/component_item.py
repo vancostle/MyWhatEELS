@@ -1,8 +1,10 @@
 class ComponentItem:
-    def __init__(self, energy_center, compo_type):
+    def __init__(self, energy_center, compo_type, energy_range, flexibility='low'):
         self.energy_center = energy_center
         self.compo_type = compo_type
+        self.energy_range = energy_range
         self.center_range = (0, 0)
+        self.flexibility = flexibility
 
     def __str__(self):
         return f"{self.compo_type}({self.energy_center})"

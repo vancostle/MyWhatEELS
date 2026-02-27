@@ -32,7 +32,6 @@ class FittingController(BaseController):
 
         all_datasets = AppState().all_datasets
 
-        self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
         view.set_controller(self)
         model.set_controller(self)
         print("Loader_OOS initialized.")
@@ -84,9 +83,11 @@ class FittingController(BaseController):
     def _add_component_item_button_callback(self, event):
         energy_center = self.view.component_input["energy_center"].value
         model_select = self.view.component_input["model_select"].value
+        energy_range = self.view.component_input["energy_range"].value
+        flexibility = self.view.component_input["flexibility"].value
 
-        component_item = ComponentItem(energy_center, model_select)
-        self._model.add_component(component_item)
+        component_item = ComponentItem(energy_center, model_select, energy_range, flexibility)
+        self._model.add_component(component_item, component_item.flexibility)
 
         component_item_view = ComponentItemView(self, component_item,   
                                                 self._model, 
@@ -125,187 +126,6 @@ class FittingController(BaseController):
         self.update_plot()  # Update plot to reflect background subtraction change
         self._model.create_model()  # Recreate model to reflect background subtraction change
         self._model.fit_reference()  # Refit with updated model
-    
-    def _run_model_nlls_fitting(self):
-        """Trigger the NLLS fitting process in the model."""
 
-        # Step 1: Calculate GOS curves for selected elements pq ja esta a quanti
-        """
-        self._view.update_status('Calculating GOS surfaces and curves...', 'info')
-        self._view.show_progress(20, 100)
-        
-        self._model.ready_elements(
-            type_surface='F-factor',  # Use F-factor corrected surfaces
-            extension=True,
-            max_Eloss=3000,
-            mesh_p=250
-        )
-        
-        self._view.show_progress(50, 100)
-        self._view.update_status('Creating model components...', 'info')
-        """
-        
-        # Step 2: Get reference spectrum (middle third of dataset)
-        ds = self._model.dataset
-        if self._model._im_type == 'single':
-            ref_spectrum = ds.ElectronCount.values
-        elif self._model._im_type == 'SLine':
-            # Use middle third of line
-            if ds.x.size == 1:
-                sli0 = int(ds.y.size / 3)
-                sli1 = int(2 * ds.y.size / 3)
-                ref_spectrum = ds.isel(x=0, y=slice(sli0, sli1)).sum('y').ElectronCount.values / (sli1 - sli0)
-            else:
-                sli0 = int(ds.x.size / 3)
-                sli1 = int(2 * ds.x.size / 3)
-                ref_spectrum = ds.isel(y=0, x=slice(sli0, sli1)).sum('x').ElectronCount.values / (sli1 - sli0)
-        else:  # SImage
-            # Use middle region
-            xlen, ylen = ds.x.size, ds.y.size
-            slix0, slix1 = int(2 * xlen / 5), int(3 * xlen / 5)
-            sliy0, sliy1 = int(2 * ylen / 5), int(3 * ylen / 5)
-            ref_spectrum = ds.sel(x=slice(slix0, slix1), y=slice(sliy0, sliy1)).sum(
-                dim=['x', 'y']
-            ).ElectronCount.values / ((slix1 - slix0) * (sliy1 - sliy0))
-        
-        # Step 3: Create components (continuum + ELNES)
-        self._model.create_components(
-            spectrum=ref_spectrum,
-            default_compo_type='gaussian',
-            flex='medium',
-            name_area='default',
-            excluded_elements=[],
-            soften=False,
-            soften_val=None
-        )
-        
-        self._view.update_status('Building composite model...', 'info')
-        
-        # Step 4: Create composite lmfit model
-        dataset = self._layout.get_active_dataset()
-        self._model.create_model(dataset = dataset, name_area='default', flex='medium')
-
-    def _on_create_model(self, event):
-        """Handle create model button click"""
-        print("=" * 80)
-        print("NLLS: Create Model button clicked")
-        print("=" * 80)
-        
-        self._view.create_model_button.disabled = True
-        self._view.update_status('Creating model components...', 'info')
-        self._view.show_progress(10, 100)
-        
-        try:
-            # Ensure dataset is initialized
-            print(f"NLLS: Checking dataset status...")
-            print(f"  - has_dataset: {self._model.has_dataset}")
-            print(f"  - _exp_param: {self._model._exp_param}")
-            print(f"  - AppState.plot_dataset: {self._app_state.plot_dataset}")
-            print(f"  - AppState.all_datasets length: {len(self._app_state.all_datasets) if self._app_state.all_datasets else 0}")
-            
-            _logger.info(f"Create model: has_dataset={self._model.has_dataset}, _exp_param={self._model._exp_param}")
-            
-            if not self._model.has_dataset or self._model._exp_param is None:
-                print("NLLS: Dataset not initialized, attempting to initialize...")
-                _logger.info("Dataset not initialized, attempting to initialize from AppState")
-                
-                if not self._model.initialize_from_dataset():
-                    print("NLLS: ERROR - Failed to initialize dataset from AppState")
-                    self._view.update_status(
-                        'No dataset loaded. Please load a dataset from the Home page.',
-                        'error'
-                    )
-                    self._view.create_model_button.disabled = False
-                    self._view.hide_progress()
-                    _logger.error("Failed to initialize dataset")
-                    return
-                
-                print(f"NLLS: Dataset initialized successfully!")
-                print(f"  - _exp_param: {self._model._exp_param}")
-                print(f"  - _im_type: {self._model._im_type}")
-                _logger.info(f"Dataset initialized successfully, _exp_param={self._model._exp_param}")
-            
-            print(f"NLLS: Starting GOS calculations for elements: {list(self._model.fitting_elements.keys())}")
-            
-            # Step 1: Calculate GOS curves for selected elements
-            self._view.update_status('Calculating GOS surfaces and curves...', 'info')
-            self._view.show_progress(20, 100)
-            
-            self._model.ready_elements(
-                type_surface='F-factor',  # Use F-factor corrected surfaces
-                extension=True,
-                max_Eloss=3000,
-                mesh_p=250
-            )
-            
-            self._view.show_progress(50, 100)
-            self._view.update_status('Creating model components...', 'info')
-            
-            # Step 2: Get reference spectrum (middle third of dataset)
-            ds = self._model.dataset
-            if self._model._im_type == 'single':
-                ref_spectrum = ds.ElectronCount.values
-            elif self._model._im_type == 'SLine':
-                # Use middle third of line
-                if ds.x.size == 1:
-                    sli0 = int(ds.y.size / 3)
-                    sli1 = int(2 * ds.y.size / 3)
-                    ref_spectrum = ds.isel(x=0, y=slice(sli0, sli1)).sum('y').ElectronCount.values / (sli1 - sli0)
-                else:
-                    sli0 = int(ds.x.size / 3)
-                    sli1 = int(2 * ds.x.size / 3)
-                    ref_spectrum = ds.isel(y=0, x=slice(sli0, sli1)).sum('x').ElectronCount.values / (sli1 - sli0)
-            else:  # SImage
-                # Use middle region
-                xlen, ylen = ds.x.size, ds.y.size
-                slix0, slix1 = int(2 * xlen / 5), int(3 * xlen / 5)
-                sliy0, sliy1 = int(2 * ylen / 5), int(3 * ylen / 5)
-                ref_spectrum = ds.sel(x=slice(slix0, slix1), y=slice(sliy0, sliy1)).sum(
-                    dim=['x', 'y']
-                ).ElectronCount.values / ((slix1 - slix0) * (sliy1 - sliy0))
-            
-            self._view.show_progress(60, 100)
-            
-            # Step 3: Create components (continuum + ELNES)
-            self._model.create_components(
-                spectrum=ref_spectrum,
-                default_compo_type='gaussian',
-                flex='medium',
-                name_area='default',
-                excluded_elements=[],
-                soften=False,
-                soften_val=None
-            )
-            
-            self._view.show_progress(80, 100)
-            self._view.update_status('Building composite model...', 'info')
-            
-            # Step 4: Create composite lmfit model
-            self._model.create_model(name_area='default', flex='medium')
-            
-            self._view.show_progress(100, 100)
-            self._view.update_status(
-                f'Model ready for {len(self._model.fitting_elements)} elements. '
-                'You can now fit reference spectra.',
-                'success'
-            )
-            
-            # Enable fitting buttons
-            self._view.fit_references_button.disabled = False
-            
-            _logger.info("Model creation completed successfully")
-        except Exception as e:
-            import traceback
-            error_details = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
-            print(f"\n{'='*80}")
-            print(f"NLLS Controller: Exception caught in _on_create_model:")
-            print(f"{'='*80}")
-            print(error_details)
-            print(f"{'='*80}\n")
-            
-            error_msg = f'Error creating model: {type(e).__name__}: {str(e)}'
-            self._view.update_status(error_msg, 'error')
-            _logger.error(f"Model creation failed: {e}", exc_info=True)
-        finally:
-            self._view.create_model_button.disabled = False
-            self._view.hide_progress()
+    def get_energy_range(self):
+        return self._layout.get_energy_range()

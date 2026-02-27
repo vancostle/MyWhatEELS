@@ -40,7 +40,7 @@ class ComponentItemView(pn.Column):
             css_classes=["component-toggle-button"],
         )
 
-        self.energy_range_input = pn.widgets.FloatInput(
+        self.energy_center_input = pn.widgets.FloatInput(
             name='Energy Center',
             value=component_item.energy_center,
             step=1e-1,
@@ -63,7 +63,7 @@ class ComponentItemView(pn.Column):
         self.amplitude_input = pn.widgets.FloatInput(
             name='Amplitude',
             value=component_item.amplitude,
-            step=1e-1,
+            step=1000,
             styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
             visible=False
         )
@@ -71,9 +71,9 @@ class ComponentItemView(pn.Column):
         self.amplitude_slider = pn.widgets.EditableRangeSlider(
             name='Amplitude Range',
             start=0,
-            end=50000000,
+            end=3000000,
             value=component_item.amplitude_range,
-            step=1,
+            step=1000,
             disabled=False,
             format='0.00a',
             styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
@@ -109,7 +109,7 @@ class ComponentItemView(pn.Column):
                     self.delete_button,
                     sizing_mode=self._STRETCH_WIDTH
                 ),
-                self.energy_range_input,
+                self.energy_center_input,
                 self.energy_range_slider,
                 self.amplitude_input,
                 self.amplitude_slider,
@@ -133,7 +133,7 @@ class ComponentItemView(pn.Column):
         self.energy_range_slider.param.watch(self._energy_range_watcher, 'value')
         self.delete_button.on_click(self._delete_element_watcher)
         self.slider_button.on_click(self._slider_button_watcher)
-        self.energy_range_input.param.watch(self._energy_center_watcher, 'value')
+        self.energy_center_input.param.watch(self._energy_center_watcher, 'value')
         self.sigma_input.param.watch(self._sigma_watcher, 'value')
         self.sigma_slider.param.watch(self._sigma_range_watcher, 'value')
         self.amplitude_input.param.watch(self._amplitude_watcher, 'value')
@@ -143,31 +143,37 @@ class ComponentItemView(pn.Column):
         self.component_item.energy_center = event.new
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
+        self.update_component_parameters()
 
     def _energy_range_watcher(self, event):
         self.component_item.set_center_range(event.new[0], event.new[1])
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
+        self.update_component_parameters()
 
     def _sigma_range_watcher(self, event):
         self.component_item.set_sigma_range(event.new[0], event.new[1])
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
+        self.update_component_parameters()
     
     def _amplitude_range_watcher(self, event):
         self.component_item.set_amplitude_range(event.new[0], event.new[1])
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
+        self.update_component_parameters()
 
     def _sigma_watcher(self, event):
         self.component_item.sigma = event.new
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
+        self.update_component_parameters()
 
     def _amplitude_watcher(self, event):
         self.component_item.amplitude = event.new
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
+        self.update_component_parameters()  # Update component parameters in the model
 
     def _delete_element_watcher(self, event):
         self._right_sidebar.remove(self)
@@ -179,10 +185,18 @@ class ComponentItemView(pn.Column):
             return
 
     def _slider_button_watcher(self, event):
-        show = not self.energy_range_input.visible
-        self.energy_range_input.visible = show
+        show = not self.energy_center_input.visible
+        self.energy_center_input.visible = show
         self.energy_range_slider.visible = show
         self.sigma_input.visible = show
         self.sigma_slider.visible = show
         self.amplitude_input.visible = show
         self.amplitude_slider.visible = show
+    
+    def update_component_parameters(self):
+        self.amplitude_input.value = self.component_item.amplitude
+        self.sigma_input.value = self.component_item.sigma
+        self.energy_center_input.value = self.component_item.energy_center
+        self.energy_range_slider.value = self.component_item.center_range
+        self.sigma_slider.value = self.component_item.sigma_range
+        self.amplitude_slider.value = self.component_item.amplitude_range
