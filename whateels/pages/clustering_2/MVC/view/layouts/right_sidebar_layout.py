@@ -16,14 +16,14 @@ class _Clustering2RightSidebarParams(param.Parameterized):
     min_eloss = param.Number(
         default=0.1, 
         step=0.1, 
-        bounds=(0, 100), 
+        bounds=(None, None), # No bounds, as the valid range of Eloss can vary significantly between datasets, and we want to allow users to set it according to their specific dataset characteristics.
         label="Min Eloss", 
         doc="Minimum Eloss value for cut signal range."
     )
     max_eloss = param.Number(
         default=100.0, 
         step=0.1, 
-        bounds=(0, 100), 
+        bounds=(None, None), # No bounds, as the valid range of Eloss can vary significantly between datasets, and we want to allow users to set it according to their specific dataset characteristics.
         label="Max Eloss", 
         doc="Maximum Eloss value for cut signal range."
     )
@@ -245,6 +245,10 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH
         )
         
+        # Sync widget values back to params so cut_signal always uses the correct range
+        self._min_cut_signal.param.watch(lambda e: setattr(self._params, 'min_eloss', e.new), 'value')
+        self._max_cut_signal.param.watch(lambda e: setattr(self._params, 'max_eloss', e.new), 'value')
+
         self._reset_cut_signal_button = pn.widgets.Button(
             name="Reset Eloss Range",
             button_type="warning",
