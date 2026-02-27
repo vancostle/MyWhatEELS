@@ -19,7 +19,7 @@ from holoviews import streams as hv_streams
 
 from whateels.helpers import SpectrumExtractor
 from whateels.interfaces import IPlot
-from whateels.components import InfoPanel
+from whateels.components import InfoPanel, SplitJs
 from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
@@ -89,13 +89,62 @@ class BaseSpectrumImagePlot(IPlot):
     # --- Public layout builders ---
     @override
     def create_plots(self):
-        """Must be implemented by subclasses to compose the full layout."""
-        raise NotImplementedError("Subclasses must implement create_plots() in BaseSpectrumImagePlot.")
+        """
+        Default two-column SplitJs layout for spectrum image plots.
+        Subclasses can override if they need a custom layout.
+        """
+        left_column = pn.Column(
+            self.paneA,
+            sizing_mode='stretch_both',
+            margin=0
+        )
+        right_column = pn.Column(
+            self.paneB,
+            sizing_mode='stretch_both',
+            margin=0
+        )
+        splitjs = SplitJs(
+            left_column=left_column,
+            right_column=right_column,
+            sizing_mode='stretch_both',
+        )
+        # Allow subclasses to store/restore layout if needed
+        self._plots_layout = splitjs
+        container = pn.Column(
+            splitjs,
+            sizing_mode='stretch_both'
+        )
+        return container
 
     @override
-    def create_dataset_info(self):
-        """ Must be implemented by subclasses to return a dataset info panel."""
-        raise NotImplementedError("Subclasses must implement create_dataset_info() in BaseSpectrumImagePlot.")
+    def create_dataset_info(self) -> InfoPanel:
+        """
+        Returns a panel with dataset information (shape, beam energy, angles).
+        Shared implementation for all spectrum image plot subclasses.
+        """
+        NOT_AVAILABLE = 'N/A'
+        attrs = self._dataset.attrs if self._dataset is not None else {}
+
+        shape = attrs.get('shape', NOT_AVAILABLE)
+        beam_energy = attrs.get('beam_energy', NOT_AVAILABLE)
+        convergence_angle = attrs.get('convergence_angle', NOT_AVAILABLE)
+        collection_angle = attrs.get('collection_angle', NOT_AVAILABLE)
+
+        beam_energy_fmt = f"{beam_energy} keV" if beam_energy != NOT_AVAILABLE else NOT_AVAILABLE
+        convergence_angle_fmt = f"{convergence_angle} mrad" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
+        collection_angle_fmt = f"{collection_angle} mrad" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
+
+        return InfoPanel(
+            title="Dataset Information",
+            information={
+                "Shape": shape,
+                "Beam Energy": beam_energy_fmt,
+                "Convergence Angle": convergence_angle_fmt,
+                "Collection Angle": collection_angle_fmt,
+            },
+            sizing_mode='stretch_width',
+            margin=0,
+        )
 
     # --- Plot / Pane Setup (HoloViews) ---
     def _setup_plots(self):

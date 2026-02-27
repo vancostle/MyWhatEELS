@@ -7,7 +7,6 @@ OOP-based clustering implementations with a base class and specific algorithms.
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Literal, TYPE_CHECKING
-from sklearn.preprocessing import normalize
 from sklearn.cluster import KMeans, AgglomerativeClustering, SpectralClustering
 from sklearn.feature_extraction.image import grid_to_graph
 

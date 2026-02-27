@@ -58,63 +58,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Widgets depend on _e_axis set by super().__init__
         self._setup_widgets()
 
-    # --- Public layout builders (used by controller) ---
-    @override
-    def create_plots(self):
-        left_column = pn.Column(
-            self.paneA,
-            sizing_mode='stretch_both',
-            align='center',
-            margin=0,
-        )
-        right_column = pn.Column(
-            self.paneB,
-            self.buttons_row if self.buttons_row is not None else self.fitting_button,
-            self.range_slider_row,
-            sizing_mode='stretch_both',
-            align='center',
-            margin=0
-        )
-        return SplitJs(
-            left_column=left_column,
-            right_column=right_column,
-            sizing_mode='stretch_both',
-        )
+    # --- Public Layout Builders ---
 
-    @override
-    def create_dataset_info(self):
-        # Extract and format dataset info, then call base class method
-        NOT_AVAILABLE = 'N/A'
-        SHAPE = 'shape'
-        BEAM_ENERGY = 'beam_energy'
-        COLLECTION_ANGLE = 'collection_angle'
-        CONVERGENCE_ANGLE = 'convergence_angle'
-        ANGLE_UNIT = "mrad"
-        ENERGY_UNIT = "keV"
-
-        dataset = self._dataset
-        attrs = dataset.attrs if dataset is not None else {}
-
-        shape = attrs.get(SHAPE, NOT_AVAILABLE)
-        beam_energy = attrs.get(BEAM_ENERGY, NOT_AVAILABLE)
-        convergence_angle = attrs.get(CONVERGENCE_ANGLE, NOT_AVAILABLE)
-        collection_angle = attrs.get(COLLECTION_ANGLE, NOT_AVAILABLE)
-        
-        beam_energy_fmt = f"{beam_energy} {ENERGY_UNIT}" if beam_energy != NOT_AVAILABLE else NOT_AVAILABLE
-        convergence_angle_fmt = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
-        collection_angle_fmt = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
-        
-        return InfoPanel(
-            title="Dataset Information",
-            information={
-                "Shape": shape,
-                "Beam Energy": beam_energy_fmt,
-                "Convergence Angle": convergence_angle_fmt,
-                "Collection Angle": collection_angle_fmt,
-            },
-            sizing_mode='stretch_width',
-            margin=0,
-        )
+    # create_plots now inherited from base class
+    # create_dataset_info now inherited from base class
     
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
