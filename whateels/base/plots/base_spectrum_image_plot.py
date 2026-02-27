@@ -1,57 +1,62 @@
 """
 Base spectrum image (datacube) visualization component.
 
-This is a shared component for basic 3D EELS datacube visualization using Plotly.
+Shared base for 3D EELS datacube visualization using HoloViews + Panel.
 It provides:
-- Integrated 2D heatmap showing summed intensity
-- Interactive spectrum display for selected pixels
-- Hover, click, and region selection interactions
-- Resizable two-column layout
+- Integrated 2D heatmap showing summed intensity with invisible selection layer
+- Pipe/DynamicMap-backed spectrum pane for efficient in-place updates
+- Hover, click, and region selection interactions via HoloViews streams
+- Zoom/pan range preservation for paneB
 
-Page-specific features (like clustering) should extend this base component.
+Page-specific features (like fitting, clustering, inactivity timers) should be
+implemented in subclasses.
 """
 
 import panel as pn
 import numpy as np
-import plotly.graph_objs as go
+import holoviews as hv
+from holoviews import streams as hv_streams
 
 from whateels.helpers import SpectrumExtractor
-from whateels.components import SplitJs
-from typing import TYPE_CHECKING
+from whateels.interfaces import IPlot
+from whateels.components import InfoPanel
+from typing import TYPE_CHECKING, override
 
 if TYPE_CHECKING:
     from xarray import Dataset
 
-class BaseSpectrumImagePlot:
+
+class BaseSpectrumImagePlot(IPlot):
     """
-    Base component for spectrum image (datacube) visualization.
-    
+    Base component for spectrum image (datacube) visualization using HoloViews + Panel.
+
     Displays a 2D heatmap of integrated intensity alongside an interactive
     spectrum viewer. Supports hover, click, and region selection.
-    
+
     Can be extended by page-specific visualizers for additional features
     like clustering, fitting, etc.
     """
 
+    # Default axis titles — subclasses may override
+    _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
+    _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+
     def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss'):
         """
         Initialize spectrum image visualizer.
-        
+
         Args:
             dataset: xarray Dataset containing the EELS datacube
             eloss_name: Name of the energy loss axis (default: 'Eloss')
         """
         self._dataset = dataset
         self._eloss_name = eloss_name
-        
-        # Energy axis (eje de energía)
+
+        # Energy axis
         self._e_axis = self._dataset.coords[self._eloss_name].values
 
         # ElectronCount data cube
         self._electron_count_data: "Dataset" = self._dataset.ElectronCount
-
-        # Last selected pixel (x,y)
-        self._last_selected = {"x": 0, "y": 0}
 
         # Range state for paneB (to preserve zoom/pan)
         self._current_x_range = None
@@ -59,96 +64,54 @@ class BaseSpectrumImagePlot:
         self._current_x_autorange = None
         self._current_y_autorange = None
 
-        # Selection / hover / state
+        # Selection / hover state
         self._region_pairs = []
         self._last_hover_point = None
-        self._frozen_pixel = None  # Store frozen pixel from single click
 
-        # Widgets / panes placeholders
-        self.paneA = None  # Plotly heatmap pane
-        self.paneB = None  # Plotly spectrum pane
+        # Image width — used for index → (row, col) mapping in _on_paneA_selected
+        self._nx = 0
+
+        # Pane / stream placeholders
+        self.paneA = None   # HoloViews heatmap pane
+        self.paneB = None   # HoloViews spectrum pane
+        self._selectors = None      # invisible hv.Points for lasso/box selection
+        self._hover_stream = None
+        self._tap_stream = None
+        self._selection_stream = None
+        self._rangexy_stream = None
+        self._paneB_pipe = None     # Pipe stream for efficient paneB updates
+        self._paneB_dmap = None     # DynamicMap backed by _paneB_pipe
 
         # Setup plots and callbacks
         self._setup_plots()
         self._setup_callbacks()
 
     # --- Public layout builders ---
-    def create_plots(self) -> pn.Column:
-        """
-        Abstract method: must be implemented by subclasses to create the layout with heatmap and spectrum.
-        """
+    @override
+    def create_plots(self):
+        """Must be implemented by subclasses to compose the full layout."""
         raise NotImplementedError("Subclasses must implement create_plots() in BaseSpectrumImagePlot.")
 
-    def create_dataset_info(self, dataset_attrs: dict | None = None):
-        """
-        Create dataset information panel.
-        
-        Args:
-            dataset_attrs: Optional dictionary of dataset attributes. 
-                         If not provided, uses self._dataset.attrs
-        
-        Returns:
-            pn.Column: Panel column with dataset info
-        """
-        # Use provided attrs or fall back to dataset attrs
-        attrs = dataset_attrs if dataset_attrs is not None else (self._dataset.attrs if self._dataset is not None else {})
-        
-        # Constants
-        SHAPE = 'shape'
-        BEAM_ENERGY = 'beam_energy'
-        COLLECTION_ANGLE = 'collection_angle'
-        CONVERGENCE_ANGLE = 'convergence_angle'
-        NOT_AVAILABLE = 'N/A'
-        ENERGY_UNIT = " keV"
-        ANGLE_UNIT = " mrad"
-        
-        shape = attrs.get(SHAPE, NOT_AVAILABLE)
-        beam_energy = attrs.get(BEAM_ENERGY, NOT_AVAILABLE)
-        convergence_angle = attrs.get(CONVERGENCE_ANGLE, NOT_AVAILABLE)
-        collection_angle = attrs.get(COLLECTION_ANGLE, NOT_AVAILABLE)
-        
-        # Build info panel
-        dataset_info = pn.Column(
-            pn.pane.HTML("<h5>Dataset Information</h5>"),
-            pn.Row(
-                pn.pane.HTML("<strong>Shape:</strong>"),
-                pn.pane.Str(shape)
-            ),
-            pn.Row(
-                pn.pane.HTML("<strong>Beam Energy:</strong>"),
-                pn.pane.Str(f"{beam_energy}{ENERGY_UNIT}")
-            ),
-            pn.Row(
-                pn.pane.HTML("<strong>Convergence Angle:</strong>"),
-                pn.pane.Str(f"{convergence_angle}{ANGLE_UNIT}")
-            ),
-            pn.Row(
-                pn.pane.HTML("<strong>Collection Angle:</strong>"),
-                pn.pane.Str(f"{collection_angle}{ANGLE_UNIT}")
-            ),
-            sizing_mode="stretch_width"
-        )
-        
-        return dataset_info
+    @override
+    def create_dataset_info(self):
+        """ Must be implemented by subclasses to return a dataset info panel."""
+        raise NotImplementedError("Subclasses must implement create_dataset_info() in BaseSpectrumImagePlot.")
 
-    # --- Plot / Pane Setup (Plotly) ---
+    # --- Plot / Pane Setup (HoloViews) ---
     def _setup_plots(self):
         """
-        Initialize the heatmap and spectrum panes.
-        
-        Creates:
-        - paneA: 2D heatmap of integrated intensity with selection support
-        - paneB: Spectrum plot for selected pixel
+        Initialize paneA (heatmap + invisible selection layer) and paneB
+        (Pipe/DynamicMap spectrum) using HoloViews.
         """
-        # Build image (m_image) from data cube by summing along energy axis
         m_image_da = self._electron_count_data.sum(self._eloss_name)
         m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
         if m_image.ndim != 2:
             raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
 
         ny, nx = m_image.shape
-        
-        # energy axis
+        self._nx = nx
+
+        # Energy axis
         try:
             energy = np.asarray(self._e_axis)
             if energy.shape[0] != self._electron_count_data.shape[-1]:
@@ -157,267 +120,221 @@ class BaseSpectrumImagePlot:
             energy = np.arange(self._electron_count_data.shape[-1])
         self._energy = energy
 
-        # Build Plotly heatmap (figA) with selectors to enable lasso/box selection
-        heat = go.Heatmap(
-            z=m_image,
-            x=np.arange(nx),
-            y=np.arange(ny),
-            colorscale="Greys_r",
-            showscale=False,
-            name="m_image",
-            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+        # Background heatmap
+        img = hv.Image(
+            (np.arange(nx), np.arange(ny), m_image),
+            kdims=['x', 'y'],
+            vdims=['Intensity'],
+        ).opts(
+            cmap='Greys_r',
+            colorbar=False,
+            xaxis=None,
+            yaxis=None,
+            invert_yaxis=True,
+            aspect='equal',
+            responsive=True,
+            shared_axes=False,
         )
 
-        # Create an invisible selectors layer (Scattergl) so Plotly emits selected/hover points
+        # Invisible Points layer — carries lasso/box select tools
         XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
-        selectors = go.Scattergl(
-            x=XX.ravel(),
-            y=YY.ravel(),
-            mode="markers",
-            name="selectors",
-            marker=dict(size=6, opacity=0.01),
-            hoverinfo="skip",
-            selected=dict(marker=dict(opacity=0.3, size=8)),
-            unselected=dict(marker=dict(opacity=0.01)),
+        points_data = np.column_stack([XX.ravel().astype(float), YY.ravel().astype(float)])
+        self._selectors = hv.Points(points_data, kdims=['x', 'y']).opts(
+            size=0,
+            alpha=0,
+            nonselection_alpha=0,
+            tools=['lasso_select', 'box_select'],
+            shared_axes=False,
         )
 
-        figA = go.Figure(data=[heat, selectors])
-        figA.update_layout(
-            title=" ",
-            height=400,
-            margin=dict(l=16, r=16, t=50, b=20),
-            dragmode="lasso",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
-        figA.update_yaxes(
-            autorange="reversed", 
-            scaleanchor="x", 
-            scaleratio=1, 
-            constrain="domain",
-            showgrid=False, 
-            zeroline=False, 
-            showticklabels=False
-        )
-        figA.update_xaxes(
-            showgrid=False, 
-            zeroline=False, 
-            showticklabels=False, 
-            constrain="domain"
+        # Overlay: heatmap + selection layer
+        overlay = (img * self._selectors).opts( # type: ignore
+            hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False)
         )
 
-        # Initial spectrum (center pixel)
-        center_x, center_y = nx // 2, ny // 2
-        initial_spectrum = self._electron_count_data.isel(x=center_x, y=center_y)
-        spectrum_data = np.asarray(initial_spectrum.fillna(0.0))
-
-        trace = go.Scatter(
-            x=energy,
-            y=spectrum_data,
-            mode='lines',
-            name='Spectrum',
+        self.paneA = pn.pane.HoloViews(
+            overlay,
+            sizing_mode='stretch_height',
+            margin=0,
+            styles={'margin': 'auto'},
         )
 
-        figB = go.Figure(data=[trace])
-        figB.update_layout(
-            title="Spectrum at Selected Pixel",
-            xaxis_title="Energy Loss (eV)",
-            yaxis_title="Intensity (AU)",
-            legend=dict(
-                x=0.98,
-                y=0.98,
-                xanchor='right',
-                yanchor='top',
-                bgcolor='rgba(255,255,255,0.6)',
-                bordercolor='rgba(0,0,0,0.1)',
-                borderwidth=1,
-            )
-        )
-
-        # Create Panel panes (use _to_plotly to avoid Panel<->Plotly relayout issues)
-        self.paneA = pn.pane.Plotly(
-            figA, 
-            config={"responsive": True}, 
+        # paneB: Pipe + DynamicMap for in-place data updates (avoids Bokeh model rebuild)
+        self._paneB_pipe = hv_streams.Pipe(data=None)
+        self._paneB_dmap = hv.DynamicMap(lambda data: data, streams=[self._paneB_pipe])
+        self.paneB = pn.pane.HoloViews(
+            self._paneB_dmap,
             sizing_mode='stretch_both',
-            margin=0
+            margin=0,
         )
-        self.paneB = pn.pane.Plotly(
-            figB, 
-            config={"responsive": True}, 
-            sizing_mode='stretch_both',
-            margin=0
-        )
+        # Seed with origin pixel so chart is immediately visible
+        # Always wrap in Overlay for consistent DynamicMap type
+        self._paneB_pipe.send(hv.Overlay([self._figB_hover({"x": 0, "y": 0})]))
 
     def _setup_callbacks(self):
-        """Setup callbacks for interactive functionality."""
-        if self.paneA is not None:
-            # Watch click, hover and selection
-            self.paneA.param.watch(self._on_paneA_click, "click_data")
-            self.paneA.param.watch(self._on_paneA_hover, "hover_data")
-            self.paneA.param.watch(self._on_paneA_selected, "selected_data")
+        """Wire HoloViews streams to interaction handlers."""
+        if self._selectors is not None:
+            self._hover_stream = hv_streams.PointerXY(source=self._selectors)
+            self._tap_stream = hv_streams.Tap(source=self._selectors)
+            self._selection_stream = hv_streams.Selection1D(source=self._selectors)
+            self._hover_stream.add_subscriber(self._on_paneA_hover)
+            self._tap_stream.add_subscriber(self._on_paneA_click)
+            self._selection_stream.add_subscriber(self._on_paneA_selected)
 
-    # --- Protected Helper Methods ---
+        # RangeXY stream to capture paneB zoom/pan
+        self._rangexy_stream = hv_streams.RangeXY(source=self._paneB_dmap)
+        self._rangexy_stream.add_subscriber(self._on_paneB_range_changed)
 
-    def _on_paneA_hover(self, event):
-        """
-        Handle hover on the heatmap to show single-pixel spectrum.
-        
-        If a pixel is frozen (via single click) or a region is selected, hover is ignored.
-        """
-        point = SpectrumExtractor.extract_point(event)
-        if point is None:
-            return
-        self._last_hover_point = point
-        
-        # If a region is selected or pixel is frozen, don't override
-        if self._region_pairs or self._frozen_pixel is not None:
-            return
-        
-        i, j = int(point['y']), int(point['x'])
-        
-        # Plot the spectrum for the hovered pixel
-        fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
-        if fig is not None and self.paneB is not None:
-            self.paneB.object = fig
+    # --- Spectrum figure helpers ---
 
-    def _plot_pixel_spectrum(self, i, j, title_prefix="Hover"):
-        """
-        Plot spectrum for a specific pixel (i, j).
-        
-        This is a basic implementation that shows only the original spectrum.
-        Subclasses can override to add normalized, fitted, or cluster spectra.
-        
-        Args:
-            i, j: Pixel coordinates
-            title_prefix: Prefix for the plot title (e.g., "Hover", "Click")
-            
-        Returns:
-            go.Figure or None: Plotly figure or None if spectrum cannot be retrieved
-        """
-        # Get original spectrum
+    def _figB_hover(self, point):
+        """Return an hv.Curve for a single pixel (hover/click)."""
+        if not point:
+            point = {"x": 0, "y": 0}
+        i, j = round(point["y"]), round(point["x"])
         spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-        if spec is None:
-            return None
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=self._energy,
-            y=spec,
-            mode='lines',
-            name=f"Spectrum (i={i}, j={j})",
-        ))
-        
-        fig.update_layout(
-            title=f"{title_prefix} at (i={i}, j={j})",
-            margin=dict(l=16, r=16, t=48, b=16),
-            xaxis_title="Energy Loss (eV)",
-            yaxis_title="Intensity (AU)",
-            legend=dict(
-                x=0.98,
-                y=0.98,
-                xanchor='right',
-                yanchor='top',
-                bgcolor='rgba(255,255,255,0.8)',
-                bordercolor='rgba(0,0,0,0.2)',
-                borderwidth=1,
-            )
+        return hv.Curve(
+            (self._energy, spec),
+            kdims=['x'],
+            vdims=['y'],
+        ).opts(
+            color='black',
+            line_width=1.5,
+            title=f"Hover (x={j}, y={i})",
+            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
+            responsive=True,
+            shared_axes=False,
+            framewise=True,
         )
-        
-        return fig
 
-    def _on_paneA_click(self, event):
-        """
-        Handle single click on the heatmap.
-        
-        Single click: Freezes the current pixel so hovering doesn't change the view.
-        """
-        if event.new is None:
-            return
-        
-        try:
-            point = event.new['points'][0]
-            i, j = int(point['y']), int(point['x'])
-            
-            # Freeze the pixel
-            self._frozen_pixel = (i, j)
-            
-            # Plot the frozen pixel spectrum
-            fig = self._plot_pixel_spectrum(i, j, title_prefix="Click (Frozen)")
-            if fig is not None and self.paneB is not None:
-                self.paneB.object = fig
-                
-        except Exception as e:
-            print(f"Error handling click: {e}")
-
-    def _on_paneA_selected(self, event):
-        """
-        Handle lasso/box selection and show summed spectrum for selected pixels.
-        
-        Unfreezes any frozen pixel when a region is selected.
-        """
-        pairs = SpectrumExtractor.extract_region(event)
-        self._region_pairs = pairs
-        
-        if not pairs:
-            # no selection: unfreeze pixel and return to hover mode
-            self._frozen_pixel = None
-            if self._last_hover_point is not None:
-                i, j = int(self._last_hover_point['y']), int(self._last_hover_point['x'])
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-                if spec is not None:
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=self._energy, 
-                        y=spec, 
-                        mode='lines', 
-                        name=f"(i={i}, j={j})"
-                    ))
-                    fig.update_layout(
-                        title="Hover", 
-                        xaxis_title="Energy Loss (eV)", 
-                        yaxis_title="Intensity (AU)",
-                        legend=dict(
-                            x=0.98, 
-                            y=0.98, 
-                            xanchor='right', 
-                            yanchor='top', 
-                            bgcolor='rgba(255,255,255,0.6)', 
-                            bordercolor='rgba(0,0,0,0.1)', 
-                            borderwidth=1
-                        )
-                    )
-                    if self.paneB is not None:
-                        self.paneB.object = fig
-            return
-
-        # Unfreeze pixel when a region is selected
-        self._frozen_pixel = None
-        
+    def _figB_region(self, pairs):
+        """Return an hv.Curve for a region (summed spectrum)."""
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
         if res is None:
-            return
+            return self._figB_hover({"x": 0, "y": 0})
         spec, n_points = res
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=self._energy, 
-            y=spec, 
-            mode='lines', 
-            name=f"sum (points={n_points})"
-        ))
-        fig.update_layout(
+        return hv.Curve(
+            (self._energy, spec),
+            kdims=['x'],
+            vdims=['y'],
+        ).opts(
+            color='black',
+            line_width=1.5,
             title=f"ROI — sum (points={n_points})",
-            xaxis_title="Energy Loss (eV)",
-            yaxis_title="Intensity (AU)",
-            legend=dict(
-                x=0.98,
-                y=0.98,
-                xanchor='right',
-                yanchor='top',
-                bgcolor='rgba(255,255,255,0.6)',
-                bordercolor='rgba(0,0,0,0.1)',
-                borderwidth=1,
-            )
+            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
+            responsive=True,
+            shared_axes=False,
+            framewise=True,
         )
-        if self.paneB is not None:
-            self.paneB.object = fig
+
+    # --- paneB update ---
+
+    def _update_paneB(self, fig):
+        """Push a new figure through the pipe. Always wraps in hv.Overlay for type consistency."""
+        if self._paneB_pipe is not None:
+            if fig is not None and not isinstance(fig, hv.Overlay):
+                fig = hv.Overlay([fig])
+            self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+
+    def _show_spectrum(self, *, point=None, region_pairs=None):
+        """
+        Unified helper: extract spectrum from a point or region and push to paneB.
+        Subclasses can override for additional behaviour (e.g. fitting).
+        """
+        fig = None
+        if region_pairs is not None:
+            if not region_pairs:
+                if self._last_hover_point is not None:
+                    self._show_spectrum(point=self._last_hover_point)
+                return
+            fig = self._figB_region(region_pairs)
+        elif point is not None:
+            fig = self._figB_hover(point)
+        self._update_paneB(fig)
+
+    # --- Pane A event handlers ---
+
+    def _on_paneA_hover(self, x=None, y=None):
+        """Handle PointerXY hover — show pixel spectrum unless region is selected."""
+        if x is None or y is None:
+            return
+        point = {"x": x, "y": y}
+        self._last_hover_point = point
+        if self._region_pairs:
+            self._show_spectrum(point=point, region_pairs=self._region_pairs)
+        else:
+            self._show_spectrum(point=point)
+
+    def _on_paneA_click(self, x=None, y=None):
+        """Handle Tap click — same as hover in the base implementation."""
+        if x is None or y is None:
+            return
+        point = {"x": x, "y": y}
+        self._last_hover_point = point
+        if self._region_pairs:
+            self._show_spectrum(point=point, region_pairs=self._region_pairs)
+        else:
+            self._show_spectrum(point=point)
+
+    def _on_paneA_selected(self, index=None):
+        """Handle lasso/box Selection1D — show summed spectrum for selected pixels."""
+        if not index:
+            pairs = []
+        else:
+            pairs = list(dict.fromkeys(
+                (idx // self._nx, idx % self._nx) for idx in index
+            ))
+        self._region_pairs = pairs
+        self._show_spectrum(region_pairs=pairs)
+
+    # --- Pane B range change (preserve zoom/pan) ---
+
+    @staticmethod
+    def _is_valid_range(r):
+        """Return True only if r is a 2-tuple of finite, distinct values."""
+        if r is None:
+            return False
+        try:
+            lo, hi = r
+            return (
+                lo is not None and hi is not None
+                and lo == lo and hi == hi  # NaN check
+                and abs(hi - lo) > 1e-12
+            )
+        except Exception:
+            return False
+
+    def _on_paneB_range_changed(self, x_range=None, y_range=None):
+        """Store current paneB zoom/pan ranges for re-application on updates."""
+        if self._is_valid_range(x_range):
+            self._current_x_range = x_range
+            self._current_x_autorange = False
+        elif x_range is None:
+            self._current_x_autorange = True
+            self._current_x_range = None
+
+        if self._is_valid_range(y_range):
+            self._current_y_range = y_range
+            self._current_y_autorange = False
+        elif y_range is None:
+            self._current_y_autorange = True
+            self._current_y_range = None
+
+    def _apply_current_ranges(self, fig):
+        """Apply stored xlim/ylim opts to a HoloViews element."""
+        try:
+            opts = {}
+            if self._current_x_range is not None:
+                opts['xlim'] = self._current_x_range
+            if self._current_y_range is not None:
+                opts['ylim'] = self._current_y_range
+            if opts:
+                return fig.opts(**opts)
+        except Exception:
+            pass
+        return fig
+
+    def _set_ranges_and_convert(self, fig):
+        return self._apply_current_ranges(fig)
