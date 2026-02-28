@@ -4,10 +4,6 @@ from whateels.errors.dm.data import DMPlotCreationError
 from whateels.helpers import LoadCSS, CSS_ROOT
 from .plots_factory import PlotsFactory
 from .layouts import HomePageLeftSidebar, HomePageMainLayout
-import holoviews as hv
-
-# Initialize Holoviews with Bokeh backend
-hv.extension('bokeh') # type: ignore
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

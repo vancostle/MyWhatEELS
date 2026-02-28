@@ -13,6 +13,6 @@ class Placeholders:
 
         return html
 
-    NO_FILE_LOADED = _load_html_template(str(HTML_ROOT / "no_file_loaded.html"))
-    LOADING_FILE = _load_html_template(str(HTML_ROOT / "loading_file.html"))
-    ERROR_FILE = _load_html_template(str(HTML_ROOT / "error_file.html"))
+    NO_FILE_LOADED = _load_html_template(str(HTML_ROOT / "no_file_loaded.min.html"))
+    LOADING_FILE = _load_html_template(str(HTML_ROOT / "loading_file.min.html"))
+    ERROR_FILE = _load_html_template(str(HTML_ROOT / "error_file.min.html"))

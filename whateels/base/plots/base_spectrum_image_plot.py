@@ -5,11 +5,10 @@ Shared base for 3D EELS datacube visualization using HoloViews + Panel.
 It provides:
 - Integrated 2D heatmap showing summed intensity with invisible selection layer
 - Pipe/DynamicMap-backed spectrum pane for efficient in-place updates
-- Hover, click, and region selection interactions via HoloViews streams
+- Hover, click, and region selection interactions via HoloViews streams (region selection may be disabled in subclasses)
 - Zoom/pan range preservation for paneB
 
-Page-specific features (like fitting, clustering, inactivity timers) should be
-implemented in subclasses.
+Page-specific features (like fitting, clustering, inactivity timers) should be implemented in subclasses. Subclasses may override or disable region selection logic as needed.
 """
 
 import panel as pn
@@ -30,18 +29,19 @@ class BaseSpectrumImagePlot(IPlot):
     """
     Base component for spectrum image (datacube) visualization using HoloViews + Panel.
 
-    Displays a 2D heatmap of integrated intensity alongside an interactive
-    spectrum viewer. Supports hover, click, and region selection.
+    Displays a 2D heatmap of integrated intensity alongside an interactive spectrum viewer. Supports hover, click, and region selection by default.
 
-    Can be extended by page-specific visualizers for additional features
-    like clustering, fitting, etc.
+    Subclasses may override or disable region selection logic (e.g., clustering visualizer disables region selection).
+
+    Can be extended by page-specific visualizers for additional features like clustering, fitting, etc.
     """
 
     # Default axis titles — subclasses may override
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
-    def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss'):
+    # TODO: Consider making paneA_select_tools a parameter for flexibility in subclasses (e.g., disable region selection in clustering visualizer)
+    def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss', paneA_select_tools=['lasso_select', 'box_select']):
         """
         Initialize spectrum image visualizer.
 
@@ -51,6 +51,7 @@ class BaseSpectrumImagePlot(IPlot):
         """
         self._dataset = dataset
         self._eloss_name = eloss_name
+        self._paneA_select_tools = paneA_select_tools
 
         # Energy axis
         self._e_axis = self._dataset.coords[self._eloss_name].values
@@ -147,7 +148,7 @@ class BaseSpectrumImagePlot(IPlot):
         )
 
     # --- Plot / Pane Setup (HoloViews) ---
-    def _setup_plots(self):
+    def _setup_plots(self, paneA_select_tools=['lasso_select', 'box_select']):
         """
         Initialize paneA (heatmap + invisible selection layer) and paneB
         (Pipe/DynamicMap spectrum) using HoloViews.
@@ -192,7 +193,7 @@ class BaseSpectrumImagePlot(IPlot):
             size=0,
             alpha=0,
             nonselection_alpha=0,
-            tools=['lasso_select', 'box_select'],
+            tools=paneA_select_tools,
             shared_axes=False,
         )
 

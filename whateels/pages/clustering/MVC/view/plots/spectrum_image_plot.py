@@ -3,13 +3,14 @@ Clustering-specific spectrum image visualizer.
 
 Extends the shared SpectrumImageVisualizer component with clustering capabilities:
 - KMeans clustering
-- Agglomerative clustering  
+- Agglomerative clustering
 - Spectral clustering
 - Cluster center visualization
 - Normalized spectrum display
 
-This visualizer orchestrates the UI interactions and delegates to OOP utility classes
-for algorithms, data preparation, and plotting.
+All plotting is performed using HoloViews. This visualizer orchestrates UI interactions and delegates to OOP utility classes for algorithms, data preparation, and plotting.
+
+Note: All lasso/box/region selection logic has been removed. No region selection or ROI summing is available in this clustering visualizer; only pixel hover/click and cluster center overlays are supported.
 """
 
 import panel as pn
@@ -21,9 +22,8 @@ import traceback
 
 from whateels.helpers import SpectrumExtractor
 from whateels.base.plots import BaseSpectrumImagePlot
-from whateels.components import SplitJs, ProgressDisplay, InfoPanel
+from whateels.components import ProgressDisplay
 from typing import override, TYPE_CHECKING
-
 
 # Import clustering page utilities (OOP classes)
 from ....utils import (
@@ -44,15 +44,16 @@ if TYPE_CHECKING:
 class SpectrumImagePlot(BaseSpectrumImagePlot):
     """
     Clustering-enhanced Spectrum Image Visualizer.
-    
+
     Extends the shared visualizer with clustering capabilities:
     - KMeans, Agglomerative, and Spectral clustering
     - Cluster center visualization
     - Normalized spectrum display
     - Background subtraction support
-    
-    This class focuses on orchestrating UI interactions and delegates
-    heavy lifting to helper modules.
+
+    All plotting is performed using HoloViews. Lasso/box/region selection and ROI summing are not available in this visualizer; only pixel hover/click and cluster center overlays are supported.
+
+    This class focuses on orchestrating UI interactions and delegates heavy lifting to helper modules.
     """
 
     def __init__(self, model: "ClusteringModel", view: "ClusteringView", dataset: "Dataset"):
@@ -84,7 +85,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._original_heatmap_data = None  # Store original heatmap for restoration
         self._clustering_active = False
         self._current_norm = None  # Store the normalization method used in clustering
-        
         # Store normalized data for visualization
         self._last_clustering_matrix = None
         self._last_clustering_input = None
@@ -92,23 +92,18 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Clustering widgets
         self._kmeans_run_button = self._view.right_sidebar.kmeans_run_button
         self._kmeans_run_button.on_click(lambda _ : self.run_kmeans_clustering(user_click=True))
-        
         self._agglomerative_run_button = self._view.right_sidebar.agglomerative_run_button
         self._agglomerative_run_button.on_click(lambda _ : self.run_agglomerative_clustering(user_click=True))
-        
         self._spectral_run_button = self._view.right_sidebar.spectral_run_button
         self._spectral_run_button.on_click(lambda _ : self.run_spectral_clustering(user_click=True))
         
         # OOP utility instances
         self._preprocessor = DataPreprocessor()
         self._visualizer: ClusterVisualizer | None = None  # Created after clustering
-        
         # Cluster colors (set after clustering)
         self.cluster_colors = []
-        
         # Progress display for clustering operations
         self._progress_display = ProgressDisplay(name="Clustering")
-        
         # Orchestrator for common clustering patterns
         # Use list as mutable reference for original_heatmap_data
         self._original_heatmap_ref = [None]
@@ -120,6 +115,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             data_getter_fn=self._get_data_for_clustering,
             original_heatmap_ref=self._original_heatmap_ref
         )
+
+        # Remove region selection state (lasso/box selection)
 
     # --- Clustering Application Methods ---
     
@@ -712,46 +709,3 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         except Exception as e:
             print(f"Error handling click: {e}")
             traceback.print_exc()
-
-    @override
-    def _on_paneA_selected(self, index=None):
-        """
-        Handle lasso/box selection.
-
-        - No clustering active: falls back to base (summed ROI spectrum).
-        - Clustering active: shows all cluster center curves (one per cluster color)
-          and freezes hover, matching the old Plotly-based behavior.
-          Double-click anywhere on paneA to unfreeze hover.
-        """
-        if not self._clustering_active or self._visualizer is None or self._clustering_results is None:
-            # No clustering — standard base behavior (summed ROI spectrum)
-            super()._on_paneA_selected(index=index)
-            return
-
-        if not index:
-            # Selection cleared — re-enable hover and restore pixel spectrum
-            self._region_pairs = []
-            self._hover_disabled = False
-            if self._last_hover_point is not None:
-                i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
-                self._update_paneB(fig)
-            return
-
-        # Record pairs so hover handler can check whether a selection is active
-        self._region_pairs = list(dict.fromkeys(
-            (idx // self._nx, idx % self._nx) for idx in index
-        ))
-
-        # Show all cluster centers — same view as the "double-click to show all" action
-        _, centres = self._clustering_results
-        fig = self._visualizer.plot_centers(
-            centres,
-            self._energy,
-            title="All Cluster Centers (double-click to re-enable hover)"
-        )
-        self._update_paneB(fig)
-
-        # Freeze hover so mouse movement doesn't overwrite this view
-        self._hover_disabled = True
-        self._frozen_pixel = None

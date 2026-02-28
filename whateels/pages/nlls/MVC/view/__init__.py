@@ -8,8 +8,8 @@ Adapted from interactive_NLLS_SImages.py and interactive_NLLS_SLines.py.
 from whateels.base.mvc import BaseView
 from whateels.helpers.nlls_library.database.elements import elements
 import panel as pn
-import param
-
+import holoviews as hv
+from holoviews import opts
 
 class NLLSView(BaseView):
     """
@@ -143,10 +143,6 @@ class NLLSView(BaseView):
             ref_spectrum: Reference spectrum data
             ref_fit: Reference fitted spectrum
         """
-        import holoviews as hv
-        from holoviews import opts
-        hv.extension('bokeh')
-        
         plots = []
         
         # Reference spectrum fit

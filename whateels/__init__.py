@@ -1,7 +1,12 @@
 import panel as pn
+import holoviews as hv
 
-# Configure Panel with theme support (only called once here)
+# Configure Panel and HoloViews once globally — calling these inside page
+# views or methods wastes time on every invocation.
 pn.extension('filedropper', 'floatpanel', 'plotly', notifications=True, theme='default')
+
+# Initialize Holoviews with Bokeh backend
+hv.extension('bokeh') # type: ignore
 
 from whateels.helpers import LoadCSS, CSS_ROOT, KillProcess
 from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification, DemoPage, Login, Clustering2Page
