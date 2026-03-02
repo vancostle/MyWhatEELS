@@ -1,3 +1,4 @@
+import weakref
 import panel as pn
 from .services import *
 from whateels.errors.dm.data import (
@@ -26,8 +27,16 @@ class HomePageController:
         self._model = model
         self._view = view
         
-        # Register cleanup function to be called on session end/page reload
-        pn.state.on_session_destroyed(lambda _: self.cleanup())
+        # Register this controller as the active one in the model (cacheado).
+        # This allows the next HomePage instantiation to call cleanup() on this
+        # instance before creating a new one, preventing memory leaks from
+        # accumulated watchers and callbacks across page navigations.
+        model.active_controller = self
+
+        # Use a weakref so the session-destroyed callback does NOT prevent GC
+        # from collecting this controller once it has been replaced.
+        ref = weakref.ref(self)
+        pn.state.on_session_destroyed(lambda _: (c := ref()) and c.cleanup())
         
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)

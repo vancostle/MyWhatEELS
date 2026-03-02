@@ -20,7 +20,7 @@ pn.extension(raw_css=[
 
 from typing import Optional
 
-class ImagePlot:
+class BaseImagePlot:
     """
     Base component for composing 2D image visualizations from EELS data.
     

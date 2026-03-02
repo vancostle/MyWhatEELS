@@ -237,5 +237,6 @@ class FittingModel(BaseModel):
                 Defaults to 'default'.
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
+        print(self.ref_results.fit_report())
 
         self._controller.update_plot(fitting_results = self.ref_results.best_fit)

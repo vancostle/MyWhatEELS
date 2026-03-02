@@ -49,7 +49,7 @@ class ComponentItemView(pn.Column):
         )
 
         self.energy_range_slider = pn.widgets.EditableRangeSlider(
-            name='Energy Range',
+            name='Energy Center Range',
             start=energy[0],
             end=energy[-1],
             value=component_item.center_range,
@@ -61,7 +61,7 @@ class ComponentItemView(pn.Column):
         )
 
         self.amplitude_input = pn.widgets.FloatInput(
-            name='Amplitude',
+            name=f"Amplitude)",
             value=component_item.amplitude,
             step=1000,
             styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},

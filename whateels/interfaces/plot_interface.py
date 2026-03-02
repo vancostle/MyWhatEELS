@@ -1,7 +1,9 @@
-import panel as pn
-
 from abc import ABC, abstractmethod
-from whateels.components import DatasetInformation
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from panel.viewable import Viewable
+    from whateels.components import InfoPanel
 
 class IPlot(ABC):
     """
@@ -19,7 +21,7 @@ class IPlot(ABC):
         super().__init__()
 
     @abstractmethod
-    def create_plots(self) -> pn.viewable.Viewable:
+    def create_plots(self) -> "Viewable":
         """
         Create and return the main Panel layout for this EELS visualizer.
 
@@ -31,7 +33,7 @@ class IPlot(ABC):
         raise NotImplementedError("Subclasses should implement create_plots and return a layout object.")
 
     @abstractmethod
-    def create_dataset_info(self) -> DatasetInformation:
+    def create_dataset_info(self) -> "InfoPanel":
         """
         Create and return a DatasetInformation panel for this visualizer.
 

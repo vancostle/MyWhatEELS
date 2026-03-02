@@ -9,7 +9,7 @@ import numpy as np
 import time
 import plotly.graph_objs as go
 
-from whateels.components.dataset_information import DatasetInformation
+from whateels.components.info_panel import InfoPanel
 from whateels.helpers import SpectrumExtractor
 from whateels.components import SplitJs
 from whateels.interfaces import IPlot
@@ -129,7 +129,7 @@ class SpectrumImageVisualizer(IPlot):
         convergence_angle = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
         collection_angle = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
         
-        dataset_information = DatasetInformation(
+        dataset_information = InfoPanel(
             title="Dataset Information", 
             information={
                 "Shape": shape,

@@ -1,6 +1,6 @@
 import panel as pn
 
-class MainLayoutPlaceholder(pn.Column):
+class DMFileUploadedPlaceholder(pn.Column):
     
     def __init__(
         self,
@@ -8,7 +8,7 @@ class MainLayoutPlaceholder(pn.Column):
     ):
         super().__init__(
             pn.pane.Markdown(
-                "## Select parameters and click 'Compute UMAP embedding' to begin",
+                "## Select parameters and click 'Compute UMAP embedding' to begin\nor\nUpload a previously computed UMAP embedding.",
                 align='center',
                 styles={
                     'color': '#999',
@@ -24,4 +24,4 @@ class MainLayoutPlaceholder(pn.Column):
                 'align-items': 'center',
             },
             **kwargs
-        ) 
+        )

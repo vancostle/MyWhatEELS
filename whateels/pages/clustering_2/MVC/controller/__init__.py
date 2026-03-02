@@ -1,4 +1,5 @@
 from whateels.helpers import SafeConverter, URLUtils
+from whateels.components import SplitJs
 import itertools, panel as pn, threading
 
 from typing import TYPE_CHECKING
@@ -10,22 +11,40 @@ class Clustering2PageController:
     
     def __init__(self, model: "Clustering2PageModel", view: "Clustering2PageView") -> None:
         TAB_PARAM = "tab"
+        
+        self._is_valid_tab_and_dataset = False
 
         self._model = model
         self._view = view
-
+        
         tab_param = URLUtils.get_query_param(TAB_PARAM) # Get tab index from URL
         tab_param = SafeConverter.to_int(tab_param, default=-1) # Get tab index as int, default to -1 if invalid
+        
         all_datasets = self._model.app_state.all_datasets
 
-        # Display nothing if no valid tab or datasets
+        # Register callback for when UMAP data is loaded from file
+        view.left_sidebar.set_on_umap_loaded_callback(self._on_umap_loaded_from_file)
+        view.left_sidebar.set_on_file_removed_callback(self._on_file_removed)
+
+        # Check if valid tab and datasets exist
         if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
-            print("No valid datasets or tab index.")
+            # Show placeholder for when no DM file is uploaded
+            main_placeholder = self._view.main.none_dm_file_uploaded_placeholder
+            self._view.main.append(main_placeholder)
             return
+
+        self._is_valid_tab_and_dataset = True
+        
+        # Show placeholder for when DM file is uploaded
+        main_placeholder = self._view.main.dm_file_uploaded_placeholder
+        self._view.main.append(main_placeholder)
 
         # Set selected dataset in the model
         self._model.selected_dataset = all_datasets[tab_param]
-        
+
+        electron_count = self._model.selected_dataset["ElectronCount"]
+        self._hdbscan = UMAP_HDBSCAN(electron_count_data=electron_count) # Initialize UMAP_HDBSCAN with electron count data from the selected dataset
+
         eloss = self._model.selected_dataset["Eloss"].values # Get Eloss values from the selected dataset
         eloss_min = float(eloss.min())
         eloss_max = float(eloss.max())
@@ -38,14 +57,29 @@ class Clustering2PageController:
         view.right_sidebar.max_cut_signal.start = eloss_min
         view.right_sidebar.max_cut_signal.end = eloss_max
         
+        view.right_sidebar.reset_cut_signal_button.on_click(self._reset_cut_signal_event) # Register callback for reset cut signal button
+        
+        view.right_sidebar.hdbscan_activate_button.on_click(self._hdbscan_active_button_event) # Register callback for HDBSCAN activate button click
+        
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(True, self._on_umap_run_button_click)
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(False, self._on_umap_cancel_button_click)
+        
+        view.right_sidebar.compute_hdbscan_embedding_run_button.on_click(self._compute_hdbscan_on_umap_event)
+        
+    def is_valid_tab_and_dataset(self) -> bool:
+        """Returns True if the controller was initialized with a valid tab and dataset, else False."""
+        return self._is_valid_tab_and_dataset
         
     def _on_umap_run_button_click(self) -> None:
         """Event handler for UMAP run button click."""
         # Start UMAP computation for all parameter combinations
         self._model.is_umap_computing = True
         self._model.was_umap_computing_canceled = False # Reset cancellation flag
+        self._model.completed_umap_count = 0 # Reset completed count
+        self._model.umap_data_dict = dict()  # Reset UMAP data dict for all computations
+        self._view.right_sidebar.download_results_button.disabled = True # Disable download button during computation
+        self._view.left_sidebar.disable_controls()  # Disable controls in the left sidebar during computation
+        self._view.right_sidebar.disable_hdbscan_controls()  # Disable hdbscan controls in the right sidebar during computation
         
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
@@ -82,22 +116,42 @@ class Clustering2PageController:
         metric = metric  # Capture metric for use in nested function
         
         def process_next(index):
-            if index >= len(combinations):
-                pn.state.notifications.success("UMAP embedding computations completed.") # type: ignore
-                self._model.is_umap_computing = False
-                self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
-                return
-            
+            # Check cancellation first, before checking completion
             if self._model.was_umap_computing_canceled:
                 pn.state.notifications.warning("UMAP embedding computations cancelled.", duration=5000) # type: ignore
                 self._model.is_umap_computing = False
+                self._view.left_sidebar.enable_controls()  # Re-enable controls in the left sidebar
                 self._view.right_sidebar.compute_umap_embedding_run_button.disabled = False
+                
+                # Only enable download button if at least one computation completed
+                if self._model.completed_umap_count > 0:
+                    self._view.right_sidebar.download_results_button.disabled = False
+                    self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls if at least one computation completed
+                    self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
+                    
+                    return
+                
+                self._view.right_sidebar.hdbscan_selected_umap.options = [] # Clear HDBSCAN UMAP selection options when cancelled
+                return
+            
+            # Check if all combinations have been processed
+            if index >= len(combinations):
+                pn.state.notifications.success("UMAP embedding computations completed.") # type: ignore
+                
+                self._model.is_umap_computing = False
+                self._view.left_sidebar.enable_controls()  # Re-enable controls in the left sidebar
+                self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls after UMAP computations are done
+                self._view.right_sidebar.compute_umap_embedding_run_button.toggle()
+                
+                # Enable download button if at least one computation completed
+                if self._model.completed_umap_count > 0:
+                    self._view.right_sidebar.download_results_button.disabled = False
+                    self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
                 return
             
             # Set current placeholder to loading state
             result_panels[index].is_loading = True
             min_dist, n_neighbors = combinations[index]
-            self._model.umap_data_dict = dict()  # Reset UMAP data dict for this computation
             
             def compute_and_callback():
                 # This runs in a separate thread to avoid blocking UI
@@ -106,7 +160,7 @@ class Clustering2PageController:
                 self._model.umap_data_dict.update(umap_data) # Get UMAP data
                 # Execute callback on main thread (thread-safe method for Panel)
                 pn.state.execute(on_complete)
-            
+
             #  Callback to be called when calculation is done
             def on_complete():
                 self._view.replace_placeholder_with_umap_embedding(
@@ -115,6 +169,9 @@ class Clustering2PageController:
                     n_neighbors, 
                     self._model.umap_data_dict,
                 )
+                
+                # Increment completed count
+                self._model.completed_umap_count += 1
             
                 # Process next placeholder
                 process_next(index + 1)
@@ -125,19 +182,24 @@ class Clustering2PageController:
         # Start with the first placeholder
         process_next(index=0)
         
+    def _reset_cut_signal_event(self, _) -> None:
+        """Reset the cut signal to the original eloss range."""
+        original_min_eloss, original_max_eloss = self._hdbscan.get_original_eloss_range()
+        self._view.right_sidebar.min_cut_signal.value = original_min_eloss
+        self._view.right_sidebar.max_cut_signal.value = original_max_eloss
+        
     def _compute_umap_embedding_event(self, min_dist: float, n_neighbors: int, n_components: int, metric: str) -> dict:
         """Event handler for computing UMAP embedding when the button is clicked."""
         
-        electron_count = self._model.selected_dataset["ElectronCount"]
-        if electron_count is None:
-            print("Warning: 'ElectronCount' attribute not found in the selected dataset.")
+        self._hdbscan.cut_signal(
+            min_eloss=self._view.right_sidebar.params.min_eloss,
+            max_eloss=self._view.right_sidebar.params.max_eloss
+        ) # Cut signal range in the data based on user input before computing UMAP embedding
         
-        umap_hdbscan = UMAP_HDBSCAN(electron_count_data=electron_count)
-
         embeddings = []
         umap_data_dicts = dict()
         
-        embedding, umap_data_dict = umap_hdbscan.compute_umap_embedding(
+        embedding, umap_data_dict = self._hdbscan.compute_umap_embedding(
             min_dist,
             n_neighbors,
             n_components,
@@ -147,9 +209,51 @@ class Clustering2PageController:
         embeddings.append(embedding)
         umap_data_dicts.update(umap_data_dict)
         
-        print(f"Umap datta dict keys: {list(umap_data_dicts.keys())}")
-        
         return umap_data_dicts
+    
+    def _compute_hdbscan_on_umap_event(self, event):
+        """Event handler for computing HDBSCAN on UMAP embedding when the button is clicked."""
+        
+        self._hdbscan.cut_signal(
+            min_eloss=self._view.right_sidebar.params.min_eloss,
+            max_eloss=self._view.right_sidebar.params.max_eloss
+        ) # Cut signal range in the data based on user input before computing UMAP embedding
+
+        self._view.main.hdbscan_wrapper.clear() # Clear previous HDBSCAN results from the main layout
+
+        selected_umap_dict = self._view.right_sidebar.hdbscan_selected_umap.value
+        
+        embedding_obj = selected_umap_dict
+        # If embedding_obj is a dict or has 'embedding_' attribute, extract the array
+        embedding = getattr(embedding_obj, 'embedding_', embedding_obj)
+        # Get HDBSCAN parameters from UI
+        min_samples = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_samples, default=4)
+        min_cluster_size = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_cluster_size, default=100)
+        hdbscan_results = self._hdbscan.compute_hdbscan_on_umap(embedding, min_samples, min_cluster_size)
+        cmap_obj = self._hdbscan.get_nclusters_cmap(hdbscan_results, n_clusters=len(set(hdbscan_results.labels_)))
+        
+        # Create the Holoviews figures and wrap them in Panel panes
+        hdbscan_map_plot = self._hdbscan.plot_hdbscan_map(hdbscan_results, cmap_obj)
+        hdbscan_mean_spectra_plot = self._hdbscan.plot_mean_spectra_per_cluster(hdbscan_results, cmap_obj)
+        hdbscan_umap_embedding_width_labels_plot = self._hdbscan.plot_umap_embedding_with_labels(
+            embedding, 
+            hdbscan_results.labels_, 
+            cmap_obj, min_samples, min_cluster_size
+        )
+        
+        self._view.main.hdbscan_wrapper.append(
+            pn.Column(
+                pn.Row(
+                    hdbscan_map_plot,
+                    hdbscan_mean_spectra_plot,
+                    sizing_mode='stretch_width',
+                    margin=0,
+                ),
+                hdbscan_umap_embedding_width_labels_plot,
+                sizing_mode='stretch_width',
+                margin=0,
+            )
+        )
     
     def _on_umap_cancel_button_click(self) -> None:
         """Event handler for UMAP cancel button click."""
@@ -162,3 +266,41 @@ class Clustering2PageController:
         self._view.disappear_non_loading_placeholders()
 
         pn.state.notifications.warning("UMAP embedding computations cancellation requested.", duration=5000) # type: ignore
+    
+    def _on_umap_loaded_from_file(self, min_dist: float, n_neighbors: int, umap_data_dict: dict, filename: str) -> None:
+        """Event handler for when UMAP data is loaded from file."""
+        
+        self._view.right_sidebar.hdbscan_selected_umap.options = umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
+        self._view.right_sidebar.disable_controls()
+        self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls when UMAP data is loaded from file
+        
+        combinations = [(min_dist, n_neighbors)]
+        self._view.display_all_combination_placeholders(combinations)
+        self._view.replace_placeholder_with_umap_embedding(0, min_dist, n_neighbors, umap_data_dict)
+    
+    def _on_file_removed(self) -> None:
+        """Event handler for when file is removed."""
+        
+        # Reset model state related to UMAP data
+        if (self._is_valid_tab_and_dataset):
+            main_placeholder = self._view.main.dm_file_uploaded_placeholder
+        else:
+            main_placeholder = self._view.main.none_dm_file_uploaded_placeholder
+
+        self._view.main.clear()  # Show default placeholder when file is removed
+        self._view.main.append(main_placeholder)  # Re-append the main placeholder after clearing
+        self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
+        self._view.right_sidebar.disable_hdbscan_controls()  # Disable HDBSCAN controls when file is removed
+        
+    def _hdbscan_active_button_event(self, event):
+        """Event handler for HDBSCAN activate button click."""
+        selected_umap_dict = self._view.right_sidebar.hdbscan_selected_umap.value
+        
+        embedding_obj = selected_umap_dict
+        embedding = getattr(embedding_obj, 'embedding_', embedding_obj)
+        
+        data : list[tuple[int, int, int, int, float]] = self._hdbscan.evaluate_umap(embedding)
+        heatmap_overlay = self._hdbscan.plot_cluster_heatmap(data)
+        
+        self._view.main.heatmap_wrapper.clear() # Clear previous heatmap from the main layout
+        self._view.main.heatmap_wrapper.append(heatmap_overlay)

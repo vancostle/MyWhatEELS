@@ -18,7 +18,7 @@ class ClusteringView:
         # Load any provided CSS files
         css_files = [
             str(CSS_ROOT / "clustering.css"),
-            str(CSS_ROOT / "dataset_info.css")
+            str(CSS_ROOT / "info_panel.css")
         ]
 
         LoadCSS(css_files)
@@ -100,13 +100,13 @@ class ClusteringView:
 
             # Create plots using the factory
             chosen_plot = plots_factory.choose_plot(str(dataset_type), dataset)
-            
+
             if chosen_plot is None:
                 print(f"No plot found for dataset type: {dataset_type}")
                 return
-            
+
             chosen_plot_created = chosen_plot.create_plots()
-                
+
             plots_tab.append((image_name, chosen_plot_created))
             
             self._all_dataset_info.append(chosen_plot.create_dataset_info())

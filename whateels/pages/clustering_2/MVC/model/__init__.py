@@ -12,6 +12,9 @@ class Clustering2PageModel:
         self._is_umap_computing = False
         self._was_umap_computing_canceled = False
         self._umap_data_dict = dict()
+        self._completed_umap_count: int = 0
+        self._extra_umap_params_key: str = "Extra UMAP Parameters"
+        self._loaded_umap_data = None
         
     @property
     def app_state(self) -> AppState:
@@ -28,7 +31,16 @@ class Clustering2PageModel:
     @property
     def umap_data_dict(self) -> dict:
         return self._umap_data_dict
-    
+    @property
+    def completed_umap_count(self) -> int:
+        return self._completed_umap_count
+    @property
+    def extra_umap_params_key(self) -> str:
+        return self._extra_umap_params_key
+    @property
+    def loaded_umap_data(self):
+        return self._loaded_umap_data
+
     @selected_dataset.setter
     def selected_dataset(self, dataset: "Dataset"):
         self._selected_dataset = dataset
@@ -44,3 +56,11 @@ class Clustering2PageModel:
     @umap_data_dict.setter
     def umap_data_dict(self, data_dict: dict):
         self._umap_data_dict = data_dict
+    
+    @completed_umap_count.setter
+    def completed_umap_count(self, count: int):
+        self._completed_umap_count = count
+        
+    @loaded_umap_data.setter
+    def loaded_umap_data(self, data):
+        self._loaded_umap_data = data

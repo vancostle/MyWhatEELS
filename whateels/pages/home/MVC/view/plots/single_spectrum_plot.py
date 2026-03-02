@@ -1,20 +1,20 @@
 """
-Single spectrum visualization composer (Plotly version).
+Single spectrum visualization composer.
 """
 import panel as pn
 import numpy as np
-import plotly.graph_objs as go
+import holoviews as hv
 
 from typing import override, TYPE_CHECKING
 from whateels.interfaces import IPlot
-from whateels.components import DatasetInformation
+from whateels.components import InfoPanel
 
 if TYPE_CHECKING:
     from ...model import HomePageModel
     from xarray import Dataset
 
 class SingleSpectrumPlot(IPlot):
-    """Composes single spectrum visualizations from EELS data (Plotly)."""
+    """Composes single spectrum visualizations from EELS data."""
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
@@ -37,29 +37,22 @@ class SingleSpectrumPlot(IPlot):
         energy = self._dataset.coords[self._model.constants.ELOSS].values
         spectrum = spectrum_data.values
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=energy,
-            y=spectrum,
-            mode="lines",
-            line=dict(color="black", width=2),
-            name="Spectrum"
-        ))
-        fig.update_layout(
-            title="EELS Spectrum",
-            margin=dict(l=40, r=20, t=40, b=40),
-            xaxis_title=self._X_AXIS_SPECTRUM_TITLE,
-            yaxis_title=self._Y_AXIS_SPECTRUM_TITLE,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+        curve = hv.Curve(
+            (energy, spectrum),
+            kdims=['Energy Loss (eV)'],
+            vdims=['Intensity (a.u.)'],
+            label='Spectrum'
+        ).opts(
+            color='black',
+            line_width=2,
+            title='EELS Spectrum',
+            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
+            responsive=True,
+            shared_axes=False,
         )
-        
-        # Convert to Panel
-        spectrum_pane = pn.pane.Plotly(
-            fig.to_plotly_json(), 
-            sizing_mode=self._STRETCH_BOTH, 
-            config={"responsive": True}
-        )
+
+        spectrum_pane = pn.pane.HoloViews(curve, sizing_mode=self._STRETCH_BOTH, margin=0)
         
         return pn.Column(
             spectrum_pane,
@@ -94,7 +87,7 @@ class SingleSpectrumPlot(IPlot):
         convergence_angle = f"{convergence_angle} {ANGLE_UNIT}" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
         collection_angle = f"{collection_angle} {ANGLE_UNIT}" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
         
-        dataset_information = DatasetInformation(
+        dataset_information = InfoPanel(
             title="Dataset Information", 
             information={
                 "Shape": shape,
