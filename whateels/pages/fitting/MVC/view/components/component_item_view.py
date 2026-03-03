@@ -1,5 +1,6 @@
 import panel as pn
 from whateels.components.toggle_button import ToggleButton
+import numpy as np
 
 class ComponentItemView(pn.Column):
     _STRETCH_WIDTH = 'stretch_width'
@@ -14,6 +15,13 @@ class ComponentItemView(pn.Column):
         self._fitting_add_component_button = view.fitting_add_component_button
         self._expandable = expandable
         self._right_sidebar = view.right_sidebar
+
+        self.dict_var = {
+            'low': [3, 3, 0.1, 0.1, 0.5, 2],
+            'medium': [7, 7, 1, 1.25, 0, 3],
+            'high': [15, 15, 1, 3, 0, 5],
+            'maximum': [np.inf, np.inf, 1, np.inf, 0, np.inf]
+        }
 
         self.delete_button = pn.widgets.Button(
             name='Delete',
@@ -50,8 +58,8 @@ class ComponentItemView(pn.Column):
 
         self.energy_range_slider = pn.widgets.EditableRangeSlider(
             name='Energy Range',
-            start=energy[0],
-            end=energy[-1],
+            start=component_item.energy_center - self.dict_var[component_item.flexibility][0],
+            end=component_item.energy_center + self.dict_var[component_item.flexibility][1],
             value=component_item.center_range,
             step=1,
             disabled=False,
@@ -70,8 +78,8 @@ class ComponentItemView(pn.Column):
 
         self.amplitude_slider = pn.widgets.EditableRangeSlider(
             name='Amplitude Range',
-            start=0,
-            end=3000000,
+            start=component_item.amplitude * self.dict_var[component_item.flexibility][4],
+            end=component_item.amplitude * self.dict_var[component_item.flexibility][5],
             value=component_item.amplitude_range,
             step=1000,
             disabled=False,
@@ -91,8 +99,8 @@ class ComponentItemView(pn.Column):
 
         self.sigma_slider = pn.widgets.EditableRangeSlider(
             name='Sigma Range',
-            start=0,
-            end=20,
+            start=component_item.sigma - self.dict_var[component_item.flexibility][2] if component_item.sigma > self.dict_var[component_item.flexibility][2] else 0,
+            end=component_item.sigma + self.dict_var[component_item.flexibility][3],
             value=component_item.sigma_range,
             step=1e-1,
             disabled=False,
@@ -141,6 +149,8 @@ class ComponentItemView(pn.Column):
 
     def _energy_center_watcher(self, event):
         self.component_item.energy_center = event.new
+        self.energy_range_slider.start = event.new - self.dict_var[self.component_item.flexibility][0]
+        self.energy_range_slider.end = event.new + self.dict_var[self.component_item.flexibility][1]
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
         self.update_component_parameters()
@@ -165,12 +175,16 @@ class ComponentItemView(pn.Column):
 
     def _sigma_watcher(self, event):
         self.component_item.sigma = event.new
+        self.sigma_slider.start = event.new - self.dict_var[self.component_item.flexibility][2] if event.new > self.dict_var[self.component_item.flexibility][2] else 0
+        self.sigma_slider.end = event.new + self.dict_var[self.component_item.flexibility][3]
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
         self.update_component_parameters()
 
     def _amplitude_watcher(self, event):
         self.component_item.amplitude = event.new
+        self.amplitude_slider.start = event.new - self.dict_var[self.component_item.flexibility][4]
+        self.amplitude_slider.end = event.new + self.dict_var[self.component_item.flexibility][5]
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
         self.update_component_parameters()  # Update component parameters in the model
@@ -200,3 +214,11 @@ class ComponentItemView(pn.Column):
         self.energy_range_slider.value = self.component_item.center_range
         self.sigma_slider.value = self.component_item.sigma_range
         self.amplitude_slider.value = self.component_item.amplitude_range
+
+    def update_component_item_name(self, reference_fit):
+        self.amplitude_input.name = f'Amplitude ({reference_fit})'
+        self.sigma_input.name = f'Sigma ({reference_fit})'
+        self.energy_center_input.name = f'Energy Center ({reference_fit})'  
+        self.energy_range_slider.name = f'Energy Range ({reference_fit})'
+        self.sigma_slider.name = f'Sigma Range ({reference_fit})'
+        self.amplitude_slider.name = f'Amplitude Range ({reference_fit})'

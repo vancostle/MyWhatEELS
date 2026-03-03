@@ -66,10 +66,10 @@ class FittingModel(BaseModel):
         self._spectra = AppState().spectra
 
         dict_var = {
-            'low': [3, 3, 0.1, 0.1],
-            'medium': [7, 7, 1, 1.25],
-            'high': [15, 15, 1, 3],
-            'maximum': [np.inf, np.inf, 1, np.inf]
+            'low': [3, 3, 0.1, 0.1, 0.5, 2],
+            'medium': [7, 7, 1, 1.25, 0, 3],
+            'high': [15, 15, 1, 3, 0, 5],
+            'maximum': [np.inf, np.inf, 1, np.inf, 0, np.inf]
         }
         if flex not in dict_var:
             flex = 'medium'
@@ -82,7 +82,7 @@ class FittingModel(BaseModel):
         component_item.set_parameters(cen, sigm, amp)
         component_item.set_center_range(cen - dict_var[flex][0], cen + dict_var[flex][1],)
         component_item.set_sigma_range(0.5, sigm + sigm * dict_var[flex][3])
-        component_item.set_amplitude_range(0, np.inf)
+        component_item.set_amplitude_range(amp * dict_var[flex][4], amp * dict_var[flex][5])
 
         self.dictionary['components'].append(component_item)
         
@@ -237,5 +237,7 @@ class FittingModel(BaseModel):
                 Defaults to 'default'.
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
+
+        
 
         self._controller.update_plot(fitting_results = self.ref_results.best_fit)

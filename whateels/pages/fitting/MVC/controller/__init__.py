@@ -74,6 +74,7 @@ class FittingController(BaseController):
 
     def _energy_center_watcher(self, event):
         energy_center = self.view.component_input["energy_center"]
+        self.view.component_input["energy_range"].value = (event.new - 10, event.new + 10)
 
     def _model_select_watcher(self, event):
         model_select = self.view.component_input["model_select"]

@@ -7,7 +7,7 @@ class ComponentItem:
         self.flexibility = flexibility
 
     def __str__(self):
-        return f"{self.compo_type}({self.energy_center})"
+        return f"{self.compo_type}({self.energy_center})({self.flexibility})"
 
     def set_energy_center(self, energy_range):
         self.energy_range = energy_range
