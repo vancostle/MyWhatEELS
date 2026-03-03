@@ -6,13 +6,6 @@ import plotly.graph_objects as go
 import numpy as np
 import xarray as xr
 
-# Make Plotly modebar transparent
-pn.extension(raw_css=[
-    ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
-    ".plotly .modebar-btn { background: transparent !important; }",
-    ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
-])
-
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 
