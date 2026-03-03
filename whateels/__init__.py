@@ -3,13 +3,21 @@ import holoviews as hv
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
-pn.extension('filedropper', 'floatpanel', 'plotly', notifications=True, theme='default')
+pn.extension(
+    'filedropper', 'floatpanel',
+    notifications=True,
+    theme='default',
+    raw_css=[
+        ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
+        ".plotly .modebar-btn { background: transparent !important; }",
+        ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
+    ]
+)
 
 # Initialize Holoviews with Bokeh backend
 hv.extension('bokeh') # type: ignore
 
 from whateels.helpers import LoadCSS, CSS_ROOT, KillProcess
-from whateels.pages import HomePage, Metadata, Clustering, MultiFitting, Quantification, DemoPage, Login, Clustering2Page
 
 class App:
     """
@@ -34,13 +42,14 @@ class App:
         # Define the pages for the application
         # Use lambdas to avoid immediate instantiation
         pages = {
-            "/": lambda: HomePage(),
-            "/metadata-details": lambda: Metadata(),
-            "/clustering": lambda: Clustering(),
-            "/clustering-2": lambda: Clustering2Page(),
-            "/multifit-details": lambda: MultiFitting(),
-            "/quantification": lambda: Quantification(),
-            # "/nlls": lambda: NLLS(),
+            "/": lambda: __import__('whateels.pages.home', fromlist=['HomePage']).HomePage(),
+            "/metadata-details": lambda: __import__('whateels.pages.metadata', fromlist=['Metadata']).Metadata(),
+            "/clustering": lambda: __import__('whateels.pages.clustering', fromlist=['Clustering']).Clustering(),
+            "/clustering-2": lambda: __import__('whateels.pages.clustering_2', fromlist=['Clustering2Page']).Clustering2Page(),
+            "/multifit-details": lambda: __import__('whateels.pages.multifitting', fromlist=['MultiFitting']).MultiFitting(),
+            "/quantification": lambda: __import__('whateels.pages.quantification', fromlist=['Quantification']).Quantification(),
+            # "/nlls": lambda: __import__('whateels.pages.nlls', fromlist=['NLLS']).NLLS(),
+
         }
 
         return pn.serve(

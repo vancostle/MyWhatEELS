@@ -26,6 +26,9 @@ class HomePageController:
     def __init__(self, model: "HomePageModel", view: "HomePageView"):
         self._model = model
         self._view = view
+        
+        # Ensure cleanup is called when the session ends to prevent memory leaks from lingering callbacks/watchers
+        pn.state.on_session_destroyed(lambda _ : self.cleanup())  # Ensure cleanup on session end
 
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)
