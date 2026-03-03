@@ -17,10 +17,10 @@ class ComponentItemView(pn.Column):
         self._right_sidebar = view.right_sidebar
 
         self.dict_var = {
-            'low': [3, 3, 0.1, 0.1, 0.5, 2],
-            'medium': [7, 7, 1, 1.25, 0, 3],
-            'high': [15, 15, 1, 3, 0, 5],
-            'maximum': [np.inf, np.inf, 1, np.inf, 0, np.inf]
+            'Low': [3, 3, 0.1, 0.1, 0.5, 2],
+            'Medium': [7, 7, 1, 1.25, 0, 3],
+            'High': [15, 15, 1, 3, 0, 5],
+            'Maximum': [np.inf, np.inf, 1, np.inf, 0, np.inf]
         }
 
         self.delete_button = pn.widgets.Button(
@@ -58,8 +58,8 @@ class ComponentItemView(pn.Column):
 
         self.energy_range_slider = pn.widgets.EditableRangeSlider(
             name='Energy Range',
-            start=component_item.energy_center - self.dict_var[component_item.flexibility][0],
-            end=component_item.energy_center + self.dict_var[component_item.flexibility][1],
+            start=component_item.center_range[0] * 0.5,
+            end=component_item.center_range[1] * 1.5,
             value=component_item.center_range,
             step=1,
             disabled=False,
@@ -78,8 +78,8 @@ class ComponentItemView(pn.Column):
 
         self.amplitude_slider = pn.widgets.EditableRangeSlider(
             name='Amplitude Range',
-            start=component_item.amplitude * self.dict_var[component_item.flexibility][4],
-            end=component_item.amplitude * self.dict_var[component_item.flexibility][5],
+            start=component_item.amplitude_range[0] * 0.5,
+            end=component_item.amplitude_range[1]  * 1.5,
             value=component_item.amplitude_range,
             step=1000,
             disabled=False,
@@ -99,8 +99,8 @@ class ComponentItemView(pn.Column):
 
         self.sigma_slider = pn.widgets.EditableRangeSlider(
             name='Sigma Range',
-            start=component_item.sigma - self.dict_var[component_item.flexibility][2] if component_item.sigma > self.dict_var[component_item.flexibility][2] else 0,
-            end=component_item.sigma + self.dict_var[component_item.flexibility][3],
+            start=component_item.sigma_range[0] * 0.5,
+            end=component_item.sigma_range[1] * 1.5,
             value=component_item.sigma_range,
             step=1e-1,
             disabled=False,
@@ -149,8 +149,8 @@ class ComponentItemView(pn.Column):
 
     def _energy_center_watcher(self, event):
         self.component_item.energy_center = event.new
-        self.energy_range_slider.start = event.new - self.dict_var[self.component_item.flexibility][0]
-        self.energy_range_slider.end = event.new + self.dict_var[self.component_item.flexibility][1]
+        self.energy_range_slider.start = (event.new - self.dict_var[self.component_item.flexibility][0]) * 0.5
+        self.energy_range_slider.end = (event.new + self.dict_var[self.component_item.flexibility][1]) * 1.5
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
         self.update_component_parameters()
@@ -175,16 +175,16 @@ class ComponentItemView(pn.Column):
 
     def _sigma_watcher(self, event):
         self.component_item.sigma = event.new
-        self.sigma_slider.start = event.new - self.dict_var[self.component_item.flexibility][2] if event.new > self.dict_var[self.component_item.flexibility][2] else 0
-        self.sigma_slider.end = event.new + self.dict_var[self.component_item.flexibility][3]
+        self.sigma_slider.start = (event.new - self.dict_var[self.component_item.flexibility][2] if event.new > self.dict_var[self.component_item.flexibility][2] else 0) * 0.5
+        self.sigma_slider.end = event.new + self.dict_var[self.component_item.flexibility][3] * 1.5
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
         self.update_component_parameters()
 
     def _amplitude_watcher(self, event):
         self.component_item.amplitude = event.new
-        self.amplitude_slider.start = event.new - self.dict_var[self.component_item.flexibility][4]
-        self.amplitude_slider.end = event.new + self.dict_var[self.component_item.flexibility][5]
+        self.amplitude_slider.start = event.new *self.dict_var[self.component_item.flexibility][4] * 0.5
+        self.amplitude_slider.end = event.new*self.dict_var[self.component_item.flexibility][5] * 1.5
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
         self.update_component_parameters()  # Update component parameters in the model
@@ -193,10 +193,6 @@ class ComponentItemView(pn.Column):
         self._right_sidebar.remove(self)
 
         self._model.remove_component(self.component_item)
-
-        add_element_button = self._quanti_add_element_button
-        if add_element_button is None:
-            return
 
     def _slider_button_watcher(self, event):
         show = not self.energy_center_input.visible

@@ -66,13 +66,13 @@ class FittingModel(BaseModel):
         self._spectra = AppState().spectra
 
         dict_var = {
-            'low': [3, 3, 0.1, 0.1, 0.5, 2],
-            'medium': [7, 7, 1, 1.25, 0, 3],
-            'high': [15, 15, 1, 3, 0, 5],
-            'maximum': [np.inf, np.inf, 1, np.inf, 0, np.inf]
+            'Low': [3, 3, 0.1, 0.1, 0.5, 2],
+            'Medium': [7, 7, 1, 1.25, 0, 3],
+            'High': [15, 15, 1, 3, 0, 5],
+            'Maximum': [np.inf, np.inf, 1, np.inf, 0, np.inf]
         }
         if flex not in dict_var:
-            flex = 'medium'
+            flex = 'Medium'
 
         # Determine component parameters
         cen, sigm, amp = self._determine_compo_parameters(
@@ -195,8 +195,11 @@ class FittingModel(BaseModel):
     def remove_component(self, component_item):
         self.dictionary['components'] = [comp for comp in self.dictionary['components'] if comp != component_item]
         if not self.dictionary['components']:
+            print("NLLS Model: No components remaining after deletion")
+            self.app_state.fitting_results = None
             self._controller.update_plot(fitting_results=None)  # Clear fitting results if no components remain
-            self.app_state.fitting_results = None  # Clear fitting results in shared state as well
+            return
+              # Clear fitting results in shared state as well
         self.create_model()  # Recreate model with updated components
         self.fit_reference()
 
