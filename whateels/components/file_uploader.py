@@ -104,6 +104,11 @@ class FileUploader(pn.Column):
             if self._current_filename and callable(self._on_file_removed_callback):
                 self._on_file_removed_callback(self._current_filename)
 
+            # Explicitly zero out the value on the old filedropper before
+            # replacing it — otherwise Panel/Bokeh keeps the model (and the
+            # uploaded bytes) alive in its document registry.
+            self._filedropper.value = {}
+
             # Completely reset by replacing the FileDropper widget
             filedroppper_container.clear()
             new_filedropper = pn.widgets.FileDropper(

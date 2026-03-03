@@ -27,8 +27,14 @@ class HomePageController:
         self._model = model
         self._view = view
         
-        # Ensure cleanup is called when the session ends to prevent memory leaks from lingering callbacks/watchers
-        pn.state.on_session_destroyed(lambda _ : self.cleanup())  # Ensure cleanup on session end
+        # Register this controller as the active one on the (cached) model so
+        # the next HomePage instantiation can call cleanup() before creating a new one.
+        model.active_controller = self
+
+        # Use a weakref so this lambda does NOT prevent GC of the controller
+        # once it has been replaced by a newer instance.
+        _ref = weakref.ref(self)
+        pn.state.on_session_destroyed(lambda _: (c := _ref()) and c.cleanup())
 
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)
@@ -105,6 +111,10 @@ class HomePageController:
             DMFileRemovalError: When cleanup operations fail
         """
         try:
+            # Stop streams and release dataset refs on all active plot instances
+            # before clearing the UI — this is what actually frees the numpy memory.
+            self._view.cleanup_plots()
+
             # Clear UI components
             self._view.left_sidebar.remove_dataset_info()
             self._view.main.empty_placeholder()
@@ -114,6 +124,11 @@ class HomePageController:
             
             # Clear global AppState data
             self._model.app_state.clear_all()
+
+            # Clear homepage-specific AppState fields that other pages may also
+            # write to, but which must be released here to free the numpy data.
+            self._model.app_state.plot_dataset = None
+            self._model.app_state.multifit = None
 
         except Exception as e:
             raise DMFileRemovalError(e)

@@ -1,7 +1,7 @@
 
 import time
 from whateels.templates import GeneralPageTemplate
-from .MVC import HomePageController, HomePageView, HomePageModel
+from .MVC import HomePageController, HomePageView, get_cached_homepage_model
 
 class HomePage(GeneralPageTemplate):
     """
@@ -12,7 +12,14 @@ class HomePage(GeneralPageTemplate):
     def __init__(self):
         start = time.perf_counter()
 
-        model = HomePageModel()
+        # Reuse the cached model (datasets, AppState) across navigations.
+        # Clean up the previous controller/view before creating new ones to
+        # release HoloViews streams, param watchers, and periodic callbacks.
+        model = get_cached_homepage_model()
+        if model.active_controller is not None:
+            model.active_controller.cleanup()
+            model.active_controller = None
+
         view = HomePageView(model)
         HomePageController(model, view)
 

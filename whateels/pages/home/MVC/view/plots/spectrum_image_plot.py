@@ -285,3 +285,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Refresh current view
         self._refresh_paneB()
+
+    @override
+    def cleanup(self):
+        """Stop periodic callback and unsubscribe streams."""
+        stop_pc(self._pc)
+        super().cleanup()

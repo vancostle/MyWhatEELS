@@ -31,6 +31,9 @@ class HomePageView:
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
         
+        # Track all created plot instances so cleanup() can stop their callbacks
+        self._all_plots: list = []
+
         # Store reference to plots_tab for cleanup
         self._plots_tab = None
         self._plots_tab_watcher = None
@@ -115,7 +118,7 @@ class HomePageView:
                 visualizer_plots = chosen_plot.create_plots()
                 
                 plots_tab.append((image_name, visualizer_plots))
-                
+                self._all_plots.append(chosen_plot)
                 self._all_dataset_info.append(chosen_plot.create_dataset_info())
 
             # Store reference to new plots_tab
@@ -146,29 +149,35 @@ class HomePageView:
         self._left_sidebar.remove_dataset_info()
         self._left_sidebar.add_component(self._all_dataset_info[selected_tab_index])
     
-    def cleanup(self):
-        """Clean up resources before page reload or session end."""
-        
-        # Remove watcher to prevent memory leaks
+    def cleanup_plots(self):
+        """Stop streams and release dataset references on all active plot instances.
+        Called on file removal so numpy memory is freed immediately.
+        """
+        for plot in self._all_plots:
+            if hasattr(plot, 'cleanup'):
+                plot.cleanup()
+        self._all_plots.clear()
+
+        # Also drop the tab widget so Panel releases its children
         if self._plots_tab_watcher is not None and self._plots_tab is not None:
             self._plots_tab.param.unwatch(self._plots_tab_watcher)
             self._plots_tab_watcher = None
-        elif self._plots_tab_watcher is not None:
-            self._plots_tab_watcher = None
-        
-        # Clear plots tab
         if self._plots_tab is not None:
             self._plots_tab.clear()
             self._plots_tab = None
-        
-        # Clear dataset info panels
+
         self._all_dataset_info.clear()
-        
+
+    def cleanup(self):
+        """Clean up resources before page reload or session end."""
+
+        # Release all plot streams, callbacks, and dataset references
+        self.cleanup_plots()
+
         # Clear layouts
         if self._main is not None:
             self._main.clear()
         if self._left_sidebar is not None:
             self._left_sidebar.clear()
-        
-        # Force garbage collection
+
         gc.collect()

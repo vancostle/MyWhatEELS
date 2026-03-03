@@ -388,3 +388,17 @@ class BaseSpectrumImagePlot(IPlot):
 
     def _set_ranges_and_convert(self, fig):
         return self._apply_current_ranges(fig)
+
+    def cleanup(self):
+        """Unsubscribe all HoloViews streams to allow GC of this visualizer."""
+        for stream in [
+            self._hover_stream,
+            self._tap_stream,
+            self._selection_stream,
+            self._rangexy_stream,
+        ]:
+            if stream is not None:
+                try:
+                    stream.clear()
+                except Exception:
+                    pass

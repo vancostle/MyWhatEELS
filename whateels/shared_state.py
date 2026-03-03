@@ -7,7 +7,6 @@ across different pages and components of the WhatEELS application.
 The AppState uses param for reactive updates across the application.
 """
 
-import gc
 import param
 from .helpers.logging import Logger
 
@@ -128,9 +127,8 @@ class AppState(param.Parameterized):
         self.metadata = None
         
     def clear_datasets(self):
-        # Clear the list and force garbage collection to free memory
+        # Clear the list; CPython reference counting handles the actual deallocation.
         self.all_datasets = []
-        gc.collect()
         
     def clear_filename(self):
         self.filename = ""
