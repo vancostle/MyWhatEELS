@@ -1,19 +1,11 @@
-"""
-Spectrum image (datacube) visualization composer.
-Usa HoloViews + Panel (Bokeh backend) para la visualización interactiva del datacubo,
-manteniendo la lógica de acceso a datos y widgets de SpectrumImageVisualizer.
-"""
-
 import panel as pn
 import time
 import holoviews as hv
-from holoviews import streams as hv_streams
 
 from whateels.helpers import SpectrumExtractor
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
-from whateels.components import SplitJs, InfoPanel
 from whateels.shared_state import AppState
 from whateels.base.plots.base_spectrum_image_plot import BaseSpectrumImagePlot
 
@@ -196,19 +188,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     # --- Callbacks setup (adds inactivity periodic callback on top of base) ---
     @override
     def _setup_callbacks(self):
-        # Wire HoloViews streams to paneA interaction handlers
-        if self._selectors is not None:
-            self._hover_stream = hv_streams.PointerXY(source=self._selectors)
-            self._tap_stream = hv_streams.Tap(source=self._selectors)
-            self._selection_stream = hv_streams.Selection1D(source=self._selectors)
-            self._hover_stream.add_subscriber(self._on_paneA_hover)
-            self._tap_stream.add_subscriber(self._on_paneA_click)
-            self._selection_stream.add_subscriber(self._on_paneA_selected)
-
-        # Wire RangeXY stream to capture paneB zoom/pan — source the DynamicMap once
-        self._rangexy_stream = hv_streams.RangeXY(source=self._paneB_dmap)
-        self._rangexy_stream.add_subscriber(self._on_paneB_range_changed)
-
+        # All stream wiring (hover, tap, selection, rangexy) is handled by the base class.
+        super()._setup_callbacks()
         # Periodic callback for inactivity logic (stopped by default)
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
 

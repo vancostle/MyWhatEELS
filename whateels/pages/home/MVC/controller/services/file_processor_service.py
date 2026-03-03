@@ -88,15 +88,13 @@ class FileProcessorService:
             all_spectrum_images = eels_data.all_data
             all_energy_axes = eels_data.all_energy_axes
 
-            # Clean data arrays by replacing NaN/inf values with zeros
-            cleaned_all_energy_axes = self._clean_all_axes(all_energy_axes)
-            cleaned_all_electron_count_data = self._clean_all_electron_count_data(all_spectrum_images)
-
-            # Create standardized xarray datasets with metadata
+            # Create standardized xarray datasets with metadata.
+            # NaN/inf cleaning is done once inside _create_all_datasets_from_data
+            # via DataProcessorService.clean_dataset() — no need to pre-clean here.
             file_identifier = getattr(file_source, 'name', str(file_source))
             all_datasets: list[xr.Dataset] = self._create_all_datasets_from_data(
-                cleaned_all_electron_count_data, 
-                cleaned_all_energy_axes,
+                all_spectrum_images, 
+                all_energy_axes,
                 eels_data, 
                 file_identifier
             )
@@ -109,25 +107,6 @@ class FileProcessorService:
             # Clean up in-memory file reference
             del self._model.in_memory_file
         
-    def _clean_all_electron_count_data(self, all_electron_count_data: list[np.ndarray]) -> list[np.ndarray]:
-        """
-        Replace NaN/Inf in electron count arrays with zeros.
-        """
-        cleaned_electron_count_data = []
-        for electron_count_data in all_electron_count_data:
-            cleaned_electron_count_data.append(np.nan_to_num(electron_count_data, nan=0.0, posinf=0.0, neginf=0.0))
-        return cleaned_electron_count_data
-
-    def _clean_all_axes(self, all_energy_axes: list[np.ndarray]) -> list[np.ndarray]:
-        """
-        Replace NaN/Inf in energy axis arrays with zeros.
-        """
-        cleaned_energy_axes = []
-        for energy_axis in all_energy_axes:
-            cleaned_energy_axis = np.nan_to_num(energy_axis, nan=0.0, posinf=0.0, neginf=0.0)
-            cleaned_energy_axes.append(cleaned_energy_axis)
-        return cleaned_energy_axes
-
     def _store_metadata(self, infoDict: dict | None = None) -> None:
         """
         Store metadata in app state.

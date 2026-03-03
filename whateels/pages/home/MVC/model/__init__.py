@@ -1,11 +1,11 @@
 
-from typing import Optional, TYPE_CHECKING
+# from typing import Optional, TYPE_CHECKING
 from whateels.helpers.in_memory_file import InMemoryFile
 from .constants import Constants, Placeholders
 from whateels.shared_state import AppState
 
-if TYPE_CHECKING:
-    from whateels.pages.home.MVC.controller import HomePageController
+# if TYPE_CHECKING:
+#     from whateels.pages.home.MVC.controller import HomePageController
 
 class HomePageModel:
     """
@@ -23,7 +23,7 @@ class HomePageModel:
         
         # Reference to the active controller — used to clean up the previous
         # instance when a new HomePage is created within the same session.
-        self._active_controller: Optional["HomePageController"] = None
+        # self._active_controller: Optional["HomePageController"] = None
     
     @property
     def constants(self) -> Constants:
@@ -38,14 +38,14 @@ class HomePageModel:
     def app_state(self) -> AppState:
         return self._app_state
 
-    @property
-    def active_controller(self) -> Optional["HomePageController"]:
-        """Reference to the currently active HomePageController instance."""
-        return self._active_controller
+    # @property
+    # def active_controller(self) -> Optional["HomePageController"]:
+    #     """Reference to the currently active HomePageController instance."""
+    #     return self._active_controller
 
-    @active_controller.setter
-    def active_controller(self, controller: Optional["HomePageController"]):
-        self._active_controller = controller
+    # @active_controller.setter
+    # def active_controller(self, controller: Optional["HomePageController"]):
+    #     self._active_controller = controller
 
     @in_memory_file.setter
     def in_memory_file(self, file: InMemoryFile | None):

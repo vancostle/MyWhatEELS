@@ -26,21 +26,9 @@ class HomePageController:
     def __init__(self, model: "HomePageModel", view: "HomePageView"):
         self._model = model
         self._view = view
-        
-        # Register this controller as the active one in the model (cacheado).
-        # This allows the next HomePage instantiation to call cleanup() on this
-        # instance before creating a new one, preventing memory leaks from
-        # accumulated watchers and callbacks across page navigations.
-        model.active_controller = self
 
-        # Use a weakref so the session-destroyed callback does NOT prevent GC
-        # from collecting this controller once it has been replaced.
-        ref = weakref.ref(self)
-        pn.state.on_session_destroyed(lambda _: (c := ref()) and c.cleanup())
-        
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)
-        self._data_processor = DataProcessorService(model)
         
         # Set up callbacks for file uploader events
         self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload

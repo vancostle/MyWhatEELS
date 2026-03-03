@@ -1,7 +1,7 @@
 
 import time
 from whateels.templates import GeneralPageTemplate
-from .MVC import HomePageController, HomePageView, get_cached_homepage_model
+from .MVC import HomePageController, HomePageView, HomePageModel
 
 class HomePage(GeneralPageTemplate):
     """
@@ -11,16 +11,8 @@ class HomePage(GeneralPageTemplate):
 
     def __init__(self):
         start = time.perf_counter()
-        model = get_cached_homepage_model()
-        
-        # Clean up the previous controller/view before creating new ones.
-        # This prevents memory leaks from accumulated watchers and callbacks
-        # when the user navigates away from and back to the HomePage multiple times
-        # within the same session (model is cached, but view/controller are recreated).
-        if model.active_controller is not None:
-            model.active_controller.cleanup()
-            model.active_controller = None
 
+        model = HomePageModel()
         view = HomePageView(model)
         HomePageController(model, view)
 
