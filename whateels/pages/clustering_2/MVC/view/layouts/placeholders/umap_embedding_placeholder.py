@@ -1,66 +1,12 @@
 import panel as pn, param
 
-# Inject raw CSS for this component
-_raw_css = """
-.umap-embedding-placeholder {
-    background-color: #fafafff;
-    box-shadow: 0px 0px 5px #d8d8d8;
-    opacity: 0;
-    overflow: hidden;
-    aspect-ratio: 1;
-    box-sizing: border-box;
-}
-
-.umap-embedding-placeholder.animated-in {
-    animation: dataset-info-bounce-fadein 0.6s cubic-bezier(.68,-0.55,.27,1.55) 0s forwards;
-}
-
-@keyframes dataset-info-bounce-fadein {
-    0% {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-    60% {
-        opacity: 1;
-        transform: scale(1.05);
-    }
-    80% {
-        transform: scale(0.98);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-.umap-embedding-placeholder.animated-out {
-    animation: umap-placeholder-discard 0.5s forwards;
-}
-
-@keyframes umap-placeholder-discard {
-    0% {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-    80% {
-        opacity: 0.2;
-        transform: scale(0.85) translateY(-10px);
-    }
-    100% {
-        opacity: 0;
-        transform: scale(0.7) translateY(-30px);
-    }
-}
-"""
-
-if _raw_css not in pn.config.raw_css: # type: ignore
-    pn.config.raw_css.append(_raw_css) # type: ignore
-    
 class _UmapEmbeddingParams(param.Parameterized):
+    """ Parameters for managing the state of UMAP embedding placeholders, including loading and disappear states. """
     is_loading = param.Boolean(default=True, doc="Whether the UMAP embedding is currently loading.")
     disappear = param.Boolean(default=False, doc="Whether the placeholder should animate disappear.")
 
 class UmapEmbeddingPlaceholder(pn.Column):
+    """ A placeholder component for UMAP embeddings that shows a loading spinner and title, with support for animated appearance and disappearance. """
 
     def __init__(self, min_dist, n_neighbors, delay:float=0, is_loading: bool = False, **kwargs):
         self._params = _UmapEmbeddingParams(is_loading=is_loading)

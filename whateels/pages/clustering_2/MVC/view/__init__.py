@@ -5,6 +5,7 @@ from .layouts import (
     UmapEmbeddingPlaceholder,
 )
 from whateels.components import ModalManager
+from whateels.helpers import LoadCSS, CSS_ROOT
 import panel as pn
 import holoviews as hv
 import numpy as np
@@ -16,13 +17,19 @@ if TYPE_CHECKING:
     
 class Clustering2PageView:
     
+    # Define stretch constants for consistent sizing modes
+    _STRETCH_BOTH = 'stretch_both'
+    
     def __init__(self, model: "Clustering2PageModel", custom_page: "GeneralPageTemplate") -> None:
         # Set notification position
         pn.state.notifications.position = 'bottom-left' # type: ignore
+        
+        # Load CSS for clustering_2 page
+        LoadCSS([str(CSS_ROOT / "clustering_2.css")])
 
         self._modal_manager = ModalManager(custom_page)
 
-        self._main = Clustering2MainLayout(sizing_mode='stretch_both')
+        self._main = Clustering2MainLayout(sizing_mode=self._STRETCH_BOTH)
         self._left_sidebar = Clustering2LeftSidebarLayout(model) 
         self._right_sidebar = Clustering2RightSidebarLayout(model, custom_page, self._modal_manager)
         
@@ -53,7 +60,7 @@ class Clustering2PageView:
 
         MAX_COLS = 3
         grid = pn.GridSpec(
-            sizing_mode='stretch_both', 
+            sizing_mode=self._STRETCH_BOTH, 
             mode='override',
             styles={'grid-gap': '10px'},
         )
@@ -68,13 +75,13 @@ class Clustering2PageView:
                 min_dist,
                 n_neighbors,
                 delay=delay,
-                sizing_mode='stretch_both',
+                sizing_mode=self._STRETCH_BOTH,
                 is_loading=False
             )
             # Wrap in a Column for isolated updates (optional, for compatibility)
             column_wrapper = pn.Column(
                 placeholder,
-                sizing_mode='stretch_both',
+                sizing_mode=self._STRETCH_BOTH,
                 margin=0,
                 styles={
                     'aspect-ratio': '1',
@@ -116,7 +123,7 @@ class Clustering2PageView:
                 responsive=True
             )
             
-            plot_panel = pn.pane.HoloViews(points, sizing_mode='stretch_both', margin=0)
+            plot_panel = pn.pane.HoloViews(points, sizing_mode=self._STRETCH_BOTH, margin=0)
             column_wrapper = self._result_columns[index]
             column_wrapper.objects = [plot_panel]
             self._result_panels[index] = plot_panel

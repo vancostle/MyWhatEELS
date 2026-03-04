@@ -14,9 +14,9 @@ class Clustering2MainLayout(pn.Column):
         self._dm_file_uploaded_placeholder = DMFileUploadedPlaceholder()
         self._none_dm_file_uploaded_placeholder = NoneDMFileUploadedPlaceholder()
         
-        self._heatmap_wrapper = pn.Column(sizing_mode='stretch_width', margin=0)
-        self._hdbscan_wrapper = pn.Column(sizing_mode='stretch_width', margin=0)    
-        self._umap_wrapper = pn.Column(sizing_mode='stretch_width', margin=0)
+        self._heatmap_wrapper = pn.Column(sizing_mode=self._STRETCH_WIDTH, margin=0)
+        self._hdbscan_wrapper = pn.Column(sizing_mode=self._STRETCH_WIDTH, margin=0)    
+        self._umap_wrapper = pn.Column(sizing_mode=self._STRETCH_WIDTH, margin=0)
         
         self.append(self._heatmap_wrapper)
         self.append(self._hdbscan_wrapper)    
