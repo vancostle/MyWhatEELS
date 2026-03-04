@@ -84,19 +84,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _check_inactivity(self):
         if not self._region_pairs:
-            if self._pc is not None and self._pc.running:
+            if self._pc is not None and bool(self._pc.running):
                 self._pc.stop()
             return
 
         if self._last_hover_ts is None:
-            if self._pc is not None and self._pc.running:
+            if self._pc is not None and bool(self._pc.running):
                 self._pc.stop()
             self._show_spectrum(region_pairs=self._region_pairs)
             return
 
         if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
             self._show_spectrum(region_pairs=self._region_pairs)
-            if self._pc is not None and self._pc.running:
+            if self._pc is not None and bool(self._pc.running):
                 self._pc.stop()
 
     # --- Pane A event handlers (inactivity-aware overrides) ---
@@ -110,11 +110,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
             self._last_hover_ts = self._now_ms()
-            if self._pc is not None and not self._pc.running:
+            if self._pc is not None and not bool(self._pc.running):
                 self._pc.start()
         else:
             self._show_spectrum(point=point)
-            if self._pc is not None and self._pc.running:
+            if self._pc is not None and bool(self._pc.running):
                 self._pc.stop()
             self._last_hover_ts = None
 
@@ -127,11 +127,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
             self._last_hover_ts = self._now_ms()
-            if self._pc is not None and not self._pc.running:
+            if self._pc is not None and not bool(self._pc.running):
                 self._pc.start()
         else:
             self._show_spectrum(point=point)
-            if self._pc is not None and self._pc.running:
+            if self._pc is not None and bool(self._pc.running):
                 self._pc.stop()
             self._last_hover_ts = None
 
@@ -145,12 +145,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             ))
         self._region_pairs = pairs
         self._show_spectrum(region_pairs=pairs)
-        if self._pc is not None and self._pc.running:
+        if self._pc is not None and bool(self._pc.running):
             self._pc.stop()
         self._last_hover_ts = None
 
     @override
     def cleanup(self):
-        if self._pc is not None and self._pc.running:
+        if self._pc is not None and bool(self._pc.running):
             self._pc.stop()
         super().cleanup()

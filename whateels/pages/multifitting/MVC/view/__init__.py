@@ -17,7 +17,7 @@ class MultifittingView:
     
     def __init__(self, model: "MultifittingModel") -> None:
         self._model = model
-        self._main_container_layout = None
+        self._main_container_layout = pn.Column(sizing_mode=self._STRETCH_BOTH)
         self._loader_spinner = None
         
         self._init_components()
@@ -93,6 +93,6 @@ class MultifittingView:
         )
         return self._main_container_layout
     
-    def get_main_container(self):
+    def get_main_container(self) -> pn.Column:
         """Provide access to the main container for controller to populate."""
         return self._main_container_layout

@@ -25,27 +25,24 @@ class MultifittingController(param.Parameterized):
             fit_range = pn.state.location.query_params.get('values', None)
         if fit_range:
             fit_range = tuple(map(float, fit_range.split(",")))
-            if hasattr(self._model, 'set_fit_range') and callable(getattr(self._model, 'set_fit_range', None)):
-                self._model.set_fit_range(fit_range)
-            else:
-                self._model.set_fit_range = fit_range  # fallback for legacy code
+            self._model.fit_range = fit_range  # fallback for legacy code
 
         # Mount the multifit component into the view's container
-        main_container = self._view.get_main_container()
+        self._main_container = self._view.get_main_container()
         
-        if main_container is None:
+        if self._main_container is None:
             return
         
-        main_container.clear()
+        self._main_container.clear()
         
         # Spinner indicator while loading
         spinner = self._view.loader_spinner
-        main_container.append(spinner)
+        self._main_container.append(spinner)
 
         # Call the loading spinner display function
-        pn.state.onload(lambda : self._display_loading_spinner(fit_range=fit_range, main_container=main_container))
+        pn.state.onload(lambda : self._display_loading_spinner(fit_range=fit_range))
 
-    def _display_loading_spinner(self, fit_range=None, main_container=None):
+    def _display_loading_spinner(self, fit_range=None):
         if fit_range:
             component = self.plot_multifit()
         else:
@@ -57,8 +54,8 @@ class MultifittingController(param.Parameterized):
                     sizing_mode="stretch_both"
                 )
 
-        main_container.clear()
-        main_container.append(component)
+        self._main_container.clear()
+        self._main_container.append(component)
 
     def collect_dataset(self):
         """
@@ -70,7 +67,7 @@ class MultifittingController(param.Parameterized):
             ds = AppState().plot_dataset
             if ds is not None:
                 self.ds = ds
-                multifit_data = self._model.perform_multifit(ds, fit_range=self._model.set_fit_range)
+                multifit_data = self._model.perform_multifit(ds, fit_range=self._model.fit_range)
                 return multifit_data
         except Exception:
             pass
@@ -82,7 +79,6 @@ class MultifittingController(param.Parameterized):
         data = self._view.create_plot_component(ds)
         return data
       
-    @param.depends("_model._app_state.metadata")
     def get_dataset_component(self):
         """Return a simple component describing the dataset available to multifit.
 

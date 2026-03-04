@@ -1,19 +1,20 @@
 from whateels.shared_state import AppState
 from whateels.helpers.fitting.multifitting import MultiFit
 import numpy as np
-
+import lmfit    
+    
 class MultifittingModel:
     """
     Model for the multifitting page.
     Handles data and business logic for multifitting and metadata information.
     """
-    set_fit_range = None
-    
+
     # Default background model for fitting from lmfit.models
     BACKGROUND_MODEL = 'PowerLawModel'
-    
+
     def __init__(self):
         self._app_state = AppState()
+        self._fit_range = None
 
     @property
     def app_state(self) -> AppState:
@@ -27,6 +28,15 @@ class MultifittingModel:
     def multifit(self):
         """Get raw multifit data."""
         return self._app_state.multifit
+    @property
+    def fit_range(self):
+        """Get the current fit range."""
+        return self._fit_range
+    
+    @fit_range.setter
+    def fit_range(self, value):
+        """Set the fit range and trigger multifit update."""
+        self._fit_range = value
     
     def is_multifit_available(self) -> bool:
         """Check if multifit is available."""
@@ -43,7 +53,6 @@ class MultifittingModel:
         Returns an xarray.Dataset with the same structure as input, where
         ElectronCount contains the background-subtracted data (original - fit).
         """
-        import lmfit
         ModelClass = getattr(lmfit.models, self.BACKGROUND_MODEL, None)
 
         # Extract energy axis for fit_range
@@ -69,11 +78,11 @@ class MultifittingModel:
     @property
     def constants(self) -> "Constants":
         """Expose constants for the multifitting page."""
-        return self.Constants()
+        return Constants()
 
-    class Constants:
-        TITLE = "Multifitting for the Spectral Data"
-        HEADER_BACKGROUND = "#0066cc"
-        # Coordinate and data variable names expected by visualizers
-        ELOSS = 'Eloss'
-        ELECTRON_COUNT = 'ElectronCount'
+class Constants:
+    TITLE = "Multifitting for the Spectral Data"
+    HEADER_BACKGROUND = "#0066cc"
+    # Coordinate and data variable names expected by visualizers
+    ELOSS = 'Eloss'
+    ELECTRON_COUNT = 'ElectronCount'
