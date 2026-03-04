@@ -201,13 +201,25 @@ class FittingView(BaseView):
             margin=(0,0,10,0)
         )
 
-        self._energy_map_toggle_button = pn.widgets.Button(
-            name="Energy Map",
-            button_type='primary',
+        # State identifiers
+        _ON = 'on'
+        _OFF = 'off'
+        
+        # Dictionary keys for state properties
+        _NAME = 'label'
+        _ON_CLICK = 'on_click'
+        _BUTTON_TYPE = 'button_type'
+
+        states = {
+            _ON: {_NAME: "Hide Energy Map", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
+            _OFF: {_NAME: "Show Energy Map", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
+        }
+
+        self._energy_map_toggle_button = ToggleButton(
+            states = states,
             margin=0,
             height=55,
             disabled=False,
-            sizing_mode=self._STRETCH_WIDTH
         )
 
         right_sidebar = pn.Column(

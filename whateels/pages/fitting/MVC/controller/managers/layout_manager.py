@@ -154,7 +154,7 @@ class LayoutManager:
             self._chosen_visualizers[state.selected_tab_index_dataset].update_plot()
             self._chosen_visualizers[state.selected_tab_index_dataset].plot_fitting(state.plot_dataset.coords['Eloss'].values, fitting_results)
 
-    def toggle_energy_map(self):
+    def plot_energy_map(self):
         energy_map = self._model.get_energy_map()
-        self._chosen_visualizers[AppState().selected_tab_index_dataset].toggle_energy_map(energy_map)
+        self._chosen_visualizers[AppState().selected_tab_index_dataset].plot_energy_map(energy_map)
 

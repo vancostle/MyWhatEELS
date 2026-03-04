@@ -49,6 +49,8 @@ class FittingController(BaseController):
             self.base_layout.empty_main()
             return
         print("Datasets and tab parameter validated.")
+
+        self.energy_map_active = False  # Track energy map state
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
         print("Tab and dataset info created.")
@@ -140,8 +142,14 @@ class FittingController(BaseController):
             self._model.fit_reference()  # Refit with updated model
 
     def _energy_map_toggle_button_callback(self, event):
-        # Toggle the energy map visibility in the layout
-        self.layout.toggle_energy_map()
+        if not self.energy_map_active:
+            self.layout.plot_energy_map()
+            self.energy_map_active = True
+        else:
+            self.update_plot()  # Update plot to hide energy map
+            self.energy_map_active = False
 
     def get_energy_range(self):
+        if not self.energy_map_active:
+            return None
         return self._layout.get_energy_range()

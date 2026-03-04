@@ -276,10 +276,33 @@ class FittingModel(BaseModel):
         fit = np.where(np.isfinite(fit), fit, 0.0)
         e_count = np.where(np.isfinite(e_count), e_count, 0.0)
 
-        # For each pixel: add fitting profile along energy and then integrate all energy levels.
-        energy_map = np.sum(e_count + fit[np.newaxis, np.newaxis, :], axis=-1)
+        components = self.dictionary.get('components', [])
+        energy_mask = np.zeros(n_energy, dtype=bool)
 
-        print(f"NLLS Model: Energy map generated with shape={energy_map.shape}")
-        return energy_map
+        if Eloss.size == n_energy and components:
+            for component in components:
+                energy_range = getattr(component, 'energy_range', None)
+                if energy_range is None or len(energy_range) < 2:
+                    continue
+
+                e_min = float(energy_range[0])
+                e_max = float(energy_range[1])
+                if e_min > e_max:
+                    e_min, e_max = e_max, e_min
+
+                energy_mask |= (Eloss >= e_min) & (Eloss <= e_max)
+
+        if not np.any(energy_mask):
+            print("NLLS Model: No valid component windows found; integrating full energy range")
+            energy_mask[:] = True
+
+        selected_e_count = e_count[..., energy_mask]
+        selected_fit = fit[energy_mask]
+
+        # For each pixel: add fitting profile in selected windows and integrate along energy.
+        energy_map = np.sum(selected_e_count + selected_fit[np.newaxis, np.newaxis, :], axis=-1)
+
+        print(f"NLLS Model: Energy map generated with shape={energy_map.shape} using {np.count_nonzero(energy_mask)} energy channels")
+        return energy_map 
 
     

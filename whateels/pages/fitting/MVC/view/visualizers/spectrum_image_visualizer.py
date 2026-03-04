@@ -181,7 +181,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         else:
             self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
 
-    def toggle_energy_map(self, energy_map):
+    def plot_energy_map(self, energy_map):
         # energy_map is a 2D array with the same shape as the image (value per pixel)
         energy_map_arr = np.asarray(energy_map)
         if energy_map_arr.ndim != 2:
@@ -195,7 +195,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             z=energy_map_arr,
             x=np.arange(nx),
             y=np.arange(ny),
-            colorscale="Viridis",
+            colorscale=[
+                [0.0, "#00eb6c"],
+                [1.0, "#ff1493"],
+            ],
             showscale=True,
             name="energy_map",
             hovertemplate="i=%{y}, j=%{x}<br>E=%{z}<extra></extra>",
