@@ -181,6 +181,60 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         else:
             self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
 
+    def toggle_energy_map(self, energy_map):
+        # energy_map is a 2D array with the same shape as the image (value per pixel)
+        energy_map_arr = np.asarray(energy_map)
+        if energy_map_arr.ndim != 2:
+            raise ValueError(f"Expected a 2D energy map, got shape={energy_map_arr.shape}")
+
+        energy_map_arr = np.where(np.isfinite(energy_map_arr), energy_map_arr, 0.0)
+        ny, nx = energy_map_arr.shape
+
+        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
+        heat = go.Heatmap(
+            z=energy_map_arr,
+            x=np.arange(nx),
+            y=np.arange(ny),
+            colorscale="Viridis",
+            showscale=True,
+            name="energy_map",
+            hovertemplate="i=%{y}, j=%{x}<br>E=%{z}<extra></extra>",
+        )
+
+        selectors = go.Scattergl(
+            x=XX.ravel(),
+            y=YY.ravel(),
+            mode="markers",
+            name="selectors",
+            marker=dict(size=6, opacity=0.01),
+            hoverinfo="skip",
+            selected=dict(marker=dict(opacity=0.3, size=8)),
+            unselected=dict(marker=dict(opacity=0.01)),
+        )
+
+        figA = go.Figure(data=[heat, selectors])
+        figA.update_layout(
+            title="Energy Map",
+            height=400,
+            margin=dict(l=16, r=16, t=50, b=20),
+            dragmode="lasso",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        figA.update_yaxes(
+            autorange="reversed",
+            scaleanchor="x",
+            scaleratio=1,
+            constrain="domain",
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+        )
+        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
+
+        self.paneA.object = self._to_plotly(figA)
+            
+
     # --- Plot / Pane Setup (Plotly) ---
     def _setup_plots(self):
         # Build image (m_image) from data cube in the canonical way used in this class

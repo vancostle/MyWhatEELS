@@ -58,8 +58,8 @@ class ComponentItemView(pn.Column):
 
         self.energy_range_slider = pn.widgets.EditableRangeSlider(
             name='Energy Range',
-            start=component_item.center_range[0] * 0.5,
-            end=component_item.center_range[1] * 1.5,
+            start=component_item.energy_center - 50,
+            end=component_item.energy_center + 50,
             value=component_item.center_range,
             step=1,
             disabled=False,
@@ -149,8 +149,14 @@ class ComponentItemView(pn.Column):
 
     def _energy_center_watcher(self, event):
         self.component_item.energy_center = event.new
-        self.energy_range_slider.start = (event.new - self.dict_var[self.component_item.flexibility][0]) * 0.5
-        self.energy_range_slider.end = (event.new + self.dict_var[self.component_item.flexibility][1]) * 1.5
+        if event.new > self.energy_range_slider.end or event.new < self.energy_range_slider.start:
+            self.energy_range_slider.start = event.new - 50
+            self.energy_range_slider.end = event.new + 50
+            self.energy_range_slider.value = (event.new - 50, event.new + 10)
+            self.energy_range_slider.value = (event.new - 10, event.new + 10)
+        else:
+            self.energy_range_slider.start = event.new - 50
+            self.energy_range_slider.end = event.new + 50
         self._model.create_model()  # Recreate model with updated component range
         self._model.fit_reference()  # Refit with updated model
         self.update_component_parameters()

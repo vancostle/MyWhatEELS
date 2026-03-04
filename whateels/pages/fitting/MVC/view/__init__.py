@@ -15,6 +15,10 @@ class FittingView(BaseView):
     _STRETCH_WIDTH = "stretch_width"
     _STRETCH_BOTH = "stretch_both"
 
+    ELEMENT_EAXIS_THRESHOLD = 50
+    COMPONENT_EAXIS_THRESHOLD = 4
+    COMPONENT_EAXIS_THRESHOLD_VALUE = 50
+
     # --- Initialization ---
     def __init__(self, model: "FittingModel"):
         super().__init__(
@@ -63,6 +67,11 @@ class FittingView(BaseView):
     def background_subtraction_switch(self) -> pn.widgets.Switch:
         """Access the background subtraction switch."""
         return self._background_subtraction_switch
+    
+    @property
+    def energy_map_toggle_button(self) -> ToggleButton:
+        """Access the energy map toggle button."""
+        return self._energy_map_toggle_button
     
 
 
@@ -134,7 +143,6 @@ class FittingView(BaseView):
             css_classes=["background-subtraction-container"]
         )
         # get dataset energy range for setting the energy range slider limits
-        energy_range = AppState().plot_dataset
         self._component_model_input = {
             "energy_center": pn.widgets.IntInput(
                 name='Energy Center',
@@ -157,9 +165,9 @@ class FittingView(BaseView):
             "energy_range": pn.widgets.EditableRangeSlider(
                 name='Energy Range',
                 sizing_mode=self.STRETCH_WIDTH,
-                value=(0, 1000),
-                start=0,
-                end=1000,
+                value=  (540 - self.COMPONENT_EAXIS_THRESHOLD_VALUE, 540 + self.COMPONENT_EAXIS_THRESHOLD_VALUE),
+                start=540 - self.COMPONENT_EAXIS_THRESHOLD,
+                end=540 + self.COMPONENT_EAXIS_THRESHOLD,
                 margin=(0,0,10,0),
             ),
             "flexibility": pn.widgets.Select(
@@ -193,9 +201,19 @@ class FittingView(BaseView):
             margin=(0,0,10,0)
         )
 
+        self._energy_map_toggle_button = pn.widgets.Button(
+            name="Energy Map",
+            button_type='primary',
+            margin=0,
+            height=55,
+            disabled=False,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
         right_sidebar = pn.Column(
             background_subtraction_container,
             details,
+            self._energy_map_toggle_button,
             sizing_mode=self.STRETCH_BOTH,
         )
         return right_sidebar

@@ -241,6 +241,45 @@ class FittingModel(BaseModel):
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
 
-        
-
+        #self.app_state.best_fitting_parameters = self.ref_results.best_values  # Store best fitting parameters in shared state
         self._controller.update_plot(fitting_results = self.ref_results.best_fit)
+
+    def get_energy_map(self):
+
+        fitting_results = self.app_state.fitting_results
+        if fitting_results is None:
+            print("NLLS Model: No fitting results available to generate energy map")
+            return None
+
+        dataset = self.app_state.plot_dataset
+        if dataset is None or not hasattr(dataset, 'ElectronCount'):
+            print("NLLS Model: No ElectronCount data available to generate energy map")
+            return None
+
+        Eloss = np.asarray(dataset.coords['Eloss'].values)
+        e_count = np.asarray(dataset.ElectronCount.values)
+        fit = np.asarray(fitting_results)
+
+        if e_count.ndim != 3:
+            print(f"NLLS Model: Expected ElectronCount with 3 dims (y, x, E), got shape={e_count.shape}")
+            return None
+
+        if fit.ndim != 1:
+            fit = np.ravel(fit)
+
+        n_energy = e_count.shape[-1]
+        if fit.size != n_energy:
+            x_old = np.linspace(0.0, 1.0, fit.size)
+            x_new = np.linspace(0.0, 1.0, n_energy)
+            fit = np.interp(x_new, x_old, fit)
+
+        fit = np.where(np.isfinite(fit), fit, 0.0)
+        e_count = np.where(np.isfinite(e_count), e_count, 0.0)
+
+        # For each pixel: add fitting profile along energy and then integrate all energy levels.
+        energy_map = np.sum(e_count + fit[np.newaxis, np.newaxis, :], axis=-1)
+
+        print(f"NLLS Model: Energy map generated with shape={energy_map.shape}")
+        return energy_map
+
+    

@@ -19,6 +19,8 @@ if TYPE_CHECKING:
 
 class FittingController(BaseController):
     ELEMENT_EAXIS_THRESHOLD = 50
+    COMPONENT_EAXIS_THRESHOLD = 50
+    COMPONENT_EAXIS_THRESHOLD_VALUE = 4
 
     def __init__(self, model: "FittingModel", view: "FittingView"):
         print("Initializing Fitting Controller...")
@@ -72,10 +74,15 @@ class FittingController(BaseController):
 
         view._background_subtraction_switch.param.watch(self._background_subtraction_switch_watcher, 'value')
 
+        view._energy_map_toggle_button.on_click(self._energy_map_toggle_button_callback)  # Temporary callback for testing energy map toggle button
+
     def _energy_center_watcher(self, event):
         energy_center = self.view.component_input["energy_center"]
-        self.view.component_input["energy_range"].value = (0, event.new + 4)
-        self.view.component_input["energy_range"].value = (event.new - 4, event.new + 4)
+        self.view.component_input["energy_range"].start = event.new - self.COMPONENT_EAXIS_THRESHOLD
+        self.view.component_input["energy_range"].end = event.new + self.COMPONENT_EAXIS_THRESHOLD
+        self.view.component_input["energy_range"].value = (event.new - self.COMPONENT_EAXIS_THRESHOLD, event.new + self.COMPONENT_EAXIS_THRESHOLD_VALUE)
+        self.view.component_input["energy_range"].value = (event.new - self.COMPONENT_EAXIS_THRESHOLD_VALUE, event.new + self.COMPONENT_EAXIS_THRESHOLD_VALUE)
+
 
     def _model_select_watcher(self, event):
         model_select = self.view.component_input["model_select"]
@@ -96,6 +103,8 @@ class FittingController(BaseController):
                                                 self._layout.get_energy_range(), 
                                                 self._view)
         self._layout.add_new_component_input(component_item_view)
+
+        self._view.energy_map_toggle_button.disabled = False  # Enable energy map toggle button when a component is added
         
 
     def _test(self, event):
@@ -129,6 +138,10 @@ class FittingController(BaseController):
         if AppState().fitting_results:
             self._model.create_model()  # Recreate model to reflect background subtraction change
             self._model.fit_reference()  # Refit with updated model
+
+    def _energy_map_toggle_button_callback(self, event):
+        # Toggle the energy map visibility in the layout
+        self.layout.toggle_energy_map()
 
     def get_energy_range(self):
         return self._layout.get_energy_range()
