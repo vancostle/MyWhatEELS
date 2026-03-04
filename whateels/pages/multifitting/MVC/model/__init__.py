@@ -1,7 +1,11 @@
-from whateels.shared_state import AppState
+from whateels.shared_state import get_cached_app_state
 from whateels.helpers.fitting.multifitting import MultiFit
 import numpy as np
-import lmfit    
+import lmfit
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from whateels.shared_state import AppState
     
 class MultifittingModel:
     """
@@ -13,11 +17,11 @@ class MultifittingModel:
     BACKGROUND_MODEL = 'PowerLawModel'
 
     def __init__(self):
-        self._app_state = AppState()
+        self._app_state = get_cached_app_state()
         self._fit_range = None
 
     @property
-    def app_state(self) -> AppState:
+    def app_state(self) -> "AppState":
         """Get the shared application state instance."""
         return self._app_state
     @property

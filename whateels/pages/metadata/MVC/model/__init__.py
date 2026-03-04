@@ -1,4 +1,4 @@
-from whateels.shared_state import AppState
+from whateels.shared_state import get_cached_app_state
 
 class Model:
     """
@@ -7,7 +7,7 @@ class Model:
     """
     
     def __init__(self):
-        self._app_state = AppState()
+        self._app_state = get_cached_app_state()
     
     def is_metadata_available(self) -> bool:
         """Check if metadata is available."""

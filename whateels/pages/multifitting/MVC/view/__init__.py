@@ -10,7 +10,7 @@ class MultifittingView:
     View class for the metadata page of the WhatEELS application.
     Handles the UI components and layout for displaying metadata information.
     """
-    
+
     # --- Class-level constants ---
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
@@ -81,7 +81,7 @@ class MultifittingView:
         self._loader_spinner = pn.indicators.LoadingSpinner(
             value=True,
             width=50,
-            sizing_mode="stretch_both",
+            sizing_mode=self._STRETCH_BOTH,
         )
 
     def _main_layout(self):

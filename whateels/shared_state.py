@@ -7,10 +7,34 @@ across different pages and components of the WhatEELS application.
 The AppState uses param for reactive updates across the application.
 """
 
-import param
+import param, panel as pn
 from .helpers.logging import Logger
 
 _logger = Logger.get_logger("shared_state.log", __name__)
+
+def _user_key(prefix: str) -> str:
+    """Return a cache key scoped to the current authenticated user.
+
+    Resolution order:
+    1. ``pn.state.user`` — set automatically when Panel auth is enabled
+       (OAuth2, BasicAuth, etc.).  Each user gets an isolated AppState so
+       cross-tab sharing works (both tabs → same user → same key) while
+       different users remain isolated.
+    2. Global fallback (``"<prefix>_global"``) — used when auth is not yet
+       configured (single-user / dev mode).  Replace step 2 with a real
+       identity source (JWT claim, session cookie, …) when you add auth.
+    """
+    user = getattr(pn.state, "user", None)
+    if user:
+        return f"{prefix}_{user}"
+    return f"{prefix}_global"
+
+def get_cached_app_state() -> "AppState":
+    """Get the AppState scoped to the current user (or global if no auth)."""
+    key = _user_key("app_state")
+    if key not in pn.state.cache:
+        pn.state.cache[key] = AppState()
+    return pn.state.cache[key]
 
 class AppState(param.Parameterized):
     """
@@ -20,8 +44,6 @@ class AppState(param.Parameterized):
     Any Panel component can depend on the metadata parameter and will automatically
     update when the metadata changes.
     """
-    
-    _instance = None
     
     # Reactive parameter for metadata
     metadata = param.Parameter(default=None, doc="""
@@ -60,16 +82,8 @@ class AppState(param.Parameterized):
         The last clustering result dictionary.
     """)
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    
     def __init__(self):
-        # Only initialize once
-        if not hasattr(self, '_initialized'):
-            super().__init__()
-            self._initialized = True
+        super().__init__()
 
     @param.depends('metadata', watch=True)
     def _on_metadata_change(self):

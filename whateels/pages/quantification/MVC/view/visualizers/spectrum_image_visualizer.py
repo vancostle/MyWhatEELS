@@ -13,7 +13,7 @@ from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import SplitJs
-from whateels.shared_state import AppState
+from whateels.shared_state import get_cached_app_state
 from ...controller.services.oos_loader_service import Loader_OOS
 
 if TYPE_CHECKING:
@@ -490,8 +490,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
             fig = self._figB_region(self._region_pairs)
-            if AppState().quantification_elements:
-                self.plot_quantification_elements(AppState().quantification_elements)
+            if get_cached_app_state().quantification_elements:
+                self.plot_quantification_elements(get_cached_app_state().quantification_elements)
             else:
                 self.paneB.object = self._set_ranges_and_convert(fig)
             if self._pc.running:
@@ -592,8 +592,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return
         self._last_hover_point = point
         fig = self._figB_hover(self._last_hover_point)
-        if AppState().quantification_elements:
-            self.plot_quantification_elements(AppState().quantification_elements)
+        if get_cached_app_state().quantification_elements:
+            self.plot_quantification_elements(get_cached_app_state().quantification_elements)
             return
         if self._region_pairs:
             self._last_hover_ts = self._now_ms()
@@ -618,7 +618,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
             return
         else:
-            self.plot_quantification_elements(AppState().quantification_elements)
+            self.plot_quantification_elements(get_cached_app_state().quantification_elements)
         # prepare inactivity behaviour: stop periodic callback until next hover
         if self._pc.running:
             self._pc.stop()

@@ -2,8 +2,6 @@ import param
 from typing import TYPE_CHECKING
 import panel as pn
 
-from whateels.shared_state import AppState
-
 if TYPE_CHECKING:
     from ..model import MultifittingModel
     from ..view import MultifittingView
@@ -64,7 +62,7 @@ class MultifittingController(param.Parameterized):
         Returns the background-subtracted dataset or None if not found.
         """
         try:
-            ds = AppState().plot_dataset
+            ds = self._model.app_state.plot_dataset
             if ds is not None:
                 self.ds = ds
                 multifit_data = self._model.perform_multifit(ds, fit_range=self._model.fit_range)

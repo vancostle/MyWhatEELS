@@ -11,7 +11,7 @@ from whateels.errors.dm import (
     DMFileLoadingError, 
     DMFileUploadError
 )
-from whateels.shared_state import AppState
+from whateels.shared_state import get_cached_app_state
 from whateels.helpers.logging_utils import Logger
 from ..dm_file_processing import DM_EELS_Reader
 from .data_processor_service import DataProcessorService
@@ -118,7 +118,7 @@ class FileProcessorService:
             raise DMEmptyInfoDictionary(NOT_INFO_DICT_MESSAGE.format(infoDict))
         try:
             # Store metadata in AppState for application-wide access
-            AppState().metadata = infoDict
+            self._model.app_state.metadata = infoDict
         except Exception:
             raise DMNonEelsError(FAILED_TO_STORE_METADATA_MESSAGE.format(infoDict.keys() if infoDict else 'None'))
 

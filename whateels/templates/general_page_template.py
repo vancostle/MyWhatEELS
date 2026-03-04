@@ -7,7 +7,7 @@ and CSS styling for the WhatEELS scientific web application.
 
 import panel as pn
 from typing import Optional, List, Union
-from whateels.shared_state import AppState
+from whateels.shared_state import AppState, get_cached_app_state
 from whateels.helpers.safe_converter import SafeConverter
 
 class GeneralPageTemplate(pn.template.FastListTemplate):
@@ -45,7 +45,7 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
             header_background: Background color for the header (default: green)
             sidebar_width: Width of the left sidebar in pixels (default: 275)
         """        
-        app_state = AppState()
+        app_state = get_cached_app_state()
 
         # Set up reactive watchers to update header on metadata or tab index changes
         app_state.param.watch(self._update_navigation_header, 'metadata')
@@ -140,7 +140,7 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         return top_menu
         
     def _update_navigation_header(self, _):        
-        app_state = AppState()
+        app_state = get_cached_app_state()
 
         selected_tab_index = self._get_selected_tab_index(app_state.selected_tab_index_dataset)
 
@@ -163,7 +163,7 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         Returns True if the dataset at selected_tab_index in all_datasets is EELS, else False.
         Uses 'Eloss' in dataset.coords for EELS detection.
         """
-        all_datasets = AppState().all_datasets
+        all_datasets = get_cached_app_state().all_datasets
         if not isinstance(all_datasets, list):
             return False
         if not all_datasets or selected_tab_index < 0 or selected_tab_index >= len(all_datasets):

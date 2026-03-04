@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 from whateels.errors.dm.data import DMPlotCreationError
 from ..visualizer_factory import VisualizerFactory
-from whateels.shared_state import AppState
+from whateels.shared_state import get_cached_app_state
 
 if TYPE_CHECKING:
     from ...view import QuantificationView
@@ -74,7 +74,7 @@ class LayoutManager:
         STRETCH_BOTH = 'stretch_both'
         DEFAULT_TAB_INDEX = 0
 
-        app_state = AppState()
+        app_state = get_cached_app_state()
 
         try:
             # Clear previous dataset info panels to prevent caching old data
@@ -108,13 +108,13 @@ class LayoutManager:
             raise DMPlotCreationError(e)
     def get_energy_range(self) -> list[float]:
         """Get the maximum energy range across all datasets."""
-        state = AppState()
+        state = get_cached_app_state()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index].coords[self._model.constants.ELOSS].values
 
     
     def get_active_dataset(self):
-        state = AppState()
+        state = get_cached_app_state()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index]
 
@@ -124,9 +124,9 @@ class LayoutManager:
         # Get the selected tab index
         selected_tab_index = event.new
 
-        AppState().selected_tab_index_dataset = selected_tab_index  # Update shared state
+        get_cached_app_state().selected_tab_index_dataset = selected_tab_index  # Update shared state
 
-        AppState().quantification_elements = []
+        get_cached_app_state().quantification_elements = []
 
         # Update sidebar with the corresponding dataset info
         self._controller.layout.remove_dataset_info_from_sidebar()

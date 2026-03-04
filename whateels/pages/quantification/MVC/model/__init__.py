@@ -1,19 +1,22 @@
 from whateels.base.mvc import BaseModel
-from whateels.shared_state import AppState
+from whateels.shared_state import get_cached_app_state
 from .constants import Constants
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from whateels.shared_state import AppState
 
 class QuantificationModel(BaseModel):
     def __init__(self):
         super().__init__()
         self._constants = Constants()
-        self._app_state = AppState()
+        self._app_state = get_cached_app_state()
 
     @property
     def constants(self) -> Constants:
         return self._constants
     
     @property
-    def app_state(self) -> AppState:
+    def app_state(self) -> "AppState":
         return self._app_state
 
     def get_uploaded_filename(self) -> str:

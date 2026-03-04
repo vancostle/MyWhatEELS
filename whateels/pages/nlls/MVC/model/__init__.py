@@ -7,7 +7,7 @@ model creation, and fitting operations.
 """
 
 from whateels.base.mvc import BaseModel
-from whateels.shared_state import AppState
+from whateels.shared_state import get_cached_app_state
 from whateels.helpers.logging import Logger
 import numpy as np
 import copy as cp
@@ -34,7 +34,7 @@ class NLLSModel(BaseModel):
         super().__init__()
         
         # Access shared application state
-        self._app_state = AppState()
+        self._app_state = get_cached_app_state()
         
         # NLLS fitting state
         self._fitting_elements = dict()  # Selected elements and subshells
