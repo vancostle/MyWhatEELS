@@ -2,7 +2,7 @@ from whateels.shared_state import AppState
 from whateels.helpers.fitting.multifitting import MultiFit
 import numpy as np
 
-class Model:
+class MultifittingModel:
     """
     Model for the multifitting page.
     Handles data and business logic for multifitting and metadata information.

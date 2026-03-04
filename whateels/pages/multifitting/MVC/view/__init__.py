@@ -1,11 +1,11 @@
 import panel as pn
 from typing import TYPE_CHECKING, Optional
-from .view_multifit import SpectrumImageVisualizer
+from .plots.spectrum_image_plot import SpectrumImagePlot
 
 if TYPE_CHECKING:
-    from ..model import Model
+    from ..model import MultifittingModel
 
-class View:
+class MultifittingView:
     """
     View class for the metadata page of the WhatEELS application.
     Handles the UI components and layout for displaying metadata information.
@@ -15,7 +15,7 @@ class View:
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
     
-    def __init__(self, model: "Model") -> None:
+    def __init__(self, model: "MultifittingModel") -> None:
         self._model = model
         self._main_container_layout = None
         self._loader_spinner = None
@@ -49,7 +49,7 @@ class View:
         # Instantiate the visualizer with the required (model, dataset) signature
         # and return a Panel component (layout) to be embedded in the page.
         try:
-            viz = SpectrumImageVisualizer(self._model, data)
+            viz = SpectrumImagePlot(self._model, data)
             return viz.create_plots()
         except Exception as e:
             # Fallback simple error pane to avoid crashing the route

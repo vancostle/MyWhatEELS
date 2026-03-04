@@ -1,5 +1,5 @@
-from .controller import Controller
-from .model import Model
-from .view import View
+from .controller import MultifittingController
+from .model import MultifittingModel
+from .view import MultifittingView
 
-__all__ = ["Model", "Controller", "View"]
+__all__ = ["MultifittingModel", "MultifittingController", "MultifittingView"]

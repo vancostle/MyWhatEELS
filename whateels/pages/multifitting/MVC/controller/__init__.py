@@ -5,16 +5,16 @@ import panel as pn
 from whateels.shared_state import AppState
 
 if TYPE_CHECKING:
-    from ..model import Model
-    from ..view import View
+    from ..model import MultifittingModel
+    from ..view import MultifittingView
 
-class Controller(param.Parameterized):
+class MultifittingController(param.Parameterized):
     """
     Controller for the multifitting page.
     Coordinates between Model and View for multifitting display.
     """
     
-    def __init__(self, model: "Model", view: "View") -> None:
+    def __init__(self, model: "MultifittingModel", view: "MultifittingView") -> None:
         super().__init__()
         self._model = model
         self._view = view

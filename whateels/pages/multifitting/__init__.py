@@ -1,5 +1,5 @@
 from whateels.templates import GeneralPageTemplate
-from .MVC import Model, Controller, View
+from .MVC import MultifittingModel, MultifittingController, MultifittingView
 
 class MultiFitting(GeneralPageTemplate):
     """
@@ -7,9 +7,9 @@ class MultiFitting(GeneralPageTemplate):
     """
 
     def __init__(self):
-        model = Model()
-        view = View(model)
-        Controller(model, view)
+        model = MultifittingModel()
+        view = MultifittingView(model)
+        MultifittingController(model, view)
 
         super().__init__(
             title=model.constants.TITLE,
