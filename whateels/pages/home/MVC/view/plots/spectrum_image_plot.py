@@ -3,6 +3,7 @@ import time
 import holoviews as hv
 
 from whateels.helpers import SpectrumExtractor
+from whateels.components import SplitJs
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
@@ -52,8 +53,29 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     # --- Public Layout Builders ---
 
-    # create_plots now inherited from base class
-    # create_dataset_info now inherited from base class
+    @override
+    def create_plots(self):
+        left_column = pn.Column(
+            self.paneA,
+            sizing_mode='stretch_both',
+            align='center',
+            margin=0,
+        )
+        right_column = pn.Column(
+            self.paneB,
+            self.buttons_row if self.buttons_row is not None else self.fitting_button,
+            self.range_slider_row,
+            sizing_mode='stretch_both',
+            align='center',
+            margin=0
+        )
+        return SplitJs(
+            left_column=left_column,
+            right_column=right_column,
+            sizing_mode='stretch_both',
+        )
+
+    # create_dataset_info inherited from base class
     
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):

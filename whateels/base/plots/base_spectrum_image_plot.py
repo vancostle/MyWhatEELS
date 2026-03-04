@@ -89,7 +89,7 @@ class BaseSpectrumImagePlot(IPlot):
 
     # --- Public layout builders ---
     @override
-    def create_plots(self):
+    def create_plots(self) -> pn.viewable.Viewable:
         """
         Default two-column SplitJs layout for spectrum image plots.
         Subclasses can override if they need a custom layout.
