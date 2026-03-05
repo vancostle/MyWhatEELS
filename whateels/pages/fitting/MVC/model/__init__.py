@@ -86,7 +86,6 @@ class FittingModel(BaseModel):
 
         self.dictionary['components'].append(component_item)
         
-        print(f"NLLS Model: Component added successfully")
 
         self.create_model()  # Recreate model with new component
         self.fit_reference()  # Refit reference spectrum with updated model
@@ -163,8 +162,6 @@ class FittingModel(BaseModel):
         
         #delta_e = self._Eloss[1]-self._Eloss[1]
         cent = Eloss_center 
-        print(self._Eloss[0],self._Eloss[-1],cent,e_idx,self._Eloss.size)
-        print(f"Determining component parameters for type '{compo_type}' at Eloss {Eloss_center} eV (index {e_idx})")
 
         h_eidx = max(0,spectrum[e_idx])
 
@@ -302,7 +299,6 @@ class FittingModel(BaseModel):
         # For each pixel: add fitting profile in selected windows and integrate along energy.
         energy_map = np.sum(selected_e_count + selected_fit[np.newaxis, np.newaxis, :], axis=-1)
 
-        print(f"NLLS Model: Energy map generated with shape={energy_map.shape} using {np.count_nonzero(energy_mask)} energy channels")
         return energy_map 
 
     

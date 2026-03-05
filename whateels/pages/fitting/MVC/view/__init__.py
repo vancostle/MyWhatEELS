@@ -73,6 +73,10 @@ class FittingView(BaseView):
         """Access the energy map toggle button."""
         return self._energy_map_toggle_button
     
+    @property
+    def component_item_view_container(self) -> pn.Column:
+        """Access the container for component item views."""
+        return self._component_item_view_container
 
 
     @dataset_info.setter
@@ -211,8 +215,8 @@ class FittingView(BaseView):
         _BUTTON_TYPE = 'button_type'
 
         states = {
-            _ON: {_NAME: "Hide Energy Map", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
-            _OFF: {_NAME: "Show Energy Map", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
+            _ON: {_NAME: "Hide Energy Map", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'},
+            _OFF: {_NAME: "Show Energy Map", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'}
         }
 
         self._energy_map_toggle_button = ToggleButton(
@@ -222,9 +226,12 @@ class FittingView(BaseView):
             disabled=False,
         )
 
+        self._component_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH, css_classes=["component-container"])
+
         right_sidebar = pn.Column(
             background_subtraction_container,
             details,
+            self._component_item_view_container,
             self._energy_map_toggle_button,
             sizing_mode=self.STRETCH_BOTH,
         )

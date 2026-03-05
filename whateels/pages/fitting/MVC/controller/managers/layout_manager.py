@@ -139,7 +139,7 @@ class LayoutManager:
 
     def add_new_component_input(self, element_input_view: pn.viewable.Viewable):
         """Add a new element input component to the sidebar."""
-        self._view.right_sidebar.append(element_input_view)
+        self._view.component_item_view_container.append(element_input_view)
 
         ##self.plot_component()
 
@@ -155,6 +155,15 @@ class LayoutManager:
             self._chosen_visualizers[state.selected_tab_index_dataset].plot_fitting(state.plot_dataset.coords['Eloss'].values, fitting_results)
 
     def plot_energy_map(self):
+        if AppState().plot_dataset is None:
+            raise DMPlotCreationError("No dataset selected for plotting energy map.")
+        if AppState().fitting_results is None:
+            raise DMPlotCreationError("No fitting results available for plotting energy map.")
         energy_map = self._model.get_energy_map()
+        if energy_map is None:
+            raise DMPlotCreationError("No energy map available to plot.")
         self._chosen_visualizers[AppState().selected_tab_index_dataset].plot_energy_map(energy_map)
+
+    def plot_image(self):
+        self._chosen_visualizers[AppState().selected_tab_index_dataset].plot_image()
 

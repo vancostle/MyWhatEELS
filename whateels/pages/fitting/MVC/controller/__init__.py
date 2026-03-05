@@ -23,7 +23,6 @@ class FittingController(BaseController):
     COMPONENT_EAXIS_THRESHOLD_VALUE = 4
 
     def __init__(self, model: "FittingModel", view: "FittingView"):
-        print("Initializing Fitting Controller...")
         
         super().__init__(model, view)
 
@@ -36,7 +35,6 @@ class FittingController(BaseController):
 
         view.set_controller(self)
         model.set_controller(self)
-        print("Loader_OOS initialized.")
         
         # Get 'tab' query parameter from URL
         tab_param = self._get_query_param("tab")
@@ -48,14 +46,11 @@ class FittingController(BaseController):
             print(tab_param, len(all_datasets))
             self.base_layout.empty_main()
             return
-        print("Datasets and tab parameter validated.")
 
         self.energy_map_active = False  # Track energy map state
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
-        print("Tab and dataset info created.")
         self._nlls_user_update(view)
-        print("NLLS Controller initialized.")
 
     @property
     def view(self) -> "FittingView":
@@ -67,8 +62,6 @@ class FittingController(BaseController):
         return self._layout
 
     def _nlls_user_update(self, view: "FittingView"):
-        """Debug method to print the Nlls input widgets."""
-        print("NLLS User Update Called")
         view.component_input["energy_center"].param.watch(self._energy_center_watcher, 'value')
         view.component_input["model_select"].param.watch(self._model_select_watcher, 'value')
 
@@ -143,10 +136,16 @@ class FittingController(BaseController):
 
     def _energy_map_toggle_button_callback(self, event):
         if not self.energy_map_active:
-            self.layout.plot_energy_map()
-            self.energy_map_active = True
+            try:
+                self.layout.plot_energy_map()
+                self.energy_map_active = True
+            except Exception as e:
+                print(f"Error occurred while plotting energy map: {e}")
+                self.energy_map_active = False
+                self.view._energy_map_toggle_button.toggle()  # Revert toggle state on error
+            
         else:
-            self.update_plot()  # Update plot to hide energy map
+            self.layout.plot_image()
             self.energy_map_active = False
 
     def get_energy_range(self):

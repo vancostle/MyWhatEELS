@@ -181,6 +181,69 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         else:
             self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
 
+    def plot_image(self):
+        m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
+        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        if m_image.ndim != 2:
+            raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
+
+        ny, nx = m_image.shape
+        # energy axis
+        try:
+            energy = np.asarray(self._e_axis)
+            if energy.shape[0] != self._electron_count_data.shape[-1]:
+                energy = np.arange(self._electron_count_data.shape[-1])
+        except Exception:
+            energy = np.arange(self._electron_count_data.shape[-1])
+        self._energy = energy
+
+        # Build Plotly heatmap (figA) and selectors scatter for box/lasso selections
+        heat = go.Heatmap(
+            z=m_image,
+            x=np.arange(nx),
+            y=np.arange(ny),
+            colorscale="Greys_r",
+            showscale=False,
+            name="m_image",
+            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+        )
+
+        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
+        selectors = go.Scattergl(
+            x=XX.ravel(),
+            y=YY.ravel(),
+            mode="markers",
+            name="selectors",
+            marker=dict(size=6, opacity=0.01),
+            hoverinfo="skip",
+            selected=dict(marker=dict(opacity=0.3, size=8)),
+            unselected=dict(marker=dict(opacity=0.01)),
+        )
+
+        # Create figure with default size but lock aspect ratio so it doesn't deform
+        figA = go.Figure(data=[heat, selectors])
+        figA.update_layout(
+            title=" ",
+            height=400,  # default initial height as in the original copy
+            margin=dict(l=16, r=16, t=50, b=20),
+            dragmode="lasso",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
+        figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
+                           showgrid=False, zeroline=False, showticklabels=False)
+        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
+
+        # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
+        self.paneA.object = self._to_plotly(figA)
+
+        self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Select a region for ROI"))
+
+        AppState().fitting_results = None  # Clear fitting results when re-plotting original image
+        AppState().spectra = None  # Clear spectra when re-plotting original image
+
+
     def plot_energy_map(self, energy_map):
         # energy_map is a 2D array with the same shape as the image (value per pixel)
         energy_map_arr = np.asarray(energy_map)

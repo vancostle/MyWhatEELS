@@ -39,7 +39,7 @@
     height: 100%;
 }
 
-.element-container {
+.component-container {
     flex: 1;
     flex-direction: column;
     overflow-y: auto;

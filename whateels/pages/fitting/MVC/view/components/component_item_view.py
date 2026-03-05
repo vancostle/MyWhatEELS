@@ -14,7 +14,7 @@ class ComponentItemView(pn.Column):
         self._component_input = view.component_input
         self._fitting_add_component_button = view.fitting_add_component_button
         self._expandable = expandable
-        self._right_sidebar = view.right_sidebar
+        self._view = view
 
         self.dict_var = {
             'Low': [3, 3, 0.1, 0.1, 0.5, 2],
@@ -196,7 +196,7 @@ class ComponentItemView(pn.Column):
         self.update_component_parameters()  # Update component parameters in the model
 
     def _delete_element_watcher(self, event):
-        self._right_sidebar.remove(self)
+        self._view.component_item_view_container.remove(self)
 
         self._model.remove_component(self.component_item)
 
