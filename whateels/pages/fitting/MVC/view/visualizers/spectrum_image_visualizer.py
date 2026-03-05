@@ -263,6 +263,16 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 [1.0, "#ff1493"],
             ],
             showscale=True,
+            colorbar=dict(
+                x=1.0,
+                y=1.12,
+                xanchor="right",
+                yanchor="top",
+                orientation="h",
+                len=0.25,
+                thickness=10,
+                title=dict(text=""),
+            ),
             name="energy_map",
             hovertemplate="i=%{y}, j=%{x}<br>E=%{z}<extra></extra>",
         )
@@ -411,7 +421,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     def _figB_hover(self, point):
         if not point:
             return self._figB_message("Hover", "Move the cursor over the image")
-        i, j = int(point["y"]), int(point["x"])
+        i, j = point["y"], point["x"]
         spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"(i={i}, j={j})"))

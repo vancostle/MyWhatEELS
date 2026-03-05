@@ -48,6 +48,8 @@ class FittingController(BaseController):
             return
 
         self.energy_map_active = False  # Track energy map state
+        AppState().plot_dataset = all_datasets[tab_param]  # Set the dataset to be plotted in shared state
+        AppState().selected_tab_index_dataset = tab_param  # Set the selected tab index in shared state
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
         self._nlls_user_update(view)
@@ -124,13 +126,13 @@ class FittingController(BaseController):
         return value
     
     def update_plot(self, fitting_results = None):
-
         self.layout.update_plot(fitting_results)
 
     def _background_subtraction_switch_watcher(self, event):
         AppState().is_multifit = event.new
         self.update_plot()  # Update plot to reflect background subtraction change
         if AppState().fitting_results:
+            print("Refitting with background subtraction change...")
             self._model.create_model()  # Recreate model to reflect background subtraction change
             self._model.fit_reference()  # Refit with updated model
 

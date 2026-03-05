@@ -239,7 +239,7 @@ class FittingModel(BaseModel):
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
 
         #self.app_state.best_fitting_parameters = self.ref_results.best_values  # Store best fitting parameters in shared state
-        self._controller.update_plot(fitting_results = self.ref_results.best_fit)
+        self._controller.update_plot(fitting_results=self.ref_results)
 
     def get_energy_map(self):
 
