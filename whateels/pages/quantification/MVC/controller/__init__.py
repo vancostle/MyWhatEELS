@@ -1,5 +1,5 @@
 from .managers import LayoutManager
-from whateels.shared_state import get_cached_app_state
+from whateels.state import CacheManager
 from whateels.base.mvc.base_controller import BaseController
 from .services.oos_loader_service import Loader_OOS
 from xarray import Dataset
@@ -28,7 +28,7 @@ class QuantificationController(BaseController):
 
         self._layout = LayoutManager(view, self, model)
 
-        all_datasets = get_cached_app_state().all_datasets
+        all_datasets = CacheManager.get_cached_app_state().all_datasets
 
         self.loader_oos = Loader_OOS(dir_path = str(OOS_ROOT / "Hartree_Xsections_FSalvat"))
         view.set_controller(self)

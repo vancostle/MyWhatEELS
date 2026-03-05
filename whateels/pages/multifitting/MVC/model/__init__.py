@@ -1,11 +1,11 @@
-from whateels.shared_state import get_cached_app_state
+from whateels.state import CacheManager
 from whateels.helpers.fitting.multifitting import MultiFit
 import numpy as np
 import lmfit
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from whateels.shared_state import AppState
+    from whateels.state import AppState
     
 class MultifittingModel:
     """
@@ -17,7 +17,7 @@ class MultifittingModel:
     BACKGROUND_MODEL = 'PowerLawModel'
 
     def __init__(self):
-        self._app_state = get_cached_app_state()
+        self._app_state = CacheManager.get_cached_app_state()
         self._fit_range = None
 
     @property

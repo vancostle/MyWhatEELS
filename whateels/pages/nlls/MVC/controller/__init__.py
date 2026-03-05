@@ -6,7 +6,7 @@ Handles user interactions and manages the fitting workflow.
 """
 
 from whateels.base.mvc import BaseController
-from whateels.shared_state import get_cached_app_state
+from whateels.state import CacheManager
 from whateels.helpers.logging import Logger
 
 _logger = Logger.get_logger("nlls_controller.log", __name__)
@@ -25,7 +25,7 @@ class NLLSController(BaseController):
         
         self._model = model
         self._view = view
-        self._app_state = get_cached_app_state()
+        self._app_state = CacheManager.get_cached_app_state()
         
         # Connect view widgets to controller methods
         self._connect_widgets()

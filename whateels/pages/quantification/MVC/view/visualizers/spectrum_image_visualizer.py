@@ -13,8 +13,6 @@ from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import SplitJs
-from whateels.shared_state import get_cached_app_state
-from ...controller.services.oos_loader_service import Loader_OOS
 
 if TYPE_CHECKING:
     from ...model import Model

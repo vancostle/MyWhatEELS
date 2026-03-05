@@ -1,11 +1,11 @@
 import numpy as np
 
-from whateels.shared_state import get_cached_app_state
+from whateels.state import CacheManager
 from .placeholders import Placeholders
 from .constants import Constants
 from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
-    from whateels.shared_state import AppState
+    from whateels.state import AppState
 
 class ClusteringModel:
     def __init__(self):
@@ -13,7 +13,7 @@ class ClusteringModel:
         
         self._placeholders = Placeholders()
         self._constants = Constants()
-        self._app_state = get_cached_app_state()
+        self._app_state = CacheManager.get_cached_app_state()
         self._current_image_name: Optional[str] = None
         
         # Example structure for last clustering result

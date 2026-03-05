@@ -7,7 +7,7 @@ from whateels.components import SplitJs
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
-from whateels.shared_state import get_cached_app_state
+from whateels.state import CacheManager
 from whateels.base.plots.base_spectrum_image_plot import BaseSpectrumImagePlot
 
 from typing import TYPE_CHECKING, override
@@ -174,7 +174,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Publish the dataset now that multifit is requested.
         
         try:
-            get_cached_app_state().plot_dataset = self._dataset
+            CacheManager.get_cached_app_state().plot_dataset = self._dataset
         except Exception:
             print("Error publishing dataset to AppState for multifit.")
         

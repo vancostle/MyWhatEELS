@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 
 from whateels.errors.dm.data import DMPlotCreationError
 from ..visualizer_factory import VisualizerFactory
-from whateels.shared_state import get_cached_app_state
 
 if TYPE_CHECKING:
     from ...view import QuantificationView

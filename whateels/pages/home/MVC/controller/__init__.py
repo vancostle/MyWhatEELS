@@ -23,6 +23,11 @@ class HomePageController:
     - Manage workflow and UI state transitions by instructing the View
     - Delegate business logic to specialized services
     """
+
+    # Track sessions that already have a cleanup callback registered.
+    # Prevents accumulation of one callback per reload (N reloads → N callbacks).
+    _sessions_with_cleanup: set = set()
+
     def __init__(self, model: "HomePageModel", view: "HomePageView"):
         self._model = model
         self._view = view
@@ -31,10 +36,9 @@ class HomePageController:
         # the next HomePage instantiation can call cleanup() before creating a new one.
         model.active_controller = self
 
-        # Use a weakref so this lambda does NOT prevent GC of the controller
-        # once it has been replaced by a newer instance.
-        _ref = weakref.ref(self)
-        pn.state.on_session_destroyed(lambda _: (c := _ref()) and c.cleanup())
+        # Register a session-end cleanup once per session (not once per reload).
+        # On session end, cleans up whatever controller is currently active on the model.
+        self._register_session_cleanup_once(model)
 
         # Initialize file processing services
         self._file_processor = FileProcessorService(model)
@@ -46,6 +50,36 @@ class HomePageController:
         if all_datasets := getattr(self._model.app_state, "all_datasets", None):
             # Initial layout setup based on existing datasets
             self._view.create_tab_and_dataset_info(all_datasets)
+
+    @staticmethod
+    def _register_session_cleanup_once(model: "HomePageModel") -> None:
+        """Register a session-end cleanup callback at most once per session.
+
+        Uses the Bokeh session ID so that multiple reloads within the same
+        session don't keep piling up callbacks in Panel's internal list.
+        """
+        try:
+            from bokeh.io import curdoc
+            doc = curdoc()
+            session_id = doc.session_context.id if doc.session_context else None
+            if session_id is None:
+                return
+            if session_id in HomePageController._sessions_with_cleanup:
+                return
+            HomePageController._sessions_with_cleanup.add(session_id)
+            _model_ref = weakref.ref(model)
+
+            def _on_session_end(session_context):
+                # Remove session from tracking set to free memory
+                HomePageController._sessions_with_cleanup.discard(session_id)
+                m = _model_ref()
+                if m is not None and m.active_controller is not None:
+                    m.active_controller.cleanup()
+                    m.active_controller = None
+
+            pn.state.on_session_destroyed(_on_session_end)
+        except Exception:
+            pass
             
     def _handle_file_upload(self, filename: str, file_content: bytes):
         """

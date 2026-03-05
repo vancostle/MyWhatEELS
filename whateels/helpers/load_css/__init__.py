@@ -5,8 +5,13 @@ import csscompressor
 class LoadCSS:
     """
     A class to load CSS files into the Panel configuration.
-    This ensures CSS files are loaded only once, even if the class is instantiated multiple times.
+    This ensures CSS files are loaded only once per server lifetime, even if
+    the class is instantiated multiple times across page reloads.
     """
+    
+    # Map file path → compressed CSS string.
+    # Checked against pn.config.raw_css before appending to avoid duplicates.
+    _css_cache: dict = {}
         
     def __init__(self, css_files=None):
         """
@@ -53,8 +58,14 @@ class LoadCSS:
         for css_file in css_files:
             try:
                 if os.path.exists(css_file):
-                    with open(css_file, READ_MODE, encoding=ENCODING) as f:
-                        min_css = csscompressor.compress(f.read())
+                    # Compress once and cache; re-read from disk only on first encounter
+                    if css_file not in LoadCSS._css_cache:
+                        with open(css_file, READ_MODE, encoding=ENCODING) as f:
+                            LoadCSS._css_cache[css_file] = csscompressor.compress(f.read())
+                    min_css = LoadCSS._css_cache[css_file]
+                    # Only append if not already present in Panel's raw_css list
+                    # (pn.config.raw_css may be cleared between sessions)
+                    if min_css not in pn.config.raw_css:
                         pn.config.raw_css.append(min_css)
                 else:
                     print(f"{WARNING_MESSAGE}: {css_file}")

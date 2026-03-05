@@ -1,48 +1,25 @@
 """
-Shared Application State for WhatEELS
+AppState model for shared application state management.
 
-This module provides a singleton AppState class to manage shared metadata
-across different pages and components of the WhatEELS application.
-
-The AppState uses param for reactive updates across the application.
+Uses param.Parameterized for reactive updates across Panel components.
+State is cached per-user (or globally if no auth configured).
 """
 
-import param, panel as pn
-from .helpers.logging import Logger
+import param
+from whateels.helpers.logging import Logger
 
 _logger = Logger.get_logger("shared_state.log", __name__)
 
-def _user_key(prefix: str) -> str:
-    """Return a cache key scoped to the current authenticated user.
-
-    Resolution order:
-    1. ``pn.state.user`` — set automatically when Panel auth is enabled
-       (OAuth2, BasicAuth, etc.).  Each user gets an isolated AppState so
-       cross-tab sharing works (both tabs → same user → same key) while
-       different users remain isolated.
-    2. Global fallback (``"<prefix>_global"``) — used when auth is not yet
-       configured (single-user / dev mode).  Replace step 2 with a real
-       identity source (JWT claim, session cookie, …) when you add auth.
-    """
-    user = getattr(pn.state, "user", None)
-    if user:
-        return f"{prefix}_{user}"
-    return f"{prefix}_global"
-
-def get_cached_app_state() -> "AppState":
-    """Get the AppState scoped to the current user (or global if no auth)."""
-    key = _user_key("app_state")
-    if key not in pn.state.cache: # type: ignore
-        pn.state.cache[key] = AppState() # type: ignore
-    return pn.state.cache[key] # type: ignore
-
 class AppState(param.Parameterized):
     """
-    Singleton AppState class using param for reactive metadata management.
+    Shared application state using param for reactive metadata management.
     
     This class provides a reactive way to share metadata across the application.
-    Any Panel component can depend on the metadata parameter and will automatically
-    update when the metadata changes.
+    Any Panel component can depend on the state parameters and will automatically
+    update when they change.
+    
+    Instances are cached per-user (or globally), ensuring cross-tab sharing
+    for the same user while maintaining isolation between users.
     """
     
     # Reactive parameter for metadata
@@ -108,6 +85,7 @@ class AppState(param.Parameterized):
             _logger.info("plot_dataset published to AppState")
         else:
             _logger.info("plot_dataset cleared in AppState")
+    
     @param.depends('all_datasets', watch=True)
     def _on_datasets_change(self):
         """Called automatically when all_datasets parameter changes."""

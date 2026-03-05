@@ -2,11 +2,11 @@
 from typing import Optional, TYPE_CHECKING
 from whateels.helpers.in_memory_file import InMemoryFile
 from .constants import Constants, Placeholders
-from whateels.shared_state import get_cached_app_state
+from whateels.state import CacheManager
 
 if TYPE_CHECKING:
     from whateels.pages.home.MVC.controller import HomePageController
-    from whateels.shared_state import AppState
+    from whateels.state import AppState
 
 class HomePageModel:
     """
@@ -20,7 +20,7 @@ class HomePageModel:
         # Shared configuration and constants
         self._constants = Constants()
         self._placeholders = Placeholders()
-        self._app_state = get_cached_app_state()
+        self._app_state = CacheManager.get_cached_app_state()
         
         # Holds the currently active controller so it can be cleaned up
         # before a new one is created on re-navigation (model is @pn.cache'd).

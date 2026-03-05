@@ -1,14 +1,14 @@
-from whateels.shared_state import get_cached_app_state
+from whateels.state import CacheManager
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from xarray import Dataset
-    from whateels.shared_state import AppState
+    from whateels.state import AppState
 
 class Clustering2PageModel:
 
     def __init__(self):
-        self._app_state = get_cached_app_state()
+        self._app_state = CacheManager.get_cached_app_state()
         self._selected_dataset : "Dataset"
         self._is_umap_computing = False
         self._was_umap_computing_canceled = False

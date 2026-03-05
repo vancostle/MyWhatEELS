@@ -84,20 +84,9 @@ class HomePageView:
         app_state = self._model.app_state
 
         try:
-            # Clean up old visualizers and watchers to prevent memory leaks
-            if self._plots_tab_watcher is not None and self._plots_tab is not None:
-                self._plots_tab.param.unwatch(self._plots_tab_watcher)
-                self._plots_tab_watcher = None
-            elif self._plots_tab_watcher is not None:
-                self._plots_tab_watcher = None
-
-            # Clear old plots_tab completely
-            if self._plots_tab is not None:
-                self._plots_tab.clear()
-                self._plots_tab = None
-
-            # Clear previous dataset info panels to prevent caching old data
-            self._all_dataset_info.clear()
+            # Stop streams and release old plot instances before creating new ones.
+            # This frees numpy arrays and unsubscribes HoloViews stream callbacks.
+            self.cleanup_plots()
 
             # Force garbage collection to free memory from old visualizers
             gc.collect()
