@@ -1,31 +1,23 @@
-
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from whateels.helpers.in_memory_file import InMemoryFile
 from .constants import Constants, Placeholders
 from whateels.state import CacheManager
 
 if TYPE_CHECKING:
-    from whateels.pages.home.MVC.controller import HomePageController
     from whateels.state import AppState
 
 class HomePageModel:
     """
     Main application model for the WhatEELS home page.
-    Stores the loaded EELS dataset, metadata, and shared configuration/state.
+    Created fresh on every navigation — Panel's session lifecycle handles cleanup.
+    AppState (user data) is retrieved from pn.state.cache via CacheManager.
     """
     def __init__(self):
-        # State attributes
-        self._in_memory_file: InMemoryFile | None = None  # Currently loaded file in memory (if any)
-
-        # Shared configuration and constants
+        self._in_memory_file: InMemoryFile | None = None
         self._constants = Constants()
         self._placeholders = Placeholders()
         self._app_state = CacheManager.get_cached_app_state()
-        
-        # Holds the currently active controller so it can be cleaned up
-        # before a new one is created on re-navigation (model is @pn.cache'd).
-        self._active_controller: Optional["HomePageController"] = None
-    
+
     @property
     def constants(self) -> Constants:
         return self._constants
@@ -39,20 +31,11 @@ class HomePageModel:
     def app_state(self) -> "AppState":
         return self._app_state
 
-    @property
-    def active_controller(self) -> Optional["HomePageController"]:
-        """Reference to the currently active HomePageController instance."""
-        return self._active_controller
-
-    @active_controller.setter
-    def active_controller(self, controller: Optional["HomePageController"]):
-        self._active_controller = controller
-
     @in_memory_file.setter
     def in_memory_file(self, file: InMemoryFile | None):
         """Set the in-memory file (or None to clear)."""
         self._in_memory_file = file
-        
+
     @in_memory_file.deleter
     def in_memory_file(self):
         """Delete the in-memory file to free resources."""
