@@ -11,7 +11,6 @@ from whateels.errors.dm import (
     DMFileLoadingError, 
     DMFileUploadError
 )
-from whateels.shared_state import get_cached_app_state
 from whateels.helpers.logging_utils import Logger
 from ..dm_file_processing import DM_EELS_Reader
 from .data_processor_service import DataProcessorService

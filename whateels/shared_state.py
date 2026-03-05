@@ -32,9 +32,9 @@ def _user_key(prefix: str) -> str:
 def get_cached_app_state() -> "AppState":
     """Get the AppState scoped to the current user (or global if no auth)."""
     key = _user_key("app_state")
-    if key not in pn.state.cache:
-        pn.state.cache[key] = AppState()
-    return pn.state.cache[key]
+    if key not in pn.state.cache: # type: ignore
+        pn.state.cache[key] = AppState() # type: ignore
+    return pn.state.cache[key] # type: ignore
 
 class AppState(param.Parameterized):
     """

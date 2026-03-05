@@ -12,11 +12,9 @@ from whateels.helpers.logging import Logger
 import numpy as np
 import copy as cp
 from scipy.interpolate import InterpolatedUnivariateSpline
-from scipy.ndimage import gaussian_filter1d
 
 # Import from relocated Library modules
 from whateels.helpers.nlls_library.database.elements import elements
-from whateels.helpers.nlls_library.physical_constants import R, a0, m0, e, c
 from whateels.helpers.nlls_library.cross_sections import bethe_surface
 
 _logger = Logger.get_logger("nlls_model.log", __name__)
