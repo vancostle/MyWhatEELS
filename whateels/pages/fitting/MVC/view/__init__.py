@@ -224,6 +224,7 @@ class FittingView(BaseView):
             margin=0,
             height=55,
             disabled=False,
+            sizing_mode=self._STRETCH_WIDTH
         )
 
         self._component_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH, css_classes=["component-container"])
