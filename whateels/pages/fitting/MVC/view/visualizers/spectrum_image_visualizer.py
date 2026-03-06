@@ -1,7 +1,7 @@
-"""
-Spectrum image (datacube) visualization composer.
-Se reemplaza HoloViews por Panel + Plotly usando la lógica de si_view.py,
-pero manteniendo la lógica de acceso a datos y widgets de SpectrumImageVisualizer.
+"""Spectrum-image (datacube) visualizer built with Panel and Plotly.
+
+This implementation replaces HoloViews rendering while preserving the original
+data access flow and interaction behavior (hover, click, ROI selection, fitting).
 """
 
 import panel as pn
@@ -24,14 +24,15 @@ if TYPE_CHECKING:
     
 import bokeh.palettes as palettes
 
-colors = palettes.Category10[10]  # o Category20, viridis, etc.
+colors = palettes.Category10[10]  # Shared qualitative palette for multi-trace overlays.
 
 
 class SpectrumImageVisualizer(AbstractEELSVisualizer):
     """
-    Version Plotly / Panel del visualizador de Spectrum Image.
-    Mantiene la lógica de datos del visualizador original y reemplaza
-    HoloViews por Plotly panes y callbacks (hover / click / select).
+    Plotly/Panel implementation of the Spectrum Image visualizer.
+
+    Keeps the original data flow and replaces HoloViews with Plotly panes and
+    callback-based interactions for hover, click, ROI selection, and fitting.
     """
     
     # Panel sizing modes
@@ -49,12 +50,13 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
     def __init__(self, model: "Model", dataset: "Dataset"):
+        """Initialize visual state, interactive panes, and callback wiring."""
         super().__init__(model, dataset)
 
         self._model = model
         self._dataset = dataset
 
-        # Energy axis (eje de energía)
+        # Cached energy axis used to draw spectra in pane B.
         self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
 
         # ElectronCount data cube
@@ -66,13 +68,13 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         # Range state for paneB (to preserve zoom/pan)
         self._current_x_range = None
         self._current_y_range = None
-        # None = unknown / leave Plotly default; True/False = explicitly requested autorange
+        # None leaves Plotly defaults; bool values explicitly control autorange.
         self._current_x_autorange = None
         self._current_y_autorange = None
 
-        # Selection / hover / fitting state (inspired by si_view.py)
-        self._region_pairs = []         # lista de (i,j) seleccionados por lasso/box
-        self._last_hover_point = None   # último hover {x,y,curve}
+        # Selection/hover/fitting state.
+        self._region_pairs = []         # List of (i, j) pixels selected by lasso/box.
+        self._last_hover_point = None   # Last hovered point payload: {x, y, curve}.
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
         self._fitting_active = False
@@ -93,11 +95,13 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         self._setup_callbacks()
 
     def get_e_axis(self):
+        """Return the 1D energy axis associated with the current datacube."""
         return self._e_axis
         
     # --- Public layout builders (used by controller) ---
     @override
-    def create_plots(self):        
+    def create_plots(self):
+        """Build the two-pane split layout with image on the left and spectra on the right."""
         left_column = pn.Column(
             self.paneA,
             sizing_mode='stretch_both'
@@ -105,9 +109,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         
         right_column = pn.Column(
             self.paneB,
-            # fila de botones (fitting + multifit)
+            # Button row (fitting + multifit), if available.
             self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
-            # slider/range debajo
+            # Energy-range slider row, if available.
             self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
             sizing_mode='stretch_both'
         )
@@ -123,20 +127,19 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     @override
     def create_dataset_info(self):
+        """Reuse the shared dataset-info card from the abstract base class."""
         return super().create_dataset_info()
     
     def plot_fitting(self, x, y_fit):
         """
-        Add fit and background subtraction traces to a Plotly figure.
+        Overlay the fitted spectrum curve on top of the current pane-B figure.
 
         Parameters:
-            fig (plotly.graph_objs.Figure): The Plotly figure to add traces to.
             x (array-like): Independent variable data.
-            y (array-like): Dependent variable data.
-            y_fit (array-like): Fitted curve values for all x.
+            y_fit (array-like): Fitted curve values for all x samples.
 
         Returns:
-            plotly.graph_objs.Figure: The figure with added fit and subtraction traces.
+            plotly.graph_objs.Figure: Updated figure including the fit overlay.
         """
         
         # Local constants for Plotly and fitting
@@ -153,6 +156,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         FILL_TO_ZEROY = 'tozeroy'
         fig = self.paneB.object
         newfig = go.Figure(fig)
+        AppState().fitting_results = y_fit  # Store the fitted curve in shared state for potential future use.
         newfig.add_trace(go.Scatter(
             x=x,
             y=y_fit,
@@ -176,23 +180,21 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         return newfig
     
     def update_plot(self):
+        """Refresh pane-B based on ROI state and clear fit overlays when needed."""
         if self._region_pairs:
             self.paneB.object = self._set_ranges_and_convert(self._figB_region(self._region_pairs))
         else:
             self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
 
-    # --- Plot / Pane Setup (Plotly) ---
-    def _setup_plots(self):
-        # Build image (m_image) from data cube in the canonical way used in this class
-        # ElectronCount dims assumed (y, x, E)
-        # Use self._electron_count_data from constructor
+    def plot_image(self):
+        """Render the integrated intensity image and reset fit/spectra shared state."""
         m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
         m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
         if m_image.ndim != 2:
             raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
 
         ny, nx = m_image.shape
-        # energy axis
+        # Validate and cache energy axis for spectrum traces.
         try:
             energy = np.asarray(self._e_axis)
             if energy.shape[0] != self._electron_count_data.shape[-1]:
@@ -201,7 +203,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             energy = np.arange(self._electron_count_data.shape[-1])
         self._energy = energy
 
-        # Build Plotly heatmap (figA) and selectors scatter for box/lasso selections
+        # Build heatmap plus an almost-transparent scatter trace for lasso/box selections.
         heat = go.Heatmap(
             z=m_image,
             x=np.arange(nx),
@@ -224,44 +226,176 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             unselected=dict(marker=dict(opacity=0.01)),
         )
 
-        # Create figure with default size but lock aspect ratio so it doesn't deform
+        # Lock aspect ratio to preserve pixel geometry while resizing.
         figA = go.Figure(data=[heat, selectors])
         figA.update_layout(
             title=" ",
-            height=400,  # default initial height as in the original copy
+            height=400,
             margin=dict(l=16, r=16, t=50, b=20),
             dragmode="lasso",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)'
         )
-        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
+        # Keep origin top-left and preserve 1:1 pixel aspect.
         figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
                            showgrid=False, zeroline=False, showticklabels=False)
         figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
-        # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
+        # Pane A (heatmap) is responsive; geometry stays correct via figure axis constraints.
+        self.paneA.object = self._to_plotly(figA)
+
+        self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Select a region for ROI"))
+
+        AppState().fitting_results = None  # Clear fitting results when re-plotting original image
+        AppState().spectra = None  # Clear spectra when re-plotting original image
+
+
+    def plot_energy_map(self, energy_map):
+        """Render a model-computed 2D energy map on pane A."""
+        # `energy_map` must be a 2D matrix aligned with image pixel coordinates.
+        energy_map_arr = np.asarray(energy_map)
+        if energy_map_arr.ndim != 2:
+            raise ValueError(f"Expected a 2D energy map, got shape={energy_map_arr.shape}")
+
+        energy_map_arr = np.where(np.isfinite(energy_map_arr), energy_map_arr, 0.0)
+        ny, nx = energy_map_arr.shape
+
+        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
+        heat = go.Heatmap(
+            z=energy_map_arr,
+            x=np.arange(nx),
+            y=np.arange(ny),
+            colorscale=[
+                [0.0, "#00eb6c"],
+                [1.0, "#ff1493"],
+            ],
+            showscale=True,
+            colorbar=dict(
+                x=1.0,
+                y=1.12,
+                xanchor="right",
+                yanchor="top",
+                orientation="h",
+                len=0.25,
+                thickness=10,
+                title=dict(text=""),
+            ),
+            name="energy_map",
+            hovertemplate="i=%{y}, j=%{x}<br>E=%{z}<extra></extra>",
+        )
+
+        selectors = go.Scattergl(
+            x=XX.ravel(),
+            y=YY.ravel(),
+            mode="markers",
+            name="selectors",
+            marker=dict(size=6, opacity=0.01),
+            hoverinfo="skip",
+            selected=dict(marker=dict(opacity=0.3, size=8)),
+            unselected=dict(marker=dict(opacity=0.01)),
+        )
+
+        figA = go.Figure(data=[heat, selectors])
+        figA.update_layout(
+            title="Energy Map",
+            height=400,
+            margin=dict(l=16, r=16, t=50, b=20),
+            dragmode="lasso",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        figA.update_yaxes(
+            autorange="reversed",
+            scaleanchor="x",
+            scaleratio=1,
+            constrain="domain",
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+        )
+        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
+
+        self.paneA.object = self._to_plotly(figA)
+            
+
+    def _setup_plots(self):
+        """Create initial pane A/B Plotly objects before the layout is requested."""
+        # Build image from datacube; expected ElectronCount dims: (y, x, E).
+        m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
+        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        if m_image.ndim != 2:
+            raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
+
+        ny, nx = m_image.shape
+        # Validate and cache energy axis for pane B traces.
+        try:
+            energy = np.asarray(self._e_axis)
+            if energy.shape[0] != self._electron_count_data.shape[-1]:
+                energy = np.arange(self._electron_count_data.shape[-1])
+        except Exception:
+            energy = np.arange(self._electron_count_data.shape[-1])
+        self._energy = energy
+
+        # Build heatmap plus transparent selectors for box/lasso ROI tools.
+        heat = go.Heatmap(
+            z=m_image,
+            x=np.arange(nx),
+            y=np.arange(ny),
+            colorscale="Greys_r",
+            showscale=False,
+            name="m_image",
+            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+        )
+
+        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
+        selectors = go.Scattergl(
+            x=XX.ravel(),
+            y=YY.ravel(),
+            mode="markers",
+            name="selectors",
+            marker=dict(size=6, opacity=0.01),
+            hoverinfo="skip",
+            selected=dict(marker=dict(opacity=0.3, size=8)),
+            unselected=dict(marker=dict(opacity=0.01)),
+        )
+
+        # Lock aspect ratio to avoid geometric deformation.
+        figA = go.Figure(data=[heat, selectors])
+        figA.update_layout(
+            title=" ",
+            height=400,
+            margin=dict(l=16, r=16, t=50, b=20),
+            dragmode="lasso",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        # Keep origin top-left and preserve 1:1 pixel aspect.
+        figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
+                           showgrid=False, zeroline=False, showticklabels=False)
+        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
+
+        # Pane A (heatmap) is responsive; geometry stays correct via figure axis constraints.
         self.paneA = pn.pane.Plotly(self._to_plotly(figA), config={"responsive": True}, sizing_mode='stretch_both')
 
-        # Pane B initial message (apply stored ranges if any)
+        # Pane B starts with an instructional message while preserving stored axis state.
         self.paneB = pn.pane.Plotly(
             self._set_ranges_and_convert(self._figB_message(" ", "Select a region for ROI")),
             sizing_mode='stretch_both', config={"responsive": True}
         )
 
-    # --- Callbacks setup (connect pane watchers & periodic callback) ---
     def _setup_callbacks(self):
-        # Attach panel watchers to figA and paneB
+        """Bind Panel/Plotly events for hover, click, selection, and relayout."""
+        # Attach watchers to pane A (image interactions) and pane B (zoom/pan relayout).
         self.paneA.param.watch(self._on_paneA_hover, "hover_data")
         self.paneA.param.watch(self._on_paneA_click, "click_data")
         self.paneA.param.watch(self._on_paneA_selected, "selected_data")
 
-        # relayout_data is emitted by pn.pane.Plotly on axis changes
+        # relayout_data is emitted by pn.pane.Plotly when axis ranges change.
         self.paneB.param.watch(self._on_paneB_relayout, "relayout_data")
 
-        # Periodic callback for inactivity logic (stopped by default)
+        # Periodic callback used only while temporary hover override is active.
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
 
-    # --- Helpers / utilities (from si_view.py adapted) ---
     def _to_plotly(self, obj):
         """Convert go.Figure to dict to avoid Panel<->Plotly relayout issues."""
         try:
@@ -277,6 +411,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         return obj
 
     def _figB_message(self, title, subtitle):
+        """Return a placeholder pane-B figure with a centered instructional message."""
         fig = go.Figure()
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
@@ -289,9 +424,10 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         return fig
 
     def _figB_hover(self, point):
+        """Create a single-pixel spectrum figure from a hovered image coordinate."""
         if not point:
             return self._figB_message("Hover", "Move the cursor over the image")
-        i, j = int(point["y"]), int(point["x"])
+        i, j = point["y"], point["x"]
         spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"(i={i}, j={j})"))
@@ -300,6 +436,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         return fig
 
     def _figB_region(self, pairs):
+        """Create an ROI-summed spectrum figure from selected pixel coordinates."""
         if AppState().is_multifit:
             multifit_electron_count_data = xr.DataArray(AppState().multifit)
             res = SpectrumExtractor.get_spectrum_from_indices(multifit_electron_count_data, pairs)
@@ -307,7 +444,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
         if res is None:
             return self._figB_message("ROI", "Select with lasso/box...")
-       
+        
         spec, n_points = res
         AppState().spectra = spec
         fig = go.Figure()
@@ -321,11 +458,12 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         region_selected = True
         return fig
 
-    # --- Inactivity logic (restaurar selección tras inactivity) ---
     def _now_ms(self):
+        """Return the current timestamp in milliseconds."""
         return int(time.time() * 1000)
 
     def _check_inactivity(self):
+        """Restore ROI view after temporary hover previews become inactive."""
         # No selection -> nothing to do
         if not self._region_pairs:
             if self._pc.running:
@@ -350,14 +488,14 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             if AppState().fitting_results is not None:
                 self.plot_fitting(self._energy, AppState().fitting_results)
 
-    # --- Pane A event handlers (hover / click / selected) ---
     def _on_paneA_hover(self, event: "Event"):
+        """Handle hover events to preview pixel spectra when ROI selection exists."""
         point = SpectrumExtractor.extract_point(event)
         if point is None:
             return
         self._last_hover_point = point
         if self._region_pairs:
-            # Temporary hover while a selection exists: show hover spectrum and start/renew timer
+            # Show hover preview while preserving ROI state for later restoration.
             fig = self._figB_hover(self._last_hover_point)
             self.paneB.object = self._set_ranges_and_convert(fig)
             self._last_hover_ts = self._now_ms()
@@ -365,6 +503,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 self._pc.start()
 
     def _on_paneA_click(self, event):
+        """Handle click events as an explicit hover-spectrum request."""
         point = SpectrumExtractor.extract_point(event)
         if point is None:
             return
@@ -380,6 +519,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             self._last_hover_ts = None
 
     def _on_paneA_selected(self, event: "Event"):
+        """Handle lasso/box selections and update pane-B with ROI spectrum."""
         pairs = SpectrumExtractor.extract_region(event)
         self._region_pairs = pairs
         if not pairs:
@@ -394,14 +534,14 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return
         else:
             self.paneB.object = self._set_ranges_and_convert(self._figB_region(self._region_pairs))
-        # prepare inactivity behaviour: stop periodic callback until next hover
+        # Keep ROI as canonical view and stop inactivity checks until next hover.
         if self._pc.running:
             self._pc.stop()
         self._last_hover_ts = None
 
-    # --- Pane B relayout (preserve zoom/pan ranges) ---
     def _on_paneB_relayout(self, event):
-        # Robustly extract ranges/autorange from relayout payloads emitted by Plotly
+        """Track user zoom/pan state from Plotly relayout payloads."""
+        # Extract ranges/autorange robustly from different Plotly payload formats.
         try:
             data = event.new or {}
 
@@ -434,7 +574,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 if self._current_y_autorange:
                     self._current_y_range = None
 
-            # Some Plotly versions emit nested keys or different payload shapes; handled permissively above.
+            # Plotly versions may vary in payload shape; parser remains permissive.
         except Exception:
             # Ignore noisy relayout payloads
             pass
@@ -456,6 +596,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         return fig
 
     def _set_ranges_and_convert(self, fig):
+        """Apply stored ranges to a figure and convert it to Panel-safe Plotly JSON."""
         # Ensure we operate on a go.Figure to apply ranges reliably
         try:
             fig_obj = fig if isinstance(fig, go.Figure) else go.Figure(fig)
@@ -467,11 +608,11 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
 def sum_slice(matrix, vertexs):
     """
-    Sums the values in a region defined by vertices in a matrix.
+    Sum values in a rectangular matrix region defined by index bounds.
 
     Parameters:
         matrix: The 2D matrix to sum over.
-        vertexs: A tuple (x_start, x_end, y_start, y_end) defining the region.
+        vertexs: Tuple `(x_start, x_end, y_start, y_end)` defining the region.
 
     Returns:
         The sum of the values in the specified region.
@@ -484,15 +625,14 @@ def sum_slice(matrix, vertexs):
 
 def get_envelope(x1, y1, x2, y2):
     """
-    Calculates the envelope of two curves.
+    Compute the upper envelope of two curves over their union x-domain.
 
     Parameters:
         x1, y1: The x and y values of the first curve.
         x2, y2: The x and y values of the second curve.
 
     Returns:
-        x_common: The common x values.
-        y_envelope: The envelope (maximum y values at each x).
+        tuple[np.ndarray, np.ndarray]: `(x_common, y_envelope)`.
     """
     # Find the common x range
     x_common = np.union1d(x1, x2)

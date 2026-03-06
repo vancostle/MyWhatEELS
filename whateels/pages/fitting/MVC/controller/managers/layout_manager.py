@@ -1,7 +1,9 @@
 import panel as pn
 from typing import TYPE_CHECKING
+from collections.abc import Mapping
 
 from whateels.errors.dm.data import DMPlotCreationError
+from whateels.helpers.constants import HTML_ROOT
 from ..visualizer_factory import VisualizerFactory
 from whateels.shared_state import AppState
 
@@ -48,7 +50,21 @@ class LayoutManager:
         """Add a component to the sidebar and track it as the last dataset info component."""
         self._view.left_sidebar.append(component)
         self._view.dataset_info = component
-        
+
+    def add_best_fit_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
+        """Add the best-fit summary card to the left sidebar and keep a reference to it."""
+        self._view.left_sidebar.append(component)
+        self._view.best_fit_component = component
+
+    def remove_best_fit_component_from_sidebar(self):
+        """Remove the best fit component from the sidebar, if present."""
+        best_fit_component = getattr(self._view, "best_fit_component", None)
+        if best_fit_component is None:
+            return
+        if best_fit_component in self._view.left_sidebar:
+            self._view.left_sidebar.remove(best_fit_component)
+        self._view.best_fit_component = None
+
     def remove_dataset_info_from_sidebar(self):
         """Remove the last dataset info component from the sidebar, if present."""
         if self._view.dataset_info is None:
@@ -98,7 +114,7 @@ class LayoutManager:
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
             self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
-            app_state.plot_dataset = app_state.all_datasets[0]
+            app_state.plot_dataset = app_state.all_datasets[AppState().selected_tab_index_dataset]  # Set initial dataset to plot based on selected tab index
             
             # Update UI
             self._controller.base_layout.update_main(self._plots_tab)
@@ -115,6 +131,7 @@ class LayoutManager:
 
     
     def get_active_dataset(self):
+        """Return the dataset currently selected by the active tab index."""
         state = AppState()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index]
@@ -141,15 +158,170 @@ class LayoutManager:
         """Add a new element input component to the sidebar."""
         self._view.right_sidebar.append(element_input_view)
 
-        ##self.plot_component()
-
-        # plot components
-
     def update_plot(self, fitting_results=None):
+        """Refresh the main spectrum plot and optionally overlay fitting results.
+
+        When `fitting_results` is `None`, the plot is reset to the base spectrum/ROI state
+        and any existing best-fit sidebar card is removed. Otherwise, this method stores the
+        fit in shared state, draws the fitted curve, and updates the best-fit information card.
+        """
         state = AppState()
         if fitting_results is None:
-            self._chosen_visualizers[state.selected_tab_index_dataset].update_plot()
+            self._chosen_visualizers[0].update_plot()
+            self.remove_best_fit_component_from_sidebar()
         else:
-            state.fitting_results = fitting_results
-            self._chosen_visualizers[state.selected_tab_index_dataset].update_plot()
-            self._chosen_visualizers[state.selected_tab_index_dataset].plot_fitting(state.plot_dataset.coords['Eloss'].values, fitting_results)
+            y_fit = fitting_results.best_fit if hasattr(fitting_results, 'best_fit') else fitting_results
+            self._chosen_visualizers[0].update_plot()
+            self._chosen_visualizers[0].plot_fitting(
+                state.plot_dataset.coords['Eloss'].values,
+                y_fit
+            )
+            best_fit_component = self.create_best_fit_info(fitting_results)
+            self.remove_best_fit_component_from_sidebar()
+            self.add_best_fit_component_to_sidebar_layout(best_fit_component)
+
+    def create_best_fit_info(self, fitting_results):
+        """Build a metadata-like Panel card with fit parameters and summary statistics.
+
+        The card intentionally mirrors the existing dataset-info styling so users can read
+        acquisition metadata and fitting metadata with the same visual structure.
+        """
+        STRETCH_WIDTH = "stretch_width"
+        DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
+        DATASET_INFO_CLASS = ["dataset-info", "animated"]
+        TITLE = "<h5 class=\"dataset-info-title\">Best Fit Information</h5>"
+        NOT_AVAILABLE = "N/A"
+        MARGIN_ZERO = 0
+        SPACER_HEIGHT_SMALL = 5
+        SPACER_HEIGHT_MEDIUM = 10
+        HTML_FILE = 'metadata_info.html'
+        READ_MODE = 'r'
+        UTF_8 = 'utf-8'
+
+        def _format_value(value):
+            if value is None:
+                return NOT_AVAILABLE
+            try:
+                if isinstance(value, bool):
+                    return str(value)
+                if isinstance(value, (int, float)):
+                    return f"{float(value):.6g}"
+            except Exception:
+                pass
+            return str(value)
+
+        def _extract_named_values(result_obj):
+            values = {}
+            if result_obj is None:
+                return values
+
+            if isinstance(result_obj, Mapping):
+                if isinstance(result_obj.get('best_values'), Mapping):
+                    values.update(result_obj['best_values'])
+                elif isinstance(result_obj.get('params'), Mapping):
+                    for key, param in result_obj['params'].items():
+                        values[key] = getattr(param, 'value', param)
+                else:
+                    for key, val in result_obj.items():
+                        if key in {'best_fit', 'model'}:
+                            continue
+                        if isinstance(val, (str, int, float, bool)) or val is None:
+                            values[key] = val
+
+            if hasattr(result_obj, 'best_values') and isinstance(result_obj.best_values, Mapping):
+                values.update(result_obj.best_values)
+
+            if not values and hasattr(result_obj, 'params'):
+                try:
+                    params = result_obj.params
+                    if isinstance(params, Mapping):
+                        for key, param in params.items():
+                            values[key] = getattr(param, 'value', param)
+                except Exception:
+                    pass
+
+            return values
+
+        def _extract_stats(result_obj):
+            stats = {}
+            for key in ('chisqr', 'redchi', 'aic', 'bic', 'nfev', 'nvarys'):
+                if isinstance(result_obj, Mapping) and key in result_obj:
+                    stats[key] = result_obj.get(key)
+                elif hasattr(result_obj, key):
+                    stats[key] = getattr(result_obj, key)
+            return stats
+
+        dataset = self.get_active_dataset()
+        attrs = dataset.attrs if dataset is not None else {}
+
+        rows = [
+            ('shape', attrs.get('shape', NOT_AVAILABLE)),
+            ('beam_energy', attrs.get('beam_energy', NOT_AVAILABLE)),
+            ('convergence_angle', attrs.get('convergence_angle', NOT_AVAILABLE)),
+            ('collection_angle', attrs.get('collection_angle', NOT_AVAILABLE)),
+        ]
+
+        parameter_values = _extract_named_values(fitting_results)
+        stats_values = _extract_stats(fitting_results)
+
+        if parameter_values:
+            rows.append(('n_params', len(parameter_values)))
+            rows.extend((f"param.{name}", value) for name, value in parameter_values.items())
+        else:
+            rows.append(('n_params', 0))
+
+        rows.extend((f"fit.{name}", value) for name, value in stats_values.items())
+
+        # Reuse the same metadata button HTML to preserve styling parity with dataset info cards.
+        metadata_html_path = HTML_ROOT / HTML_FILE
+        with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
+            metadata_button_html = f.read()
+
+        metadata_button = pn.pane.HTML(metadata_button_html, margin=MARGIN_ZERO)
+
+        header = pn.Row(
+            pn.pane.HTML(TITLE, sizing_mode=STRETCH_WIDTH, margin=MARGIN_ZERO),
+            metadata_button,
+            sizing_mode=STRETCH_WIDTH,
+            css_classes=DATASET_INFO_HEADER_CLASS,
+            margin=MARGIN_ZERO
+        )
+
+        info_rows = [
+            pn.Row(
+                pn.pane.HTML(f"<strong>{label}:</strong>"),
+                pn.pane.Str(_format_value(value)),
+                sizing_mode=STRETCH_WIDTH
+            )
+            for label, value in rows
+        ]
+
+        return pn.Column(
+            header,
+            pn.Spacer(height=SPACER_HEIGHT_SMALL),
+            *info_rows,
+            pn.Spacer(height=SPACER_HEIGHT_MEDIUM),
+            sizing_mode=STRETCH_WIDTH,
+            css_classes=DATASET_INFO_CLASS
+        )
+
+    def plot_energy_map(self):
+        """Plot the model-computed energy map over the currently selected image.
+
+        Raises:
+            DMPlotCreationError: If there is no selected dataset, no fitting results,
+                or no available energy map.
+        """
+        if AppState().plot_dataset is None:
+            raise DMPlotCreationError("No dataset selected for plotting energy map.")
+        if AppState().fitting_results is None:
+            raise DMPlotCreationError("No fitting results available for plotting energy map.")
+        energy_map = self._model.get_energy_map()
+        if energy_map is None:
+            raise DMPlotCreationError("No energy map available to plot.")
+        self._chosen_visualizers[0].plot_energy_map(energy_map)
+
+    def plot_image(self):
+        """Restore the visualizer image view (without energy-map overlay)."""
+        self._chosen_visualizers[0].plot_image()
+

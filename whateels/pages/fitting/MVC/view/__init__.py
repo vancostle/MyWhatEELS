@@ -11,12 +11,18 @@ if TYPE_CHECKING:
     from ..controller import FittingController
 
 class FittingView(BaseView):
+    """View layer for fitting page sidebars, controls, and main plotting container."""
     
     _STRETCH_WIDTH = "stretch_width"
     _STRETCH_BOTH = "stretch_both"
 
+    ELEMENT_EAXIS_THRESHOLD = 50
+    COMPONENT_EAXIS_THRESHOLD = 4
+    COMPONENT_EAXIS_THRESHOLD_VALUE = 50
+
     # --- Initialization ---
     def __init__(self, model: "FittingModel"):
+        """Initialize fitting view widgets and base layout placeholders."""
         super().__init__(
             model, 
             css_files=[
@@ -35,10 +41,6 @@ class FittingView(BaseView):
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
         self._background_subtraction_switch: Optional[pn.widgets.Switch] = None
         
-        # self._main_layout = NllsMainLayout(model)
-        # self._left_sidebar_layout = QuanficationLeftSidebarLayout(model)
-        # self._right_sidebar_layout = NllsRightSidebarLayout(model)
-
         self._init_components()
     
     def set_controller(self, controller: "FittingController"):
@@ -52,11 +54,11 @@ class FittingView(BaseView):
     
     @property
     def component_input(self) -> dict[str, pn.widgets.Widget]:
-        """Access the K-Means input widgets."""
+        """Access fitting component input widgets."""
         return self._component_model_input
     @property
     def fitting_add_component_button(self) -> Optional[pn.widgets.Button]:
-        """Access the K-Means 'Add Element' button."""
+        """Access the 'Add Component' fitting button."""
         return self._fitting_add_compontent_button
     
     @property
@@ -64,6 +66,15 @@ class FittingView(BaseView):
         """Access the background subtraction switch."""
         return self._background_subtraction_switch
     
+    @property
+    def energy_map_toggle_button(self) -> ToggleButton:
+        """Access the energy map toggle button."""
+        return self._energy_map_toggle_button
+    
+    @property
+    def component_item_view_container(self) -> pn.Column:
+        """Access the container for component item views."""
+        return self._component_item_view_container
 
 
     @dataset_info.setter
@@ -72,11 +83,13 @@ class FittingView(BaseView):
         self._dataset_info_layout = component
 
     def _init_components(self):
+        """Create left/main/right sections for the fitting page."""
         self.left_sidebar = self._left_sidebar_layout()
         self.main = self._main_layout()
         self.right_sidebar = self._right_sidebar_layout()
 
     def _left_sidebar_layout(self):
+        """Build the left sidebar with uploaded-file summary and dataset info slot."""
         
         uploaded_file = UploadedFile(
             filename=str(self._model.get_uploaded_filename()), 
@@ -94,6 +107,7 @@ class FittingView(BaseView):
 
 
     def _main_layout(self):
+        """Build the main plotting container initialized with no-file placeholder."""
         self._main_container_layout = pn.Column(
             self._no_file_placeholder,
             sizing_mode=self._STRETCH_BOTH
@@ -102,6 +116,7 @@ class FittingView(BaseView):
         return self._main_container_layout
     
     def _right_sidebar_layout(self) -> pn.Column:
+        """Build right sidebar controls for component definition and fitting actions."""
 
         
 
@@ -133,8 +148,7 @@ class FittingView(BaseView):
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-subtraction-container"]
         )
-        # get dataset energy range for setting the energy range slider limits
-        energy_range = AppState().plot_dataset
+        # Component creation controls.
         self._component_model_input = {
             "energy_center": pn.widgets.IntInput(
                 name='Energy Center',
@@ -157,9 +171,9 @@ class FittingView(BaseView):
             "energy_range": pn.widgets.EditableRangeSlider(
                 name='Energy Range',
                 sizing_mode=self.STRETCH_WIDTH,
-                value=(0, 1000),
-                start=0,
-                end=1000,
+                value=  (540 - self.COMPONENT_EAXIS_THRESHOLD_VALUE, 540 + self.COMPONENT_EAXIS_THRESHOLD_VALUE),
+                start=540 - self.COMPONENT_EAXIS_THRESHOLD,
+                end=540 + self.COMPONENT_EAXIS_THRESHOLD,
                 margin=(0,0,10,0),
             ),
             "flexibility": pn.widgets.Select(
@@ -193,9 +207,35 @@ class FittingView(BaseView):
             margin=(0,0,10,0)
         )
 
+        # Toggle button state identifiers.
+        _ON = 'on'
+        _OFF = 'off'
+        
+        # Dictionary keys used by ToggleButton state schema.
+        _NAME = 'label'
+        _ON_CLICK = 'on_click'
+        _BUTTON_TYPE = 'button_type'
+
+        states = {
+            _ON: {_NAME: "Hide Energy Map", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'primary'},
+            _OFF: {_NAME: "Show Energy Map", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'success'}
+        }
+
+        self._energy_map_toggle_button = ToggleButton(
+            states = states,
+            margin=0,
+            height=55,
+            disabled=False,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
+        self._component_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH,
+                                                        css_classes=["component-container"])
+
         right_sidebar = pn.Column(
             background_subtraction_container,
             details,
+            self._energy_map_toggle_button,
             sizing_mode=self.STRETCH_BOTH,
         )
         return right_sidebar

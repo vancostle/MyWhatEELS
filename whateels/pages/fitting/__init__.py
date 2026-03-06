@@ -10,9 +10,7 @@ class Fitting(GeneralPageTemplate):
 
     def __init__(self):
         model = FittingModel()
-        print("NLLS initialized.")
-        view = FittingView(model)
-        print("NLLS View initialized.")
+        view = FittingView(model)   
         FittingController(model, view)
         
         super().__init__(

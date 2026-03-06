@@ -11,20 +11,23 @@ from lmfit.models import GaussianModel, LorentzianModel, PseudoVoigtModel, Split
 import numpy as np
 
 class FittingModel(BaseModel):
+    """Model responsible for component management, lmfit model assembly, and fitting outputs."""
+
     def __init__(self):
+        """Initialize model constants, shared state fields, and component registry."""
         super().__init__()
         self._constants = Constants()
         self._app_state = AppState()
         self._controller = 0
 
         self._app_state.spectra = None
-        self._app_state.fitting_results = None  # Initialize fitting results in shared state
-        self._app_state.is_multifit = False  # Initialize multifit flag in shared state
+        self._app_state.fitting_results = None
+        self._app_state.is_multifit = False
 
-        self._spectra = 0 # Reference spectra
-        self._models = 0 # Composite models for fitting
-        self._pars = 0 # Parameters for fitting
-        self._Eloss = 0 # Energy loss axis
+        self._spectra = 0
+        self._models = 0
+        self._pars = 0
+        self._Eloss = 0
 
         self.dictionary = dict()
         self.dictionary['components'] = []
@@ -40,6 +43,7 @@ class FittingModel(BaseModel):
         return self._app_state
     
     def set_controller(self, controller):
+        """Store controller reference for pushing plot updates after fitting."""
         self._controller = controller
 
     def get_uploaded_filename(self) -> str:
@@ -61,20 +65,24 @@ class FittingModel(BaseModel):
         return self.app_state.multifit is not None
     
     def add_component(self, component_item, flex='low'):
+        """Add a component, estimate initial params, rebuild model, and refit."""
         dataset = self.app_state.plot_dataset
         self._Eloss = dataset.coords['Eloss'].values
+        
         self._spectra = AppState().spectra
-
+        if self._spectra is None:
+            raise ValueError("Fitting Model: No spectra data available to add component")
+            return
         dict_var = {
-            'low': [3, 3, 0.1, 0.1],
-            'medium': [7, 7, 1, 1.25],
-            'high': [15, 15, 1, 3],
-            'maximum': [np.inf, np.inf, 1, np.inf]
+            'Low': [3, 3, 0.1, 0.1, 0.5, 2],
+            'Medium': [7, 7, 1, 1.25, 0, 3],
+            'High': [15, 15, 1, 3, 0, 5],
+            'Maximum': [np.inf, np.inf, 1, np.inf, 0, np.inf]
         }
         if flex not in dict_var:
-            flex = 'medium'
+            flex = 'Medium'
 
-        # Determine component parameters
+        # Estimate component parameters from the current spectrum and selected window.
         cen, sigm, amp = self._determine_compo_parameters(
                         self._spectra, component_item.compo_type, component_item.energy_center, component_item.energy_range
                     )
@@ -82,16 +90,16 @@ class FittingModel(BaseModel):
         component_item.set_parameters(cen, sigm, amp)
         component_item.set_center_range(cen - dict_var[flex][0], cen + dict_var[flex][1],)
         component_item.set_sigma_range(0.5, sigm + sigm * dict_var[flex][3])
-        component_item.set_amplitude_range(0, np.inf)
+        component_item.set_amplitude_range(amp * dict_var[flex][4], amp * dict_var[flex][5])
 
         self.dictionary['components'].append(component_item)
         
-        print(f"NLLS Model: Component added successfully")
 
-        self.create_model()  # Recreate model with new component
-        self.fit_reference()  # Refit reference spectrum with updated model
+        self.create_model()
+        self.fit_reference()
 
     def create_model(self):
+        """Build a composite lmfit model and parameter bounds from registered components."""
         if not self.dictionary['components']:
             print("NLLS Model: No components to create model")
             return
@@ -102,7 +110,7 @@ class FittingModel(BaseModel):
             tipo = component.compo_type
             pref = f'compo_{idx}_'
                     
-            # Select model type
+            # Select lmfit model class for each registered component.
             if tipo == 'GaussianModel':
                 mod = GaussianModel(prefix=pref)
             elif tipo == 'LorentzianModel':
@@ -119,9 +127,8 @@ class FittingModel(BaseModel):
         self._models = mod_list[0]
         for mod in mod_list[1:]:
             self._models += mod
-        # Make parameters
+        # Create parameter set and apply initial values and bounds.
         self._pars = self._models.make_params()
-        # Apply parameter values and constraints
         for idx, component in enumerate(self.dictionary['components']):
             pref = f'compo_{idx}_'
             self._pars[f'{pref}center'].value = component.energy_center
@@ -137,67 +144,59 @@ class FittingModel(BaseModel):
         
     
     def _determine_compo_parameters(self,spectrum,compo_type,Eloss_center, energy_range):
-        """This method makes an estimation of the initial parameter values (pre_fit) 
-        of a certain component of the model, knowing only the type of component
-        and the energy loss (aprox.) of the center for that component
+        """Estimate initial center/sigma/amplitude values for a fitting component.
 
         Args:
             compo_type (str): Type of component to be created/ whose parameters need guessing
                 3 categories:
-                symetrical-gaussian     : -str- GaussianModel
+                symmetrical-gaussian     : -str- GaussianModel
                 symmetrical-nonGaussian : -str- LorentzianModel, PseudoVoigtModel
-                asymmetrical            : -str- SplitLorentzianModel 
-            Eloss_center ([type]): Energy Loss position in which we stimate the center of the component
+                asymmetrical            : -str- SplitLorentzianModel
+            Eloss_center ([type]): Energy-loss position used to estimate component center
                 e.g. CeM5 - Eloss_center = 884.0 (Ce4+ in non reduced CeO2)
         """
-        #If no ZeroLoss was analysed or included, let's guess
-        #fwhm      = 1.2 * 4  # Standard ELoss resolution ... around 1.2 eV in NonCorrected non FEG
-        #fwhm_min = 0.7 * 2  # Going to Cold_FEG ranges of resolution in non monochromated
-        #fwhm_max = 2.5 * 2  # Really badly calibrated acquisition or poor instrumentation 
-        #Let's analyse the possible cases
+        # Approximate FWHM from the selected component energy window.
+        fwhm  = (energy_range[1] - energy_range[0]) / 2
 
-        fwhm  = (energy_range[1] - energy_range[0]) / 2  # Estimate FWHM based on energy range of component]
+        e_idx  = np.searchsorted(self._Eloss,Eloss_center)
 
-        
-        e_idx  = np.searchsorted(self._Eloss,Eloss_center) #Positional index E axis
-        
-        #delta_e = self._Eloss[1]-self._Eloss[1]
-        cent = Eloss_center 
-        print(self._Eloss[0],self._Eloss[-1],cent,e_idx,self._Eloss.size)
-        print(f"Determining component parameters for type '{compo_type}' at Eloss {Eloss_center} eV (index {e_idx})")
+        cent = Eloss_center
 
         h_eidx = max(0,spectrum[e_idx])
 
         if compo_type == 'GaussianModel':
-            sig = fwhm / np.sqrt(np.log(256))                 # fwhm   = 2*np.sqrt(2*log(2)) * sigma
-            amp = h_eidx * max(2E-16,sig) * np.sqrt(2*np.pi)  # height = 1/sqrt(2*pi) * A / max(0,sigma)
+            sig = fwhm / np.sqrt(np.log(256))
+            amp = h_eidx * max(2E-16,sig) * np.sqrt(2*np.pi)
             return [cent,sig,amp]
         elif compo_type == 'LorentzianModel':
-            sig = fwhm / 2                                    # sigma  = 2*np.sqrt(2*log(2))
+            sig = fwhm / 2
             amp = h_eidx * max(2E-16,sig) * np.pi
-            return [cent,sig,amp]             # height = 1/pi * A / max(0,sigma)
+            return [cent,sig,amp]
         elif compo_type == 'PseudoVoigtModel':
-            sig = fwhm / 2                                    # sigma  = 2*np.sqrt(2*log(2))
+            sig = fwhm / 2
             factor1 = max(2E-16,(sig*np.sqrt(np.pi/np.log(2))))
             factor2 = max(2E-16,(np.pi*sig))
             amp = 2 * h_eidx * factor1 * factor2 / (factor1 + factor2) 
-            #As given by lmfit relation if fraction = 0.5
+            # Follows lmfit pseudo-Voigt relation for fraction ~= 0.5.
             return [cent,sig,amp]
         elif compo_type == 'SplitLorentzianModel':
-            #We start with a symmetric distrib -sigma = sigma_r = fwhm/2
-            sig = fwhm / 2                             # fwhm = sigma + sigma_r
-            amp = np.pi*h_eidx*max(2E-16,sig*2) / 2    # h = 2*A/pi/max(0,sigma+sigma_r)
+            # Start from a symmetric shape: sigma == sigma_r == fwhm/2.
+            sig = fwhm / 2
+            amp = np.pi*h_eidx*max(2E-16,sig*2) / 2
             return [cent,sig,amp]
         else:
             print('NO valid component given')
             raise KeyError
     
     def remove_component(self, component_item):
+        """Remove a component and refit, or clear fitting results if none remain."""
         self.dictionary['components'] = [comp for comp in self.dictionary['components'] if comp != component_item]
-        if not self.dictionary['components']:
-            self._controller.update_plot(fitting_results=None)  # Clear fitting results if no components remain
-            self.app_state.fitting_results = None  # Clear fitting results in shared state as well
-        self.create_model()  # Recreate model with updated components
+        if self.dictionary['components'] is None or len(self.dictionary['components']) == 0:
+            print("NLLS Model: No components remaining after deletion")
+            self.app_state.fitting_results = None
+            self._controller.update_plot(fitting_results=None)
+            return
+        self.create_model()
         self.fit_reference()
 
     def delete_component(self,element,name,area_name= 'default'):
@@ -229,14 +228,72 @@ class FittingModel(BaseModel):
 
     def fit_reference(self):
         """
-        Method that carries out the initial fitting for the reference spectra
-        of a certain reference area
-
-        Args:
-            name_area (str, optional): Label of the reference area selected.
-                Defaults to 'default'.
+        Fit the current reference spectrum using the composed model and parameters.
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
         print(self.ref_results.fit_report())
 
-        self._controller.update_plot(fitting_results = self.ref_results.best_fit)
+        self._controller.update_plot(fitting_results=self.ref_results)
+
+    def get_energy_map(self):
+        """Compute a per-pixel energy map by integrating selected windows with fit profile support."""
+
+        fitting_results = self.app_state.fitting_results
+        if fitting_results is None:
+            print("NLLS Model: No fitting results available to generate energy map")
+            return None
+
+        dataset = self.app_state.plot_dataset
+        if dataset is None or not hasattr(dataset, 'ElectronCount'):
+            print("NLLS Model: No ElectronCount data available to generate energy map")
+            return None
+
+        Eloss = np.asarray(dataset.coords['Eloss'].values)
+        e_count = np.asarray(dataset.ElectronCount.values)
+        fit = np.asarray(fitting_results)
+
+        if e_count.ndim != 3:
+            print(f"NLLS Model: Expected ElectronCount with 3 dims (y, x, E), got shape={e_count.shape}")
+            return None
+
+        if fit.ndim != 1:
+            fit = np.ravel(fit)
+
+        n_energy = e_count.shape[-1]
+        if fit.size != n_energy:
+            x_old = np.linspace(0.0, 1.0, fit.size)
+            x_new = np.linspace(0.0, 1.0, n_energy)
+            fit = np.interp(x_new, x_old, fit)
+
+        fit = np.where(np.isfinite(fit), fit, 0.0)
+        e_count = np.where(np.isfinite(e_count), e_count, 0.0)
+
+        components = self.dictionary.get('components', [])
+        energy_mask = np.zeros(n_energy, dtype=bool)
+
+        if Eloss.size == n_energy and components:
+            for component in components:
+                energy_range = getattr(component, 'energy_range', None)
+                if energy_range is None or len(energy_range) < 2:
+                    continue
+
+                e_min = float(energy_range[0])
+                e_max = float(energy_range[1])
+                if e_min > e_max:
+                    e_min, e_max = e_max, e_min
+
+                energy_mask |= (Eloss >= e_min) & (Eloss <= e_max)
+
+        if not np.any(energy_mask):
+            print("NLLS Model: No valid component windows found; integrating full energy range")
+            energy_mask[:] = True
+
+        selected_e_count = e_count[..., energy_mask]
+        selected_fit = fit[energy_mask]
+
+        # For each pixel, add fitting profile in selected windows and integrate over energy.
+        energy_map = np.sum(selected_e_count + selected_fit[np.newaxis, np.newaxis, :], axis=-1)
+
+        return energy_map 
+
+    

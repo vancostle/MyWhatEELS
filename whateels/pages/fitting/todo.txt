@@ -1,0 +1,6 @@
+fix: Al afegir un nou componenet i modificar el energy center el rang de energy es modificar pero no es fa be 
+fix: els component_item_view queden tallats al desplegarlos
+(he posat el boto de energy map a sobre i he tret el component_item_view_container)
+feat: desglossar el energy map en una imatge per cada component
+feat: multifit del model amb els components afegits
+feat: gestiona afegir component sense roi seleccionat

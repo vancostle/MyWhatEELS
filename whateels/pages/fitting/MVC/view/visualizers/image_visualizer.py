@@ -20,19 +20,20 @@ if TYPE_CHECKING:
     from ...model import HomePageModel
 
 class ImageVisualizer(AbstractEELSVisualizer):
-    """Composes image visualizations from EELS data"""
+    """Render 2D image datasets as Plotly heatmaps inside Panel layouts."""
 
     # Constants for sizing modes and plot configuration
     _STRETCH_BOTH = 'stretch_both'
     _STRETCH_WIDTH = 'stretch_width'
     
     def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
+        """Store model/dataset references and initialize click-state fields."""
         super().__init__(model, dataset)
 
         self._model = model
         self._dataset = dataset        
         
-        # For tap/click throttling
+        # Click state placeholders kept for future interaction throttling.
         self._last_click_x = None
         self._click_tolerance = 0.5  # Minimum distance to trigger update
 
@@ -40,7 +41,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
 
     @override
     def create_plots(self):
-        """Create layout for spectrum line visualization with Plotly (no HoloViews/Bokeh)."""
+        """Create the responsive image panel layout for 2D datasets."""
 
         # Prepare cleaned image data and coordinates
         image_data = self._dataset.ElectronCount.squeeze()
@@ -82,7 +83,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
                              showgrid=False, zeroline=False, showticklabels=False)
         fig_base.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
 
-        # Use a responsive Plotly pane that fills the parent container to avoid resize loops
+        # Use a responsive Plotly pane that fills the parent container.
         image_panel = pn.pane.Plotly(self._to_plotly(fig_base), sizing_mode='stretch_both', config={'responsive': True})
         plots = pn.Column(image_panel, sizing_mode=self._STRETCH_BOTH)
         return plots
@@ -112,10 +113,6 @@ class ImageVisualizer(AbstractEELSVisualizer):
 
         Returns a plotly.graph_objects.Figure sized to data with preserved aspect ratio.
         """
-        IMAGE_X_LABEL = 'X Position'
-        IMAGE_Y_LABEL = 'Y Position'
-        IMAGE_TITLE = 'Image Data'
-
         MAX_PLOT_SIZE = 600
 
         # Calculate dimensions from the data itself

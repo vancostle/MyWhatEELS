@@ -33,6 +33,11 @@ class AbstractEELSVisualizer(ABC):
 
     @abstractmethod
     def create_dataset_info(self):
+        """Build a standard dataset metadata card shared by concrete visualizers.
+
+        Although declared abstract to allow subclasses to override behavior, this default
+        implementation renders the common dataset information panel used across views.
+        """
         # Dataset attribute keys
         SHAPE = 'shape'
         BEAM_ENERGY = 'beam_energy'
@@ -75,7 +80,7 @@ class AbstractEELSVisualizer(ABC):
         convergence_angle = attrs.get(CONVERGENCE_ANGLE, NOT_AVAILABLE)
         collection_angle = attrs.get(COLLECTION_ANGLE, NOT_AVAILABLE)
 
-        # Load metadata button HTML
+        # Load the existing metadata button HTML so visualizers share one UI style.
         metadata_html_path = HTML_ROOT / HTML_FILE
         with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
             metadata_button_html = f.read()
