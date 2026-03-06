@@ -68,8 +68,11 @@ class FittingModel(BaseModel):
         """Add a component, estimate initial params, rebuild model, and refit."""
         dataset = self.app_state.plot_dataset
         self._Eloss = dataset.coords['Eloss'].values
+        
         self._spectra = AppState().spectra
-
+        if self._spectra is None:
+            raise ValueError("Fitting Model: No spectra data available to add component")
+            return
         dict_var = {
             'Low': [3, 3, 0.1, 0.1, 0.5, 2],
             'Medium': [7, 7, 1, 1.25, 0, 3],

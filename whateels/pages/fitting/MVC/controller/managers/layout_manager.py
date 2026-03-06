@@ -156,7 +156,7 @@ class LayoutManager:
 
     def add_new_component_input(self, element_input_view: pn.viewable.Viewable):
         """Add a new element input component to the sidebar."""
-        self._view.component_item_view_container.append(element_input_view)
+        self._view.right_sidebar.append(element_input_view)
 
     def update_plot(self, fitting_results=None):
         """Refresh the main spectrum plot and optionally overlay fitting results.

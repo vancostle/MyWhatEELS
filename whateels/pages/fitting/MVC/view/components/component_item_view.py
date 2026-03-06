@@ -210,7 +210,7 @@ class ComponentItemView(pn.Column):
 
     def _delete_element_watcher(self, event):
         """Remove card from UI and delete linked component from model."""
-        self._view.component_item_view_container.remove(self)
+        self._view.right_sidebar.remove(self)
 
         self._model.remove_component(self.component_item)
 

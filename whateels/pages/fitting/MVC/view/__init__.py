@@ -235,7 +235,6 @@ class FittingView(BaseView):
         right_sidebar = pn.Column(
             background_subtraction_container,
             details,
-            self._component_item_view_container,
             self._energy_map_toggle_button,
             sizing_mode=self.STRETCH_BOTH,
         )
