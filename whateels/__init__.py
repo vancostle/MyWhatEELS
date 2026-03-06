@@ -3,16 +3,10 @@ import holoviews as hv
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
-# TODO raw_css must be deleted once all plotly plots have been updated by holoviews
 pn.extension(
     'filedropper', 'floatpanel',
     notifications=True,
     theme='default',
-    raw_css=[
-        ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
-        ".plotly .modebar-btn { background: transparent !important; }",
-        ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
-    ]
 )
 
 # Initialize Holoviews with Bokeh backend
