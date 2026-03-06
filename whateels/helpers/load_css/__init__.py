@@ -57,17 +57,19 @@ class LoadCSS:
         
         for css_file in css_files:
             try:
-                if os.path.exists(css_file):
-                    # Compress once and cache; re-read from disk only on first encounter
-                    if css_file not in LoadCSS._css_cache:
-                        with open(css_file, READ_MODE, encoding=ENCODING) as f:
-                            LoadCSS._css_cache[css_file] = csscompressor.compress(f.read())
-                    min_css = LoadCSS._css_cache[css_file]
-                    # Only append if not already present in Panel's raw_css list
-                    # (pn.config.raw_css may be cleared between sessions)
-                    if min_css not in pn.config.raw_css:
-                        pn.config.raw_css.append(min_css)
-                else:
+                if not os.path.exists(css_file):
                     print(f"{WARNING_MESSAGE}: {css_file}")
+                    continue
+                
+                # Read from disk and compress only once per server lifetime
+                if css_file not in LoadCSS._css_cache:
+                    with open(css_file, READ_MODE, encoding=ENCODING) as f:
+                        LoadCSS._css_cache[css_file] = csscompressor.compress(f.read())
+                    print(f"✅ Loading CSS file: {css_file}")
+
+                min_css = LoadCSS._css_cache[css_file]
+                # Re-append on every session because Panel clears raw_css on each reload
+                if min_css not in pn.config.raw_css:
+                    pn.config.raw_css.append(min_css) # type: ignore
             except Exception as e:
                 print(f"{ERROR_MESSAGE} {css_file}: {e}")
