@@ -131,7 +131,7 @@ class ComponentItemView(pn.Column):
                 self.sigma_input,
                 self.sigma_slider,
                 sizing_mode=self._STRETCH_WIDTH,
-                css_classes=["element-item"]
+                css_classes=["component-item"]
             )
         else:
             super().__init__(
