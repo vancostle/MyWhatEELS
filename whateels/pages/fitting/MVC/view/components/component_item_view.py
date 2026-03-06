@@ -1,12 +1,19 @@
 import panel as pn
 from whateels.components.toggle_button import ToggleButton
 import numpy as np
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...model.component_item import ComponentItem
 
 class ComponentItemView(pn.Column):
+    """Editable UI card for a single fitting component and its parameter bounds."""
+
     _STRETCH_WIDTH = 'stretch_width'
 
     def __init__(self, controller, component_item: "ComponentItem", model, energy, 
                 view, expandable: bool = True):
+        """Initialize controls, callbacks, and collapsible layout for one component."""
         self._controller = controller
         self.component_item = component_item
         self._model = model
@@ -28,11 +35,11 @@ class ComponentItemView(pn.Column):
             button_type='danger'
         )
 
-        # State identifiers
+        # Toggle state identifiers.
         _ON = 'on'
         _OFF = 'off'
 
-        # Dictionary keys for state properties
+        # Keys required by ToggleButton state schema.
         _NAME = 'label'
         _ON_CLICK = 'on_click'
         _BUTTON_TYPE = 'button_type'
@@ -109,7 +116,7 @@ class ComponentItemView(pn.Column):
             visible=False
         )
 
-        # Initialize the parent class (pn.Column) with the layout
+        # Build expandable or compact card layout.
         if self._expandable:
             super().__init__(
                 pn.Row(
@@ -137,7 +144,7 @@ class ComponentItemView(pn.Column):
                 css_classes=["component-item"]
             )
 
-        # Add watchers and callbacks
+        # Register widget watchers and actions.
         self.energy_range_slider.param.watch(self._energy_range_watcher, 'value')
         self.delete_button.on_click(self._delete_element_watcher)
         self.slider_button.on_click(self._slider_button_watcher)
@@ -148,6 +155,7 @@ class ComponentItemView(pn.Column):
         self.amplitude_slider.param.watch(self._amplitude_range_watcher, 'value')
 
     def _energy_center_watcher(self, event):
+        """Update center value and keep center-range widget around the new location."""
         self.component_item.energy_center = event.new
         if event.new > self.energy_range_slider.end or event.new < self.energy_range_slider.start:
             self.energy_range_slider.start = event.new - 50
@@ -157,50 +165,57 @@ class ComponentItemView(pn.Column):
         else:
             self.energy_range_slider.start = event.new - 50
             self.energy_range_slider.end = event.new + 50
-        self._model.create_model()  # Recreate model with updated component range
-        self._model.fit_reference()  # Refit with updated model
+        self._model.create_model()
+        self._model.fit_reference()
         self.update_component_parameters()
 
     def _energy_range_watcher(self, event):
+        """Update center bounds and trigger refit."""
         self.component_item.set_center_range(event.new[0], event.new[1])
-        self._model.create_model()  # Recreate model with updated component range
-        self._model.fit_reference()  # Refit with updated model
+        self._model.create_model()
+        self._model.fit_reference()
         self.update_component_parameters()
 
     def _sigma_range_watcher(self, event):
+        """Update sigma bounds and trigger refit."""
         self.component_item.set_sigma_range(event.new[0], event.new[1])
-        self._model.create_model()  # Recreate model with updated component range
-        self._model.fit_reference()  # Refit with updated model
+        self._model.create_model()
+        self._model.fit_reference()
         self.update_component_parameters()
     
     def _amplitude_range_watcher(self, event):
+        """Update amplitude bounds and trigger refit."""
         self.component_item.set_amplitude_range(event.new[0], event.new[1])
-        self._model.create_model()  # Recreate model with updated component range
-        self._model.fit_reference()  # Refit with updated model
+        self._model.create_model()
+        self._model.fit_reference()
         self.update_component_parameters()
 
     def _sigma_watcher(self, event):
+        """Update sigma value, adapt range slider bounds, and refit."""
         self.component_item.sigma = event.new
         self.sigma_slider.start = (event.new - self.dict_var[self.component_item.flexibility][2] if event.new > self.dict_var[self.component_item.flexibility][2] else 0) * 0.5
         self.sigma_slider.end = event.new + self.dict_var[self.component_item.flexibility][3] * 1.5
-        self._model.create_model()  # Recreate model with updated component range
-        self._model.fit_reference()  # Refit with updated model
+        self._model.create_model()
+        self._model.fit_reference()
         self.update_component_parameters()
 
     def _amplitude_watcher(self, event):
+        """Update amplitude value, adapt range slider bounds, and refit."""
         self.component_item.amplitude = event.new
         self.amplitude_slider.start = event.new *self.dict_var[self.component_item.flexibility][4] * 0.5
         self.amplitude_slider.end = event.new*self.dict_var[self.component_item.flexibility][5] * 1.5
-        self._model.create_model()  # Recreate model with updated component range
-        self._model.fit_reference()  # Refit with updated model
-        self.update_component_parameters()  # Update component parameters in the model
+        self._model.create_model()
+        self._model.fit_reference()
+        self.update_component_parameters()
 
     def _delete_element_watcher(self, event):
+        """Remove card from UI and delete linked component from model."""
         self._view.component_item_view_container.remove(self)
 
         self._model.remove_component(self.component_item)
 
     def _slider_button_watcher(self, event):
+        """Toggle advanced parameter controls visibility."""
         show = not self.energy_center_input.visible
         self.energy_center_input.visible = show
         self.energy_range_slider.visible = show
@@ -210,6 +225,7 @@ class ComponentItemView(pn.Column):
         self.amplitude_slider.visible = show
     
     def update_component_parameters(self):
+        """Synchronize widget values with latest component values after refits."""
         self.amplitude_input.value = self.component_item.amplitude
         self.sigma_input.value = self.component_item.sigma
         self.energy_center_input.value = self.component_item.energy_center
@@ -218,6 +234,7 @@ class ComponentItemView(pn.Column):
         self.amplitude_slider.value = self.component_item.amplitude_range
 
     def update_component_item_name(self, reference_fit):
+        """Annotate widget labels with a reference-fit identifier."""
         self.amplitude_input.name = f'Amplitude ({reference_fit})'
         self.sigma_input.name = f'Sigma ({reference_fit})'
         self.energy_center_input.name = f'Energy Center ({reference_fit})'  

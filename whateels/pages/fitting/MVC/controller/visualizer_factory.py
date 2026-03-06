@@ -28,6 +28,7 @@ class VisualizerFactory:
     """
     
     def __init__(self, model: "QuantificationModel", controller: "QuantificationController") -> None:
+        """Create a dataset-type to visualizer-class registry for runtime selection."""
         self._model = model
         self._controller = controller
         
@@ -37,7 +38,7 @@ class VisualizerFactory:
             model.constants.SPECTRUM_IMAGE: SpectrumImageVisualizer,
             model.constants.IMAGE: ImageVisualizer
         }
-        # aqui afegiriem el visualitzador de pieplot
+        # New visualizers can be added here by mapping dataset_type -> visualizer class.
 
     def choose_visualizer(
         self, 
@@ -51,10 +52,11 @@ class VisualizerFactory:
             dataset_type (str): The dataset type key (e.g., model.constants.SPECTRUM_LINE or SPECTRUM_IMAGE).
 
         Returns:
-            SpectrumImageVisualizer: An instance of the corresponding visualizer class.
+            SpectrumImageVisualizer | ImageVisualizer | None:
+                Instantiated visualizer for the provided dataset type.
 
         Raises:
-            ValueError: If the dataset type is not recognized (not mapped in _all_spectrum_visualizer).
+            ValueError: If the dataset type is not recognized by the registry.
             RuntimeError: If an exception occurs during visualizer instantiation.
         """
         

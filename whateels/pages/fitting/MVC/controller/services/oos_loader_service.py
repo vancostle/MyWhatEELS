@@ -45,7 +45,7 @@ class Loader_OOS():
             dir_path: Path to the directory containing the OOS database.
         """
         super().__init__()
-        self.subshells = []         # List of all available subshells for the specified element
+        self.subshells = []
         self.directory = dir_path
 
     def oos_reader(self, z_number, subshell):
@@ -92,8 +92,6 @@ class Loader_OOS():
                 if isinstance(item, dict):
                     self.subshells.extend(item.keys())              
                     if subshell in self.subshells:
-                        ##print(f'Subshell {subshell} found.')
-                        ##print("Energy axis (last value):", np.array(item[subshell]['eaxis'])[-1])
                         return np.array(item[subshell]['eaxis']), np.array(item[subshell]['counts']), \
                             item[subshell]['onset']
                     elif subshell is None:
@@ -166,7 +164,6 @@ class Loader_OOS():
         """
         self.subshells = []
         self.oos_reader(z_number, subshell=None)
-        ##print(f'Available subshells for element {z_number} are {self.subshells}')
         return self.subshells
             
     def df_cross_section(self, z_number, subshell, V=None, b=None, si=None):
@@ -221,4 +218,5 @@ class Loader_OOS():
         Returns:
             The real part of the integrated cross-section.
         """
+        # Integrate differential cross-section over the sampled energy axis.
         return (sp.integrate.trapezoid(self.df_cross_section(z_number, subshell, V, b, si))).real

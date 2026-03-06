@@ -5,10 +5,12 @@ if TYPE_CHECKING:
     from ...model import QuantificationModel
 
 class QuantificationMainLayout(pn.Column):
+    """Legacy standalone main-layout container kept for compatibility."""
     
     _STRETCH_BOTH = "stretch_both"
     
     def __init__(self, model: "QuantificationModel") -> None:
+        """Initialize placeholder panes and create a no-file default layout."""
         
         # Initialize placeholders
         self._loading_placeholder = pn.pane.HTML(

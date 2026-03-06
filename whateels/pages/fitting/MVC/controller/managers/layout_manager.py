@@ -52,7 +52,7 @@ class LayoutManager:
         self._view.dataset_info = component
 
     def add_best_fit_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
-        
+        """Add the best-fit summary card to the left sidebar and keep a reference to it."""
         self._view.left_sidebar.append(component)
         self._view.best_fit_component = component
 
@@ -131,6 +131,7 @@ class LayoutManager:
 
     
     def get_active_dataset(self):
+        """Return the dataset currently selected by the active tab index."""
         state = AppState()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index]
@@ -157,19 +158,19 @@ class LayoutManager:
         """Add a new element input component to the sidebar."""
         self._view.component_item_view_container.append(element_input_view)
 
-        ##self.plot_component()
-
-        # plot components
-
     def update_plot(self, fitting_results=None):
+        """Refresh the main spectrum plot and optionally overlay fitting results.
+
+        When `fitting_results` is `None`, the plot is reset to the base spectrum/ROI state
+        and any existing best-fit sidebar card is removed. Otherwise, this method stores the
+        fit in shared state, draws the fitted curve, and updates the best-fit information card.
+        """
         state = AppState()
         if fitting_results is None:
-            state.fitting_results = None
             self._chosen_visualizers[0].update_plot()
             self.remove_best_fit_component_from_sidebar()
         else:
             y_fit = fitting_results.best_fit if hasattr(fitting_results, 'best_fit') else fitting_results
-            state.fitting_results = y_fit
             self._chosen_visualizers[0].update_plot()
             self._chosen_visualizers[0].plot_fitting(
                 state.plot_dataset.coords['Eloss'].values,
@@ -180,6 +181,11 @@ class LayoutManager:
             self.add_best_fit_component_to_sidebar_layout(best_fit_component)
 
     def create_best_fit_info(self, fitting_results):
+        """Build a metadata-like Panel card with fit parameters and summary statistics.
+
+        The card intentionally mirrors the existing dataset-info styling so users can read
+        acquisition metadata and fitting metadata with the same visual structure.
+        """
         STRETCH_WIDTH = "stretch_width"
         DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
         DATASET_INFO_CLASS = ["dataset-info", "animated"]
@@ -266,7 +272,7 @@ class LayoutManager:
 
         rows.extend((f"fit.{name}", value) for name, value in stats_values.items())
 
-        # Keep existing metadata button styling to match dataset info cards.
+        # Reuse the same metadata button HTML to preserve styling parity with dataset info cards.
         metadata_html_path = HTML_ROOT / HTML_FILE
         with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
             metadata_button_html = f.read()
@@ -300,6 +306,12 @@ class LayoutManager:
         )
 
     def plot_energy_map(self):
+        """Plot the model-computed energy map over the currently selected image.
+
+        Raises:
+            DMPlotCreationError: If there is no selected dataset, no fitting results,
+                or no available energy map.
+        """
         if AppState().plot_dataset is None:
             raise DMPlotCreationError("No dataset selected for plotting energy map.")
         if AppState().fitting_results is None:
@@ -310,5 +322,6 @@ class LayoutManager:
         self._chosen_visualizers[0].plot_energy_map(energy_map)
 
     def plot_image(self):
+        """Restore the visualizer image view (without energy-map overlay)."""
         self._chosen_visualizers[0].plot_image()
 

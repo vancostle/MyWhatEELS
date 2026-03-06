@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from ..controller import FittingController
 
 class FittingView(BaseView):
+    """View layer for fitting page sidebars, controls, and main plotting container."""
     
     _STRETCH_WIDTH = "stretch_width"
     _STRETCH_BOTH = "stretch_both"
@@ -21,6 +22,7 @@ class FittingView(BaseView):
 
     # --- Initialization ---
     def __init__(self, model: "FittingModel"):
+        """Initialize fitting view widgets and base layout placeholders."""
         super().__init__(
             model, 
             css_files=[
@@ -39,10 +41,6 @@ class FittingView(BaseView):
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
         self._background_subtraction_switch: Optional[pn.widgets.Switch] = None
         
-        # self._main_layout = NllsMainLayout(model)
-        # self._left_sidebar_layout = QuanficationLeftSidebarLayout(model)
-        # self._right_sidebar_layout = NllsRightSidebarLayout(model)
-
         self._init_components()
     
     def set_controller(self, controller: "FittingController"):
@@ -56,11 +54,11 @@ class FittingView(BaseView):
     
     @property
     def component_input(self) -> dict[str, pn.widgets.Widget]:
-        """Access the K-Means input widgets."""
+        """Access fitting component input widgets."""
         return self._component_model_input
     @property
     def fitting_add_component_button(self) -> Optional[pn.widgets.Button]:
-        """Access the K-Means 'Add Element' button."""
+        """Access the 'Add Component' fitting button."""
         return self._fitting_add_compontent_button
     
     @property
@@ -85,11 +83,13 @@ class FittingView(BaseView):
         self._dataset_info_layout = component
 
     def _init_components(self):
+        """Create left/main/right sections for the fitting page."""
         self.left_sidebar = self._left_sidebar_layout()
         self.main = self._main_layout()
         self.right_sidebar = self._right_sidebar_layout()
 
     def _left_sidebar_layout(self):
+        """Build the left sidebar with uploaded-file summary and dataset info slot."""
         
         uploaded_file = UploadedFile(
             filename=str(self._model.get_uploaded_filename()), 
@@ -107,6 +107,7 @@ class FittingView(BaseView):
 
 
     def _main_layout(self):
+        """Build the main plotting container initialized with no-file placeholder."""
         self._main_container_layout = pn.Column(
             self._no_file_placeholder,
             sizing_mode=self._STRETCH_BOTH
@@ -115,6 +116,7 @@ class FittingView(BaseView):
         return self._main_container_layout
     
     def _right_sidebar_layout(self) -> pn.Column:
+        """Build right sidebar controls for component definition and fitting actions."""
 
         
 
@@ -146,7 +148,7 @@ class FittingView(BaseView):
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-subtraction-container"]
         )
-        # get dataset energy range for setting the energy range slider limits
+        # Component creation controls.
         self._component_model_input = {
             "energy_center": pn.widgets.IntInput(
                 name='Energy Center',
@@ -205,11 +207,11 @@ class FittingView(BaseView):
             margin=(0,0,10,0)
         )
 
-        # State identifiers
+        # Toggle button state identifiers.
         _ON = 'on'
         _OFF = 'off'
         
-        # Dictionary keys for state properties
+        # Dictionary keys used by ToggleButton state schema.
         _NAME = 'label'
         _ON_CLICK = 'on_click'
         _BUTTON_TYPE = 'button_type'
