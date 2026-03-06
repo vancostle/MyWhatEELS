@@ -134,7 +134,7 @@ class ComponentItemView(pn.Column):
                     sizing_mode=self._STRETCH_WIDTH
                 ),
                 sizing_mode=self._STRETCH_WIDTH,
-                css_classes=["element-item"]
+                css_classes=["component-item"]
             )
 
         # Add watchers and callbacks

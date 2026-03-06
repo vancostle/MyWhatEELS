@@ -227,7 +227,8 @@ class FittingView(BaseView):
             sizing_mode=self._STRETCH_WIDTH
         )
 
-        self._component_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH, css_classes=["component-container"])
+        self._component_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH,
+                                                        css_classes=["component-container"])
 
         right_sidebar = pn.Column(
             background_subtraction_container,
