@@ -54,7 +54,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._paneA_select_tools = paneA_select_tools
 
         # Energy axis
-        self._e_axis = self._dataset.coords[self._eloss_name].values
+        self._e_axis: np.ndarray = self._dataset.coords[self._eloss_name].values
 
         # ElectronCount data cube
         self._electron_count_data: "Dataset" = self._dataset.ElectronCount
@@ -390,15 +390,34 @@ class BaseSpectrumImagePlot(IPlot):
         return self._apply_current_ranges(fig)
 
     def cleanup(self):
-        """Unsubscribe all HoloViews streams to allow GC of this visualizer."""
+        """Unsubscribe all HoloViews streams and release dataset references."""
         for stream in [
             self._hover_stream,
             self._tap_stream,
             self._selection_stream,
             self._rangexy_stream,
+            self._paneB_pipe,
         ]:
             if stream is not None:
                 try:
                     stream.clear()
                 except Exception:
                     pass
+
+        # Explicitly null out large data references so numpy arrays are freed
+        # even if something else still holds a reference to this plot object.
+        self._dataset = None  # type: ignore[assignment]
+        self._e_axis = None  # type: ignore[assignment]
+        self._electron_count_data = None  # type: ignore[assignment]
+        self._energy = None
+        self._region_pairs = []
+        self.paneA = None
+        self.paneB = None
+        self._selectors = None
+        self._hover_stream = None
+        self._tap_stream = None
+        self._selection_stream = None
+        self._rangexy_stream = None
+        self._paneB_pipe = None
+        self._paneB_dmap = None
+        self._plots_layout = None

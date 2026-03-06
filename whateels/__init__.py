@@ -35,7 +35,7 @@ class App:
         LoadCSS([str(CSS_ROOT / "custom_page.css")])
 
         # Define the pages for the application
-        # 
+        # Lazy load page modules using lambda functions to avoid unnecessary imports and speed up initial load time
         pages = {
             "/": lambda: __import__('whateels.pages.home', fromlist=['HomePage']).HomePage(),
             "/metadata-details": lambda: __import__('whateels.pages.metadata', fromlist=['Metadata']).Metadata(),

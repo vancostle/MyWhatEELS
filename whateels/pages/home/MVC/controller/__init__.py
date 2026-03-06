@@ -1,5 +1,6 @@
 import weakref
 import panel as pn
+import gc
 from .services import *
 from whateels.errors.dm.data import (
     DMFileLoadingError,
@@ -127,6 +128,9 @@ class HomePageController:
             # write to, but which must be released here to free the numpy data.
             self._model.app_state.plot_dataset = None
             self._model.app_state.multifit = None
+
+            # Force GC to reclaim numpy arrays and HoloViews objects immediately
+            gc.collect()
 
         except Exception as e:
             raise DMFileRemovalError(e)

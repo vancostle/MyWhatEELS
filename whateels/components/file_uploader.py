@@ -100,13 +100,16 @@ class FileUploader(pn.Column):
         )
         
         def clear_message_handler(type: str = "both"):
-            # Call removal callback if a file was present
-            if self._current_filename and callable(self._on_file_removed_callback):
-                self._on_file_removed_callback(self._current_filename)
+            saved_filename = self._current_filename
 
-            # Explicitly zero out the value on the old filedropper before
-            # replacing it — otherwise Panel/Bokeh keeps the model (and the
-            # uploaded bytes) alive in its document registry.
+            # Null out filename BEFORE zeroing filedropper value so the
+            # param.watch on 'value' (_handle_file_removal) does NOT fire
+            # the removal callback a second time when value is set to {}.
+            self._current_filename = None
+
+            # Explicitly zero out the value on the old filedropper BEFORE
+            # calling the removal callback — this frees the raw file bytes
+            # (held in the FileDropper dict) as early as possible.
             self._filedropper.value = {}
 
             # Completely reset by replacing the FileDropper widget
@@ -119,8 +122,11 @@ class FileUploader(pn.Column):
             filedroppper_container.append(new_filedropper)
             filedroppper_container.height = self._FILE_UPDLOADER_HEIGHT
             self._filedropper = new_filedropper
-            self._current_filename = None
             self._setup_event_handlers()
+
+            # Call removal callback after bytes and widget are already freed
+            if saved_filename and callable(self._on_file_removed_callback):
+                self._on_file_removed_callback(saved_filename)
 
             if type in ("error", "both"):
                 self._clear_error_message()
@@ -264,15 +270,12 @@ class FileUploader(pn.Column):
         pn.state.notifications.success(f"File '{self._current_filename}' uploaded successfully.", duration=3000) # type: ignore
     def _show_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(0%)', 'pointer-events': 'auto'}
-        pn.state.notifications.error(f"File upload failed.", duration=3000) # type: ignore
 
     def _clear_success_message(self):
         self._success_message_panel.styles = {'transform': 'translateX(calc(100% + var(--inner-panel-padding) * 2))', 'pointer-events': 'none'}
-        pn.state.notifications.info(f"File was removed correctly.", duration=2000) # type: ignore
                 
     def _clear_error_message(self):
         self._error_message_panel.styles = {'transform': 'translateX(calc(-100% - var(--inner-panel-padding) * 2))', 'pointer-events': 'none'}
-        pn.state.notifications.info(f"File was removed correctly.", duration=2000) # type: ignore
         
     def disable(self):
         """Disable the file uploader."""

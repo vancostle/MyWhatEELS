@@ -39,6 +39,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Widget placeholders (filled by _setup_widgets, called after super)
         self.range_slider = None
+        self._range_slider_watcher = None
         self.fitting_button = None
         self._js_executor = None
         self.multifit_button = None
@@ -87,7 +88,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["my-range"]
         )
-        self.range_slider.param.watch(self._on_range_changed, 'value')
+        self._range_slider_watcher = self.range_slider.param.watch(self._on_range_changed, 'value')
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
         self.multifit_button = pn.widgets.Button(name="Multifit", button_type="warning")
@@ -310,6 +311,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     @override
     def cleanup(self):
-        """Stop periodic callback and unsubscribe streams."""
+        """Stop periodic callback, unwatch widgets, and release all references."""
         stop_pc(self._pc)
+        self._pc = None
+
+        # Unwatch range slider to sever the reference from the watcher to self
+        if self._range_slider_watcher is not None and self.range_slider is not None:
+            try:
+                self.range_slider.param.unwatch(self._range_slider_watcher)
+            except Exception:
+                pass
+        self._range_slider_watcher = None
+
+        # Null out all widget references
+        self.range_slider = None
+        self.fitting_button = None
+        self.multifit_button = None
+        self._js_executor = None
+        self.buttons_row = None
+        self.range_slider_row = None
+
         super().cleanup()
