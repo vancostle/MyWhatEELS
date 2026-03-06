@@ -1,3 +1,4 @@
+import gc
 import panel as pn
 
 from whateels.errors.dm.data import DMPlotCreationError
@@ -29,6 +30,9 @@ class ClusteringView:
         
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
+        
+        # Track the active plot so we can call cleanup() before replacing it
+        self._current_plot = None
         
         # Callback for tab changes (will be set by controller)
         self._on_tab_change_callback = None
@@ -89,6 +93,17 @@ class ClusteringView:
         STRETCH_BOTH = 'stretch_both'
 
         try:
+            # Cleanup old plot before replacing to free HoloViews streams,
+            # numpy arrays, and button-callback refs holding the old instance alive.
+            if self._current_plot is not None:
+                try:
+                    if hasattr(self._current_plot, 'cleanup'):
+                        self._current_plot.cleanup()  # type: ignore[union-attr]
+                except Exception:
+                    pass
+                self._current_plot = None
+                gc.collect()
+
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
             
@@ -110,6 +125,9 @@ class ClusteringView:
             plots_tab.append((image_name, chosen_plot_created))
             
             self._all_dataset_info.append(chosen_plot.create_dataset_info())
+            
+            # Track the plot so we can call cleanup() before the next replacement
+            self._current_plot = chosen_plot
                 
             # Register tab change callback if controller provided one
             if self._on_tab_change_callback is not None:

@@ -168,7 +168,7 @@ class BaseSpectrumImagePlot(IPlot):
                 energy = np.arange(self._electron_count_data.shape[-1])
         except Exception:
             energy = np.arange(self._electron_count_data.shape[-1])
-        self._energy = energy
+        self._energy: np.ndarray = energy
 
         # Background heatmap
         img = hv.Image(
@@ -391,6 +391,22 @@ class BaseSpectrumImagePlot(IPlot):
 
     def cleanup(self):
         """Unsubscribe all HoloViews streams and release dataset references."""
+        # Remove subscribers first — streams hold strong refs to bound methods
+        # (e.g. self._on_paneA_hover), which would keep this plot alive via the
+        # stream→callback→self chain even after all other refs are nulled.
+        subscriber_pairs = [
+            (self._hover_stream,     self._on_paneA_hover),
+            (self._tap_stream,       self._on_paneA_click),
+            (self._selection_stream, self._on_paneA_selected),
+            (self._rangexy_stream,   self._on_paneB_range_changed),
+        ]
+        for stream, callback in subscriber_pairs:
+            if stream is not None:
+                try:
+                    stream.remove_subscriber(callback)
+                except Exception:
+                    pass
+
         for stream in [
             self._hover_stream,
             self._tap_stream,
@@ -409,7 +425,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._dataset = None  # type: ignore[assignment]
         self._e_axis = None  # type: ignore[assignment]
         self._electron_count_data = None  # type: ignore[assignment]
-        self._energy = None
+        self._energy = None  # type: ignore[assignment]
         self._region_pairs = []
         self.paneA = None
         self.paneB = None

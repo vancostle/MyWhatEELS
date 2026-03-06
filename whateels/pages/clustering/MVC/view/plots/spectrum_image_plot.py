@@ -67,8 +67,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         super().__init__(dataset, eloss_name)
 
         # Store references for clustering features
-        self._model = model
-        self._view = view
+        self._model: "ClusteringModel" = model
+        self._view: "ClusteringView" = view
         
         # Store original plots layout to restore after clustering
         self._plots_layout = None
@@ -90,24 +90,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._last_clustering_input = None
 
         # Clustering widgets
-        self._kmeans_run_button = self._view.right_sidebar.kmeans_run_button
-        self._kmeans_run_button.on_click(lambda _ : self.run_kmeans_clustering(user_click=True))
-        self._agglomerative_run_button = self._view.right_sidebar.agglomerative_run_button
-        self._agglomerative_run_button.on_click(lambda _ : self.run_agglomerative_clustering(user_click=True))
-        self._spectral_run_button = self._view.right_sidebar.spectral_run_button
-        self._spectral_run_button.on_click(lambda _ : self.run_spectral_clustering(user_click=True))
+        self._kmeans_run_button: pn.widgets.Button = self._view.right_sidebar.kmeans_run_button
+        self._kmeans_run_button_watcher = self._kmeans_run_button.on_click(lambda _ : self.run_kmeans_clustering(user_click=True))
+        self._agglomerative_run_button: pn.widgets.Button = self._view.right_sidebar.agglomerative_run_button
+        self._agglomerative_run_button_watcher = self._agglomerative_run_button.on_click(lambda _ : self.run_agglomerative_clustering(user_click=True))
+        self._spectral_run_button: pn.widgets.Button = self._view.right_sidebar.spectral_run_button
+        self._spectral_run_button_watcher = self._spectral_run_button.on_click(lambda _ : self.run_spectral_clustering(user_click=True))
         
         # OOP utility instances
-        self._preprocessor = DataPreprocessor()
+        self._preprocessor: DataPreprocessor = DataPreprocessor()
         self._visualizer: ClusterVisualizer | None = None  # Created after clustering
         # Cluster colors (set after clustering)
         self.cluster_colors = []
         # Progress display for clustering operations
-        self._progress_display = ProgressDisplay(name="Clustering")
+        self._progress_display: ProgressDisplay = ProgressDisplay(name="Clustering")
         # Orchestrator for common clustering patterns
         # Use list as mutable reference for original_heatmap_data
         self._original_heatmap_ref = [None]
-        self._orchestrator = ClusteringOrchestrator(
+        self._orchestrator: ClusteringOrchestrator = ClusteringOrchestrator(
             progress_display=self._progress_display,
             model=self._model,
             view=self._view,
@@ -709,3 +709,49 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         except Exception as e:
             print(f"Error handling click: {e}")
             traceback.print_exc()
+
+    # --- Lifecycle ---
+
+    def cleanup(self):
+        """Unwatch button callbacks, release clustering data, and call base cleanup."""
+        # Unwatch on_click callbacks so lambdas capturing self are released
+        for btn, watcher in [
+            (self._kmeans_run_button, self._kmeans_run_button_watcher),
+            (self._agglomerative_run_button, self._agglomerative_run_button_watcher),
+            (self._spectral_run_button, self._spectral_run_button_watcher),
+        ]:
+            if btn is not None and watcher is not None:
+                try:
+                    btn.param.unwatch(watcher)
+                except Exception:
+                    pass
+
+        # Release large numpy arrays
+        self._clustering_results = None
+        self._original_heatmap_data = None
+        if isinstance(self._original_heatmap_ref, list):
+            self._original_heatmap_ref[0] = None
+        self._original_heatmap_ref = []
+        self._last_clustering_matrix = None
+        self._last_clustering_input = None
+
+        # Release OOP helper objects (orchestrator holds a closure over self via data_getter_fn)
+        self._orchestrator = None  # type: ignore[assignment]
+        self._preprocessor = None  # type: ignore[assignment]
+        self._visualizer = None
+        self._progress_display = None  # type: ignore[assignment]
+
+        # Release button and watcher refs
+        self._kmeans_run_button = None  # type: ignore[assignment]
+        self._agglomerative_run_button = None  # type: ignore[assignment]
+        self._spectral_run_button = None  # type: ignore[assignment]
+        self._kmeans_run_button_watcher = None
+        self._agglomerative_run_button_watcher = None
+        self._spectral_run_button_watcher = None
+
+        # Release model/view refs
+        self._model = None  # type: ignore[assignment]
+        self._view = None   # type: ignore[assignment]
+
+        # Base class: clears HoloViews streams, panes, dataset/energy refs
+        super().cleanup()
