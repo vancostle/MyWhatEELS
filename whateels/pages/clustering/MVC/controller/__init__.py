@@ -1,3 +1,5 @@
+import weakref
+import panel as pn
 from whateels.helpers import SafeConverter, URLUtils
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -9,6 +11,11 @@ class ClusteringController:
     def __init__(self, model: "ClusteringModel", view: "ClusteringView"):
         self._view = view
         self._model = model
+        
+        # Register view cleanup when this session ends so HoloViews streams,
+        # numpy arrays, and button-callback refs are freed on navigation.
+        _view_ref = weakref.ref(view)
+        pn.state.on_session_destroyed(lambda _: (v := _view_ref()) and v.cleanup())
         
         # Register tab change handler
         self._view.set_tab_change_callback(self._on_tab_change)

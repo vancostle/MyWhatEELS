@@ -34,16 +34,26 @@ class App:
         # Load custom CSS for the entire app
         LoadCSS([str(CSS_ROOT / "custom_page.css")])
 
+        # Cache imported class references so __import__ only hits the module
+        # loader on the first visit; subsequent sessions reuse the cached class.
+        _cls_cache: dict = {}
+
+        def _lazy(module: str, cls: str):
+            def _loader():
+                if cls not in _cls_cache:
+                    _cls_cache[cls] = getattr(__import__(module, fromlist=[cls]), cls)
+                return _cls_cache[cls]()
+            return _loader
+
         # Define the pages for the application
-        # Lazy load page modules using lambda functions to avoid unnecessary imports and speed up initial load time
         pages = {
-            "/": lambda: __import__('whateels.pages.home', fromlist=['HomePage']).HomePage(),
-            "/metadata-details": lambda: __import__('whateels.pages.metadata', fromlist=['Metadata']).Metadata(),
-            "/clustering": lambda: __import__('whateels.pages.clustering', fromlist=['Clustering']).Clustering(),
-            "/clustering-2": lambda: __import__('whateels.pages.clustering_2', fromlist=['Clustering2Page']).Clustering2Page(),
-            "/multifit-details": lambda: __import__('whateels.pages.multifitting', fromlist=['MultiFitting']).MultiFitting(),
-            "/quantification": lambda: __import__('whateels.pages.quantification', fromlist=['Quantification']).Quantification(),
-            # "/nlls": lambda: __import__('whateels.pages.nlls', fromlist=['NLLS']).NLLS(),
+            "/": _lazy('whateels.pages.home', 'HomePage'),
+            "/metadata-details": _lazy('whateels.pages.metadata', 'Metadata'),
+            "/clustering": _lazy('whateels.pages.clustering', 'Clustering'),
+            "/clustering-2": _lazy('whateels.pages.clustering_2', 'Clustering2Page'),
+            "/multifit-details": _lazy('whateels.pages.multifitting', 'MultiFitting'),
+            "/quantification": _lazy('whateels.pages.quantification', 'Quantification'),
+            # "/nlls": _lazy('whateels.pages.nlls', 'NLLS'),
         }
 
         return pn.serve(

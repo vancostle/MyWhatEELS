@@ -5,9 +5,10 @@ This module provides a customized Panel FastListTemplate with navigation header
 and CSS styling for the WhatEELS scientific web application.
 """
 
+import weakref as _weakref
 import panel as pn
 from typing import Optional, List, Union
-from whateels.state import AppState, CacheManager
+from whateels.state import CacheManager
 from whateels.helpers.safe_converter import SafeConverter
 
 class GeneralPageTemplate(pn.template.FastListTemplate):
@@ -47,9 +48,27 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         """        
         app_state = CacheManager.get_cached_app_state()
 
-        # Set up reactive watchers to update header on metadata or tab index changes
-        app_state.param.watch(self._update_navigation_header, 'metadata')
-        app_state.param.watch(self._update_navigation_header, 'selected_tab_index_dataset', onlychanged=False)
+        # Set up reactive watchers to update header on metadata or tab index changes.
+        # Store the watchers so we can unwatch on session destruction — otherwise
+        # every page visit permanently adds callbacks to the app_state singleton,
+        # each holding a strong ref to this template instance via the bound method.
+        self._metadata_watcher = app_state.param.watch(self._update_navigation_header, 'metadata')
+        self._tab_index_watcher = app_state.param.watch(self._update_navigation_header, 'selected_tab_index_dataset', onlychanged=False)
+
+        # Unwatch when this session ends so the template can be garbage collected
+        _self_ref = _weakref.ref(self)
+        def _unwatch_on_destroy(_):
+            _t = _self_ref()
+            if _t is not None:
+                try:
+                    app_state.param.unwatch(_t._metadata_watcher)
+                except Exception:
+                    pass
+                try:
+                    app_state.param.unwatch(_t._tab_index_watcher)
+                except Exception:
+                    pass
+        pn.state.on_session_destroyed(_unwatch_on_destroy)
 
         # Create a reactive header container
         self._header_container = pn.Row(

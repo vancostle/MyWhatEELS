@@ -173,3 +173,23 @@ class ClusteringView:
     def set_tab_change_callback(self, callback):
         """Set the callback to be called when tabs change."""
         self._on_tab_change_callback = callback
+
+    def cleanup(self):
+        """Release all resources when the session is destroyed."""
+        if self._current_plot is not None:
+            try:
+                if hasattr(self._current_plot, 'cleanup'):
+                    self._current_plot.cleanup()  # type: ignore[union-attr]
+            except Exception:
+                pass
+            self._current_plot = None
+
+        self._all_dataset_info.clear()
+        self._on_tab_change_callback = None
+
+        if self._main is not None:
+            self._main.clear()
+        if self._left_sidebar is not None:
+            self._left_sidebar.clear()
+
+        gc.collect()
