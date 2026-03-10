@@ -124,7 +124,6 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
                 
         navigation_links = [
             ("[Home](/)", "Home page with file upload"),
-            # ("[NLLS](/nlls)", "NLLS fitting page"),
         ]
         
         is_eels_tab = self._is_selected_tab_eels(selected_tab_index)
@@ -146,6 +145,12 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         quantification_a_element = f'<a href="{quantification_href}" class="{quantification_class}">Quantification</a>'
 
         navigation_links.append((quantification_a_element, "Quantification"))
+
+        fitting_href = f'/fitting?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
+        fitting_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
+        fitting_a_element = f'<a href="{fitting_href}" class="{fitting_class}">Fitting</a>'
+
+        navigation_links.append((fitting_a_element, "Fitting"))
 
         top_menu = [
             pn.pane.Markdown(

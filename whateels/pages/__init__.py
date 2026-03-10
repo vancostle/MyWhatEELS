@@ -1,5 +1,5 @@
 from .home import HomePage
-from .nlls import NLLS
+from .fitting import Fitting
 from .login import Login
 from .metadata import Metadata
 from .clustering import Clustering

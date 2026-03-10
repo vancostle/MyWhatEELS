@@ -58,7 +58,7 @@ class App:
 
         return pn.serve(
             pages, # type: ignore
-            title=self._title,
+            title=self._title, 
             port=port,
             show=show,
             allow_websocket_origin=["*"],

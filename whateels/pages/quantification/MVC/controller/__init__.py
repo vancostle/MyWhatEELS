@@ -6,7 +6,7 @@ from xarray import Dataset
 from whateels.helpers.constants import OOS_ROOT
 from whateels.helpers.safe_converter import SafeConverter
 from ..model.element_item import ElementItem
-from ..view.components.ElementItemView import ElementItemView
+from ..view.components.element_item_view import ElementItemView
 
 import panel as pn
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 
 class QuantificationController(BaseController):
+    ELEMENT_EAXIS_THRESHOLD = 50
 
     def __init__(self, model: "QuantificationModel", view: "QuantificationView"):
         
@@ -201,7 +202,7 @@ class QuantificationController(BaseController):
             element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b,), V, b]
 
             min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])            
-        if min_eaxis_cs < self._layout.get_energy_range()[0]:
+        if min_eaxis_cs + self.ELEMENT_EAXIS_THRESHOLD < self._layout.get_energy_range()[0]:
             add_element_button.disabled = True
             add_element_button.name = "Bad Energy Range"
             add_element_button.button_type = "danger"
