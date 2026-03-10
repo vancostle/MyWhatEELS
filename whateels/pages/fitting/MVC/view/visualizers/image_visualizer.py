@@ -6,18 +6,11 @@ import plotly.graph_objects as go
 import numpy as np
 import xarray as xr
 
-# Make Plotly modebar transparent
-pn.extension(raw_css=[
-    ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
-    ".plotly .modebar-btn { background: transparent !important; }",
-    ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
-])
-
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import HomePageModel
+    from ...model import FittingModel
 
 class ImageVisualizer(AbstractEELSVisualizer):
     """Render 2D image datasets as Plotly heatmaps inside Panel layouts."""
@@ -26,7 +19,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
     _STRETCH_BOTH = 'stretch_both'
     _STRETCH_WIDTH = 'stretch_width'
     
-    def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
+    def __init__(self, model: "FittingModel", dataset: "xr.Dataset"):
         """Store model/dataset references and initialize click-state fields."""
         super().__init__(model, dataset)
 
@@ -68,7 +61,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
             z=m_image,
             x=np.arange(nx),
             y=np.arange(ny-1, -1, -1),
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model, 'colors') else 'Greys_r',
+            colorscale='Greys_r',
             showscale=False,
             hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )
@@ -127,7 +120,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
             z=m_image,
             x=np.arange(data_width),
             y=np.arange(data_height-1, -1, -1),
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model, 'colors') else 'Greys_r',
+            colorscale='Greys_r',
             showscale=False,
             hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )

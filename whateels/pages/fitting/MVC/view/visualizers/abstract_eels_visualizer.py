@@ -22,7 +22,7 @@ class AbstractEELSVisualizer(ABC):
         self._dataset = dataset
 
     @abstractmethod
-    def create_plots(self):
+    def create_plots(self) -> pn.viewable.Viewable:
         """
         Create the main layout for the EELS visualizer.
         

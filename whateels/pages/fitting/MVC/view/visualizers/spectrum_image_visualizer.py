@@ -12,13 +12,12 @@ import xarray as xr
 
 from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
-from whateels.helpers import SpectrumExtractor, SpectrumFitting
+from whateels.helpers import SpectrumExtractor
 from whateels.components import SplitJs
-from whateels.shared_state import AppState
-from ...controller.services.oos_loader_service import Loader_OOS
+from whateels.state import CacheManager
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import FittingModel
     from xarray import Dataset
     from param.parameterized import Event
     
@@ -49,7 +48,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "FittingModel", dataset: "Dataset"):
         """Initialize visual state, interactive panes, and callback wiring."""
         super().__init__(model, dataset)
 
@@ -156,7 +155,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
         FILL_TO_ZEROY = 'tozeroy'
         fig = self.paneB.object
         newfig = go.Figure(fig)
-        AppState().fitting_results = y_fit  # Store the fitted curve in shared state for potential future use.
+        CacheManager.get_cached_app_state().fitting_results = y_fit  # Store the fitted curve in shared state for potential future use.
         newfig.add_trace(go.Scatter(
             x=x,
             y=y_fit,
@@ -246,8 +245,8 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
         self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Select a region for ROI"))
 
-        AppState().fitting_results = None  # Clear fitting results when re-plotting original image
-        AppState().spectra = None  # Clear spectra when re-plotting original image
+        CacheManager.get_cached_app_state().fitting_results = None  # Clear fitting results when re-plotting original image
+        CacheManager.get_cached_app_state().spectra = None  # Clear spectra when re-plotting original image
 
 
     def plot_energy_map(self, energy_map):
@@ -437,8 +436,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
 
     def _figB_region(self, pairs):
         """Create an ROI-summed spectrum figure from selected pixel coordinates."""
-        if AppState().is_multifit:
-            multifit_electron_count_data = xr.DataArray(AppState().multifit)
+        app_state = CacheManager.get_cached_app_state()
+        if app_state.is_multifit:
+            multifit_electron_count_data = xr.DataArray(app_state.multifit)
             res = SpectrumExtractor.get_spectrum_from_indices(multifit_electron_count_data, pairs)
         else:
             res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
@@ -446,7 +446,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return self._figB_message("ROI", "Select with lasso/box...")
         
         spec, n_points = res
-        AppState().spectra = spec
+        app_state.spectra = spec
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"sum (points={n_points})"))
         fig.update_layout(
@@ -476,8 +476,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 self._pc.stop()
             fig = self._figB_region(self._region_pairs)
             self.paneB.object = self._set_ranges_and_convert(fig)
-            if AppState().fitting_results is not None:
-                self.plot_fitting(self._energy, AppState().fitting_results)
+            app_state = CacheManager.get_cached_app_state()
+            if app_state.fitting_results is not None:
+                self.plot_fitting(self._energy, app_state.fitting_results)
             return
 
         if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
@@ -485,8 +486,9 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             self.paneB.object = self._set_ranges_and_convert(fig)
             if self._pc.running:
                 self._pc.stop()
-            if AppState().fitting_results is not None:
-                self.plot_fitting(self._energy, AppState().fitting_results)
+            app_state = CacheManager.get_cached_app_state()
+            if app_state.fitting_results is not None:
+                self.plot_fitting(self._energy, app_state.fitting_results)
 
     def _on_paneA_hover(self, event: "Event"):
         """Handle hover events to preview pixel spectra when ROI selection exists."""

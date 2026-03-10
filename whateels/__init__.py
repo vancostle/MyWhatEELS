@@ -7,6 +7,11 @@ pn.extension(
     'filedropper', 'floatpanel',
     notifications=True,
     theme='default',
+    raw_css=[ # TODO: to remove all plotly css
+        ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
+        ".plotly .modebar-btn { background: transparent !important; }",
+        ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
+    ],
 )
 
 # Initialize Holoviews with Bokeh backend
@@ -53,6 +58,7 @@ class App:
             "/clustering-2": _lazy('whateels.pages.clustering_2', 'Clustering2Page'),
             "/multifit-details": _lazy('whateels.pages.multifitting', 'MultiFitting'),
             "/quantification": _lazy('whateels.pages.quantification', 'Quantification'),
+            "/fitting": _lazy('whateels.pages.fitting', 'Fitting'),
             # "/nlls": _lazy('whateels.pages.nlls', 'NLLS'),
         }
 

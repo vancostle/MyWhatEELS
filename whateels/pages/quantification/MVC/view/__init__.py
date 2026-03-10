@@ -3,7 +3,6 @@ import panel as pn
 from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton, SimpleDetails
 from whateels.base.mvc import BaseView
-from .layouts import QuanficationLeftSidebarLayout, QuantificationMainLayout, QuantificationRightSidebarLayout
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ..model import QuantificationModel
@@ -20,7 +19,7 @@ class QuantificationView(BaseView):
             model, 
             css_files=[
                 str(CSS_ROOT / "quantification.css"),
-                str(CSS_ROOT / "dataset_info.css")
+                str(CSS_ROOT / "info_panel.css")
             ]
         )
 

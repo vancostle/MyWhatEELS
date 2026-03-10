@@ -5,7 +5,6 @@ from whateels.components import UploadedFile, ToggleButton, SimpleDetails
 from whateels.base.mvc import BaseView
 from typing import TYPE_CHECKING, Optional
 
-from whateels.shared_state import AppState
 if TYPE_CHECKING:
     from ..model import FittingModel
     from ..controller import FittingController
@@ -27,7 +26,7 @@ class FittingView(BaseView):
             model, 
             css_files=[
                 str(CSS_ROOT / "fitting.css"),
-                str(CSS_ROOT / "dataset_info.css")
+                str(CSS_ROOT / "info_panel.css")
             ]
         )
 
@@ -39,7 +38,7 @@ class FittingView(BaseView):
 
         self._fitting_add_compontent_button: Optional[pn.widgets.Button] = None
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
-        self._background_subtraction_switch: Optional[pn.widgets.Switch] = None
+        self._background_subtraction_switch: pn.widgets.Switch = pn.widgets.Switch()
         
         self._init_components()
     

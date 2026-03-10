@@ -5,16 +5,14 @@ from collections.abc import Mapping
 from whateels.errors.dm.data import DMPlotCreationError
 from whateels.helpers.constants import HTML_ROOT
 from ..visualizer_factory import VisualizerFactory
-from whateels.shared_state import AppState
+from whateels.state import CacheManager
 
 if TYPE_CHECKING:
-    from ...view import QuantificationView
+    from ...view import FittingView
     from ...view.visualizers.abstract_eels_visualizer import AbstractEELSVisualizer
-    from ...model import QuantificationModel
-    from ...controller import QuantificationController
+    from ...model import FittingModel
+    from ...controller import FittingController
     from xarray import Dataset
-    from ...controller.services.oos_loader_service import Loader_OOS
-    from ...controller import ElementItem
 
 class LayoutManager:
     """
@@ -29,7 +27,7 @@ class LayoutManager:
     code organization and single responsibility principle.
     """
     
-    def __init__(self, view: "QuantificationView", controller: "QuantificationController", model: "QuantificationModel"):
+    def __init__(self, view: "FittingView", controller: "FittingController", model: "FittingModel"):
         """
         Initialize the LayoutManager with a reference to the View.
         
@@ -90,7 +88,7 @@ class LayoutManager:
         STRETCH_BOTH = 'stretch_both'
         DEFAULT_TAB_INDEX = 0
 
-        app_state = AppState()
+        app_state = CacheManager.get_cached_app_state()
 
         try:
             # Clear previous dataset info panels to prevent caching old data
@@ -114,7 +112,7 @@ class LayoutManager:
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
             self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
-            app_state.plot_dataset = app_state.all_datasets[AppState().selected_tab_index_dataset]  # Set initial dataset to plot based on selected tab index
+            app_state.plot_dataset = app_state.all_datasets[app_state.selected_tab_index_dataset]  # Set initial dataset to plot based on selected tab index
             
             # Update UI
             self._controller.base_layout.update_main(self._plots_tab)
@@ -125,14 +123,14 @@ class LayoutManager:
             raise DMPlotCreationError(e)
     def get_energy_range(self) -> list[float]:
         """Get the maximum energy range across all datasets."""
-        state = AppState()
+        state = CacheManager.get_cached_app_state()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index].coords[self._model.constants.ELOSS].values
 
     
     def get_active_dataset(self):
         """Return the dataset currently selected by the active tab index."""
-        state = AppState()
+        state = CacheManager.get_cached_app_state()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index]
 
@@ -142,7 +140,7 @@ class LayoutManager:
         # Get the selected tab index
         selected_tab_index = event.new
 
-        state = AppState()
+        state = CacheManager.get_cached_app_state()
 
         state.selected_tab_index_dataset = selected_tab_index  # Update shared state
 
@@ -165,7 +163,7 @@ class LayoutManager:
         and any existing best-fit sidebar card is removed. Otherwise, this method stores the
         fit in shared state, draws the fitted curve, and updates the best-fit information card.
         """
-        state = AppState()
+        state = CacheManager.get_cached_app_state()
         if fitting_results is None:
             self._chosen_visualizers[0].update_plot()
             self.remove_best_fit_component_from_sidebar()
@@ -312,9 +310,11 @@ class LayoutManager:
             DMPlotCreationError: If there is no selected dataset, no fitting results,
                 or no available energy map.
         """
-        if AppState().plot_dataset is None:
+        app_state = CacheManager.get_cached_app_state()
+        
+        if app_state.plot_dataset is None:
             raise DMPlotCreationError("No dataset selected for plotting energy map.")
-        if AppState().fitting_results is None:
+        if app_state.fitting_results is None:
             raise DMPlotCreationError("No fitting results available for plotting energy map.")
         energy_map = self._model.get_energy_map()
         if energy_map is None:

@@ -13,9 +13,10 @@ from .abstract_eels_visualizer import AbstractEELSVisualizer
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import SplitJs
+from whateels.state import CacheManager
 
 if TYPE_CHECKING:
-    from ...model import Model
+    from ...model import QuantificationModel
     from xarray import Dataset
     from param.parameterized import Event
     
@@ -45,7 +46,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
-    def __init__(self, model: "Model", dataset: "Dataset"):
+    def __init__(self, model: "QuantificationModel", dataset: "Dataset"):
         super().__init__(model, dataset)
 
         self._model = model
@@ -487,9 +488,11 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             return
 
         if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
+            app_state = CacheManager.get_cached_app_state()
             fig = self._figB_region(self._region_pairs)
-            if get_cached_app_state().quantification_elements:
-                self.plot_quantification_elements(get_cached_app_state().quantification_elements)
+
+            if app_state.quantification_elements:
+                self.plot_quantification_elements(app_state.quantification_elements)
             else:
                 self.paneB.object = self._set_ranges_and_convert(fig)
             if self._pc.running:
@@ -585,13 +588,14 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 self._pc.start()
 
     def _on_paneA_click(self, event):
+        app_state = CacheManager.get_cached_app_state()
         point = SpectrumExtractor.extract_point(event)
         if point is None:
             return
         self._last_hover_point = point
         fig = self._figB_hover(self._last_hover_point)
-        if get_cached_app_state().quantification_elements:
-            self.plot_quantification_elements(get_cached_app_state().quantification_elements)
+        if app_state.quantification_elements:
+            self.plot_quantification_elements(app_state.quantification_elements)
             return
         if self._region_pairs:
             self._last_hover_ts = self._now_ms()
@@ -616,7 +620,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
                 self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
             return
         else:
-            self.plot_quantification_elements(get_cached_app_state().quantification_elements)
+            self.plot_quantification_elements(app_state.quantification_elements)
         # prepare inactivity behaviour: stop periodic callback until next hover
         if self._pc.running:
             self._pc.stop()

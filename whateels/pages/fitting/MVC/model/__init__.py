@@ -1,14 +1,16 @@
 from whateels.base.mvc import BaseModel
-from whateels.shared_state import AppState
+from whateels.state import CacheManager
 from .constants import Constants
-import copy as cp
 
-from scipy.interpolate import InterpolatedUnivariateSpline
-from scipy.ndimage import gaussian_filter1d
-from lmfit import Model
 from lmfit.models import GaussianModel, LorentzianModel, PseudoVoigtModel, SplitLorentzianModel
 
 import numpy as np
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from whateels.state import AppState
+    from ...MVC import FittingController
+    from xarray import Dataset
 
 class FittingModel(BaseModel):
     """Model responsible for component management, lmfit model assembly, and fitting outputs."""
@@ -17,8 +19,8 @@ class FittingModel(BaseModel):
         """Initialize model constants, shared state fields, and component registry."""
         super().__init__()
         self._constants = Constants()
-        self._app_state = AppState()
-        self._controller = 0
+        self._app_state = CacheManager.get_cached_app_state()
+        self._controller : "FittingController"
 
         self._app_state.spectra = None
         self._app_state.fitting_results = None
@@ -39,10 +41,10 @@ class FittingModel(BaseModel):
         return self._constants
     
     @property
-    def app_state(self) -> AppState:
+    def app_state(self) -> "AppState":
         return self._app_state
     
-    def set_controller(self, controller):
+    def set_controller(self, controller: "FittingController"):
         """Store controller reference for pushing plot updates after fitting."""
         self._controller = controller
 
@@ -66,13 +68,12 @@ class FittingModel(BaseModel):
     
     def add_component(self, component_item, flex='low'):
         """Add a component, estimate initial params, rebuild model, and refit."""
-        dataset = self.app_state.plot_dataset
+        dataset : "Dataset" = self.app_state.plot_dataset
         self._Eloss = dataset.coords['Eloss'].values
         
-        self._spectra = AppState().spectra
+        self._spectra = self._app_state.spectra
         if self._spectra is None:
             raise ValueError("Fitting Model: No spectra data available to add component")
-            return
         dict_var = {
             'Low': [3, 3, 0.1, 0.1, 0.5, 2],
             'Medium': [7, 7, 1, 1.25, 0, 3],
@@ -84,16 +85,15 @@ class FittingModel(BaseModel):
 
         # Estimate component parameters from the current spectrum and selected window.
         cen, sigm, amp = self._determine_compo_parameters(
-                        self._spectra, component_item.compo_type, component_item.energy_center, component_item.energy_range
-                    )
-        
+            self._spectra, component_item.compo_type, component_item.energy_center, component_item.energy_range
+        )
+
         component_item.set_parameters(cen, sigm, amp)
         component_item.set_center_range(cen - dict_var[flex][0], cen + dict_var[flex][1],)
         component_item.set_sigma_range(0.5, sigm + sigm * dict_var[flex][3])
         component_item.set_amplitude_range(amp * dict_var[flex][4], amp * dict_var[flex][5])
 
         self.dictionary['components'].append(component_item)
-        
 
         self.create_model()
         self.fit_reference()
@@ -104,7 +104,7 @@ class FittingModel(BaseModel):
             print("NLLS Model: No components to create model")
             return
         mod_list = []
-        self._spectra = AppState().spectra
+        self._spectra = self._app_state.spectra
 
         for idx, component in enumerate(self.dictionary['components']):
             tipo = component.compo_type
@@ -140,9 +140,7 @@ class FittingModel(BaseModel):
             self._pars[f'{pref}amplitude'].value = component.amplitude
             self._pars[f'{pref}amplitude'].min = component.amplitude_range[0]
             self._pars[f'{pref}amplitude'].max = component.amplitude_range[1]
-        
-        
-    
+
     def _determine_compo_parameters(self,spectrum,compo_type,Eloss_center, energy_range):
         """Estimate initial center/sigma/amplitude values for a fitting component.
 

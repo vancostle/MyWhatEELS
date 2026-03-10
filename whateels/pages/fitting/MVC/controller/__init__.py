@@ -1,11 +1,8 @@
 from .managers import LayoutManager
-from whateels.shared_state import AppState
+from whateels.state import CacheManager
 from whateels.base.mvc.base_controller import BaseController
-from .services.oos_loader_service import Loader_OOS
 from xarray import Dataset
-from whateels.helpers.constants import OOS_ROOT
 from whateels.helpers.safe_converter import SafeConverter
-from ..model.element_item import ElementItem
 from ..model.component_item import ComponentItem
 from ..view.components.component_item_view import ComponentItemView
 
@@ -32,7 +29,9 @@ class FittingController(BaseController):
 
         self._layout = LayoutManager(view, self, model)
 
-        all_datasets = AppState().all_datasets
+        app_state = CacheManager.get_cached_app_state()
+
+        all_datasets = app_state.all_datasets
 
         view.set_controller(self)
         model.set_controller(self)
@@ -49,8 +48,8 @@ class FittingController(BaseController):
             return
 
         self.energy_map_active = False
-        AppState().plot_dataset = all_datasets[tab_param]
-        AppState().selected_tab_index_dataset = tab_param
+        app_state.plot_dataset = all_datasets[tab_param]
+        app_state.selected_tab_index_dataset = tab_param
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
         self._nlls_user_update(view)
@@ -137,7 +136,8 @@ class FittingController(BaseController):
 
     def _background_subtraction_switch_watcher(self, event):
         """Toggle multifit background subtraction mode and refit if needed."""
-        AppState().is_multifit = event.new
+        app_state = CacheManager.get_cached_app_state()
+        app_state.is_multifit = event.new
         self.layout.update_plot()
         self._model.create_model()
         self._model.fit_reference()

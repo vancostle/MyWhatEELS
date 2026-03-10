@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 from whateels.errors.dm.data import DMPlotCreationError
 from ..visualizer_factory import VisualizerFactory
+from whateels.state import CacheManager
 
 if TYPE_CHECKING:
     from ...view import QuantificationView
@@ -10,7 +11,6 @@ if TYPE_CHECKING:
     from ...model import QuantificationModel
     from ...controller import QuantificationController
     from xarray import Dataset
-    from ...controller.services.oos_loader_service import Loader_OOS
     from ...controller import ElementItem
 
 class LayoutManager:
@@ -73,7 +73,7 @@ class LayoutManager:
         STRETCH_BOTH = 'stretch_both'
         DEFAULT_TAB_INDEX = 0
 
-        app_state = get_cached_app_state()
+        app_state = CacheManager.get_cached_app_state()
 
         try:
             # Clear previous dataset info panels to prevent caching old data
@@ -107,13 +107,13 @@ class LayoutManager:
             raise DMPlotCreationError(e)
     def get_energy_range(self) -> list[float]:
         """Get the maximum energy range across all datasets."""
-        state = get_cached_app_state()
+        state = CacheManager.get_cached_app_state()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index].coords[self._model.constants.ELOSS].values
 
     
     def get_active_dataset(self):
-        state = get_cached_app_state()
+        state = CacheManager.get_cached_app_state()
         selected_index = state.selected_tab_index_dataset
         return state.all_datasets[selected_index]
 
@@ -122,10 +122,12 @@ class LayoutManager:
 
         # Get the selected tab index
         selected_tab_index = event.new
+        
+        app_state = CacheManager.get_cached_app_state()
 
-        get_cached_app_state().selected_tab_index_dataset = selected_tab_index  # Update shared state
+        app_state.selected_tab_index_dataset = selected_tab_index  # Update shared state
 
-        get_cached_app_state().quantification_elements = []
+        app_state.quantification_elements = []
 
         # Update sidebar with the corresponding dataset info
         self._controller.layout.remove_dataset_info_from_sidebar()
@@ -139,7 +141,7 @@ class LayoutManager:
     def plot_quantification_elements(self):
         """Plot a single quantification element using the model's plotting method."""
         print ("Plotting quantification element...")
-        self._chosen_visualizers[0].plot_quantification_elements(self._model.app_state.quantification_elements)
+        self._chosen_visualizers[0].plot_quantification_elements(CacheManager.get_cached_app_state().quantification_elements)
 
     def plot_shells_cross_section(self, element_item: "ElementItem"):
         print ("Plotting shells")
@@ -148,4 +150,4 @@ class LayoutManager:
     def plot_quantification_pie(self):
         """Plot the quantification pie chart using the model's plotting method."""
         print ("Plotting quantification pie chart...")
-        self._chosen_visualizers[0].plot_quantification_pie(self._model.app_state.quantification_elements)
+        self._chosen_visualizers[0].plot_quantification_pie(CacheManager.get_cached_app_state().quantification_elements)

@@ -1,6 +1,6 @@
 from whateels.templates import GeneralPageTemplate
 from .MVC import FittingModel, FittingController, FittingView
-from whateels.shared_state import AppState
+from whateels.state import CacheManager
 
 class Fitting(GeneralPageTemplate):
     """
@@ -13,10 +13,12 @@ class Fitting(GeneralPageTemplate):
         view = FittingView(model)   
         FittingController(model, view)
         
+        app_state = CacheManager.get_cached_app_state()
+        
         super().__init__(
             title=model.constants.TITLE,
             main=[view.main],
-            sidebar=[view.left_sidebar] if AppState().metadata is not None else [],
-            right_sidebar=[] if AppState().metadata is None else [view.right_sidebar],
+            sidebar=[view.left_sidebar] if app_state.metadata is not None else [],
+            right_sidebar=[] if app_state.metadata is None else [view.right_sidebar],
             collapsed_sidebar=True,
         )
