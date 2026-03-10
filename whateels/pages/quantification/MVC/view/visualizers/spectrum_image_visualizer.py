@@ -607,6 +607,7 @@ class SpectrumImageVisualizer(AbstractEELSVisualizer):
             self._last_hover_ts = None
 
     def _on_paneA_selected(self, event: "Event"):
+        app_state = CacheManager.get_cached_app_state()
         pairs = SpectrumExtractor.extract_region(event)
         self._region_pairs = pairs
         if not pairs:

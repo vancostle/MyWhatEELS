@@ -13,7 +13,6 @@ from .plots import SpectrumLinePlot, SpectrumImagePlot, SingleSpectrumPlot, Imag
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import HomePageModel
-    from typing import TYPE_CHECKING
     from xarray import Dataset
 
 import traceback
