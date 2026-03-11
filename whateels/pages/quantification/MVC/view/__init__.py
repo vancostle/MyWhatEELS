@@ -41,7 +41,7 @@ class QuantificationView(BaseView):
         
         self._modal_manager.register_modal(
             self._PERIODIC_TABLE_MODAL_ID,
-            PeriodicTableOfElementsModal()
+            PeriodicTableOfElementsModal(custom_page=custom_page)
         )
 
         self._init_components()
