@@ -10,7 +10,7 @@ class Quantification(GeneralPageTemplate):
 
     def __init__(self):
         model = QuantificationModel()
-        view = QuantificationView(model)
+        view = QuantificationView(model, custom_page=self)
         QuantificationController(model, view)
         
         cache_manager = CacheManager()
@@ -22,4 +22,5 @@ class Quantification(GeneralPageTemplate):
             sidebar=[view.left_sidebar] if app_state.metadata is not None else [],
             right_sidebar=[] if app_state.metadata is None else [view.right_sidebar],
             collapsed_sidebar=True,
+            modal=view.modals,
         )

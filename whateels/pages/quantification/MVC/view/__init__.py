@@ -1,20 +1,24 @@
 import panel as pn
 
 from whateels.helpers import CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton, SimpleDetails
+from whateels.components import UploadedFile, ToggleButton, SimpleDetails, ModalManager
 from whateels.base.mvc import BaseView
+from .modals import PeriodicTableOfElementsModal
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ..model import QuantificationModel
     from ..controller import QuantificationController
+    from whateels.templates import GeneralPageTemplate
 
 class QuantificationView(BaseView):
     
     _STRETCH_WIDTH = "stretch_width"
     _STRETCH_BOTH = "stretch_both"
+    
+    _PERIODIC_TABLE_MODAL_ID = 'Periodic Table of Elements'
 
     # --- Initialization ---
-    def __init__(self, model: "QuantificationModel"):
+    def __init__(self, model: "QuantificationModel", custom_page: "GeneralPageTemplate"):
         super().__init__(
             model, 
             css_files=[
@@ -33,9 +37,12 @@ class QuantificationView(BaseView):
 
         self._element_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH)
         
-        # self._main_layout = QuantificationMainLayout(model)
-        # self._left_sidebar_layout = QuanficationLeftSidebarLayout(model)
-        # self._right_sidebar_layout = QuantificationRightSidebarLayout(model)
+        self._modal_manager = ModalManager(custom_page)
+        
+        self._modal_manager.register_modal(
+            self._PERIODIC_TABLE_MODAL_ID,
+            PeriodicTableOfElementsModal()
+        )
 
         self._init_components()
     
@@ -46,6 +53,11 @@ class QuantificationView(BaseView):
         if quant_elements is not None and hasattr(quant_elements, "__iter__"):
             for element_item in quant_elements:
                 self._controller.add_element_item(element_item)
+
+    @property
+    def modals(self) -> list:
+        """Return a list of all modals used by this view."""
+        return self._modal_manager.modals
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -134,6 +146,38 @@ class QuantificationView(BaseView):
                 margin=(0,0,10,0)
             ),
         }
+        
+        SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="20" rx="2"/>
+          <text x="5" y="8" font-size="4.5" font-family="Arial,sans-serif" fill="currentColor" stroke="none">Z</text>
+          <text x="12" y="16" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor" stroke="none" font-weight="bold">E</text>
+          <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="currentColor" stroke="none">Element</text>
+        </svg>
+        """
+        ACTIVE_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="20" rx="2"/>
+          <text x="5" y="8" font-size="4.5" font-family="Arial,sans-serif" fill="white" stroke="none">Z</text>
+          <text x="12" y="16" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="white" stroke="none" font-weight="bold">E</text>
+          <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="white" stroke="none">Element</text>
+        </svg>
+        """
+        
+        periodic_table_button = pn.widgets.ButtonIcon(
+            icon=SVG,
+            active_icon=ACTIVE_SVG,
+            size='3em',
+            margin=(21,2,0,8),
+        )
+        
+        periodic_table_button.on_click(lambda _ : self._modal_manager.open_modal(self._PERIODIC_TABLE_MODAL_ID))
+        
+        element_atomic_number_wrapper = pn.Row(
+            self._quanti_input["element_num"],
+            periodic_table_button,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
 
         self._quanti_add_element_button = pn.widgets.Button(
             name='Add Element',
@@ -153,11 +197,12 @@ class QuantificationView(BaseView):
             sizing_mode=self.STRETCH_BOTH,
             css_classes=["element-container"],
         )
-        
+
         details = SimpleDetails(
             title="Quantification Instructions",
             content=pn.Column(
-                *[widget for widget in self._quanti_input.values()],
+                # *[widget for widget in self._quanti_input.values()],
+                element_atomic_number_wrapper,
                 self._quanti_add_element_button,
                 sizing_mode=self._STRETCH_WIDTH
             ),
@@ -169,17 +214,17 @@ class QuantificationView(BaseView):
         )
 
         # State identifiers
-        _ON = 'on'
-        _OFF = 'off'
+        ON = 'on'
+        OFF = 'off'
         
         # Dictionary keys for state properties
-        _NAME = 'label'
-        _ON_CLICK = 'on_click'
-        _BUTTON_TYPE = 'button_type'
+        NAME = 'label'
+        ON_CLICK = 'on_click'
+        BUTTON_TYPE = 'button_type'
 
         states = {
-            _ON: {_NAME: "Hide Quantification", _ON_CLICK: (lambda: print("On clicked")), _BUTTON_TYPE: 'primary'},
-            _OFF: {_NAME: "Show Quantification", _ON_CLICK: (lambda: print("Off clicked")), _BUTTON_TYPE: 'success'}
+            ON: {NAME: "Hide Quantification", ON_CLICK: (lambda: print("On clicked")), BUTTON_TYPE: 'primary'},
+            OFF: {NAME: "Show Quantification", ON_CLICK: (lambda: print("Off clicked")), BUTTON_TYPE: 'success'}
         }
 
         self._quanti_toggle_button = ToggleButton(

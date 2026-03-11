@@ -1,0 +1,1 @@
+from .periodic_table_of_elements_modal import PeriodicTableOfElementsModal
