@@ -8,7 +8,7 @@ Features:
 - Handles errors robustly by raising exceptions with clear messages.
 """
 
-from ..view.visualizers import SpectrumImageVisualizer, ImageVisualizer
+from ..view.plots import SpectrumImagePlot, ImageVisualizer
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ class VisualizerFactory:
         # Mapping of dataset types to visualizer classes
         # This can be extended with more visualizers as needed
         self._all_visualizers = {
-            model.constants.SPECTRUM_IMAGE: SpectrumImageVisualizer,
+            model.constants.SPECTRUM_IMAGE: SpectrumImagePlot,
             model.constants.IMAGE: ImageVisualizer
         }
         # aqui afegiriem el visualitzador de pieplot
@@ -43,7 +43,7 @@ class VisualizerFactory:
         self, 
         dataset_type: str, 
         dataset: "Dataset"
-    ) -> SpectrumImageVisualizer | ImageVisualizer | None:
+    ) -> SpectrumImagePlot | ImageVisualizer | None:
         """
         Instantiates and returns the appropriate EELS visualizer for the specified dataset type.
 

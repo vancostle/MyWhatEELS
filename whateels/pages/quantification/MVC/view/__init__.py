@@ -203,6 +203,7 @@ class QuantificationView(BaseView):
             content=pn.Column(
                 # *[widget for widget in self._quanti_input.values()],
                 element_atomic_number_wrapper,
+                self._quanti_input["shells_multiselect"],
                 self._quanti_add_element_button,
                 sizing_mode=self._STRETCH_WIDTH
             ),

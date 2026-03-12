@@ -9,7 +9,7 @@ import numpy as np
 import time
 import plotly.graph_objs as go
 
-from .abstract_eels_visualizer import AbstractEELSVisualizer
+from .abstract_eels_plots import AbstractEELSPlot
 from typing import override, TYPE_CHECKING
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
 from whateels.components import SplitJs
@@ -25,7 +25,7 @@ import bokeh.palettes as palettes
 colors = palettes.Category10[10]  # o Category20, viridis, etc.
 
 
-class SpectrumImageVisualizer(AbstractEELSVisualizer):
+class SpectrumImagePlot(AbstractEELSPlot):
     """
     Version Plotly / Panel del visualizador de Spectrum Image.
     Mantiene la lógica de datos del visualizador original y reemplaza

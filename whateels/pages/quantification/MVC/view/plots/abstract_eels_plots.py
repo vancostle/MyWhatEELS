@@ -5,24 +5,23 @@ import panel as pn
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import HomePageModel
     from xarray import Dataset
 
-class AbstractEELSVisualizer(ABC):
+class AbstractEELSPlot(ABC):
     """
-    Abstract base class for EELS visualizers.
-    This class defines the interface for EELS visualizers,
+    Abstract base class for EELS plots.
+    This class defines the interface for EELS plots,
     including methods for creating plots and handling dataset information.
     """
     
-    def __init__(self, model: "HomePageModel", dataset: "Dataset"):
+    def __init__(self, model, dataset: "Dataset"):
         super().__init__()
 
         self._model = model
         self._dataset = dataset
 
     @abstractmethod
-    def create_plots(self):
+    def create_plots(self) -> pn.viewable.Viewable:
         """
         Create the main layout for the EELS visualizer.
         
@@ -32,7 +31,7 @@ class AbstractEELSVisualizer(ABC):
         pass
 
     @abstractmethod
-    def create_dataset_info(self):
+    def create_dataset_info(self) -> pn.viewable.Viewable:
         # Dataset attribute keys
         SHAPE = 'shape'
         BEAM_ENERGY = 'beam_energy'

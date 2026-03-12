@@ -7,7 +7,7 @@ from whateels.state import CacheManager
 
 if TYPE_CHECKING:
     from ...view import QuantificationView
-    from ...view.visualizers.abstract_eels_visualizer import AbstractEELSVisualizer
+    from ...view.plots.abstract_eels_plots import AbstractEELSPlot
     from ...model import QuantificationModel
     from ...controller import QuantificationController
     from xarray import Dataset
@@ -41,7 +41,7 @@ class LayoutManager:
         self._all_dataset_info: list[pn.viewable.Viewable] = []
         self._max_energy_range = [float('inf'), float('-inf')]
         self._plots_tab = None
-        self._chosen_visualizers: list[AbstractEELSVisualizer] = []
+        self._chosen_visualizers: list[AbstractEELSPlot] = []
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""

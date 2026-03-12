@@ -6,20 +6,20 @@ import plotly.graph_objects as go
 import numpy as np
 import xarray as xr
 
-from .abstract_eels_visualizer import AbstractEELSVisualizer
+from .abstract_eels_plots import AbstractEELSPlot
 from typing import override, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...model import HomePageModel
+    from ...model import QuantificationModel
 
-class ImageVisualizer(AbstractEELSVisualizer):
+class ImageVisualizer(AbstractEELSPlot):
     """Composes image visualizations from EELS data"""
 
     # Constants for sizing modes and plot configuration
     _STRETCH_BOTH = 'stretch_both'
     _STRETCH_WIDTH = 'stretch_width'
     
-    def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
+    def __init__(self, model: "QuantificationModel", dataset: "xr.Dataset"):
         super().__init__(model, dataset)
 
         self._model = model
@@ -32,7 +32,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
     # -- Public Methods --
 
     @override
-    def create_plots(self):
+    def create_plots(self) -> pn.Column:
         """Create layout for spectrum line visualization with Plotly (no HoloViews/Bokeh)."""
 
         # Prepare cleaned image data and coordinates
@@ -60,7 +60,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
             z=m_image,
             x=np.arange(nx),
             y=np.arange(ny-1, -1, -1),
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model, 'colors') else 'Greys_r',
+            colorscale='Greys_r',
             showscale=False,
             hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )
@@ -105,10 +105,6 @@ class ImageVisualizer(AbstractEELSVisualizer):
 
         Returns a plotly.graph_objects.Figure sized to data with preserved aspect ratio.
         """
-        IMAGE_X_LABEL = 'X Position'
-        IMAGE_Y_LABEL = 'Y Position'
-        IMAGE_TITLE = 'Image Data'
-
         MAX_PLOT_SIZE = 600
 
         # Calculate dimensions from the data itself
@@ -123,7 +119,7 @@ class ImageVisualizer(AbstractEELSVisualizer):
             z=m_image,
             x=np.arange(data_width),
             y=np.arange(data_height-1, -1, -1),
-            colorscale=self._model.colors.GREYS_R if hasattr(self._model, 'colors') else 'Greys_r',
+            colorscale='Greys_r',
             showscale=False,
             hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
         )
