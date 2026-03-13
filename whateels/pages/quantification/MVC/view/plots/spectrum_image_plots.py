@@ -11,6 +11,7 @@ import panel as pn
 import numpy as np
 import time
 import holoviews as hv
+from holoviews import streams as hv_streams
 import bokeh.palettes as palettes
 
 from whateels.base.plots import BaseSpectrumImagePlot
@@ -52,9 +53,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._pending_selection_ts = None
         self._SELECTION_DEBOUNCE_MS = 200
 
-        # Hover is blocked while a lasso selection is active; reset by _process_selection
-        # when no pairs are found (empty click) or by double-click.
+        # Hover is blocked while a lasso selection is active; reset only by double-click.
         self._hover_blocked = False
+        self._double_tap_stream = None
 
         # Quantification state
         self.selected_slice = None
@@ -62,6 +63,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Base __init__ sets up HoloViews heatmap + spectrum panes and wires streams
         super().__init__(dataset, eloss_name=model.constants.ELOSS)
+
+        # Wire DoubleTap to reset hover block (source available after super().__init__)
+        self._double_tap_stream = hv_streams.DoubleTap(source=self._selectors)
+        self._double_tap_stream.add_subscriber(self._on_paneA_double_tap)
 
         # Periodic callback for inactivity logic (stopped initially)
         self._pc = pn.state.add_periodic_callback(
@@ -92,7 +97,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._pending_selection_index = None
                 self._pending_selection_ts = None
                 self._process_selection(index)
-                return
+            # Always return while a selection is pending — don't let the
+            # region_pairs / hover checks below stop the pc prematurely.
+            return
 
         if not self._region_pairs:
             if self._pc and self._pc.running:
@@ -115,6 +122,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     @override
     def _on_paneA_hover(self, x=None, y=None):
+        # Hover is blocked after a lasso selection — double-click on paneA to reset.
+        if self._hover_blocked:
+            return
         if x is None or y is None:
             return
         point = {"x": x, "y": y}
@@ -190,6 +200,20 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._pc.stop()
         self._last_hover_ts = None
         self._hover_blocked = True
+
+    def _on_paneA_double_tap(self, x=None, y=None):
+        """Double-click resets the lasso selection and unblocks hover."""
+        self._hover_blocked = False
+        self._region_pairs = []
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        self._last_hover_ts = None
+        if self._pc and self._pc.running:
+            self._pc.stop()
+        if x is not None and y is not None:
+            point = {"x": x, "y": y}
+            self._last_hover_point = point
+            self._show_spectrum(point=point)
 
     # --- Quantification overlays ---
 
@@ -349,6 +373,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def cleanup(self):
         self._pending_selection_index = None
         self._pending_selection_ts = None
+        if self._double_tap_stream is not None:
+            try:
+                self._double_tap_stream.remove_subscriber(self._on_paneA_double_tap)
+                self._double_tap_stream.clear()
+            except Exception:
+                pass
+            self._double_tap_stream = None
         if self._pc is not None:
             try:
                 if self._pc.running:
