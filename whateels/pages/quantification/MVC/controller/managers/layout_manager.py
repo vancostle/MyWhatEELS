@@ -41,7 +41,7 @@ class LayoutManager:
         self._all_dataset_info: list[pn.viewable.Viewable] = []
         self._max_energy_range = [float('inf'), float('-inf')]
         self._plots_tab = None
-        self._chosen_visualizers: list[AbstractEELSPlot] = []
+        self._chosen_visualizers: list = []
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
@@ -71,9 +71,6 @@ class LayoutManager:
         NOT_AVAILABLE = 'N/A'
         ACTIVE = 'active'
         STRETCH_BOTH = 'stretch_both'
-        DEFAULT_TAB_INDEX = 0
-
-        app_state = CacheManager.get_cached_app_state()
 
         try:
             # Clear previous dataset info panels to prevent caching old data

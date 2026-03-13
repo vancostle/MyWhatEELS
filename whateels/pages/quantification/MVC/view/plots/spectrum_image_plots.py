@@ -76,6 +76,22 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def get_e_axis(self):
         return self._e_axis
 
+    # --- paneB override: hv.Bars can't be sent through a Curve-typed Pipe/DynamicMap ---
+
+    @override
+    def _update_paneB(self, fig):
+        if isinstance(fig, hv.Bars):
+            # Bar chart has categorical kdims — Bokeh can't update a curve renderer in-place.
+            # Set paneB.object directly to get a fresh render.
+            self.paneB.object = fig
+            self._paneB_bar_mode = True
+        else:
+            if getattr(self, '_paneB_bar_mode', False):
+                # Coming back from bar mode: restore the DynamicMap so the Pipe works again.
+                self.paneB.object = self._paneB_dmap
+                self._paneB_bar_mode = False
+            super()._update_paneB(fig)
+
     @override
     def _setup_plots(self):
         super()._setup_plots()
@@ -301,6 +317,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         return cs_instance.get_data()
 
     def plot_quantification_pie(self, element_items):
+        if self.selected_slice is None:
+            raise ValueError("No region selected. Use lasso/box on the image before running quantification.")
         element_data = []
         if element_items is None or len(element_items) == 0:
             raise ValueError("No elements provided for quantification.")
@@ -339,10 +357,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     y_extrapolated0, y_extrapolated1,
                     self._energy,
                 ).get_quanti()
-                if q_aux < 0:
-                    return (
-                        f" | Quantification result: Negative value for "
-                        f"{element_item0.element} / {element_item1.element}, check ranges."
+                if not np.isfinite(float(q_aux)) or q_aux < 0:
+                    raise ValueError(
+                        f"Invalid quantification result ({q_aux}) for "
+                        f"{element_item0.element} / {element_item1.element}. "
+                        f"Check fit and quantification ranges."
                     )
                 q_list.append((element_item0.element, element_item1.element, q_aux))
                 i += 1
@@ -350,6 +369,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._update_paneB(self._build_quant_bars(q_list))
         except Exception as e:
             print(f"Error in quantification calculation: {e}")
+            raise
 
     def _build_quant_bars(self, q_list):
         """Build an hv.Bars chart from quantification ratios (replaces Plotly pie)."""
@@ -431,6 +451,9 @@ class add_cs:
             y_filtered_ = self.cross_section[mask_]
             self.norm_exp = np.trapz(y_filtered, x_filtered).real  # Experimental normalization
             self.norm_sim = np.trapz(y_filtered_, x_filtered_).real  # Simulated normalization
+            print(f"[DBG add_cs] {element} {ishell}: quant_range={quant_range_values}, "
+                  f"mask_sum={mask_.sum()}, cs_range=[{self.eaxis_cs[0]:.2f},{self.eaxis_cs[-1]:.2f}], "
+                  f"cs_sum={self.cross_section[mask_].sum():.6g}, norm_sim={self.norm_sim:.6g}, norm_exp={self.norm_exp:.6g}")
         else:
             self.norm_sim = np.trapz(self.cross_section, self.eaxis).real
             self.norm_exp = np.trapz(selected_slice - y_extrapolated, self.eaxis).real
