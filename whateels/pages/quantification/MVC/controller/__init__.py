@@ -50,8 +50,6 @@ class QuantificationController(BaseController):
         isDisabled = self._view.should_enable_quantification_button()
         self._view.quanti_toggle_button.disabled = not isDisabled
 
-        self._quanti_active =  False
-        
         self._quantification_user_update(view)
 
     @property
@@ -71,7 +69,8 @@ class QuantificationController(BaseController):
         view.quanti_input["shells_multiselect"].param.watch(self._shells_multiselect_watcher, 'value')
         view.quanti_add_element_button.on_click(self._add_element_item_button_callback)
         view.quanti_run_button.on_click(self._run_quantification)
-        view.quanti_toggle_button.on_click(self._toggle_quantification)
+        view.quanti_toggle_button.on_click_by_state(False, self._on_quanti_show)
+        view.quanti_toggle_button.on_click_by_state(True, self._on_quanti_hide)
 
     def _element_num_watcher(self, event):
         """Watcher for changes in the element number selection."""
@@ -184,7 +183,6 @@ class QuantificationController(BaseController):
         
         if element_repeated:
             add_element_button.disabled = True
-            print("Element already added.")
             return
         
         element_item = ElementItem(
@@ -240,37 +238,34 @@ class QuantificationController(BaseController):
         element_item.set_quant_range(min_eaxis_cs)
         self._layout.add_new_element_input(element_item_view)
         self.view.quanti_input['shells_multiselect'].value = []
-        print("Element added programmatically.")
         return
 
 
     def _run_quantification(self, event):
         if not self._model.app_state.quantification_elements:
-            print("No elements to quantify.")
+            raise RuntimeError("No elements to quantify.")
         elif len(self._model.app_state.quantification_elements) < 2:
-            print("At least two elements are required for quantification.")
+            raise RuntimeError("At least two elements are required for quantification.")
         else:
             self._layout.plot_quantification_pie()    
 
-    def _toggle_quantification(self, event):
-        print(self._quanti_active)
-        if not self._quanti_active:
-            if not self._model.app_state.quantification_elements:
-                self.view.quanti_toggle_button.toggle()  # Revert the toggle state
-                print("No elements to quantify.")
-            elif len(self._model.app_state.quantification_elements) < 2:
-                self.view.quanti_toggle_button.toggle()  # Revert the toggle state
-                print("At least two elements are required for quantification.")
-            else:
-                try:
-                    self._layout.plot_quantification_pie()
-                    self._quanti_active = True
-                except Exception as e:
-                    self.view.quanti_toggle_button.toggle()
-                    print(f"Error plotting quantification pie chart: {e}")
-        else:
-            self.plot_elements()
-            self._quanti_active = False
+    def _on_quanti_show(self):
+        """Called when toggle button is clicked in OFF state (show quantification)."""
+        if not self._model.app_state.quantification_elements:
+            self.view.quanti_toggle_button.toggle()  # Revert the toggle state
+            raise RuntimeError("No elements to quantify.")
+        elif len(self._model.app_state.quantification_elements) < 2:
+            self.view.quanti_toggle_button.toggle()  # Revert the toggle state
+            raise RuntimeError("At least two elements are required for quantification.")
+        try:
+            self._layout.plot_quantification_pie()
+        except Exception as e:
+            self.view.quanti_toggle_button.toggle()
+            raise RuntimeError(f"Error plotting quantification pie chart: {e}")
+
+    def _on_quanti_hide(self):
+        """Called when toggle button is clicked in ON state (hide quantification)."""
+        self.plot_elements()
 
     def plot_elements(self):
         self._layout.plot_quantification_elements()

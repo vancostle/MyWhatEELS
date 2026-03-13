@@ -137,14 +137,11 @@ class LayoutManager:
 
     def plot_quantification_elements(self):
         """Plot a single quantification element using the model's plotting method."""
-        print ("Plotting quantification element...")
         self._chosen_visualizers[0].plot_quantification_elements(CacheManager.get_cached_app_state().quantification_elements)
 
     def plot_shells_cross_section(self, element_item: "ElementItem"):
-        print ("Plotting shells")
         self._chosen_visualizers[0].plot_shells_cross_section(element_item)
 
     def plot_quantification_pie(self):
         """Plot the quantification pie chart using the model's plotting method."""
-        print ("Plotting quantification pie chart...")
         self._chosen_visualizers[0].plot_quantification_pie(CacheManager.get_cached_app_state().quantification_elements)

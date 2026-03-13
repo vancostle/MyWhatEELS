@@ -75,7 +75,7 @@ class Loader_OOS():
             else:
                 raise ValueError("z_number should be between 1 and 99")
         except ValueError:
-            print("z_number must be a valid integer between 1 and 99")
+            raise ValueError("z_number must be a valid integer between 1 and 99")
 
         directories_possible = [el for el in self.directory]
 
@@ -92,8 +92,6 @@ class Loader_OOS():
                 if isinstance(item, dict):
                     self.subshells.extend(item.keys())              
                     if subshell in self.subshells:
-                        ##print(f'Subshell {subshell} found.')
-                        ##print("Energy axis (last value):", np.array(item[subshell]['eaxis'])[-1])
                         return np.array(item[subshell]['eaxis']), np.array(item[subshell]['counts']), \
                             item[subshell]['onset']
                     elif subshell is None:
@@ -122,7 +120,7 @@ class Loader_OOS():
             else:
                 raise ValueError("z_number should be between 1 and 99")
         except ValueError:
-            print("z_number must be a valid integer between 1 and 99")
+            raise ValueError("z_number must be a valid integer between 1 and 99")
 
         # Load the OOS data from the JSON file
         with open(f'{self.directory}/{oos_filename}.json', 'r') as g:
@@ -147,7 +145,7 @@ class Loader_OOS():
             else:
                 raise ValueError("z_number should be between 1 and 99")
         except ValueError:
-            print("z_number must be a valid integer between 1 and 99")
+            raise ValueError("z_number must be a valid integer between 1 and 99")
 
         # Load the OOS data from the JSON file
         with open(f'{self.directory}/{oos_filename}.json', 'r') as g:
@@ -166,7 +164,6 @@ class Loader_OOS():
         """
         self.subshells = []
         self.oos_reader(z_number, subshell=None)
-        ##print(f'Available subshells for element {z_number} are {self.subshells}')
         return self.subshells
             
     def df_cross_section(self, z_number, subshell, V=None, b=None, si=None):

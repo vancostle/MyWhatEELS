@@ -365,11 +365,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     )
                 q_list.append((element_item0.element, element_item1.element, q_aux))
                 i += 1
-            print(f" | Quantification result: {q_list}")
             self._update_paneB(self._build_quant_bars(q_list))
         except Exception as e:
-            print(f"Error in quantification calculation: {e}")
-            raise
+            raise RuntimeError(f"Error in quantification calculation: {e}")
 
     def _build_quant_bars(self, q_list):
         """Build an hv.Bars chart from quantification ratios."""
@@ -381,7 +379,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             abc_list.append(abc_list[i] / q_list[i][2])
         total = sum(abc_list)
         labels = [str(q_list[i][0]) for i in range(len(abc_list) - 1)] + [str(q_list[-1][1])]
-        proportions = [v / total for v in abc_list]
+        proportions = [round(v / total * 100) for v in abc_list]
         bar_colors = [_QUANT_COLORS[i % len(_QUANT_COLORS)] for i in range(len(labels))]
 
         return hv.Bars(
@@ -389,7 +387,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             kdims=['Element'], vdims=['Proportion', 'Color'],
         ).opts(
             title='Quantification',
-            xlabel='Element', ylabel='Proportion',
+            xlabel='Element', ylabel='Proportion (%)',
             color='Color',
             responsive=True, shared_axes=False, framewise=True,
         )

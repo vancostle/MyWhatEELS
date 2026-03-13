@@ -1,15 +1,20 @@
 import panel as pn
 from whateels.components.toggle_button import ToggleButton
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ...view import QuantificationView
+
 class ElementItemView(pn.Column):
     _STRETCH_WIDTH = 'stretch_width'
 
     def __init__(self, controller, element_item: "ElementItem", model, energy, 
-                view, expandable: bool = True):
+                view : "QuantificationView", expandable: bool = True):
         self._controller = controller
         self.element_item = element_item
         self._model = model
         self.energy = energy
+        self._view = view
         self._element_item_view_container = view._element_item_view_container
         self._quanti_input = view._quanti_input
         self._quanti_add_element_button = view._quanti_add_element_button
@@ -138,7 +143,7 @@ class ElementItemView(pn.Column):
             add_element_button.name = f'Add Element'
 
         # Update quantification toggle button state
-        isDisabled = self.should_enable_quantification_button()
+        isDisabled = self._view.should_enable_quantification_button()
         self._quanti_toggle_button.disabled = not isDisabled
 
         self._controller.plot_elements()
