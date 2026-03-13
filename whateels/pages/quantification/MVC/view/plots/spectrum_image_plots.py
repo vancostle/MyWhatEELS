@@ -52,6 +52,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._pending_selection_ts = None
         self._SELECTION_DEBOUNCE_MS = 200
 
+        # Hover is blocked while a lasso selection is active; reset by _process_selection
+        # when no pairs are found (empty click) or by double-click.
+        self._hover_blocked = False
+
         # Quantification state
         self.selected_slice = None
         self.element_quant_data = []
@@ -128,6 +132,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_paneA_click(self, x=None, y=None):
         if x is None or y is None:
             return
+        # Ignore while a selection is being drawn or processed — Tap fires at mouse-up
+        # which is the same moment Selection1D finishes, causing interference.
+        if self._pending_selection_ts is not None or self._hover_blocked:
+            return
         app_state = CacheManager.get_cached_app_state()
         point = {"x": x, "y": y}
         self._last_hover_point = point
@@ -146,11 +154,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     @override
     def _on_paneA_selected(self, index=None):
-        # Selection1D fires on every point while drawing the lasso.
-        # Store the latest index and timestamp; _check_inactivity will process
-        # it once it has been stable for _SELECTION_DEBOUNCE_MS.
-        self._pending_selection_index = index
+        # Block hover immediately so paneB isn't overwritten while lasso is being drawn.
+        self._hover_blocked = True
+        # Always refresh the debounce timestamp.
         self._pending_selection_ts = self._now_ms()
+        # Only store non-empty indices: Bokeh fires a final Selection1D(index=[]) after
+        # mouse release to clear the visual highlight — that would overwrite the real indices.
+        if index:
+            self._pending_selection_index = index
         if self._pc and not self._pc.running:
             self._pc.start()
 
@@ -164,6 +175,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             ))
         self._region_pairs = pairs
         if not pairs:
+            self._hover_blocked = False
             if self._pc and self._pc.running:
                 self._pc.stop()
             self._last_hover_ts = None
@@ -177,6 +189,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if self._pc and self._pc.running:
             self._pc.stop()
         self._last_hover_ts = None
+        self._hover_blocked = True
 
     # --- Quantification overlays ---
 
