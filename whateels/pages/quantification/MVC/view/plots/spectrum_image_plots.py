@@ -1,193 +1,252 @@
 """
 Spectrum image (datacube) visualization composer.
-Se reemplaza HoloViews por Panel + Plotly usando la lógica de si_view.py,
-pero manteniendo la lógica de acceso a datos y widgets de SpectrumImageVisualizer.
+
+Extends BaseSpectrumImagePlot (HoloViews + Panel) with quantification-specific
+overlays: power-law background fit, background-subtracted signal, and cross-section
+curves. Inactivity timer logic temporarily shows hover spectra then reverts to the
+ROI sum after a short pause.
 """
 
 import panel as pn
 import numpy as np
 import time
-import plotly.graph_objs as go
+import holoviews as hv
+import bokeh.palettes as palettes
 
-from .abstract_eels_plots import AbstractEELSPlot
-from typing import override, TYPE_CHECKING
+from whateels.base.plots import BaseSpectrumImagePlot
 from whateels.helpers import SpectrumExtractor, SpectrumFitting
-from whateels.components import SplitJs
 from whateels.state import CacheManager
+from typing import override, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...model import QuantificationModel
     from xarray import Dataset
-    from param.parameterized import Event
-    
-import bokeh.palettes as palettes
 
-colors = palettes.Category10[10]  # o Category20, viridis, etc.
+colors = palettes.Category10[10]
 
 
-class SpectrumImagePlot(AbstractEELSPlot):
+class SpectrumImagePlot(BaseSpectrumImagePlot):
     """
-    Version Plotly / Panel del visualizador de Spectrum Image.
-    Mantiene la lógica de datos del visualizador original y reemplaza
-    HoloViews por Plotly panes y callbacks (hover / click / select).
+    HoloViews-based spectrum image visualizer for the quantification page.
+
+    Extends BaseSpectrumImagePlot with:
+    - Inactivity timer: hover temporarily shows pixel spectrum, then reverts to ROI.
+    - Quantification overlays: power-law fit, background subtraction, cross-sections.
+    - Quantification bar chart (replaces Plotly pie).
     """
-    
-    # Panel sizing modes
-    _STRETCH_WIDTH = "stretch_width"
-    
-    # CSS classes and constants for dataset info panel
-    _DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
-    _DATASET_INFO_CLASS = ["dataset-info", "animated"]
-    _DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
-    
-    _NOT_AVAILABLE = 'N/A'
-    
-    # Axis titles for spectrum plot
+
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
     def __init__(self, model: "QuantificationModel", dataset: "Dataset"):
-        super().__init__(model, dataset)
-
         self._model = model
-        self._dataset = dataset
 
-        # Energy axis (eje de energía)
-        self._e_axis = self._dataset.coords[self._model.constants.ELOSS].values
-
-        # ElectronCount data cube
-        self._electron_count_data: "Dataset" = self._dataset.ElectronCount
-        
-        # Last selected pixel (x,y)
-        self._last_selected = {"x": 0, "y": 0}
-
-        # Range state for paneB (to preserve zoom/pan)
-        self._current_x_range = None
-        self._current_y_range = None
-        # None = unknown / leave Plotly default; True/False = explicitly requested autorange
-        self._current_x_autorange = None
-        self._current_y_autorange = None
-
-        # Selection / hover / fitting state (inspired by si_view.py)
-        self._region_pairs = []         # lista de (i,j) seleccionados por lasso/box
-        self._last_hover_point = None   # último hover {x,y,curve}
+        # Inactivity timer state — must be set before super().__init__ triggers callbacks
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
-        self._fitting_active = False
+        self._pc = None
 
-        # Widgets / panes placeholders
-        self.range_slider = None
-        self.fitting_button = None
-        self.paneA = None  # Plotly heatmap pane
-        self.paneB = None  # Plotly spectrum pane
-        self._pc = None    # periodic callback handle
-        self._js_executor = None  # invisible HTML pane to run JS
+        # Pending selection — overwritten on every Selection1D event while drawing;
+        # processed by _check_inactivity on the next periodic callback tick.
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        self._SELECTION_DEBOUNCE_MS = 200
 
-        self.element_quant_data = []  # to store quantification data per element
+        # Quantification state
         self.selected_slice = None
+        self.element_quant_data = []
 
-        # Setup widgets, plots and callbacks
-        self._setup_plots()
-        self._setup_callbacks()
+        # Base __init__ sets up HoloViews heatmap + spectrum panes and wires streams
+        super().__init__(dataset, eloss_name=model.constants.ELOSS)
+
+        # Periodic callback for inactivity logic (stopped initially)
+        self._pc = pn.state.add_periodic_callback(
+            self._check_inactivity, period=250, start=False
+        )
 
     def get_e_axis(self):
         return self._e_axis
-        
-    # --- Public layout builders (used by controller) ---
-    @override
-    def create_plots(self):        
-        left_column = pn.Column(
-            self.paneA,
-            sizing_mode='stretch_both',
-            margin=0
-        )
-        
-        right_column = pn.Column(
-            self.paneB,
-            # fila de botones (fitting + multifit)
-            self.buttons_row if hasattr(self, 'buttons_row') else self.fitting_button,
-            # slider/range debajo
-            self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
-            sizing_mode='stretch_both',
-            margin=0
-        )
-        
-        splitjs = SplitJs(
-            left_column=left_column,
-            right_column=right_column,
-            sizing_mode='stretch_both',
-            margin=0
-        )
- 
-        return splitjs
 
     @override
-    def create_dataset_info(self):
-        return super().create_dataset_info()
-    
-    def plot_quantification_elements(self, element_items: list["ElementItems"]):
-        fig = self._figB_region(self._region_pairs)
-        fig = fig
+    def _setup_plots(self):
+        super()._setup_plots()
+        # Make lasso the default active drag tool, matching the previous Plotly dragmode="lasso"
+        self.paneA.object = self.paneA.object.opts(
+            hv.opts.Overlay(active_tools=['lasso_select'])
+        )
 
-        colors = palettes.Category10[10]
-        
+    # --- Inactivity timer ---
 
+    def _now_ms(self):
+        return int(time.time() * 1000)
+
+    def _check_inactivity(self):
+        # --- Flush pending selection after debounce ---
+        if self._pending_selection_ts is not None:
+            if self._now_ms() - self._pending_selection_ts >= self._SELECTION_DEBOUNCE_MS:
+                index = self._pending_selection_index
+                self._pending_selection_index = None
+                self._pending_selection_ts = None
+                self._process_selection(index)
+                return
+
+        if not self._region_pairs:
+            if self._pc and self._pc.running:
+                self._pc.stop()
+            return
+        if self._last_hover_ts is None:
+            if self._pc and self._pc.running:
+                self._pc.stop()
+            return
+        if self._now_ms() - self._last_hover_ts >= self._INACTIVITY_MS:
+            app_state = CacheManager.get_cached_app_state()
+            if app_state.quantification_elements:
+                self.plot_quantification_elements(app_state.quantification_elements)
+            else:
+                self._show_spectrum(region_pairs=self._region_pairs)
+            if self._pc and self._pc.running:
+                self._pc.stop()
+
+    # --- Overridden event handlers ---
+
+    @override
+    def _on_paneA_hover(self, x=None, y=None):
+        if x is None or y is None:
+            return
+        point = {"x": x, "y": y}
+        self._last_hover_point = point
+        if self._region_pairs:
+            # Temporarily show pixel spectrum; inactivity timer will revert to ROI
+            self._update_paneB(self._figB_hover(point))
+            self._last_hover_ts = self._now_ms()
+            if self._pc and not self._pc.running:
+                self._pc.start()
+        else:
+            self._show_spectrum(point=point)
+
+    @override
+    def _on_paneA_click(self, x=None, y=None):
+        if x is None or y is None:
+            return
+        app_state = CacheManager.get_cached_app_state()
+        point = {"x": x, "y": y}
+        self._last_hover_point = point
+        if app_state.quantification_elements and self._region_pairs:
+            self.plot_quantification_elements(app_state.quantification_elements)
+            return
+        if self._region_pairs:
+            self._last_hover_ts = self._now_ms()
+            if self._pc and not self._pc.running:
+                self._pc.start()
+        else:
+            if self._pc and self._pc.running:
+                self._pc.stop()
+            self._last_hover_ts = None
+            self._show_spectrum(point=point)
+
+    @override
+    def _on_paneA_selected(self, index=None):
+        # Selection1D fires on every point while drawing the lasso.
+        # Store the latest index and timestamp; _check_inactivity will process
+        # it once it has been stable for _SELECTION_DEBOUNCE_MS.
+        self._pending_selection_index = index
+        self._pending_selection_ts = self._now_ms()
+        if self._pc and not self._pc.running:
+            self._pc.start()
+
+    def _process_selection(self, index=None):
+        app_state = CacheManager.get_cached_app_state()
+        if not index:
+            pairs = []
+        else:
+            pairs = list(dict.fromkeys(
+                (idx // self._nx, idx % self._nx) for idx in index
+            ))
+        self._region_pairs = pairs
+        if not pairs:
+            if self._pc and self._pc.running:
+                self._pc.stop()
+            self._last_hover_ts = None
+            if self._last_hover_point is not None:
+                self._update_paneB(self._figB_hover(self._last_hover_point))
+            return
+        if app_state.quantification_elements:
+            self.plot_quantification_elements(app_state.quantification_elements)
+        else:
+            self._show_spectrum(region_pairs=pairs)
+        if self._pc and self._pc.running:
+            self._pc.stop()
+        self._last_hover_ts = None
+
+    # --- Quantification overlays ---
+
+    def plot_quantification_elements(self, element_items: list):
         res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-        if res is not None:
-            self.selected_slice, _ = res ## Retorna none
-            i = 0
-            for element_item in element_items:
-                color = colors[i % len(colors)]
-                fig = self.plot_quantification_element(fig, element_item, color)
-                i += 1
+        if res is None:
+            return
+        spec, n_points = res
+        self.selected_slice = spec
 
-            self.paneB.object = self._set_ranges_and_convert(fig)
-
-
-    
-
-    def plot_quantification_element(self, fig, element_item: "ElementItem", color):
-        try:
-            y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
-            fig = self._plot_fit_traces(fig, element_item.element, self._energy, self.selected_slice, y_fit, color)
-            self.plot_shells_cross_section(fig, element_item)
-            #fig.update_layout(xaxis= dict(range=[self._e_axis[0], self._e_axis[-1]]))
-
-            return fig
-        except Exception as e:
-            raise e
-        
-    def plot_shells_cross_section(self, fig, element_item: "ElementItem"):
-        y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
-        min_eaxis_cs = float('inf')
-        for ishell in element_item.shells:
-            eaxis = element_item.cross_sections[ishell][0]
-            counts = element_item.cross_sections[ishell][1]
-            onset = element_item.cross_sections[ishell][2]
-            cross_section = element_item.cross_sections[ishell][3]
-            chemical_shift = element_item.chemical_shift
-            
-            self.plot_cs(
-                fig, element_item, ishell, self.selected_slice, y_fit,
-                eaxis_cs=eaxis, counts=counts, onset=onset,
-                cross_section=cross_section, chemical_shift=chemical_shift
-            )
-            if eaxis[0] < min_eaxis_cs:
-                min_eaxis_cs = eaxis[0]
-        
-        ## fig.add_vline(x=min_eaxis_cs - chemical_shift, line_width=2, line_dash="dash", line_color="rgba(0, 0, 0, 0.7)")
-        """
-        fig.add_annotation(
-            x=min_eaxis_cs - chemical_shift,
-            y=max(self.selected_slice),
-            text=element_item.element_name_short,
-            font=dict(color="rgba(0, 0, 0, 0.7)"),
-            bgcolor='rgba(255, 255, 255, 0.7)',
-            showarrow=False,
-            align='center'
+        base_curve = hv.Curve(
+            (self._energy, spec), kdims=['x'], vdims=['y'], label='Spectrum',
+        ).opts(
+            color='black', line_width=1.5,
+            title=f"ROI — sum (points={n_points})",
+            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
+            responsive=True, shared_axes=False, framewise=True,
         )
-        """
-    
+        curves = [base_curve]
+        for i, element_item in enumerate(element_items):
+            color = colors[i % len(colors)]
+            curves.extend(self._build_quant_curves(element_item, color))
+
+        overlay = hv.Overlay(curves).opts(
+            hv.opts.Overlay(
+                responsive=True, shared_axes=False, framewise=True, show_legend=True,
+            )
+        )
+        self._update_paneB(overlay)
+
+    def _build_quant_curves(self, element_item, color):
+        """Build HoloViews fit + cross-section curves for one element."""
+        curves = []
+        try:
+            y_fit = SpectrumFitting.fit_powerlaw_curve(
+                self._energy, self.selected_slice, range_values=element_item.fit_range
+            )
+            if y_fit is not None:
+                curves.append(hv.Curve(
+                    (self._energy, y_fit), kdims=['x'], vdims=['y'],
+                    label=f'{element_item.element} PowerLaw Fit',
+                ).opts(color=color, line_width=1.5))
+                bg_sub = self.selected_slice - y_fit
+                curves.append(hv.Area(
+                    (self._energy, bg_sub), kdims=['x'], vdims=['y'],
+                    label=f'{element_item.element} BG Subtraction',
+                ).opts(color=color, alpha=0.3, line_color=color, line_alpha=0.6))
+            for ishell in element_item.shells:
+                eaxis_cs = element_item.cross_sections[ishell][0]
+                counts = element_item.cross_sections[ishell][1]
+                onset = element_item.cross_sections[ishell][2]
+                cross_section = element_item.cross_sections[ishell][3]
+                cs_instance = add_cs(
+                    element=element_item.element, ishell=ishell,
+                    selected_slice=self.selected_slice,
+                    y_extrapolated=y_fit if y_fit is not None else np.zeros_like(self.selected_slice),
+                    chemical_shift=element_item.chemical_shift,
+                    quant_range_values=element_item.quant_range,
+                    eaxis=self._energy, eaxis_cs=eaxis_cs,
+                    counts=counts, onset=onset, cross_section=cross_section,
+                )
+                xaxis, yaxis = cs_instance.get_data()
+                curves.append(hv.Curve(
+                    (xaxis, yaxis), kdims=['x'], vdims=['y'],
+                    label=f'{element_item.element} {ishell} OOS',
+                ).opts(line_width=1.5))
+        except Exception:
+            pass
+        return curves
 
     def calculate_shell_data(self, selected_slice, element_item, y_extrapolated, ishell):
         eaxis = element_item.cross_sections[ishell][0]
@@ -195,503 +254,95 @@ class SpectrumImagePlot(AbstractEELSPlot):
         onset = element_item.cross_sections[ishell][2]
         cross_section = element_item.cross_sections[ishell][3]
         cs_instance = add_cs(
-                    element=element_item.element, 
-                    ishell=ishell, 
-                    selected_slice=selected_slice, 
-                    y_extrapolated=y_extrapolated, 
-                    chemical_shift=element_item.chemical_shift, 
-                    quant_range_values=element_item.quant_range, 
-                    eaxis=self._e_axis, 
-                    eaxis_cs=eaxis, 
-                    counts=counts, 
-                    onset=onset, 
-                    cross_section=cross_section
-            )
-    
-        shell_data = cs_instance.get_data()
-                    
-        return shell_data
-    
-    def plot_cs(self, fig, element_item, ishell, selected_slice, y_extrapolated, eaxis_cs, counts, onset, cross_section, chemical_shift=16):
-        
-        cs_instance = add_cs(
-                    element=element_item.element, 
-                    ishell=ishell, 
-                    selected_slice=selected_slice, 
-                    y_extrapolated=y_extrapolated, 
-                    chemical_shift=chemical_shift, 
-                    quant_range_values=element_item.quant_range, 
-                    eaxis=self._e_axis, 
-                    eaxis_cs=eaxis_cs, 
-                    counts=counts, 
-                    onset=onset, 
-                    cross_section=cross_section
-            )
-        
-        xaxis, yaxis = cs_instance.get_data()
-        fig.add_trace(go.Scatter(
-            x=xaxis, 
-            y=yaxis, 
-            name=f'{cs_instance.element} {cs_instance.ishell} OOS'
-        ))
+            element=element_item.element, ishell=ishell,
+            selected_slice=selected_slice, y_extrapolated=y_extrapolated,
+            chemical_shift=element_item.chemical_shift,
+            quant_range_values=element_item.quant_range,
+            eaxis=self._energy, eaxis_cs=eaxis,
+            counts=counts, onset=onset, cross_section=cross_section,
+        )
+        return cs_instance.get_data()
 
-        
-
-        #fig.update_layout(xaxis=dict(range=[self._e_axis, self._e_axis]))
-
-        return fig, (xaxis, yaxis)
-    
     def plot_quantification_pie(self, element_items):
-        """
-        Calculates the quantification results for the elements in the state.
-
-        Parameters:
-            state: The application state containing element data and energy information.
-
-        Returns:
-            A string summarizing the quantification results or an error message if something goes wrong.
-        """
         element_data = []
         if element_items is None or len(element_items) == 0:
             raise ValueError("No elements provided for quantification.")
         for element_item in element_items:
             try:
                 shells_data = []
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, self.selected_slice, range_values=element_item.fit_range)
+                y_fit = SpectrumFitting.fit_powerlaw_curve(
+                    self._energy, self.selected_slice, range_values=element_item.fit_range
+                )
                 for ishell in element_item.shells:
-                    shell_data = self.calculate_shell_data(self.selected_slice, element_item, y_fit, ishell)
+                    shell_data = self.calculate_shell_data(
+                        self.selected_slice, element_item, y_fit, ishell
+                    )
                     shells_data.append((ishell, shell_data))
                 if len(shells_data) == 2:
-                    ##afegir element data a init
                     element_data.append([
-                                    element_item, y_fit,
-                                    get_envelope(
-                                        shells_data[0][1][0], shells_data[0][1][1],
-                                        shells_data[1][1][0], shells_data[1][1][1]
-                                    )
-                                ])
+                        element_item, y_fit,
+                        get_envelope(
+                            shells_data[0][1][0], shells_data[0][1][1],
+                            shells_data[1][1][0], shells_data[1][1][1],
+                        )
+                    ])
                 else:
                     element_data.append([element_item, y_fit, shells_data[0][1]])
             except Exception as e:
                 raise e
         try:
-            q_list = []  # List to store quantification results
+            q_list = []
             i = 0
-            # Iterate through the element data list in pairs
             while i < len(element_data) - 1:
-                # Extract data for the current and next elements
                 element_item0, y_extrapolated0, element_data0 = element_data[i]
                 element_item1, y_extrapolated1, element_data1 = element_data[i + 1]
-                
-                # Perform quantification between the two elements
                 q_aux = quanti(
                     element_item0.quant_range, element_item1.quant_range,
                     element_data0, element_data1,
                     y_extrapolated0, y_extrapolated1,
-                    self._energy
+                    self._energy,
                 ).get_quanti()
-                
-                # Check if the quantification result is valid
                 if q_aux < 0:
-                    return f" | Quantification result: Negative value for {element_item0.element} / {element_item1.element}, check ranges."
-                else:
-                    # Append the result to the list
-                    q_list.append((element_item0.element, element_item1.element, q_aux))
+                    return (
+                        f" | Quantification result: Negative value for "
+                        f"{element_item0.element} / {element_item1.element}, check ranges."
+                    )
+                q_list.append((element_item0.element, element_item1.element, q_aux))
                 i += 1
-            ##state.paneC.object = pie_plot(q_list)  # Update the pie chart with the results
-            self.paneB.object = self.pie_plot(q_list)
-            print (f" | Quantification result: {q_list}")
+            print(f" | Quantification result: {q_list}")
+            self._update_paneB(self._build_quant_bars(q_list))
         except Exception as e:
-            # Handle any errors that occur during quantification
             print(f"Error in quantification calculation: {e}")
 
-    def pie_plot(self, q_list):
-        """
-        Creates a pie chart to visualize the quantification results.
-
-        Parameters:
-            q_list: A list of tuples containing element pairs and their quantification values.
-
-        Returns:
-            A Plotly pie chart figure.
-        """
-        A = 1  # Initial value for proportions
-        abc_list = [1]  # List to store intermediate proportions
+    def _build_quant_bars(self, q_list):
+        """Build an hv.Bars chart from quantification ratios (replaces Plotly pie)."""
+        abc_list = [1.0]
         for i in range(len(q_list)):
-            # Calculate the proportion for each element pair
             abc_list.append(abc_list[i] / q_list[i][2])
-
-        # Normalize the proportions
         total = sum(abc_list)
-        proportions = []  # List to store normalized proportions
-        labels = []  # List to store labels for the pie chart
-        for i in range(len(abc_list)):
-            proportions.append(abc_list[i] / total)
-            if i != len(abc_list) - 1:
-                labels.append(q_list[i][0])  # Add the first element of the pair as a label
-        labels.append(q_list[-1][1])  # Add the last element of the last pair as a label
-
-        # Create the pie chart using Plotly
-        fig = go.Figure(data=[go.Pie(labels=labels, values=proportions, hole=0.0)])
-        return fig
-
-    # --- Plot / Pane Setup (Plotly) ---
-    def _setup_plots(self):
-        # Build image (m_image) from data cube in the canonical way used in this class
-        # ElectronCount dims assumed (y, x, E)
-        # Use self._electron_count_data from constructor
-        m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
-        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
-        if m_image.ndim != 2:
-            raise ValueError(f"Se esperaba imagen 2D integrada, recibido shape={m_image.shape}")
-
-        ny, nx = m_image.shape
-        # energy axis
-        try:
-            energy = np.asarray(self._e_axis)
-            if energy.shape[0] != self._electron_count_data.shape[-1]:
-                energy = np.arange(self._electron_count_data.shape[-1])
-        except Exception:
-            energy = np.arange(self._electron_count_data.shape[-1])
-        self._energy = energy
-
-        # Build Plotly heatmap (figA) and selectors scatter for box/lasso selections
-        heat = go.Heatmap(
-            z=m_image,
-            x=np.arange(nx),
-            y=np.arange(ny),
-            colorscale="Greys_r",
-            showscale=False,
-            name="m_image",
-            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+        labels = [q_list[i][0] for i in range(len(abc_list) - 1)] + [q_list[-1][1]]
+        proportions = [v / total for v in abc_list]
+        return hv.Bars(
+            list(zip(labels, proportions)), kdims=['Element'], vdims=['Proportion'],
+        ).opts(
+            title='Quantification',
+            xlabel='Element', ylabel='Proportion',
+            responsive=True, shared_axes=False, framewise=True,
         )
 
-        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
-        selectors = go.Scattergl(
-            x=XX.ravel(),
-            y=YY.ravel(),
-            mode="markers",
-            name="selectors",
-            marker=dict(size=6, opacity=0.01),
-            hoverinfo="skip",
-            selected=dict(marker=dict(opacity=0.3, size=8)),
-            unselected=dict(marker=dict(opacity=0.01)),
-        )
+    # --- Cleanup ---
 
-        # Create figure with default size but lock aspect ratio so it doesn't deform
-        figA = go.Figure(data=[heat, selectors])
-        figA.update_layout(
-            title=" ",
-            height=400,  # default initial height as in the original copy
-            margin=dict(l=16, r=16, t=50, b=20),
-            dragmode="lasso",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
-        figA.update_yaxes(autorange="reversed", scaleanchor="x", scaleratio=1, constrain="domain",
-                           showgrid=False, zeroline=False, showticklabels=False)
-        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, constrain="domain")
-
-        # Pane A (heatmap) — responsive and will scale to parent; aspect locked by figure axes
-        self.paneA = pn.pane.Plotly(
-            figA, 
-            config={"responsive": True}, 
-            sizing_mode='stretch_both',
-            margin=0
-        )
-
-        # Pane B initial message (apply stored ranges if any)
-        self.paneB = pn.pane.Plotly(
-            self._set_ranges_and_convert(self._figB_message(" ", "Select a region for ROI")),
-            sizing_mode='stretch_both', 
-            config={"responsive": True},
-            margin=0
-        )
-
-    # --- Callbacks setup (connect pane watchers & periodic callback) ---
-    def _setup_callbacks(self):
-        # Attach panel watchers to figA and paneB
-        self.paneA.param.watch(self._on_paneA_hover, "hover_data")
-        self.paneA.param.watch(self._on_paneA_click, "click_data")
-        self.paneA.param.watch(self._on_paneA_selected, "selected_data")
-
-        # relayout_data is emitted by pn.pane.Plotly on axis changes
-        self.paneB.param.watch(self._on_paneB_relayout, "relayout_data")
-
-        # Periodic callback for inactivity logic (stopped by default)
-        self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
-
-    # --- Helpers / utilities (from si_view.py adapted) ---
-    def _figB_message(self, title, subtitle):
-        fig = go.Figure()
-        fig.update_xaxes(visible=False)
-        fig.update_yaxes(visible=False)
-        fig.update_layout(title=title, margin=dict(l=16, r=16, t=48, b=16))
-        fig.add_annotation(
-            x=0.5, y=0.6, xref="paper", yref="paper",
-            text=subtitle, showarrow=False,
-            font=dict(size=22), align="center",
-        )
-        return fig
-
-    def _figB_hover(self, point):
-        if not point:
-            return self._figB_message("Hover", "Move the cursor over the image")
-        i, j = int(point["y"]), int(point["x"])
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"(i={i}, j={j})"))
-        fig.update_layout(title="Hover", margin=dict(l=16, r=16, t=48, b=16),
-                          xaxis_title=self._X_AXIS_SPECTRUM_TITLE, yaxis_title=self._Y_AXIS_SPECTRUM_TITLE)
-        return fig
-
-    def _figB_region(self, pairs):
-        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
-        if res is None:
-            return self._figB_message("ROI", "Select with lasso/box...")
-        spec, n_points = res
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=self._energy, y=spec, mode="lines", name=f"sum (points={n_points})"))
-        fig.update_layout(
-            title=f"ROI — sum (points={n_points})",
-            margin=dict(l=16, r=16, t=48, b=16), 
-            xaxis_title=self._X_AXIS_SPECTRUM_TITLE, 
-            yaxis_title=self._Y_AXIS_SPECTRUM_TITLE
-        )
-        region_selected = True
-        return fig
-
-    # --- Inactivity logic (restaurar selección tras inactivity) ---
-    def _now_ms(self):
-        return int(time.time() * 1000)
-
-    def _check_inactivity(self):
-        # No selection -> nothing to do
-        if not self._region_pairs:
-            if self._pc.running:
-                self._pc.stop()
-            return
-
-        # If there is no hover timestamp, ensure selection is shown and timer stopped
-        if self._last_hover_ts is None:
-            if self._pc.running:
-                self._pc.stop()
-            fig = self._figB_region(self._region_pairs)
-            if self._fitting_active:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
-                if res is not None:
-                    spec, _N = res
-                y_fit = SpectrumFitting.fit_powerlaw_curve(self._energy, spec, range_values=self.range_slider.value)
-                fig = self._plot_fit_traces(fig, self._energy, spec, y_fit)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            return
-
-        if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
-            app_state = CacheManager.get_cached_app_state()
-            fig = self._figB_region(self._region_pairs)
-
-            if app_state.quantification_elements:
-                self.plot_quantification_elements(app_state.quantification_elements)
-            else:
-                self.paneB.object = self._set_ranges_and_convert(fig)
-            if self._pc.running:
-                self._pc.stop()
-
-    # funcio que entra un color hex i un alpha i retorna el color amb rgba amb alpha
-    def _hex_to_rgba(self, hex_color, alpha):
-        """
-        Convert a hex color string to an rgba color string with the given alpha.
-
-        Parameters:
-            hex_color (str): The hex color string (e.g., '#RRGGBB').
-            alpha (float): The alpha value (0.0 to 1.0).
-
-        Returns:
-            str: The rgba color string (e.g., 'rgba(r, g, b, a)').
-        """
-        hex_color = hex_color.lstrip('#')
-        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        return f'rgba({r}, {g}, {b}, {alpha})'
-        
-    
-    
-    def _plot_fit_traces(self, fig, element, x, y, y_fit, color):
-        """
-        Add fit and background subtraction traces to a Plotly figure.
-
-        Parameters:
-            fig (plotly.graph_objs.Figure): The Plotly figure to add traces to.
-            x (array-like): Independent variable data.
-            y (array-like): Dependent variable data.
-            y_fit (array-like): Fitted curve values for all x.
-
-        Returns:
-            plotly.graph_objs.Figure: The figure with added fit and subtraction traces.
-        """
-        # Local constants for Plotly and fitting
-        POWERLAW_FIT_NAME = f'{element} PowerLaw Fit'
-        BG_SUBTRACTION_NAME = f'{element} Background Subtraction'
-        BG_LINE_COLOR = self._hex_to_rgba(color, 0.2)
-        BG_FILL_COLOR = self._hex_to_rgba(color, 0.6)
-        LEGEND_X = 0.98
-        LEGEND_Y = 0.98
-        LEGEND_XANCHOR = 'right'
-        LEGEND_YANCHOR = 'top'
-        LEGEND_BGCOLOR = 'rgba(255,255,255,0.6)'
-        LEGEND_BORDER_COLOR = 'rgba(0,0,0,0.1)'
-        LEGEND_BORDER_WIDTH = 1
-        FILL_TO_ZEROY = 'tozeroy'
-
-        if y_fit is None:
-            return fig
-        newfig = go.Figure(fig)
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=y_fit,
-            line=dict(color=color),
-            name=POWERLAW_FIT_NAME
-        ))
-        newfig.add_trace(go.Scatter(
-            x=x,
-            y=(y - y_fit),
-            fill=FILL_TO_ZEROY,
-            line=dict(color=BG_LINE_COLOR),
-            fillcolor=BG_FILL_COLOR,
-            name=BG_SUBTRACTION_NAME
-        ))
-        newfig.update_layout(
-            legend=dict(
-                x=LEGEND_X,
-                y=LEGEND_Y,
-                xanchor=LEGEND_XANCHOR,
-                yanchor=LEGEND_YANCHOR,
-                bgcolor=LEGEND_BGCOLOR,
-                bordercolor=LEGEND_BORDER_COLOR,
-                borderwidth=LEGEND_BORDER_WIDTH,
-            )
-        )
-        return newfig
-
-    # --- Pane A event handlers (hover / click / selected) ---
-    def _on_paneA_hover(self, event: "Event"):
-        point = SpectrumExtractor.extract_point(event)
-        if point is None:
-            return
-        self._last_hover_point = point
-        if self._region_pairs:
-            # Temporary hover while a selection exists: show hover spectrum and start/renew timer
-            fig = self._figB_hover(self._last_hover_point)
-            self.paneB.object = self._set_ranges_and_convert(fig)
-            self._last_hover_ts = self._now_ms()
-            if not self._pc.running:
-                self._pc.start()
-
-    def _on_paneA_click(self, event):
-        app_state = CacheManager.get_cached_app_state()
-        point = SpectrumExtractor.extract_point(event)
-        if point is None:
-            return
-        self._last_hover_point = point
-        fig = self._figB_hover(self._last_hover_point)
-        if app_state.quantification_elements:
-            self.plot_quantification_elements(app_state.quantification_elements)
-            return
-        if self._region_pairs:
-            self._last_hover_ts = self._now_ms()
-            if not self._pc.running:
-                self._pc.start()
-        else:
-            if self._pc.running:
-                self._pc.stop()
-            self._last_hover_ts = None
-
-    def _on_paneA_selected(self, event: "Event"):
-        app_state = CacheManager.get_cached_app_state()
-        pairs = SpectrumExtractor.extract_region(event)
-        self._region_pairs = pairs
-        if not pairs:
-            if self._pc.running:
-                self._pc.stop()
-            self._last_hover_ts = None
-            if self._last_hover_point is not None:
-                fig = self._figB_hover(self._last_hover_point)
-                self.paneB.object = self._set_ranges_and_convert(fig)
-            else:
-                self.paneB.object = self._set_ranges_and_convert(self._figB_message(" ", "Move the cursor over the image"))
-            return
-        else:
-            self.plot_quantification_elements(app_state.quantification_elements)
-        # prepare inactivity behaviour: stop periodic callback until next hover
-        if self._pc.running:
-            self._pc.stop()
-        self._last_hover_ts = None
-
-    # --- Pane B relayout (preserve zoom/pan ranges) ---
-    def _on_paneB_relayout(self, event):
-        # Robustly extract ranges/autorange from relayout payloads emitted by Plotly
-        try:
-            data = event.new or {}
-
-            # X axis: support 'xaxis.range', 'xaxis.range[0/1]', 'xaxis.autorange'
-            if 'xaxis.range[0]' in data and 'xaxis.range[1]' in data:
-                self._current_x_range = (float(data['xaxis.range[0]']), float(data['xaxis.range[1]']))
-                self._current_x_autorange = False
-            elif 'xaxis.range' in data:
-                rng = data.get('xaxis.range')
-                if isinstance(rng, (list, tuple)) and len(rng) == 2:
-                    self._current_x_range = (float(rng[0]), float(rng[1]))
-                    self._current_x_autorange = False
-            elif 'xaxis.autorange' in data:
-                # autorange True means clear explicit range
-                self._current_x_autorange = bool(data.get('xaxis.autorange'))
-                if self._current_x_autorange:
-                    self._current_x_range = None
-
-            # Y axis: same logic
-            if 'yaxis.range[0]' in data and 'yaxis.range[1]' in data:
-                self._current_y_range = (float(data['yaxis.range[0]']), float(data['yaxis.range[1]']))
-                self._current_y_autorange = False
-            elif 'yaxis.range' in data:
-                rng = data.get('yaxis.range')
-                if isinstance(rng, (list, tuple)) and len(rng) == 2:
-                    self._current_y_range = (float(rng[0]), float(rng[1]))
-                    self._current_y_autorange = False
-            elif 'yaxis.autorange' in data:
-                self._current_y_autorange = bool(data.get('yaxis.autorange'))
-                if self._current_y_autorange:
-                    self._current_y_range = None
-
-            # Some Plotly versions emit nested keys or different payload shapes; handled permissively above.
-        except Exception:
-            # Ignore noisy relayout payloads
-            pass
-
-    def _apply_current_ranges(self, fig):
-        """Apply stored ranges to fig if present."""
-        try:
-            # Only set explicit ranges when available. Only set autorange when explicitly known.
-            if self._current_x_range is not None:
-                fig.update_xaxes(range=self._current_x_range)
-            elif self._current_x_autorange is not None:
-                fig.update_xaxes(autorange=bool(self._current_x_autorange))
-            if self._current_y_range is not None:
-                fig.update_yaxes(range=self._current_y_range)
-            elif self._current_y_autorange is not None:
-                fig.update_yaxes(autorange=bool(self._current_y_autorange))
-        except Exception:
-            pass
-        return fig
-
-    def _set_ranges_and_convert(self, fig):
-        # Ensure we operate on a go.Figure to apply ranges reliably
-        try:
-            fig_obj = fig if isinstance(fig, go.Figure) else go.Figure(fig)
-        except Exception:
-            # fallback: empty figure
-            fig_obj = go.Figure()
-        self._apply_current_ranges(fig_obj)
-        return fig_obj
+    @override
+    def cleanup(self):
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        if self._pc is not None:
+            try:
+                if self._pc.running:
+                    self._pc.stop()
+            except Exception:
+                pass
+        super().cleanup()
 
 class add_cs:
     """
