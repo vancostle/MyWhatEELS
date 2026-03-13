@@ -372,18 +372,25 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             raise
 
     def _build_quant_bars(self, q_list):
-        """Build an hv.Bars chart from quantification ratios (replaces Plotly pie)."""
+        """Build an hv.Bars chart from quantification ratios."""
+        # Matches Plotly's default color sequence (blue, red, then others)
+        _QUANT_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+
         abc_list = [1.0]
         for i in range(len(q_list)):
             abc_list.append(abc_list[i] / q_list[i][2])
         total = sum(abc_list)
-        labels = [q_list[i][0] for i in range(len(abc_list) - 1)] + [q_list[-1][1]]
+        labels = [str(q_list[i][0]) for i in range(len(abc_list) - 1)] + [str(q_list[-1][1])]
         proportions = [v / total for v in abc_list]
+        bar_colors = [_QUANT_COLORS[i % len(_QUANT_COLORS)] for i in range(len(labels))]
+
         return hv.Bars(
-            list(zip(labels, proportions)), kdims=['Element'], vdims=['Proportion'],
+            list(zip(labels, proportions, bar_colors)),
+            kdims=['Element'], vdims=['Proportion', 'Color'],
         ).opts(
             title='Quantification',
             xlabel='Element', ylabel='Proportion',
+            color='Color',
             responsive=True, shared_axes=False, framewise=True,
         )
 
@@ -451,9 +458,6 @@ class add_cs:
             y_filtered_ = self.cross_section[mask_]
             self.norm_exp = np.trapz(y_filtered, x_filtered).real  # Experimental normalization
             self.norm_sim = np.trapz(y_filtered_, x_filtered_).real  # Simulated normalization
-            print(f"[DBG add_cs] {element} {ishell}: quant_range={quant_range_values}, "
-                  f"mask_sum={mask_.sum()}, cs_range=[{self.eaxis_cs[0]:.2f},{self.eaxis_cs[-1]:.2f}], "
-                  f"cs_sum={self.cross_section[mask_].sum():.6g}, norm_sim={self.norm_sim:.6g}, norm_exp={self.norm_exp:.6g}")
         else:
             self.norm_sim = np.trapz(self.cross_section, self.eaxis).real
             self.norm_exp = np.trapz(selected_slice - y_extrapolated, self.eaxis).real
