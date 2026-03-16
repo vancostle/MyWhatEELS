@@ -8,12 +8,12 @@ Features:
 - Handles errors robustly by raising exceptions with clear messages.
 """
 
-from ..view.visualizers import SpectrumImageVisualizer, ImageVisualizer
+from ..view.plots import SpectrumImageVisualizer, ImageVisualizer
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..model import QuantificationModel
-    from . import QuantificationController
+    from ..model import FittingModel
+    from . import FittingController
     from xarray import Dataset
 
 import traceback
@@ -27,7 +27,7 @@ class VisualizerFactory:
     - Raises exceptions for unknown types or plot creation errors.
     """
     
-    def __init__(self, model: "QuantificationModel", controller: "QuantificationController") -> None:
+    def __init__(self, model: "FittingModel", controller: "FittingController") -> None:
         """Create a dataset-type to visualizer-class registry for runtime selection."""
         self._model = model
         self._controller = controller
