@@ -11,6 +11,19 @@ class ComponentItemView(pn.Column):
 
     _STRETCH_WIDTH = 'stretch_width'
 
+    @staticmethod
+    def _safe_bound(value, fallback):
+        """Return value if finite, otherwise return fallback."""
+        return value if np.isfinite(value) else fallback
+
+    @staticmethod
+    def _safe_range(lo, hi, lo_fallback, hi_fallback):
+        """Return a (lo, hi) tuple with infinite values replaced by fallbacks."""
+        return (
+            lo if np.isfinite(lo) else lo_fallback,
+            hi if np.isfinite(hi) else hi_fallback,
+        )
+
     def __init__(self, controller, component_item: "ComponentItem", model, energy, 
                 view, expandable: bool = True):
         """Initialize controls, callbacks, and collapsible layout for one component."""
@@ -63,11 +76,17 @@ class ComponentItemView(pn.Column):
             visible=False
         )
 
+        _er_start = component_item.energy_center - 50
+        _er_end   = component_item.energy_center + 50
+        _er_value = self._safe_range(
+            component_item.center_range[0], component_item.center_range[1],
+            _er_start, _er_end
+        )
         self.energy_range_slider = pn.widgets.EditableRangeSlider(
             name='Energy Range',
-            start=component_item.energy_center - 50,
-            end=component_item.energy_center + 50,
-            value=component_item.center_range,
+            start=_er_start,
+            end=_er_end,
+            value=_er_value,
             step=1,
             disabled=False,
             format='0.00a',
@@ -83,11 +102,16 @@ class ComponentItemView(pn.Column):
             visible=False
         )
 
+        _amp_lo    = component_item.amplitude_range[0]
+        _amp_hi    = component_item.amplitude_range[1]
+        _amp_start = self._safe_bound(_amp_lo * 0.5, 0.0)
+        _amp_end   = self._safe_bound(_amp_hi * 1.5, component_item.amplitude * 10)
+        _amp_value = self._safe_range(_amp_lo, _amp_hi, _amp_start, _amp_end)
         self.amplitude_slider = pn.widgets.EditableRangeSlider(
             name='Amplitude Range',
-            start=component_item.amplitude_range[0] * 0.5,
-            end=component_item.amplitude_range[1]  * 1.5,
-            value=component_item.amplitude_range,
+            start=_amp_start,
+            end=_amp_end,
+            value=_amp_value,
             step=1000,
             disabled=False,
             format='0.00a',
@@ -104,11 +128,16 @@ class ComponentItemView(pn.Column):
         )
 
 
+        _sig_lo    = component_item.sigma_range[0]
+        _sig_hi    = component_item.sigma_range[1]
+        _sig_start = self._safe_bound(_sig_lo * 0.5, 0.0)
+        _sig_end   = self._safe_bound(_sig_hi * 1.5, component_item.sigma * 10)
+        _sig_value = self._safe_range(_sig_lo, _sig_hi, _sig_start, _sig_end)
         self.sigma_slider = pn.widgets.EditableRangeSlider(
             name='Sigma Range',
-            start=component_item.sigma_range[0] * 0.5,
-            end=component_item.sigma_range[1] * 1.5,
-            value=component_item.sigma_range,
+            start=_sig_start,
+            end=_sig_end,
+            value=_sig_value,
             step=1e-1,
             disabled=False,
             format='0.00a',
@@ -136,7 +165,7 @@ class ComponentItemView(pn.Column):
         else:
             super().__init__(
                 pn.Row(
-                    pn.widgets.Markdown(f"### {component_item.__str__()}"),
+                    pn.pane.Markdown(f"### {component_item.__str__()}"),
                     self.delete_button,
                     sizing_mode=self._STRETCH_WIDTH
                 ),
@@ -202,8 +231,8 @@ class ComponentItemView(pn.Column):
     def _amplitude_watcher(self, event):
         """Update amplitude value, adapt range slider bounds, and refit."""
         self.component_item.amplitude = event.new
-        self.amplitude_slider.start = event.new *self.dict_var[self.component_item.flexibility][4] * 0.5
-        self.amplitude_slider.end = event.new*self.dict_var[self.component_item.flexibility][5] * 1.5
+        self.amplitude_slider.start = self._safe_bound(event.new * self.dict_var[self.component_item.flexibility][4] * 0.5, 0.0)
+        self.amplitude_slider.end = self._safe_bound(event.new * self.dict_var[self.component_item.flexibility][5] * 1.5, event.new * 10)
         self._model.create_model()
         self._model.fit_reference()
         self.update_component_parameters()
@@ -229,9 +258,18 @@ class ComponentItemView(pn.Column):
         self.amplitude_input.value = self.component_item.amplitude
         self.sigma_input.value = self.component_item.sigma
         self.energy_center_input.value = self.component_item.energy_center
-        self.energy_range_slider.value = self.component_item.center_range
-        self.sigma_slider.value = self.component_item.sigma_range
-        self.amplitude_slider.value = self.component_item.amplitude_range
+        self.energy_range_slider.value = self._safe_range(
+            self.component_item.center_range[0], self.component_item.center_range[1],
+            self.energy_range_slider.start, self.energy_range_slider.end
+        )
+        self.sigma_slider.value = self._safe_range(
+            self.component_item.sigma_range[0], self.component_item.sigma_range[1],
+            self.sigma_slider.start, self.sigma_slider.end
+        )
+        self.amplitude_slider.value = self._safe_range(
+            self.component_item.amplitude_range[0], self.component_item.amplitude_range[1],
+            self.amplitude_slider.start, self.amplitude_slider.end
+        )
 
     def update_component_item_name(self, reference_fit):
         """Annotate widget labels with a reference-fit identifier."""

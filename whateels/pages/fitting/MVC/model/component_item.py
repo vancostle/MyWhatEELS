@@ -1,7 +1,7 @@
 class ComponentItem:
     """Lightweight data container for a fitting component and its parameter bounds."""
 
-    def __init__(self, energy_center, compo_type, energy_range, flexibility='low'):
+    def __init__(self, energy_center, compo_type, energy_range, flexibility: str='low'):
         """Initialize component metadata and default center-range placeholders."""
         self.energy_center = energy_center
         self.compo_type = compo_type

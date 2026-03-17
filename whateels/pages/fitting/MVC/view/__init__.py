@@ -36,7 +36,7 @@ class FittingView(BaseView):
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
 
-        self._fitting_add_compontent_button: Optional[pn.widgets.Button] = None
+        self._fitting_add_compontent_button = pn.widgets.Button()
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
         self._background_subtraction_switch: pn.widgets.Switch = pn.widgets.Switch()
         
@@ -56,7 +56,7 @@ class FittingView(BaseView):
         """Access fitting component input widgets."""
         return self._component_model_input
     @property
-    def fitting_add_component_button(self) -> Optional[pn.widgets.Button]:
+    def fitting_add_component_button(self) -> pn.widgets.Button:
         """Access the 'Add Component' fitting button."""
         return self._fitting_add_compontent_button
     
@@ -180,7 +180,7 @@ class FittingView(BaseView):
                 options=["Low", "Medium", "High", "Maximum"],  
                 sizing_mode=self.STRETCH_WIDTH,
                 margin=(0,0,10,0)
-                )
+            )
         }
 
         self._fitting_add_compontent_button = pn.widgets.Button(

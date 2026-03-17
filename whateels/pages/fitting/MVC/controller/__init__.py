@@ -105,7 +105,7 @@ class FittingController(BaseController):
         energy_range = self.view.component_input["energy_range"].value
         flexibility = self.view.component_input["flexibility"].value
 
-        component_item = ComponentItem(energy_center, model_select, energy_range, flexibility)
+        component_item = ComponentItem(energy_center, model_select, energy_range, str(flexibility))
         self._model.add_component(component_item, component_item.flexibility)
 
         component_item_view = ComponentItemView(self, component_item,   
@@ -124,7 +124,6 @@ class FittingController(BaseController):
         """Show the NLLS configuration popup."""
         #self._layout.show_nlls_config_popup(event)
         self._on_create_model(event)
-
     
     def _get_only_eels_datasets(self, datasets: list["Dataset"]) -> list["Dataset"]:
         """Filter and return only EELS datasets from the provided list."""

@@ -68,8 +68,8 @@ class FittingModel(BaseModel):
     
     def add_component(self, component_item, flex='low'):
         """Add a component, estimate initial params, rebuild model, and refit."""
-        dataset : "Dataset" = self._app_state.plot_dataset
-        self._Eloss = dataset.coords['Eloss'].values
+        dataset = self._app_state.plot_dataset
+        self._Eloss = getattr(dataset, 'coords', {}).get('Eloss', {}).values if dataset is not None else None
         
         self._spectra = self._app_state.spectra
         if self._spectra is None:
