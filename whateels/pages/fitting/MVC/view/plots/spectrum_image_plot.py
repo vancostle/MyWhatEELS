@@ -11,6 +11,7 @@ import time
 import xarray as xr
 import holoviews as hv
 from holoviews import streams as hv_streams
+from matplotlib.colors import LinearSegmentedColormap
 
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
@@ -241,11 +242,13 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         energy_map_arr = np.where(np.isfinite(energy_map_arr), energy_map_arr, 0.0)
         ny, nx = energy_map_arr.shape
 
+        _energy_map_cmap = LinearSegmentedColormap.from_list('energy_map', ['#00eb6c', '#ff1493'])
+
         img = hv.Image(
             (np.arange(nx), np.arange(ny), energy_map_arr),
             kdims=['x', 'y'], vdims=['Energy'],
         ).opts(
-            cmap=['#00eb6c', '#ff1493'],
+            cmap=_energy_map_cmap,
             colorbar=True,
             xaxis=None, yaxis=None,
             invert_yaxis=True, aspect='equal',
