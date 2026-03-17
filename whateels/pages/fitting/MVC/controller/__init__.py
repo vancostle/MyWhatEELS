@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from ..model import FittingModel
     from ..view import FittingView
 
-
 class FittingController(BaseController):
     """Controller that coordinates fitting UI events, model updates, and plot refreshes."""
     ELEMENT_EAXIS_THRESHOLD = 50
@@ -43,7 +42,6 @@ class FittingController(BaseController):
         
         # Validate dataset list and requested tab index.
         if not (isinstance(all_datasets, list) and all_datasets and 0 <= tab_param < len(all_datasets)):
-            print(tab_param, len(all_datasets))
             self.base_layout.empty_main()
             return
 
@@ -74,20 +72,31 @@ class FittingController(BaseController):
 
         view._energy_map_toggle_button.on_click(self._energy_map_toggle_button_callback)
 
+    def _energy_map_toggle_button_callback(self, event):
+        """Switch between standard image view and computed energy-map overlay."""
+        if not self.energy_map_active:
+            try:
+                self.layout.plot_energy_map()
+                self.energy_map_active = True
+            except Exception as e:
+                print(f"Error occurred while plotting energy map: {e}")
+                self.energy_map_active = False
+                # Restore button state if plotting the energy map fails.
+                self.view._energy_map_toggle_button.toggle()
+        else:
+            self.layout.plot_image()
+            self.energy_map_active = False
+
     def _energy_center_watcher(self, event):
         """Recenter the editable energy window whenever the center value changes."""
-        energy_center = self.view.component_input["energy_center"]
         self.view.component_input["energy_range"].start = event.new - self.COMPONENT_EAXIS_THRESHOLD
         self.view.component_input["energy_range"].end = event.new + self.COMPONENT_EAXIS_THRESHOLD
         self.view.component_input["energy_range"].value = (event.new - self.COMPONENT_EAXIS_THRESHOLD, event.new + self.COMPONENT_EAXIS_THRESHOLD_VALUE)
         self.view.component_input["energy_range"].value = (event.new - self.COMPONENT_EAXIS_THRESHOLD_VALUE, event.new + self.COMPONENT_EAXIS_THRESHOLD_VALUE)
 
-
     def _model_select_watcher(self, event):
         """Enable component creation after selecting a model type."""
-        model_select = self.view.component_input["model_select"]
         self.view.fitting_add_component_button.disabled = False
-
 
     def _add_component_item_button_callback(self, event):
         """Create a component from sidebar inputs, register it in the model, and render its editor card."""
@@ -107,7 +116,6 @@ class FittingController(BaseController):
 
         self._view.energy_map_toggle_button.disabled = False
         
-
     def _test(self, event):
         """Internal helper kept for manual testing of model creation."""
         self._model._create_model(self._model.dataset, name_area='default', flex='medium')
@@ -141,22 +149,6 @@ class FittingController(BaseController):
         self.layout.update_plot()
         self._model.create_model()
         self._model.fit_reference()
-
-    def _energy_map_toggle_button_callback(self, event):
-        """Switch between standard image view and computed energy-map overlay."""
-        if not self.energy_map_active:
-            try:
-                self.layout.plot_energy_map()
-                self.energy_map_active = True
-            except Exception as e:
-                print(f"Error occurred while plotting energy map: {e}")
-                self.energy_map_active = False
-                # Restore button state if plotting the energy map fails.
-                self.view._energy_map_toggle_button.toggle()
-            
-        else:
-            self.layout.plot_image()
-            self.energy_map_active = False
 
     def get_energy_range(self):
         """Return the active energy range only when energy-map mode is enabled."""

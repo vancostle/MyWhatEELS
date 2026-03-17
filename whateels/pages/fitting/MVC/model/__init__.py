@@ -55,7 +55,7 @@ class FittingModel(BaseModel):
         Returns:
             str: Uploaded filename, or empty string if none
         """
-        return str(self.app_state.filename) if self.app_state.filename is not None else "No file uploaded"
+        return str(self._app_state.filename) if self._app_state.filename is not None else "No file uploaded"
     
     def is_multifit_available(self) -> bool:
         """
@@ -64,11 +64,11 @@ class FittingModel(BaseModel):
         Returns:
             bool: True if multifit data exists, False otherwise
         """
-        return self.app_state.multifit is not None
+        return self._app_state.multifit is not None
     
     def add_component(self, component_item, flex='low'):
         """Add a component, estimate initial params, rebuild model, and refit."""
-        dataset : "Dataset" = self.app_state.plot_dataset
+        dataset : "Dataset" = self._app_state.plot_dataset
         self._Eloss = dataset.coords['Eloss'].values
         
         self._spectra = self._app_state.spectra
@@ -191,7 +191,7 @@ class FittingModel(BaseModel):
         self.dictionary['components'] = [comp for comp in self.dictionary['components'] if comp != component_item]
         if self.dictionary['components'] is None or len(self.dictionary['components']) == 0:
             print("NLLS Model: No components remaining after deletion")
-            self.app_state.fitting_results = None
+            self._app_state.fitting_results = None
             self._controller.update_plot(fitting_results=None)
             return
         self.create_model()
@@ -214,7 +214,7 @@ class FittingModel(BaseModel):
         except:
             print('The given element, or name of the area are wrong')
             print('\nCheck those fields and re-run')
-            raise
+            raise 
         else:
             for compType in dictionary:
                 for key in dictionary[compType]:
@@ -229,19 +229,18 @@ class FittingModel(BaseModel):
         Fit the current reference spectrum using the composed model and parameters.
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
-        print(self.ref_results.fit_report())
 
         self._controller.update_plot(fitting_results=self.ref_results)
 
     def get_energy_map(self):
         """Compute a per-pixel energy map by integrating selected windows with fit profile support."""
 
-        fitting_results = self.app_state.fitting_results
+        fitting_results = self._app_state.fitting_results
         if fitting_results is None:
             print("NLLS Model: No fitting results available to generate energy map")
             return None
 
-        dataset = self.app_state.plot_dataset
+        dataset = self._app_state.plot_dataset
         if dataset is None or not hasattr(dataset, 'ElectronCount'):
             print("NLLS Model: No ElectronCount data available to generate energy map")
             return None

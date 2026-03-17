@@ -33,7 +33,7 @@ class QuantificationView(BaseView):
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
 
-        self._quanti_add_element_button = None
+        self._quanti_add_element_button = pn.widgets.Button()
 
         self._element_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH)
         
@@ -70,7 +70,7 @@ class QuantificationView(BaseView):
         return self._quanti_input
 
     @property
-    def quanti_add_element_button(self):
+    def quanti_add_element_button(self) -> pn.widgets.Button:
         """Access the K-Means 'Add Element' button."""
         return self._quanti_add_element_button
     
@@ -80,7 +80,7 @@ class QuantificationView(BaseView):
         return self._element_item_view_container
     
     @property
-    def quanti_run_button(self):
+    def quanti_run_button(self) -> pn.widgets.Button:
         """Access the 'Run Quantification' button."""
         return self._quanti_run_button
     

@@ -3,25 +3,24 @@ from typing import Optional, Callable
 
 class ToggleButton(Button):
     """
-    A two-state toggle button for Panel with customizable labels, colors, and callbacks.
+    Two-state toggle button for Panel with customizable labels, colors, and callbacks.
 
     Parameters
     ----------
     initial_state : bool, optional
-        If True, button starts in the 'on' state, else 'off'.
+        Initial state of the button (True = 'on', False = 'off').
     states : dict, optional
-        A dictionary specifying the properties for each state. Must have keys 'on' and 'off',
-        each mapping to a dict with at least:
-            - 'label': str, the button label for that state
-            - 'button_type': str, the Panel button_type (e.g. 'success', 'danger')
-            - 'on_click': callable or None, function to call when button is clicked in that state
+        Dictionary with properties for each state ('on' and 'off'). Each must include:
+            - 'label': str, button label for that state
+            - 'button_type': str, Panel button_type ('success', 'danger', etc.)
+            - 'on_click': callable or None, function to execute on click in that state
         Example:
             states = {
                 'on': {'label': 'Stop', 'on_click': stop_fn, 'button_type': 'danger'},
                 'off': {'label': 'Start', 'on_click': start_fn, 'button_type': 'success'}
             }
     kwargs :
-        Additional keyword arguments passed to Panel's Button.
+        Additional keyword arguments for Panel Button.
     """
     # State identifiers
     _ON = 'on'
@@ -59,7 +58,9 @@ class ToggleButton(Button):
         self.on_click(self._handle_click)
 
     def _handle_click(self, event):
-        """Handle button click events to toggle state and update label and button type."""
+        """
+        Handles click: executes the callback for the current state, then toggles and updates the UI.
+        """
         # Call the function for the CURRENT state (before toggling)
         current_state_key = self._ON if self._state else self._OFF
         on_click_fn = self._states[current_state_key].get(self._ON_CLICK)
@@ -73,18 +74,24 @@ class ToggleButton(Button):
         self.button_type = self._states[new_state_key][self._BUTTON_TYPE]
 
     def toggle(self):
-        """Toggle the button's state."""
+        """
+        Toggle the button's state and update label and color.
+        """
         self._state = not self._state
         new_state_key = self._ON if self._state else self._OFF
         self.name = self._states[new_state_key][self._NAME]
         self.button_type = self._states[new_state_key][self._BUTTON_TYPE]
 
     def is_on(self):
-        """Check if the button is in the 'on' state."""
+        """
+        Returns True if the button is in the 'on' state.
+        """
         return self._state 
 
     def on_click_by_state(self, state: bool, on_click: Callable):
-        """Set the on_click handler for the given state (does not update the button state or UI)."""
+        """
+        Assigns the callback for the given state ('on' or 'off'). Does not change state or UI.
+        """
         state_key = self._ON if state else self._OFF
         if state_key not in [self._ON, self._OFF]:
             raise ValueError(f"Invalid state '{state}'. Use 'on' or 'off'.")
@@ -94,4 +101,7 @@ class ToggleButton(Button):
         self._states[state_key][self._ON_CLICK] = on_click
 
     def set_states(self, states):
+        """
+        Update the button's state dictionary.
+        """
         self._states = states

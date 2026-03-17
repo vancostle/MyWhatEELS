@@ -21,7 +21,6 @@ class QuantificationController(BaseController):
 
     def __init__(self, model: "QuantificationModel", view: "QuantificationView"):
         
-        
         super().__init__(model, view)
 
         self._model = model
