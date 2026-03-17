@@ -180,59 +180,26 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             invert_yaxis=True, aspect='equal',
             responsive=True, shared_axes=False,
         )
-        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
-        points_data = np.column_stack([XX.ravel().astype(float), YY.ravel().astype(float)])
-        selectors = hv.Points(points_data, kdims=['x', 'y']).opts(
-            size=0, alpha=0, nonselection_alpha=0,
-            tools=['lasso_select', 'box_select'],
-            shared_axes=False,
-        )
-        self._selectors = selectors
         self._nx = nx
-        overlay = (img * selectors).opts(
+        overlay = (img * self._selectors).opts(
             hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False,
                             active_tools=['lasso_select'])
         )
         self.paneA.object = overlay
 
-        # Rewire streams to new selectors
-        if self._hover_stream is not None:
-            try:
-                self._hover_stream.remove_subscriber(self._on_paneA_hover)
-            except Exception:
-                pass
-        if self._tap_stream is not None:
-            try:
-                self._tap_stream.remove_subscriber(self._on_paneA_click)
-            except Exception:
-                pass
-        if self._selection_stream is not None:
-            try:
-                self._selection_stream.remove_subscriber(self._on_paneA_selected)
-            except Exception:
-                pass
-        if self._double_tap_stream is not None:
-            try:
-                self._double_tap_stream.remove_subscriber(self._on_paneA_double_tap)
-            except Exception:
-                pass
-        from holoviews import streams as hv_streams_local
-        self._hover_stream = hv_streams_local.PointerXY(source=selectors)
-        self._tap_stream = hv_streams_local.Tap(source=selectors)
-        self._selection_stream = hv_streams_local.Selection1D(source=selectors)
-        self._double_tap_stream = hv_streams_local.DoubleTap(source=selectors)
-        self._hover_stream.add_subscriber(self._on_paneA_hover)
-        self._tap_stream.add_subscriber(self._on_paneA_click)
-        self._selection_stream.add_subscriber(self._on_paneA_selected)
-        self._double_tap_stream.add_subscriber(self._on_paneA_double_tap)
+        # Streams remain connected to self._selectors — no rewiring needed.
 
-        self._region_pairs = []
         self._hover_blocked = False
         self._last_hover_ts = None
-        self._update_paneB(self._figB_hover({"x": 0, "y": 0}))
 
-        CacheManager.get_cached_app_state().fitting_results = None
-        CacheManager.get_cached_app_state().spectra = None
+        # Restore paneB to whatever was showing before the energy map was opened.
+        app_state = CacheManager.get_cached_app_state()
+        if app_state.fitting_results is not None:
+            self.plot_fitting(self._energy, app_state.fitting_results)
+        elif self._region_pairs:
+            self._update_paneB(self._figB_region(self._region_pairs))
+        else:
+            self._update_paneB(self._figB_hover(self._last_hover_point or {"x": 0, "y": 0}))
 
     def plot_energy_map(self, energy_map):
         """Render a model-computed 2D energy map on paneA."""
@@ -255,14 +222,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             responsive=True, shared_axes=False,
             title='Energy Map',
         )
-        XX, YY = np.meshgrid(np.arange(nx), np.arange(ny))
-        points_data = np.column_stack([XX.ravel().astype(float), YY.ravel().astype(float)])
-        selectors = hv.Points(points_data, kdims=['x', 'y']).opts(
-            size=0, alpha=0, nonselection_alpha=0,
-            tools=['lasso_select', 'box_select'],
-            shared_axes=False,
-        )
-        overlay = (img * selectors).opts(
+        overlay = (img * self._selectors).opts(
             hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False,
                             active_tools=['lasso_select'])
         )
