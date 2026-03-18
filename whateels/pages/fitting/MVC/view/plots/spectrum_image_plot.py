@@ -55,6 +55,10 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._hover_blocked = False
         self._double_tap_stream = None
 
+        # Persistent selection overlay (red dots shown after lasso)
+        self._paneA_base_overlay = None
+        self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+
         # Fitting/UI state
         self.element_quant_data = []
         self.selected_slice = None
@@ -83,9 +87,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     @override
     def _setup_plots(self):
         super()._setup_plots()
-        self.paneA.object = self.paneA.object.opts(
-            hv.opts.Overlay(active_tools=['lasso_select'])
-        )
+        self._paneA_base_overlay = self.paneA.object
+        self._update_selection_overlay(self._region_pairs)
 
     # --- Public layout builders (used by controller) ---
     @override
@@ -181,11 +184,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             responsive=True, shared_axes=False,
         )
         self._nx = nx
-        overlay = (img * self._selectors).opts(
-            hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False,
-                            active_tools=['lasso_select'])
-        )
-        self.paneA.object = overlay
+        self._paneA_base_overlay = img * self._selectors
+        self._update_selection_overlay(self._region_pairs)
 
         # Streams remain connected to self._selectors — no rewiring needed.
 
@@ -222,11 +222,36 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             responsive=True, shared_axes=False,
             title='Energy Map',
         )
-        overlay = (img * self._selectors).opts(
+        self._paneA_base_overlay = img * self._selectors
+        self.paneA.object = self._paneA_base_overlay.opts(
             hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False,
                             active_tools=['lasso_select'])
         )
-        self.paneA.object = overlay
+
+    def _update_selection_overlay(self, pairs):
+        """Rebuild the red-dot selection overlay and recompose paneA.
+
+        Always reapplies the full set of Overlay-level opts (responsive, aspect,
+        shared_axes, active_tools) so that paneA never loses its sizing behaviour
+        when the overlay is reconstructed.
+        """
+        if pairs:
+            xs = [col for row, col in pairs]
+            ys = [row for row, col in pairs]
+            self._selection_overlay = hv.Points(
+                (xs, ys), kdims=['x', 'y']
+            ).opts(color='red', size=5, alpha=0.5)
+        else:
+            self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+        if self._paneA_base_overlay is not None and self.paneA is not None:
+            self.paneA.object = (
+                self._paneA_base_overlay * self._selection_overlay
+            ).opts(
+                hv.opts.Overlay(
+                    responsive=True, aspect='equal', shared_axes=False,
+                    active_tools=['lasso_select'],
+                )
+            )
 
     # --- Inactivity timer ---
 
@@ -303,10 +328,11 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     @override
     def _on_paneA_selected(self, index=None):
+        if not index:
+            return
         self._hover_blocked = True
         self._pending_selection_ts = self._now_ms()
-        if index:
-            self._pending_selection_index = index
+        self._pending_selection_index = index
         if self._pc and not self._pc.running:
             self._pc.start()
 
@@ -318,6 +344,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
                 (idx // self._nx, idx % self._nx) for idx in index
             ))
         self._region_pairs = pairs
+        self._update_selection_overlay(pairs)
         if not pairs:
             self._hover_blocked = False
             if self._pc and self._pc.running:
@@ -343,6 +370,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._pending_selection_index = None
         self._pending_selection_ts = None
         self._last_hover_ts = None
+        self._update_selection_overlay([])
         if self._pc and self._pc.running:
             self._pc.stop()
         if x is not None and y is not None:
