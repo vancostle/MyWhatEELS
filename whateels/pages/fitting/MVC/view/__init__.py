@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ..model import FittingModel
-    from ..controller import FittingController
 
 class FittingView(BaseView):
     """View layer for fitting page sidebars, controls, and main plotting container."""
@@ -31,7 +30,6 @@ class FittingView(BaseView):
         )
 
         self._model = model
-        self._controller: Optional["FittingController"] = None
 
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
@@ -42,9 +40,6 @@ class FittingView(BaseView):
         
         self._init_components()
     
-    def set_controller(self, controller: "FittingController"):
-        """Set the controller for this view."""
-        self._controller = controller
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -116,8 +111,6 @@ class FittingView(BaseView):
     
     def _right_sidebar_layout(self) -> pn.Column:
         """Build right sidebar controls for component definition and fitting actions."""
-
-        
 
         background_subtraction_label = pn.pane.Markdown(
             "### Background-subtraction", 

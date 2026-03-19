@@ -20,7 +20,7 @@ class FittingModel(BaseModel):
         super().__init__()
         self._constants = Constants()
         self._app_state = CacheManager.get_cached_app_state()
-        self._controller : "FittingController"
+        # Removed controller reference for MVC purity
 
         self._app_state.spectra = None
         self._app_state.fitting_results = None
@@ -44,9 +44,7 @@ class FittingModel(BaseModel):
     def app_state(self) -> "AppState":
         return self._app_state
     
-    def set_controller(self, controller: "FittingController"):
-        """Store controller reference for pushing plot updates after fitting."""
-        self._controller = controller
+
 
     def get_uploaded_filename(self) -> str:
         """
@@ -187,15 +185,15 @@ class FittingModel(BaseModel):
             raise KeyError
     
     def remove_component(self, component_item):
-        """Remove a component and refit, or clear fitting results if none remain."""
+        """Remove a component and refit, or clear fitting results if none remain. Returns True if plot should be updated."""
         self.dictionary['components'] = [comp for comp in self.dictionary['components'] if comp != component_item]
-        if self.dictionary['components'] is None or len(self.dictionary['components']) == 0:
+        if not self.dictionary['components']:
             print("NLLS Model: No components remaining after deletion")
             self._app_state.fitting_results = None
-            self._controller.update_plot(fitting_results=None)
-            return
+            return True  # Signal to controller to update plot
         self.create_model()
         self.fit_reference()
+        return True  # Signal to controller to update plot
 
     def delete_component(self,element,name,area_name= 'default'):
         """Method that allows to remove a certain component from the fitting.
@@ -227,10 +225,10 @@ class FittingModel(BaseModel):
     def fit_reference(self):
         """
         Fit the current reference spectrum using the composed model and parameters.
+        Returns the fit results.
         """
         self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
-
-        self._controller.update_plot(fitting_results=self.ref_results)
+        return self.ref_results
 
     def get_energy_map(self):
         """Compute a per-pixel energy map by integrating selected windows with fit profile support."""

@@ -32,8 +32,7 @@ class FittingController(BaseController):
 
         all_datasets = app_state.all_datasets
 
-        view.set_controller(self)
-        model.set_controller(self)
+        # No longer needed: model.set_controller(self)
         
         # Get 'tab' query parameter from URL
         tab_param = self._get_query_param("tab")
@@ -115,6 +114,8 @@ class FittingController(BaseController):
         self._layout.add_new_component_input(component_item_view)
 
         self._view.energy_map_toggle_button.disabled = False
+        # After adding a component, update the plot
+        self.update_plot(self._model.ref_results if hasattr(self._model, 'ref_results') else None)
         
     def _test(self, event):
         """Internal helper kept for manual testing of model creation."""
@@ -140,6 +141,12 @@ class FittingController(BaseController):
     def update_plot(self, fitting_results = None):
         """Proxy plot updates to layout manager."""
         self.layout.update_plot(fitting_results)
+
+    def remove_component(self, component_item):
+        """Remove a component from the model and update the plot if needed."""
+        should_update = self._model.remove_component(component_item)
+        if should_update:
+            self.update_plot(self._model.ref_results if hasattr(self._model, 'ref_results') else None)
 
     def _background_subtraction_switch_watcher(self, event):
         """Toggle multifit background subtraction mode and refit if needed."""
