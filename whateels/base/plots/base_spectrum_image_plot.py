@@ -148,7 +148,7 @@ class BaseSpectrumImagePlot(IPlot):
         )
 
     # --- Plot / Pane Setup (HoloViews) ---
-    def _setup_plots(self, paneA_select_tools=['lasso_select', 'box_select']):
+    def _setup_plots(self):
         """
         Initialize paneA (heatmap + invisible selection layer) and paneB
         (Pipe/DynamicMap spectrum) using HoloViews.
@@ -193,7 +193,7 @@ class BaseSpectrumImagePlot(IPlot):
             size=0,
             alpha=0,
             nonselection_alpha=0,
-            tools=paneA_select_tools,
+            tools=['lasso_select', 'box_select'],
             shared_axes=False,
         )
 

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from whateels.state import AppState
     from ...MVC import FittingController
-    from xarray import Dataset
+    from ..model.component_item import ComponentItem
 
 class FittingModel(BaseModel):
     """Model responsible for component management, lmfit model assembly, and fitting outputs."""
@@ -66,7 +66,7 @@ class FittingModel(BaseModel):
         """
         return self._app_state.multifit is not None
     
-    def add_component(self, component_item, flex='low'):
+    def add_component(self, component_item: "ComponentItem", flex='low'):
         """Add a component, estimate initial params, rebuild model, and refit."""
         dataset = self._app_state.plot_dataset
         self._Eloss = getattr(dataset, 'coords', {}).get('Eloss', {}).values if dataset is not None else None

@@ -46,7 +46,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         # Inactivity timer state — must be set before super().__init__ triggers _setup_plots
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
-        self._pc = None
+        self._pc : pn.state.PeriodicCallback | None = None
 
         # Hover/selection debounce (same pattern as quantification page)
         self._pending_selection_index = None

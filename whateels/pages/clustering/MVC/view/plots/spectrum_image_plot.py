@@ -62,7 +62,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         
         # Get axis name from model constants
         eloss_name = getattr(model.constants, 'ELOSS', 'Eloss') if hasattr(model, 'constants') else 'Eloss'
-        
+
+        # Persistent selection overlay (red dots shown after lasso) — must be set
+        # before super().__init__ because that calls _setup_plots() internally.
+        self._paneA_base_overlay = None
+        self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+
         # Call parent constructor to setup base visualization
         super().__init__(dataset, eloss_name)
 
@@ -117,6 +122,38 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
 
         # Remove region selection state (lasso/box selection)
+
+    # --- paneA setup override: store base overlay for dot recomposition ---
+
+    @override
+    def _setup_plots(self):
+        super()._setup_plots()
+        self._paneA_base_overlay = self.paneA.object
+        self._update_selection_overlay(self._region_pairs)
+
+    def _update_selection_overlay(self, pairs):
+        """Rebuild the red-dot selection overlay and recompose paneA.
+
+        Always reapplies the full Overlay-level opts so paneA never loses its
+        sizing behaviour when the overlay is reconstructed.
+        """
+        if pairs:
+            xs = [col for row, col in pairs]
+            ys = [row for row, col in pairs]
+            self._selection_overlay = hv.Points(
+                (xs, ys), kdims=['x', 'y']
+            ).opts(color='red', size=5, alpha=0.5)
+        else:
+            self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+        if self._paneA_base_overlay is not None and self.paneA is not None:
+            self.paneA.object = (
+                self._paneA_base_overlay * self._selection_overlay  # type: ignore
+            ).opts(
+                hv.opts.Overlay(
+                    responsive=True, aspect='equal', shared_axes=False,
+                    active_tools=['lasso_select'],
+                )
+            )
 
     # --- Clustering Application Methods ---
     
@@ -351,11 +388,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         
         # Update heatmap pane — re-overlay with selectors to preserve interaction streams
         if self.paneA is not None and self._selectors is not None:
-            overlay = (cluster_img * self._selectors).opts(  # type: ignore
-                hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False)
-            )
-            self.paneA.object = overlay
-            self.paneA.param.trigger('object')
+            self._paneA_base_overlay = cluster_img * self._selectors  # type: ignore
+            self._update_selection_overlay([])  # reset any stale red dots
         
         # Update spectrum pane to show cluster centers via base class pipe
         centers_fig = self._visualizer.plot_centers(centres, self._energy)
@@ -649,6 +683,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         return hv.Overlay(overlays)
     
     @override
+    def _on_paneA_selected(self, index=None):
+        """Ignore empty Selection1D events (Bokeh fires index=[] after committing
+        a lasso, which would immediately wipe the red dots)."""
+        if not index:
+            return
+        pairs = list(dict.fromkeys(
+            (idx // self._nx, idx % self._nx) for idx in index
+        ))
+        self._region_pairs = pairs
+        self._update_selection_overlay(pairs)
+        self._show_spectrum(region_pairs=pairs)
+
+    @override
     def _on_paneA_hover(self, x=None, y=None):
         """
         Handle PointerXY hover — show pixel spectrum unless region is selected.
@@ -682,6 +729,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 if self._hover_disabled:
                     self._hover_disabled = False
                     self._region_pairs = []  # Clear lasso selection when unfreeze
+                    self._update_selection_overlay([])  # Remove red dots
                     if self._last_hover_point is not None and self._clustering_active:
                         i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
                         fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
