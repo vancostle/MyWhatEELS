@@ -5,27 +5,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...model.component_item import ComponentItem
+    from ...view import FittingView
 
 class ComponentItemView(pn.Column):
     """Editable UI card for a single fitting component and its parameter bounds."""
 
     _STRETCH_WIDTH = 'stretch_width'
 
-    @staticmethod
-    def _safe_bound(value, fallback):
-        """Return value if finite, otherwise return fallback."""
-        return value if np.isfinite(value) else fallback
-
-    @staticmethod
-    def _safe_range(lo, hi, lo_fallback, hi_fallback):
-        """Return a (lo, hi) tuple with infinite values replaced by fallbacks."""
-        return (
-            lo if np.isfinite(lo) else lo_fallback,
-            hi if np.isfinite(hi) else hi_fallback,
-        )
-
-    def __init__(self, controller, component_item: "ComponentItem", model, energy, 
-                view, expandable: bool = True):
+    def __init__(self, controller, component_item: "ComponentItem", model, energy, view : "FittingView", expandable: bool = True):
         """Initialize controls, callbacks, and collapsible layout for one component."""
         self._controller = controller
         self.component_item = component_item
@@ -182,6 +169,19 @@ class ComponentItemView(pn.Column):
         self.sigma_slider.param.watch(self._sigma_range_watcher, 'value')
         self.amplitude_input.param.watch(self._amplitude_watcher, 'value')
         self.amplitude_slider.param.watch(self._amplitude_range_watcher, 'value')
+
+    @staticmethod
+    def _safe_bound(value, fallback):
+        """Return value if finite, otherwise return fallback."""
+        return value if np.isfinite(value) else fallback
+
+    @staticmethod
+    def _safe_range(lo, hi, lo_fallback, hi_fallback):
+        """Return a (lo, hi) tuple with infinite values replaced by fallbacks."""
+        return (
+            lo if np.isfinite(lo) else lo_fallback,
+            hi if np.isfinite(hi) else hi_fallback,
+        )
 
     def _energy_center_watcher(self, event):
         """Update center value and keep center-range widget around the new location."""
