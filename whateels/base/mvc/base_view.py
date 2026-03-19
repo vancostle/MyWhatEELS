@@ -54,15 +54,15 @@ class BaseView:
         self._right_sidebar = Column(sizing_mode=self.STRETCH_WIDTH)
 
     @property
-    def main(self) -> Viewable:
+    def main(self) -> Column:
         """Main content area layout for displaying plots or placeholders."""
         return self._main
     @property
-    def left_sidebar(self) -> Viewable:
+    def left_sidebar(self) -> Column:
         """Left sidebar layout for displaying info and controls."""
         return self._left_sidebar
     @property
-    def right_sidebar(self) -> Viewable:
+    def right_sidebar(self) -> Column:
         """Right sidebar layout for additional controls or info."""
         return self._right_sidebar
     @property
