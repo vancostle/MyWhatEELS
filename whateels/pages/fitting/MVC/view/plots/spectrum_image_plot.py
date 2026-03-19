@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from ...model import FittingModel
     from xarray import Dataset
 
-
 class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     """
     HoloViews/Panel implementation of the Spectrum Image visualizer for the fitting page.
@@ -53,7 +52,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._pending_selection_ts = None
         self._SELECTION_DEBOUNCE_MS = 200
         self._hover_blocked = False
-        self._double_tap_stream = None
+        self._double_tap_stream : hv_streams.DoubleTap | None = None
 
         # Persistent selection overlay (red dots shown after lasso)
         self._paneA_base_overlay = None
