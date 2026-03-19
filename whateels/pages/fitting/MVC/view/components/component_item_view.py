@@ -195,28 +195,32 @@ class ComponentItemView(pn.Column):
             self.energy_range_slider.start = event.new - 50
             self.energy_range_slider.end = event.new + 50
         self._model.create_model()
-        self._model.fit_reference()
+        results = self._model.fit_reference()
+        self._controller.update_plot(results)
         self.update_component_parameters()
 
     def _energy_range_watcher(self, event):
         """Update center bounds and trigger refit."""
         self.component_item.set_center_range(event.new[0], event.new[1])
         self._model.create_model()
-        self._model.fit_reference()
+        results = self._model.fit_reference()
+        self._controller.update_plot(results)
         self.update_component_parameters()
 
     def _sigma_range_watcher(self, event):
         """Update sigma bounds and trigger refit."""
         self.component_item.set_sigma_range(event.new[0], event.new[1])
         self._model.create_model()
-        self._model.fit_reference()
+        results = self._model.fit_reference()
+        self._controller.update_plot(results)
         self.update_component_parameters()
     
     def _amplitude_range_watcher(self, event):
         """Update amplitude bounds and trigger refit."""
         self.component_item.set_amplitude_range(event.new[0], event.new[1])
         self._model.create_model()
-        self._model.fit_reference()
+        results = self._model.fit_reference()
+        self._controller.update_plot(results)
         self.update_component_parameters()
 
     def _sigma_watcher(self, event):
@@ -225,7 +229,8 @@ class ComponentItemView(pn.Column):
         self.sigma_slider.start = (event.new - self.dict_var[self.component_item.flexibility][2] if event.new > self.dict_var[self.component_item.flexibility][2] else 0) * 0.5
         self.sigma_slider.end = event.new + self.dict_var[self.component_item.flexibility][3] * 1.5
         self._model.create_model()
-        self._model.fit_reference()
+        results = self._model.fit_reference()
+        self._controller.update_plot(results)
         self.update_component_parameters()
 
     def _amplitude_watcher(self, event):
@@ -234,14 +239,15 @@ class ComponentItemView(pn.Column):
         self.amplitude_slider.start = self._safe_bound(event.new * self.dict_var[self.component_item.flexibility][4] * 0.5, 0.0)
         self.amplitude_slider.end = self._safe_bound(event.new * self.dict_var[self.component_item.flexibility][5] * 1.5, event.new * 10)
         self._model.create_model()
-        self._model.fit_reference()
+        results = self._model.fit_reference()
+        self._controller.update_plot(results)
         self.update_component_parameters()
 
     def _delete_element_watcher(self, event):
         """Remove card from UI and delete linked component from model."""
         self._view.right_sidebar.remove(self)
 
-        self._model.remove_component(self.component_item)
+        self._controller.remove_component(self.component_item)
 
     def _slider_button_watcher(self, event):
         """Toggle advanced parameter controls visibility."""
