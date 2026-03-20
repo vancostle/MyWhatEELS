@@ -94,9 +94,17 @@ class BaseSpectrumImagePlot(IPlot):
         self._paneB_pipe = None     # Pipe stream for efficient paneB updates
         self._paneB_dmap = None     # DynamicMap backed by _paneB_pipe
 
+        # Selection-change hook — set by external consumers (e.g. controller)
+        # Signature: on_selection_change(has_selection: bool) -> None
+        self.on_selection_change = None
+
         # Setup plots and callbacks
         self._setup_plots()
         self._setup_callbacks()
+        
+    @property
+    def has_selection(self) -> bool:
+        return bool(self._region_pairs)
 
     # --- Public layout builders ---
     @override
@@ -427,6 +435,8 @@ class BaseSpectrumImagePlot(IPlot):
         self._update_selection_overlay([])
         if self._debounce_pc and self._debounce_pc.running:
             self._debounce_pc.stop()
+        if self.on_selection_change:
+            self.on_selection_change(False)
 
     # --- Pane B range change (preserve zoom/pan) ---
 

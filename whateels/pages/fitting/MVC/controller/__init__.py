@@ -67,6 +67,12 @@ class FittingController(BaseController):
 
         view._fitting_add_compontent_button.on_click(self._add_component_item_button_callback)
 
+        # Enable/disable 'Add Component' reactively based on lasso selection
+        if self._layout._chosen_visualizers:
+            self._layout._chosen_visualizers[0].on_selection_change = (
+                lambda has_sel: setattr(self._view.fitting_add_component_button, 'disabled', not has_sel)
+            )
+
         view._background_subtraction_switch.param.watch(self._background_subtraction_switch_watcher, 'value')
 
         view._energy_map_toggle_button.on_click(self._energy_map_toggle_button_callback)

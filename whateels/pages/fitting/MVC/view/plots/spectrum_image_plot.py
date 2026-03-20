@@ -288,6 +288,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self._last_hover_ts = None
             if self._last_hover_point is not None:
                 self._update_paneB(self._figB_hover(self._last_hover_point))
+            if self.on_selection_change:
+                self.on_selection_change(False)
             return
         app_state = CacheManager.get_cached_app_state()
         if app_state.fitting_results is not None:
@@ -298,6 +300,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self._pc.stop()
         self._last_hover_ts = None
         self._hover_blocked = True
+        if self.on_selection_change:
+            self.on_selection_change(True)
 
     @override
     def _on_paneA_double_tap(self, x=None, y=None):
@@ -324,42 +328,3 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             except Exception:
                 pass
         super().cleanup()
-
-def sum_slice(matrix, vertexs):
-    """
-    Sum values in a rectangular matrix region defined by index bounds.
-
-    Parameters:
-        matrix: The 2D matrix to sum over.
-        vertexs: Tuple `(x_start, x_end, y_start, y_end)` defining the region.
-
-    Returns:
-        The sum of the values in the specified region.
-    """
-    suma = 0
-    for i in range(vertexs[0], vertexs[1]):
-        for j in range(vertexs[2], vertexs[3]):
-            suma += matrix[j][i]
-    return suma
-
-def get_envelope(x1, y1, x2, y2):
-    """
-    Compute the upper envelope of two curves over their union x-domain.
-
-    Parameters:
-        x1, y1: The x and y values of the first curve.
-        x2, y2: The x and y values of the second curve.
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: `(x_common, y_envelope)`.
-    """
-    # Find the common x range
-    x_common = np.union1d(x1, x2)
-
-    # Interpolate y values for the common x points
-    y1_interp = np.interp(x_common, x1, y1)
-    y2_interp = np.interp(x_common, x2, y2)
-
-    # Calculate the envelope by taking the maximum at each point
-    y_envelope = np.maximum(y1_interp, y2_interp)
-    return x_common, y_envelope

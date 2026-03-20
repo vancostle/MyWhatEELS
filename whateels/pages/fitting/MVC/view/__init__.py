@@ -39,7 +39,6 @@ class FittingView(BaseView):
         self._background_subtraction_switch: pn.widgets.Switch = pn.widgets.Switch()
         
         self._init_components()
-    
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -182,7 +181,7 @@ class FittingView(BaseView):
             height=55,
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
-            disabled=False,
+            disabled=True,
         )
         
         details = SimpleDetails(
