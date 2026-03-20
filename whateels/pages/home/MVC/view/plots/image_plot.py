@@ -1,72 +1,23 @@
 """
 Image visualization composer.
 """
-import panel as pn
-import holoviews as hv
-import numpy as np
 import xarray as xr
 
+from whateels.base.plots import BaseImagePlot
 from whateels.components import InfoPanel
-from whateels.interfaces import IPlot
 from typing import TYPE_CHECKING, override
 if TYPE_CHECKING:
     from ...model import HomePageModel
 
-class ImagePlot(IPlot):
+class ImagePlot(BaseImagePlot):
     """Composes image visualizations from EELS data"""
-
-    # Constants for sizing modes and plot configuration
-    _STRETCH_BOTH = 'stretch_both'
-    _STRETCH_WIDTH = 'stretch_width'
     
     def __init__(self, model: "HomePageModel", dataset: "xr.Dataset"):
+        super().__init__(dataset)
         self._model = model
-        self._dataset = dataset        
-        
-        # For tap/click throttling
-        self._last_click_x = None
-        self._click_tolerance = 0.5  # Minimum distance to trigger update
-
-    # -- Public Methods --
-    @override
-    def create_plots(self):
-        """Create layout for image visualization with HoloViews/Bokeh."""
-
-        # Prepare cleaned image data and coordinates
-        image_data = self._dataset.ElectronCount.squeeze()
-        image_data = image_data.fillna(0.0)
-        image_data = image_data.where(np.isfinite(image_data), 0.0)
-
-        ny, nx = image_data.shape
-        m_image = np.asarray(image_data)
-
-        # hv.Image expects (x_coords, y_coords, 2D-array) with shape (ny, nx)
-        img = hv.Image(
-            (np.arange(nx), np.arange(ny), m_image),
-            kdims=['x', 'y'],
-            vdims=['Intensity']
-        ).opts(
-            cmap='Greys_r',
-            colorbar=False,
-            xaxis=None,
-            yaxis=None,
-            invert_yaxis=True,
-            responsive=True,
-            aspect='equal',
-            shared_axes=False,
-        )
-
-        image_panel = pn.pane.HoloViews(img, sizing_mode='stretch_height', margin=0, styles={'margin': 'auto'})
-        plots = pn.Column(
-            image_panel,
-            sizing_mode=self._STRETCH_BOTH,
-            align='center',
-            styles={'width': '100%'}
-        )
-        return plots
 
     @override
-    def create_dataset_info(self):
+    def create_dataset_info(self) -> "InfoPanel":
         NOT_AVAILABLE = 'N/A'
         SHAPE = 'shape'
         BEAM_ENERGY = 'beam_energy'

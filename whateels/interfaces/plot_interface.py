@@ -35,11 +35,11 @@ class IPlot(ABC):
     @abstractmethod
     def create_dataset_info(self) -> "InfoPanel":
         """
-        Create and return a DatasetInformation panel for this visualizer.
+        Create and return an InfoPanel for this visualizer.
 
         Returns:
-            DatasetInformation: A Panel component displaying key metadata attributes for the dataset.
+            InfoPanel: A Panel component displaying key metadata attributes for the dataset.
 
         Subclasses must implement this method to provide dataset info relevant to their visualization.
         """
-        raise NotImplementedError("Subclasses should implement create_dataset_info and return a DatasetInformation object.")
+        raise NotImplementedError("Subclasses should implement create_dataset_info and return an InfoPanel object.")

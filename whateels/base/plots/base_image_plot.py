@@ -2,22 +2,24 @@
 Base image visualizer component for 2D EELS image data.
 
 This is a shared component that can be used across different pages.
-It provides basic 2D image rendering with Plotly heatmaps.
+It provides basic 2D image rendering with HoloViews.
 
 No model dependency - only requires dataset and optional axis names.
 """
 import panel as pn
-import plotly.graph_objects as go
+import holoviews as hv
 import numpy as np
 import xarray as xr
 
-from typing import Optional
+from whateels.components import InfoPanel
+from whateels.interfaces import IPlot
+from typing import Optional, override
 
-class BaseImagePlot:
+class BaseImagePlot(IPlot):
     """
     Base component for composing 2D image visualizations from EELS data.
     
-    This visualizer renders a simple 2D heatmap using Plotly, with:
+    This visualizer renders a simple 2D heatmap using HoloViews, with:
     - Automatic data cleaning (NaN/inf handling)
     - Locked aspect ratio (1:1 pixel)
     - Responsive layout
@@ -49,6 +51,7 @@ class BaseImagePlot:
             axis_x: Name of x-axis coordinate (default: 'x')
             axis_y: Name of y-axis coordinate (default: 'y')
         """
+        super().__init__()
         self._dataset = dataset
         self._axis_x = axis_x or self._DEFAULT_AXIS_X
         self._axis_y = axis_y or self._DEFAULT_AXIS_Y
@@ -59,255 +62,89 @@ class BaseImagePlot:
 
     # -- Public Methods --
     
-    def create_dataset_info(self, dataset_attrs: Optional[dict] = None):
+    @override
+    def create_dataset_info(self) -> "InfoPanel":
         """
-        Create dataset info panel.
-        
-        Args:
-            dataset_attrs: Optional dictionary of dataset attributes.
-                          If None, uses self._dataset.attrs
-        
-        Returns:
-            pn.Column: Dataset information panel
+        Returns a panel with dataset information (shape, beam energy, angles).
+        Shared implementation for all spectrum image plot subclasses.
         """
-        from whateels.helpers import HTML_ROOT
-        
-        # Constants
-        SHAPE = 'shape'
-        BEAM_ENERGY = 'beam_energy'
-        COLLECTION_ANGLE = 'collection_angle'
-        CONVERGENCE_ANGLE = 'convergence_angle'
-        HTML_FILE = 'metadata_info.html'
-        READ_MODE = 'r'
-        UTF_8 = 'utf-8'
         NOT_AVAILABLE = 'N/A'
-        STRETCH_WIDTH = "stretch_width"
-        DATASET_INFO_HEADER_CLASS = ["dataset-info-header"]
-        DATASET_INFO_CLASS = ["dataset-info", "animated"]
-        DATASET_INFO_TITLE = "<h5 class=\"dataset-info-title\">Dataset Information</h5>"
-        LABEL_SHAPE = "<strong>Shape:</strong>"
-        LABEL_BEAM_ENERGY = "<strong>Beam Energy:</strong>"
-        LABEL_CONVERGENCE_ANGLE = "<strong>Convergence Angle:</strong>"
-        LABEL_COLLECTION_ANGLE = "<strong>Collection Angle:</strong>"
-        ENERGY_UNIT = " keV"
-        ANGLE_UNIT = " mrad"
-        SPACER_HEIGHT_SMALL = 5
-        SPACER_HEIGHT_MEDIUM = 10
-        MARGIN_ZERO = 0
-        
-        attrs = dataset_attrs if dataset_attrs is not None else (self._dataset.attrs if self._dataset is not None else {})
+        attrs = self._dataset.attrs if self._dataset is not None else {}
 
-        shape = attrs.get(SHAPE, NOT_AVAILABLE)
-        beam_energy = attrs.get(BEAM_ENERGY, NOT_AVAILABLE)
-        convergence_angle = attrs.get(CONVERGENCE_ANGLE, NOT_AVAILABLE)
-        collection_angle = attrs.get(COLLECTION_ANGLE, NOT_AVAILABLE)
+        shape = attrs.get('shape', NOT_AVAILABLE)
+        beam_energy = attrs.get('beam_energy', NOT_AVAILABLE)
+        convergence_angle = attrs.get('convergence_angle', NOT_AVAILABLE)
+        collection_angle = attrs.get('collection_angle', NOT_AVAILABLE)
 
-        # Load metadata button HTML
-        metadata_html_path = HTML_ROOT / HTML_FILE
-        with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
-            metadata_button_html = f.read()
+        beam_energy_fmt = f"{beam_energy} keV" if beam_energy != NOT_AVAILABLE else NOT_AVAILABLE
+        convergence_angle_fmt = f"{convergence_angle} mrad" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
+        collection_angle_fmt = f"{collection_angle} mrad" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
 
-        metadata_button = pn.pane.HTML(metadata_button_html, margin=MARGIN_ZERO)
-
-        # Main info panel
-        header = pn.Row(
-            pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=MARGIN_ZERO),
-            metadata_button,
-            sizing_mode=STRETCH_WIDTH,
-            css_classes=DATASET_INFO_HEADER_CLASS,
-            margin=MARGIN_ZERO
+        return InfoPanel(
+            title="Dataset Information",
+            information={
+                "Shape": shape,
+                "Beam Energy": beam_energy_fmt,
+                "Convergence Angle": convergence_angle_fmt,
+                "Collection Angle": collection_angle_fmt,
+            },
+            sizing_mode='stretch_width',
+            margin=0,
         )
 
-        dataset_info = pn.Column(
-            header,
-            pn.Spacer(height=SPACER_HEIGHT_SMALL),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML(LABEL_SHAPE),
-                    sizing_mode=STRETCH_WIDTH
-                ),
-                pn.pane.Str(shape),
-                sizing_mode=STRETCH_WIDTH
-            ),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML(LABEL_BEAM_ENERGY),
-                    sizing_mode=STRETCH_WIDTH
-                ),
-                pn.pane.Str(f"{beam_energy}{ENERGY_UNIT}"),
-                sizing_mode=STRETCH_WIDTH
-            ),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML(LABEL_CONVERGENCE_ANGLE),
-                    sizing_mode=STRETCH_WIDTH
-                ),
-                pn.pane.Str(f"{convergence_angle}{ANGLE_UNIT}"),
-                sizing_mode=STRETCH_WIDTH
-            ),
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML(LABEL_COLLECTION_ANGLE),
-                    sizing_mode=STRETCH_WIDTH
-                ),
-                pn.pane.Str(f"{collection_angle}{ANGLE_UNIT}"),
-                sizing_mode=STRETCH_WIDTH
-            ),
-            pn.Spacer(height=SPACER_HEIGHT_MEDIUM),
-            sizing_mode=STRETCH_WIDTH,
-            css_classes=DATASET_INFO_CLASS
-        )
-        return dataset_info
 
     def create_plots(self):
         """
-        Create layout for 2D image visualization with Plotly.
+        Create layout for 2D image visualization with HoloViews.
         
         Returns:
             pn.Column: Panel column containing the image plot
         """
-        # Use the axis names provided in constructor
-        axis_x = self._axis_x
-        axis_y = self._axis_y
-
-        # Prepare cleaned image data and coordinates
         image_data = self._dataset.ElectronCount.squeeze()
         image_data = image_data.fillna(0.0)
         image_data = image_data.where(np.isfinite(image_data), 0.0)
 
-        x_coords = self._dataset.coords[axis_x]
-        x_coords = x_coords.where(np.isfinite(x_coords), 0.0)
-
-        y_coords = self._dataset.coords[axis_y]
-        y_coords = y_coords.where(np.isfinite(y_coords), 0.0)
-
-        clean_image_data = image_data.assign_coords({
-            axis_x: x_coords,
-            axis_y: y_coords
-        })
-
-        ny, nx = clean_image_data.shape
-
-        # Build Plotly heatmap with locked aspect ratio
-        m_image = np.asarray(clean_image_data)
-        heat = go.Heatmap(
-            z=m_image,
-            x=np.arange(nx),
-            y=np.arange(ny-1, -1, -1),
-            colorscale='Greys_r',
-            showscale=False,
-            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
+        image_plot = self._create_2d_image(image_data)
+        image_panel = pn.pane.HoloViews(
+            image_plot,
+            sizing_mode='stretch_height',
+            margin=0,
+            styles={'margin': 'auto'}
         )
-        fig_base = go.Figure(data=[heat])
-        fig_base.update_layout(
-            margin=dict(l=0, r=0, t=0, b=0),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+        plots = pn.Column(
+            image_panel,
+            sizing_mode=self._STRETCH_BOTH,
+            align='center',
+            styles={'width': '100%'}
         )
-        # Keep origin top-left and preserve 1:1 pixel aspect to avoid deformation
-        fig_base.update_yaxes(
-            autorange="reversed", 
-            scaleanchor="x", 
-            scaleratio=1, 
-            constrain="domain",
-            showgrid=False, 
-            zeroline=False, 
-            showticklabels=False
-        )
-        fig_base.update_xaxes(
-            showgrid=False, 
-            zeroline=False, 
-            showticklabels=False, 
-            constrain="domain"
-        )
-
-        # Use a responsive Plotly pane that fills the parent container
-        image_panel = pn.pane.Plotly(
-            self._to_plotly(fig_base), 
-            sizing_mode='stretch_both', 
-            config={'responsive': True}
-        )
-        plots = pn.Column(image_panel, sizing_mode=self._STRETCH_BOTH)
         return plots
 
     # -- Protected Helper Methods --
 
-    def _to_plotly(self, obj):
+    def _create_2d_image(self, clean_image_data):
         """
-        Convert go.Figure to dict to avoid Panel<->Plotly relayout issues.
-        
-        Args:
-            obj: Plotly Figure or dict
-            
-        Returns:
-            dict: Plotly JSON representation
-        """
-        try:
-            if isinstance(obj, go.Figure):
-                return obj.to_plotly_json()
-        except Exception:
-            pass
-        try:
-            if isinstance(obj, dict):
-                return obj
-        except Exception:
-            pass
-        return obj
-
-    def _create_2d_image(self, clean_image_data, max_plot_size: int = 600) -> 'go.Figure':
-        """
-        Create a 2D image plot for image data using Plotly.
-        
-        This is a helper method that can be used by subclasses to create
-        fixed-size image plots (as opposed to the responsive plot in create_plots).
+        Create a 2D image plot for image data using HoloViews.
 
         Args:
             clean_image_data: 2D numpy array or xarray DataArray with image data
-            max_plot_size: Maximum width/height for the plot in pixels
             
         Returns:
-            go.Figure: Plotly figure with preserved aspect ratio
+            A HoloViews image-like object with preserved aspect ratio
         """
-        # Calculate dimensions from the data itself
-        data_height, data_width = clean_image_data.shape
-        scale_factor = min(max_plot_size / data_width, max_plot_size / data_height)
-        plot_width = int(data_width * scale_factor)
-        plot_height = int(data_height * scale_factor)
-
-        # Build Plotly heatmap; invert Y so origin is top-left
         m_image = np.asarray(clean_image_data)
-        heat = go.Heatmap(
-            z=m_image,
-            x=np.arange(data_width),
-            y=np.arange(data_height-1, -1, -1),
-            colorscale='Greys_r',
-            showscale=False,
-            hovertemplate="i=%{y}, j=%{x}<br>I=%{z}<extra></extra>",
-        )
+        ny, nx = m_image.shape
 
-        fig = go.Figure(data=[heat])
-        fig.update_layout(
-            width=plot_width,
-            height=plot_height,
-            margin=dict(l=0, r=0, t=0, b=0),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+        return hv.Image(
+            (np.arange(nx), np.arange(ny), m_image),
+            kdims=[self._axis_x, self._axis_y],
+            vdims=['Intensity']
+        ).opts(
+            cmap='Greys_r',
+            colorbar=False,
+            xaxis=None,
+            yaxis=None,
+            invert_yaxis=True,
+            responsive=True,
+            aspect='equal',
+            shared_axes=False,
         )
-        fig.update_xaxes(
-            showgrid=False, 
-            zeroline=False, 
-            showticklabels=False, 
-            constrain="domain", 
-            fixedrange=True
-        )
-        fig.update_yaxes(
-            scaleanchor="x", 
-            scaleratio=1, 
-            showgrid=False, 
-            zeroline=False, 
-            showticklabels=False, 
-            constrain="domain", 
-            fixedrange=True
-        )
-
-        return fig

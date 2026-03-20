@@ -45,7 +45,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         # Inactivity timer state — must be set before super().__init__ triggers _setup_plots
         self._last_hover_ts = None
         self._INACTIVITY_MS = 700
-        self._pc : pn.state.PeriodicCallback | None = None
+        self._pc : pn.state.PeriodicCallback | None = None # type: ignore[assignment] # Panel's PeriodicCallback type is not well-annotated
 
         # Hover/selection debounce (same pattern as quantification page)
         self._pending_selection_index = None
@@ -244,7 +244,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self._selection_overlay = hv.Points([], kdims=['x', 'y'])
         if self._paneA_base_overlay is not None and self.paneA is not None:
             self.paneA.object = (
-                self._paneA_base_overlay * self._selection_overlay
+                self._paneA_base_overlay * self._selection_overlay # type: ignore[union-attr] # BaseSpectrumImagePlot sets paneA.object to an hv.Overlay, but mypy can't track that
             ).opts(
                 hv.opts.Overlay(
                     responsive=True, aspect='equal', shared_axes=False,
