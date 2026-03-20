@@ -9,7 +9,7 @@ No model dependency - only requires dataset and optional axis names.
 import panel as pn
 import holoviews as hv
 import numpy as np
-import xarray as xr
+from xarray import Dataset
 
 from whateels.components import InfoPanel
 from whateels.interfaces import IPlot
@@ -28,20 +28,10 @@ class BaseImagePlot(IPlot):
     Can be extended by page-specific visualizers for additional features.
     No model dependency - works with any page.
     """
-
-    # Constants for sizing modes and plot configuration
-    _STRETCH_BOTH = 'stretch_both'
-    _STRETCH_WIDTH = 'stretch_width'
-    
-    # Default axis names
-    _DEFAULT_AXIS_X = 'x'
-    _DEFAULT_AXIS_Y = 'y'
     
     def __init__(
         self, 
-        dataset: "xr.Dataset",
-        axis_x: Optional[str] = None,
-        axis_y: Optional[str] = None
+        dataset: "Dataset",
     ):
         """
         Initialize the image visualizer.
@@ -53,9 +43,7 @@ class BaseImagePlot(IPlot):
         """
         super().__init__()
         self._dataset = dataset
-        self._axis_x = axis_x or self._DEFAULT_AXIS_X
-        self._axis_y = axis_y or self._DEFAULT_AXIS_Y
-        
+
         # For tap/click throttling (if subclasses need it)
         self._last_click_x = None
         self._click_tolerance = 0.5  # Minimum distance to trigger update
@@ -68,6 +56,7 @@ class BaseImagePlot(IPlot):
         Returns a panel with dataset information (shape, beam energy, angles).
         Shared implementation for all spectrum image plot subclasses.
         """
+        STRETCH_WIDTH = 'stretch_width'
         NOT_AVAILABLE = 'N/A'
         attrs = self._dataset.attrs if self._dataset is not None else {}
 
@@ -88,18 +77,20 @@ class BaseImagePlot(IPlot):
                 "Convergence Angle": convergence_angle_fmt,
                 "Collection Angle": collection_angle_fmt,
             },
-            sizing_mode='stretch_width',
+            sizing_mode=STRETCH_WIDTH,
             margin=0,
         )
 
-
-    def create_plots(self):
+    @override
+    def create_plots(self) -> pn.Column:
         """
         Create layout for 2D image visualization with HoloViews.
         
         Returns:
             pn.Column: Panel column containing the image plot
         """
+        STRETCH_BOTH = 'stretch_both'
+        
         image_data = self._dataset.ElectronCount.squeeze()
         image_data = image_data.fillna(0.0)
         image_data = image_data.where(np.isfinite(image_data), 0.0)
@@ -107,15 +98,13 @@ class BaseImagePlot(IPlot):
         image_plot = self._create_2d_image(image_data)
         image_panel = pn.pane.HoloViews(
             image_plot,
-            sizing_mode='stretch_height',
-            margin=0,
-            styles={'margin': 'auto'}
+            sizing_mode='scale_height',
+            styles={'margin' : 'auto'},
         )
         plots = pn.Column(
             image_panel,
-            sizing_mode=self._STRETCH_BOTH,
+            sizing_mode=STRETCH_BOTH,
             align='center',
-            styles={'width': '100%'}
         )
         return plots
 
@@ -136,7 +125,7 @@ class BaseImagePlot(IPlot):
 
         return hv.Image(
             (np.arange(nx), np.arange(ny), m_image),
-            kdims=[self._axis_x, self._axis_y],
+            kdims=['x', 'y'],
             vdims=['Intensity']
         ).opts(
             cmap='Greys_r',
