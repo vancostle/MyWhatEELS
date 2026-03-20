@@ -13,6 +13,7 @@ Page-specific features (like fitting, clustering, inactivity timers) should be i
 
 import panel as pn
 import numpy as np
+import time
 import holoviews as hv
 from holoviews import streams as hv_streams
 
@@ -68,6 +69,16 @@ class BaseSpectrumImagePlot(IPlot):
         # Selection / hover state
         self._region_pairs = []
         self._last_hover_point = None
+
+        # Overlay + lasso debounce state — must exist before _setup_plots() runs
+        self._paneA_base_overlay = None
+        self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+        self._hover_blocked = False
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        self._SELECTION_DEBOUNCE_MS = 200
+        self._debounce_pc = None
+        self._double_tap_stream: hv_streams.DoubleTap | None = None
 
         # Image width — used for index → (row, col) mapping in _on_paneA_selected
         self._nx = 0
@@ -209,6 +220,10 @@ class BaseSpectrumImagePlot(IPlot):
             styles={'margin': 'auto'},
         )
 
+        # Capture base overlay for selection dot recomposition
+        self._paneA_base_overlay = overlay
+        self._update_selection_overlay([])
+
         # paneB: Pipe + DynamicMap for in-place data updates (avoids Bokeh model rebuild)
         self._paneB_pipe = hv_streams.Pipe(data=None)
         self._paneB_dmap = hv.DynamicMap(lambda data: data, streams=[self._paneB_pipe])
@@ -234,6 +249,15 @@ class BaseSpectrumImagePlot(IPlot):
         # RangeXY stream to capture paneB zoom/pan
         self._rangexy_stream = hv_streams.RangeXY(source=self._paneB_dmap)
         self._rangexy_stream.add_subscriber(self._on_paneB_range_changed)
+
+        # Debounce periodic callback for lasso selection
+        self._debounce_pc = pn.state.add_periodic_callback(
+            self._check_selection_debounce, period=250, start=False
+        )
+        # DoubleTap stream to reset lasso selection
+        if self._selectors is not None:
+            self._double_tap_stream = hv_streams.DoubleTap(source=self._selectors)
+            self._double_tap_stream.add_subscriber(self._on_paneA_double_tap)
 
     # --- Spectrum figure helpers ---
 
@@ -306,6 +330,51 @@ class BaseSpectrumImagePlot(IPlot):
 
     # --- Pane A event handlers ---
 
+    def _now_ms(self):
+        return int(time.time() * 1000)
+
+    def _index_to_pairs(self, index):
+        """Convert a flat Selection1D index list to (row, col) pairs."""
+        if not index:
+            return []
+        return list(dict.fromkeys(
+            (idx // self._nx, idx % self._nx) for idx in index
+        ))
+
+    def _check_selection_debounce(self):
+        """Periodic callback: flush a pending lasso selection after the debounce window."""
+        if self._pending_selection_ts is None:
+            if self._debounce_pc and self._debounce_pc.running:
+                self._debounce_pc.stop()
+            return
+        if self._now_ms() - self._pending_selection_ts >= self._SELECTION_DEBOUNCE_MS:
+            index = self._pending_selection_index
+            self._pending_selection_index = None
+            self._pending_selection_ts = None
+            if self._debounce_pc and self._debounce_pc.running:
+                self._debounce_pc.stop()
+            self._process_selection(index)
+
+    def _update_selection_overlay(self, pairs):
+        """Rebuild the red-dot selection overlay and recompose paneA."""
+        if pairs:
+            xs = [col for row, col in pairs]
+            ys = [row for row, col in pairs]
+            self._selection_overlay = hv.Points(
+                (xs, ys), kdims=['x', 'y']
+            ).opts(color='red', size=5, alpha=0.5)
+        else:
+            self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+        if self._paneA_base_overlay is not None and self.paneA is not None:
+            self.paneA.object = (
+                self._paneA_base_overlay * self._selection_overlay
+            ).opts(
+                hv.opts.Overlay(
+                    responsive=True, aspect='equal', shared_axes=False,
+                    active_tools=['lasso_select'],
+                )
+            )
+
     def _on_paneA_hover(self, x=None, y=None):
         """Handle PointerXY hover — show pixel spectrum unless region is selected."""
         if x is None or y is None:
@@ -329,15 +398,35 @@ class BaseSpectrumImagePlot(IPlot):
             self._show_spectrum(point=point)
 
     def _on_paneA_selected(self, index=None):
-        """Handle lasso/box Selection1D — show summed spectrum for selected pixels."""
+        """Store pending lasso index and start debounce timer."""
         if not index:
-            pairs = []
-        else:
-            pairs = list(dict.fromkeys(
-                (idx // self._nx, idx % self._nx) for idx in index
-            ))
+            return
+        self._hover_blocked = True
+        self._pending_selection_ts = self._now_ms()
+        self._pending_selection_index = index
+        if self._debounce_pc and not self._debounce_pc.running:
+            self._debounce_pc.start()
+
+    def _process_selection(self, index=None):
+        """Commit a debounced lasso selection: compute pairs, update overlay, show spectrum."""
+        pairs = self._index_to_pairs(index)
         self._region_pairs = pairs
+        self._update_selection_overlay(pairs)
+        if not pairs:
+            self._hover_blocked = False
+            return
         self._show_spectrum(region_pairs=pairs)
+        self._hover_blocked = True
+
+    def _on_paneA_double_tap(self, x=None, y=None):
+        """Reset lasso selection, clear red dots, and unblock hover."""
+        self._hover_blocked = False
+        self._region_pairs = []
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        self._update_selection_overlay([])
+        if self._debounce_pc and self._debounce_pc.running:
+            self._debounce_pc.stop()
 
     # --- Pane B range change (preserve zoom/pan) ---
 
@@ -391,14 +480,24 @@ class BaseSpectrumImagePlot(IPlot):
 
     def cleanup(self):
         """Unsubscribe all HoloViews streams and release dataset references."""
+        # Stop and clean up debounce periodic callback
+        if self._debounce_pc is not None:
+            try:
+                if self._debounce_pc.running:
+                    self._debounce_pc.stop()
+            except Exception:
+                pass
+            self._debounce_pc = None
+
         # Remove subscribers first — streams hold strong refs to bound methods
         # (e.g. self._on_paneA_hover), which would keep this plot alive via the
         # stream→callback→self chain even after all other refs are nulled.
         subscriber_pairs = [
-            (self._hover_stream,     self._on_paneA_hover),
-            (self._tap_stream,       self._on_paneA_click),
-            (self._selection_stream, self._on_paneA_selected),
-            (self._rangexy_stream,   self._on_paneB_range_changed),
+            (self._hover_stream,       self._on_paneA_hover),
+            (self._tap_stream,         self._on_paneA_click),
+            (self._selection_stream,   self._on_paneA_selected),
+            (self._double_tap_stream,  self._on_paneA_double_tap),
+            (self._rangexy_stream,     self._on_paneB_range_changed),
         ]
         for stream, callback in subscriber_pairs:
             if stream is not None:
@@ -411,6 +510,7 @@ class BaseSpectrumImagePlot(IPlot):
             self._hover_stream,
             self._tap_stream,
             self._selection_stream,
+            self._double_tap_stream,
             self._rangexy_stream,
             self._paneB_pipe,
         ]:
@@ -433,7 +533,10 @@ class BaseSpectrumImagePlot(IPlot):
         self._hover_stream = None
         self._tap_stream = None
         self._selection_stream = None
+        self._double_tap_stream = None
         self._rangexy_stream = None
         self._paneB_pipe = None
         self._paneB_dmap = None
         self._plots_layout = None
+        self._paneA_base_overlay = None
+        self._selection_overlay = None

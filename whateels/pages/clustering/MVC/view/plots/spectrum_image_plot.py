@@ -63,18 +63,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Get axis name from model constants
         eloss_name = getattr(model.constants, 'ELOSS', 'Eloss') if hasattr(model, 'constants') else 'Eloss'
 
-        # Persistent selection overlay (red dots shown after lasso) — must be set
-        # before super().__init__ because that calls _setup_plots() internally.
-        self._paneA_base_overlay = None
-        self._selection_overlay = hv.Points([], kdims=['x', 'y'])
-
-        # Lasso debounce + hover block — must be set before super().__init__ too
-        self._pc = None
-        self._pending_selection_index = None
-        self._pending_selection_ts = None
-        self._SELECTION_DEBOUNCE_MS = 200
-        self._hover_blocked = False
-
         # Call parent constructor to setup base visualization
         super().__init__(dataset, eloss_name)
 
@@ -85,9 +73,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Store original plots layout to restore after clustering
         self._plots_layout = None
 
-        # Double-click timing for toggling cluster display
-        self._last_click_time = 0
-        self._DOUBLE_CLICK_MS = 400  # Double-click threshold in milliseconds
+        # Double-click state is now handled by base DoubleTap stream.
         self._frozen_pixel = None  # Store frozen pixel (i, j) from single click
         self._hover_disabled = False  # Disable hover after showing all clusters
         self._last_hover_point = None  # Store last hover position for re-enabling
@@ -130,77 +116,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Remove region selection state (lasso/box selection)
 
-    # --- paneA setup override: store base overlay for dot recomposition ---
-
-    @override
-    def _setup_plots(self):
-        super()._setup_plots()
-        self._paneA_base_overlay = self.paneA.object
-        self._update_selection_overlay(self._region_pairs)
-
-    def _update_selection_overlay(self, pairs):
-        """Rebuild the red-dot selection overlay and recompose paneA.
-
-        Always reapplies the full Overlay-level opts so paneA never loses its
-        sizing behaviour when the overlay is reconstructed.
-        """
-        if pairs:
-            xs = [col for row, col in pairs]
-            ys = [row for row, col in pairs]
-            self._selection_overlay = hv.Points(
-                (xs, ys), kdims=['x', 'y']
-            ).opts(color='red', size=5, alpha=0.5)
-        else:
-            self._selection_overlay = hv.Points([], kdims=['x', 'y'])
-        if self._paneA_base_overlay is not None and self.paneA is not None:
-            self.paneA.object = (
-                self._paneA_base_overlay * self._selection_overlay  # type: ignore
-            ).opts(
-                hv.opts.Overlay(
-                    responsive=True, aspect='equal', shared_axes=False,
-                    active_tools=['lasso_select'],
-                )
-            )
-
-    # --- Lasso debounce callbacks ---
-
-    @override
-    def _setup_callbacks(self):
-        super()._setup_callbacks()
-        self._pc = pn.state.add_periodic_callback(self._check_debounce, period=250, start=False)
-
-    def _now_ms(self):
-        return int(time.time() * 1000)
-
-    def _check_debounce(self):
-        """Flush pending lasso selection after the debounce window."""
-        if self._pending_selection_ts is None:
-            if self._pc and self._pc.running:
-                self._pc.stop()
-            return
-        if self._now_ms() - self._pending_selection_ts >= self._SELECTION_DEBOUNCE_MS:
-            index = self._pending_selection_index
-            self._pending_selection_index = None
-            self._pending_selection_ts = None
-            if self._pc and self._pc.running:
-                self._pc.stop()
-            self._process_selection(index)
-
-    def _process_selection(self, index=None):
-        """Commit a debounced lasso selection: compute pairs, update overlay and spectrum."""
-        if not index:
-            pairs = []
-        else:
-            pairs = list(dict.fromkeys(
-                (idx // self._nx, idx % self._nx) for idx in index
-            ))
-        self._region_pairs = pairs
-        self._update_selection_overlay(pairs)
-        if not pairs:
-            self._hover_blocked = False
-            return
-        self._show_spectrum(region_pairs=pairs)
-        self._hover_blocked = True
+    # --- paneA setup / callbacks: handled by base ---
 
     # --- Clustering Application Methods ---
     
@@ -728,17 +644,33 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 print(f"Error plotting cluster center: {e}")
 
         return hv.Overlay(overlays)
-    
+
+    @override
+    def _on_paneA_double_tap(self, x=None, y=None):
+        """Toggle between hover mode and all-cluster-centers display."""
+        was_hover_blocked = self._hover_blocked
+        super()._on_paneA_double_tap(x, y)  # clears _hover_blocked, _region_pairs, selection overlay
+        self._frozen_pixel = None
+        if self._hover_disabled or was_hover_blocked:
+            self._hover_disabled = False
+            if self._last_hover_point is not None and self._clustering_active:
+                i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
+                self._update_paneB(self._plot_pixel_spectrum(i, j, title_prefix="Hover"))
+        else:
+            if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
+                self._hover_disabled = True
+                _, centres = self._clustering_results
+                fig = self._visualizer.plot_centers(
+                    centres,
+                    self._energy,
+                    title="All Cluster Centers (Double Click again to re-enable hover)"
+                )
+                self._update_paneB(fig)
+
     @override
     def _on_paneA_selected(self, index=None):
-        """Debounce rapid lasso events — only commit after _SELECTION_DEBOUNCE_MS of silence."""
-        if not index:
-            return
-        self._hover_blocked = True
-        self._pending_selection_ts = self._now_ms()
-        self._pending_selection_index = index
-        if self._pc and not self._pc.running:
-            self._pc.start()
+        """Delegate to base debounce logic."""
+        super()._on_paneA_selected(index)
 
     @override
     def _on_paneA_hover(self, x=None, y=None):
@@ -761,47 +693,18 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     @override
     def _on_paneA_click(self, x=None, y=None):
         """
-        Handle Tap click — single/double click for clustering overlays.
-        Adapts to base class event signature.
+        Handle Tap click — freeze pixel spectrum on click.
+        Double-click is handled by the base DoubleTap stream via _on_paneA_double_tap.
         """
         if x is None or y is None:
             return
         try:
-            current_time = time.time() * 1000
-            time_since_last_click = current_time - self._last_click_time
-            if time_since_last_click < self._DOUBLE_CLICK_MS:
-                self._frozen_pixel = None
-                if self._hover_disabled or self._hover_blocked:
-                    self._hover_disabled = False
-                    self._hover_blocked = False
-                    self._pending_selection_index = None
-                    self._pending_selection_ts = None
-                    self._region_pairs = []  # Clear lasso selection when unfreeze
-                    self._update_selection_overlay([])  # Remove red dots
-                    if self._last_hover_point is not None and self._clustering_active:
-                        i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                        fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
-                        self._update_paneB(fig)
-                else:
-                    if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
-                        self._hover_disabled = True
-                        _, centres = self._clustering_results
-                        fig = self._visualizer.plot_centers(
-                            centres,
-                            self._energy,
-                            title="All Cluster Centers (Double Click again to re-enable hover)"
-                        )
-                        self._update_paneB(fig)
-                self._last_click_time = current_time - 1000
-                return
+            if self._clustering_active:
+                self._frozen_pixel = (int(y), int(x))
+                fig = self._plot_pixel_spectrum(int(y), int(x), title_prefix="Click (Frozen)")
+                self._update_paneB(fig)
             else:
-                self._last_click_time = current_time
-                if self._clustering_active:
-                    self._frozen_pixel = (int(y), int(x))
-                    fig = self._plot_pixel_spectrum(int(y), int(x), title_prefix="Click (Frozen)")
-                    self._update_paneB(fig)
-                else:
-                    super()._on_paneA_click(x, y)
+                super()._on_paneA_click(x, y)
         except Exception as e:
             print(f"Error handling click: {e}")
             traceback.print_exc()
@@ -810,16 +713,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def cleanup(self):
         """Unwatch button callbacks, release clustering data, and call base cleanup."""
-        if self._pc is not None:
-            try:
-                if self._pc.running:
-                    self._pc.stop()
-            except Exception:
-                pass
-        self._pc = None
-        self._pending_selection_index = None
-        self._pending_selection_ts = None
-
         # Unwatch on_click callbacks so lambdas capturing self are released
         for btn, watcher in [
             (self._kmeans_run_button, self._kmeans_run_button_watcher),

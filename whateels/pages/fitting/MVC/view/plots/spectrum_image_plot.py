@@ -10,7 +10,6 @@ import numpy as np
 import time
 import xarray as xr
 import holoviews as hv
-from holoviews import streams as hv_streams
 from matplotlib.colors import LinearSegmentedColormap
 
 from whateels.base.plots import BaseSpectrumImagePlot
@@ -47,17 +46,6 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._INACTIVITY_MS = 700
         self._pc : pn.state.PeriodicCallback | None = None # type: ignore[assignment] # Panel's PeriodicCallback type is not well-annotated
 
-        # Hover/selection debounce (same pattern as quantification page)
-        self._pending_selection_index = None
-        self._pending_selection_ts = None
-        self._SELECTION_DEBOUNCE_MS = 200
-        self._hover_blocked = False
-        self._double_tap_stream : hv_streams.DoubleTap | None = None
-
-        # Persistent selection overlay (red dots shown after lasso)
-        self._paneA_base_overlay = None
-        self._selection_overlay = hv.Points([], kdims=['x', 'y'])
-
         # Fitting/UI state
         self.element_quant_data = []
         self.selected_slice = None
@@ -68,9 +56,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         # _setup_plots() + _setup_callbacks() internally.
         super().__init__(dataset, eloss_name=model.constants.ELOSS)
 
-        # Wire DoubleTap to reset hover block (source available after super().__init__)
-        self._double_tap_stream = hv_streams.DoubleTap(source=self._selectors)
-        self._double_tap_stream.add_subscriber(self._on_paneA_double_tap)
+        # Wire DoubleTap was moved to base _setup_callbacks — no manual wiring needed.
 
         # Periodic callback for inactivity logic (stopped initially)
         self._pc = pn.state.add_periodic_callback(
@@ -81,13 +67,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         """Return the 1D energy axis associated with the current datacube."""
         return self._e_axis
 
-    # --- paneA setup override: activate lasso by default ---
-
-    @override
-    def _setup_plots(self):
-        super()._setup_plots()
-        self._paneA_base_overlay = self.paneA.object
-        self._update_selection_overlay(self._region_pairs)
+    # --- paneA setup override: now handled by base ---
 
     # --- Public layout builders (used by controller) ---
     @override
@@ -228,29 +208,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         )
 
     def _update_selection_overlay(self, pairs):
-        """Rebuild the red-dot selection overlay and recompose paneA.
-
-        Always reapplies the full set of Overlay-level opts (responsive, aspect,
-        shared_axes, active_tools) so that paneA never loses its sizing behaviour
-        when the overlay is reconstructed.
-        """
-        if pairs:
-            xs = [col for row, col in pairs]
-            ys = [row for row, col in pairs]
-            self._selection_overlay = hv.Points(
-                (xs, ys), kdims=['x', 'y']
-            ).opts(color='red', size=5, alpha=0.5)
-        else:
-            self._selection_overlay = hv.Points([], kdims=['x', 'y'])
-        if self._paneA_base_overlay is not None and self.paneA is not None:
-            self.paneA.object = (
-                self._paneA_base_overlay * self._selection_overlay # type: ignore[union-attr] # BaseSpectrumImagePlot sets paneA.object to an hv.Overlay, but mypy can't track that
-            ).opts(
-                hv.opts.Overlay(
-                    responsive=True, aspect='equal', shared_axes=False,
-                    active_tools=['lasso_select'],
-                )
-            )
+        """Inherited from base — red-dot overlay recomposition."""
+        super()._update_selection_overlay(pairs)
 
     # --- Inactivity timer ---
 
@@ -258,16 +217,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         return int(time.time() * 1000)
 
     def _check_inactivity(self):
-        """Flush pending selection or restore ROI after hover preview times out."""
-        # Flush debounced selection first
-        if self._pending_selection_ts is not None:
-            if self._now_ms() - self._pending_selection_ts >= self._SELECTION_DEBOUNCE_MS:
-                index = self._pending_selection_index
-                self._pending_selection_index = None
-                self._pending_selection_ts = None
-                self._process_selection(index)
-            return
-
+        """Restore ROI after hover preview times out."""
         if not self._region_pairs:
             if self._pc and self._pc.running:
                 self._pc.stop()
@@ -326,22 +276,9 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self._show_spectrum(point=point)
 
     @override
-    def _on_paneA_selected(self, index=None):
-        if not index:
-            return
-        self._hover_blocked = True
-        self._pending_selection_ts = self._now_ms()
-        self._pending_selection_index = index
-        if self._pc and not self._pc.running:
-            self._pc.start()
-
     def _process_selection(self, index=None):
-        if not index:
-            pairs = []
-        else:
-            pairs = list(dict.fromkeys(
-                (idx // self._nx, idx % self._nx) for idx in index
-            ))
+        """Commit selection: use fitting_results if available, else show ROI spectrum."""
+        pairs = self._index_to_pairs(index)
         self._region_pairs = pairs
         self._update_selection_overlay(pairs)
         if not pairs:
@@ -362,14 +299,11 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._last_hover_ts = None
         self._hover_blocked = True
 
+    @override
     def _on_paneA_double_tap(self, x=None, y=None):
-        """Double-click resets the lasso selection and unblocks hover."""
-        self._hover_blocked = False
-        self._region_pairs = []
-        self._pending_selection_index = None
-        self._pending_selection_ts = None
+        """Reset selection (base), stop inactivity timer, optionally show hover spectrum."""
+        super()._on_paneA_double_tap(x, y)
         self._last_hover_ts = None
-        self._update_selection_overlay([])
         if self._pc and self._pc.running:
             self._pc.stop()
         if x is not None and y is not None:
@@ -383,13 +317,6 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     def cleanup(self):
         self._pending_selection_index = None
         self._pending_selection_ts = None
-        if self._double_tap_stream is not None:
-            try:
-                self._double_tap_stream.remove_subscriber(self._on_paneA_double_tap)
-                self._double_tap_stream.clear()
-            except Exception:
-                pass
-            self._double_tap_stream = None
         if self._pc is not None:
             try:
                 if self._pc.running:
