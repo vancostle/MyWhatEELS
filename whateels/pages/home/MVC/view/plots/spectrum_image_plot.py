@@ -1,6 +1,7 @@
 import panel as pn
 import time
 import holoviews as hv
+from holoviews import streams as hv_streams
 
 from whateels.helpers import SpectrumExtractor
 from whateels.components import SplitJs
@@ -46,11 +47,26 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self.buttons_row = None
         self.range_slider_row = None
 
+        # Selection overlay state — must be set before super().__init__ triggers _setup_plots
+        self._paneA_base_overlay = None
+        self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+        self._double_tap_stream = None
+        self._hover_blocked = False
+
+        # Selection debounce — coalesces rapid lasso events into one final commit
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        self._SELECTION_DEBOUNCE_MS = 200
+
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
 
         # Widgets depend on _e_axis set by super().__init__
         self._setup_widgets()
+
+        # Wire DoubleTap to clear lasso selection (source available after super().__init__)
+        self._double_tap_stream = hv_streams.DoubleTap(source=self._selectors)
+        self._double_tap_stream.add_subscriber(self._on_paneA_double_tap)
 
     # --- Public Layout Builders ---
 
@@ -78,6 +94,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     # create_dataset_info inherited from base class
     
+    # --- Plot setup override: capture base overlay after paneA is built ---
+    @override
+    def _setup_plots(self):
+        super()._setup_plots()
+        self._paneA_base_overlay = self.paneA.object
+        self._update_selection_overlay(self._region_pairs)
+
     # --- Widget Setup (kept from original, but range_slider reused) ---
     def _setup_widgets(self):
         self.range_slider = pn.widgets.EditableRangeSlider(
@@ -221,6 +244,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         return int(time.time() * 1000)
 
     def _check_inactivity(self):
+        # Flush debounced selection first
+        if self._pending_selection_ts is not None:
+            if self._now_ms() - self._pending_selection_ts >= self._SELECTION_DEBOUNCE_MS:
+                index = self._pending_selection_index
+                self._pending_selection_index = None
+                self._pending_selection_ts = None
+                self._process_selection(index)
+            return
+
         # No selection -> nothing to do
         if not self._region_pairs:
             stop_pc(self._pc)
@@ -233,13 +265,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._refresh_paneB()
             return
 
-        if self._last_hover_ts is not None and self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
+        if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
             self._refresh_paneB()
             stop_pc(self._pc)
 
     # --- Pane A event handlers (hover / click / selected) ---
     def _on_paneA_hover(self, x=None, y=None):
         # HoloViews PointerXY delivers x, y directly as kwargs
+        if self._hover_blocked:
+            return
         if x is None or y is None:
             return
         point = {"x": x, "y": y}
@@ -255,6 +289,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_paneA_click(self, x=None, y=None):
         # HoloViews Tap delivers x, y directly as kwargs
+        if self._hover_blocked:
+            return
         if x is None or y is None:
             return
         point = {"x": x, "y": y}
@@ -269,9 +305,17 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._last_hover_ts = None
 
     def _on_paneA_selected(self, index=None):
-        # HoloViews Selection1D delivers a list of point indices into self._selectors
-        # selectors were built from meshgrid(arange(nx), arange(ny)).ravel()
-        # so index k → col = k % nx, row = k // nx → pair = (row, col)
+        # Store the raw index and timestamp — _check_inactivity will flush it
+        # after _SELECTION_DEBOUNCE_MS of silence, coalescing rapid lasso events.
+        if not index:
+            return
+        self._hover_blocked = True
+        self._pending_selection_ts = self._now_ms()
+        self._pending_selection_index = index
+        start_pc(self._pc)
+
+    def _process_selection(self, index=None):
+        """Commit a debounced lasso selection: compute pairs, update overlay and spectrum."""
         if not index:
             pairs = []
         else:
@@ -279,10 +323,47 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 (idx // self._nx, idx % self._nx) for idx in index
             ))
         self._region_pairs = pairs
+        self._update_selection_overlay(pairs)
+        if not pairs:
+            self._hover_blocked = False
+            stop_pc(self._pc)
+            self._last_hover_ts = None
+            return
         self._show_spectrum(region_pairs=pairs)
-        # prepare inactivity behaviour: stop periodic callback until next hover
         stop_pc(self._pc)
         self._last_hover_ts = None
+        self._hover_blocked = True
+
+    def _update_selection_overlay(self, pairs):
+        """Rebuild the red-dot selection overlay and recompose paneA."""
+        if pairs:
+            xs = [col for row, col in pairs]
+            ys = [row for row, col in pairs]
+            self._selection_overlay = hv.Points(
+                (xs, ys), kdims=['x', 'y']
+            ).opts(color='red', size=5, alpha=0.5)
+        else:
+            self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+        if self._paneA_base_overlay is not None and self.paneA is not None:
+            self.paneA.object = (
+                self._paneA_base_overlay * self._selection_overlay
+            ).opts(
+                hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False)
+            )
+
+    def _on_paneA_double_tap(self, x=None, y=None):
+        """Double-click resets the lasso selection, clears red dots, and unblocks hover."""
+        self._hover_blocked = False
+        self._region_pairs = []
+        self._last_hover_ts = None
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        self._update_selection_overlay([])
+        stop_pc(self._pc)
+        if x is not None and y is not None:
+            point = {"x": x, "y": y}
+            self._last_hover_point = point
+            self._show_spectrum(point=point)
 
     # --- Fitting and range behaviour ---
     def _on_fitting_clicked(self, event):
@@ -330,5 +411,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._js_executor = None
         self.buttons_row = None
         self.range_slider_row = None
+
+        if self._double_tap_stream is not None:
+            try:
+                self._double_tap_stream.remove_subscriber(self._on_paneA_double_tap)
+                self._double_tap_stream.clear()
+            except Exception:
+                pass
+            self._double_tap_stream = None
 
         super().cleanup()
