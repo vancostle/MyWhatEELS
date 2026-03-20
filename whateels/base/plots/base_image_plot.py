@@ -90,6 +90,9 @@ class BaseImagePlot(IPlot):
             pn.Column: Panel column containing the image plot
         """
         STRETCH_BOTH = 'stretch_both'
+        STRETCH_HEIGHT = 'scale_height'
+        MARGIN_AUTO = {'margin': 'auto'}
+        CENTER = 'center'
         
         image_data = self._dataset.ElectronCount.squeeze()
         image_data = image_data.fillna(0.0)
@@ -98,13 +101,13 @@ class BaseImagePlot(IPlot):
         image_plot = self._create_2d_image(image_data)
         image_panel = pn.pane.HoloViews(
             image_plot,
-            sizing_mode='scale_height',
-            styles={'margin' : 'auto'},
+            sizing_mode=STRETCH_HEIGHT,
+            styles=MARGIN_AUTO,
         )
         plots = pn.Column(
             image_panel,
             sizing_mode=STRETCH_BOTH,
-            align='center',
+            align=CENTER,
         )
         return plots
 
