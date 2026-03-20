@@ -292,7 +292,9 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
                 self.on_selection_change(False)
             return
         app_state = CacheManager.get_cached_app_state()
-        if app_state.fitting_results is not None:
+        if self.on_region_committed:
+            self.on_region_committed()
+        elif app_state.fitting_results is not None:
             self.plot_fitting(self._energy, app_state.fitting_results)
         else:
             self._show_spectrum(region_pairs=pairs)

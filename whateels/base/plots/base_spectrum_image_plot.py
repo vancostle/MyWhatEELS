@@ -97,6 +97,9 @@ class BaseSpectrumImagePlot(IPlot):
         # Selection-change hook — set by external consumers (e.g. controller)
         # Signature: on_selection_change(has_selection: bool) -> None
         self.on_selection_change = None
+        # Region-committed hook — fired when a non-empty lasso selection is committed
+        # Signature: on_region_committed() -> None
+        self.on_region_committed = None
 
         # Setup plots and callbacks
         self._setup_plots()

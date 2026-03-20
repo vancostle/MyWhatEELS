@@ -69,9 +69,22 @@ class FittingController(BaseController):
 
         # Enable/disable 'Add Component' reactively based on lasso selection
         if self._layout._chosen_visualizers:
-            self._layout._chosen_visualizers[0].on_selection_change = (
+            vis = self._layout._chosen_visualizers[0]
+            vis.on_selection_change = (
                 lambda has_sel: setattr(self._view.fitting_add_component_button, 'disabled', not has_sel)
             )
+
+            def _on_region_committed():
+                vis.update_plot()  # pushes new ROI to paneB, updates app_state.spectra
+                if self._model.dictionary.get('components'):
+                    try:
+                        self._model.create_model()  # syncs model._spectra from app_state.spectra
+                        ref = self._model.fit_reference()
+                        self._layout.update_plot(ref)
+                    except Exception:
+                        pass  # plain ROI is already visible from update_plot() above
+
+            vis.on_region_committed = _on_region_committed
 
         view._background_subtraction_switch.param.watch(self._background_subtraction_switch_watcher, 'value')
 
