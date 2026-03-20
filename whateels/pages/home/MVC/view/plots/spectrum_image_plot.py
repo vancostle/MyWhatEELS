@@ -50,7 +50,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Selection overlay state — must be set before super().__init__ triggers _setup_plots
         self._paneA_base_overlay = None
         self._selection_overlay = hv.Points([], kdims=['x', 'y'])
-        self._double_tap_stream = None
+        self._double_tap_stream : hv_streams.DoubleTap | None = None
         self._hover_blocked = False
 
         # Selection debounce — coalesces rapid lasso events into one final commit

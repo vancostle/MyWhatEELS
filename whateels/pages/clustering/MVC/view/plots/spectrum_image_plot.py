@@ -68,6 +68,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._paneA_base_overlay = None
         self._selection_overlay = hv.Points([], kdims=['x', 'y'])
 
+        # Lasso debounce + hover block — must be set before super().__init__ too
+        self._pc = None
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+        self._SELECTION_DEBOUNCE_MS = 200
+        self._hover_blocked = False
+
         # Call parent constructor to setup base visualization
         super().__init__(dataset, eloss_name)
 
@@ -154,6 +161,46 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     active_tools=['lasso_select'],
                 )
             )
+
+    # --- Lasso debounce callbacks ---
+
+    @override
+    def _setup_callbacks(self):
+        super()._setup_callbacks()
+        self._pc = pn.state.add_periodic_callback(self._check_debounce, period=250, start=False)
+
+    def _now_ms(self):
+        return int(time.time() * 1000)
+
+    def _check_debounce(self):
+        """Flush pending lasso selection after the debounce window."""
+        if self._pending_selection_ts is None:
+            if self._pc and self._pc.running:
+                self._pc.stop()
+            return
+        if self._now_ms() - self._pending_selection_ts >= self._SELECTION_DEBOUNCE_MS:
+            index = self._pending_selection_index
+            self._pending_selection_index = None
+            self._pending_selection_ts = None
+            if self._pc and self._pc.running:
+                self._pc.stop()
+            self._process_selection(index)
+
+    def _process_selection(self, index=None):
+        """Commit a debounced lasso selection: compute pairs, update overlay and spectrum."""
+        if not index:
+            pairs = []
+        else:
+            pairs = list(dict.fromkeys(
+                (idx // self._nx, idx % self._nx) for idx in index
+            ))
+        self._region_pairs = pairs
+        self._update_selection_overlay(pairs)
+        if not pairs:
+            self._hover_blocked = False
+            return
+        self._show_spectrum(region_pairs=pairs)
+        self._hover_blocked = True
 
     # --- Clustering Application Methods ---
     
@@ -684,16 +731,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     
     @override
     def _on_paneA_selected(self, index=None):
-        """Ignore empty Selection1D events (Bokeh fires index=[] after committing
-        a lasso, which would immediately wipe the red dots)."""
+        """Debounce rapid lasso events — only commit after _SELECTION_DEBOUNCE_MS of silence."""
         if not index:
             return
-        pairs = list(dict.fromkeys(
-            (idx // self._nx, idx % self._nx) for idx in index
-        ))
-        self._region_pairs = pairs
-        self._update_selection_overlay(pairs)
-        self._show_spectrum(region_pairs=pairs)
+        self._hover_blocked = True
+        self._pending_selection_ts = self._now_ms()
+        self._pending_selection_index = index
+        if self._pc and not self._pc.running:
+            self._pc.start()
 
     @override
     def _on_paneA_hover(self, x=None, y=None):
@@ -704,7 +749,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if x is None or y is None:
             return
         self._last_hover_point = {"x": x, "y": y}
-        if self._frozen_pixel is not None or self._hover_disabled:
+        if self._hover_blocked or self._frozen_pixel is not None or self._hover_disabled:
             return
         if not self._clustering_active:
             super()._on_paneA_hover(x, y)
@@ -726,8 +771,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             time_since_last_click = current_time - self._last_click_time
             if time_since_last_click < self._DOUBLE_CLICK_MS:
                 self._frozen_pixel = None
-                if self._hover_disabled:
+                if self._hover_disabled or self._hover_blocked:
                     self._hover_disabled = False
+                    self._hover_blocked = False
+                    self._pending_selection_index = None
+                    self._pending_selection_ts = None
                     self._region_pairs = []  # Clear lasso selection when unfreeze
                     self._update_selection_overlay([])  # Remove red dots
                     if self._last_hover_point is not None and self._clustering_active:
@@ -762,6 +810,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def cleanup(self):
         """Unwatch button callbacks, release clustering data, and call base cleanup."""
+        if self._pc is not None:
+            try:
+                if self._pc.running:
+                    self._pc.stop()
+            except Exception:
+                pass
+        self._pc = None
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
+
         # Unwatch on_click callbacks so lambdas capturing self are released
         for btn, watcher in [
             (self._kmeans_run_button, self._kmeans_run_button_watcher),
