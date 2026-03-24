@@ -59,13 +59,16 @@ class SplitJs(JSComponent):
 
         if event not in EVENTS:
             return
+
+        widths = data.get('widths', {}) or {}
+        heights = data.get('heights', {}) or {}
         
         if event == DRAG_START:
             self._drag_start_event()
-        # elif event == DRAGGING or event == EXTERNAL_RESIZE:
-            # self._dragging_event(widths=data.get('widths', {}))
+        elif event == DRAGGING or event == EXTERNAL_RESIZE:
+            self._dragging_event(widths=widths, heights=heights)
         elif event == DRAG_END:
-            self._drag_end_event()
+            self._drag_end_event(widths=widths, heights=heights)
 
     def _drag_start_event(self):
         """Handle drag start event.
@@ -74,16 +77,18 @@ class SplitJs(JSComponent):
         """
         pass # No action needed at drag start since Bokeh handles resizing automatically
 
-    def _dragging_event(self, widths: dict):
+    def _dragging_event(self, widths: dict, heights: dict):
         """Handle dragging event.
-        Bokeh handles responsive resizing automatically — no pixel-width push needed.
+        For paneA image plots, enforce fixed pixel ratio by recalculating both
+        frame width and frame height from current split panel dimensions.
         """
-        pass # No action needed during dragging since Bokeh handles resizing automatically
+        self._apply_left_plot_pixel_ratio(widths=widths, heights=heights)
 
-    def _drag_end_event(self):
+    def _drag_end_event(self, widths: dict, heights: dict):
         """Handle drag end event.
         No cleanup needed; Bokeh restores to container size automatically.
         """
+        self._apply_left_plot_pixel_ratio(widths=widths, heights=heights)
         self.force_holoviews_resize()  # Final refresh to ensure everything is up-to-date after drag
 
     def _external_resize_event(self, widths: dict):
@@ -98,3 +103,42 @@ class SplitJs(JSComponent):
             self._left_column_hv.object = self._left_column_hv.object
         if self._right_column_hv is not None and isinstance(self._right_column_hv, pn.pane.HoloViews):
             self._right_column_hv.object = self._right_column_hv.object
+
+    def _apply_left_plot_pixel_ratio(self, widths: dict, heights: dict):
+        """Resize paneA by fitting width/height simultaneously while preserving X/Y ratio."""
+        pane = self._left_column_hv
+        if pane is None or not isinstance(pane, pn.pane.HoloViews):
+            return
+
+        if not bool(getattr(pane, '_splitjs_preserve_pixel_ratio', False)):
+            return
+
+        try:
+            ratio = float(getattr(pane, '_splitjs_xy_ratio', 1.0))
+        except Exception:
+            ratio = 1.0
+        if ratio <= 0:
+            ratio = 1.0
+
+        left_w = float(widths.get('left', 0) or 0)
+        left_h = float(heights.get('left', 0) or 0)
+        if left_w <= 0 or left_h <= 0:
+            return
+
+        # Keep a small safety margin to avoid scrollbars from gutter/padding jitter.
+        max_w = max(1.0, left_w - 8.0)
+        max_h = max(1.0, left_h - 8.0)
+
+        width_from_height = max_h * ratio
+        target_w = min(max_w, width_from_height)
+        target_h = target_w / ratio
+
+        new_w = max(1, int(round(target_w)))
+        new_h = max(1, int(round(target_h)))
+
+        if pane.width == new_w and pane.height == new_h and pane.sizing_mode == 'fixed':
+            return
+
+        pane.sizing_mode = 'fixed'
+        pane.width = new_w
+        pane.height = new_h

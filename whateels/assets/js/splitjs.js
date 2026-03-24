@@ -67,6 +67,9 @@ export function render({ model }) {
     container._resizeObserver = resizeObserver;
     container._splitInstance = splitInstance;
 
+    // Initial sync so Python can compute fixed plot dimensions immediately.
+    resizing(left, right, model, 'external_resize');
+
     return container;
 }
 
@@ -76,12 +79,14 @@ const get_model_child = (model, value) => {
     return child
 }
 const resizing = (left, right, model, event) => {
-    // Get actual pixel widths using getBoundingClientRect (more accurate)
+    // Get actual pixel dimensions using getBoundingClientRect (more accurate)
     const leftRect = left.getBoundingClientRect();
     const rightRect = right.getBoundingClientRect();
 
     const leftWidth = leftRect.width;
     const rightWidth = rightRect.width;
+    const leftHeight = leftRect.height;
+    const rightHeight = rightRect.height;
 
     // Send drag end event to Python using Panel's messaging API
     model.send_msg({
@@ -89,6 +94,10 @@ const resizing = (left, right, model, event) => {
         widths: {
             left: leftWidth,
             right: rightWidth
+        },
+        heights: {
+            left: leftHeight,
+            right: rightHeight,
         }
     });
     
