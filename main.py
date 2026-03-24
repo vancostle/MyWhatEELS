@@ -26,5 +26,6 @@ PORT = 5006
 
 if __name__ == "__main__":
     # This line is for running with 'python main.py'
-    App(title='WhatEELS').run(port=5006)
+    app = App(title=APP_NAME)
+    app.run(port=PORT)
     

@@ -12,8 +12,9 @@ class InfoPanel(pn.Column):
         information: dict = {"No information available": "None"},
         show_metadata_button: bool = True,
         **params
-    ):
-        LoadCSS([str(CSS_ROOT / "info_panel.css")])
+    ):        
+        # Load any provided CSS files
+        pn.config.css_files.append('/assets/css/info_panel.css') # type: ignore
 
         self._title = title
         self._link = link

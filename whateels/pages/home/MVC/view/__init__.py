@@ -1,7 +1,7 @@
 import panel as pn
 import gc
 from whateels.errors.dm.data import DMPlotCreationError
-from whateels.helpers import LoadCSS, CSS_ROOT
+import panel as pn
 from .plots_factory import PlotsFactory
 from .layouts import HomePageLeftSidebar, HomePageMainLayout
 
@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import HomePageModel
     from xarray import Dataset
-    
+
 class HomePageView:
     
     _STRETCH_WIDTH = "stretch_width"
@@ -19,7 +19,7 @@ class HomePageView:
         self._model = model
         
         # Load any provided CSS files
-        LoadCSS([str(CSS_ROOT / "home.css")])
+        pn.config.css_files.append('/assets/css/home.css') # type: ignore
         
         # Layout components
         self._main = HomePageMainLayout(model)

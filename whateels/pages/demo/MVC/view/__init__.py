@@ -1,19 +1,19 @@
 import panel as pn
-import plotly.graph_objs as go
 import numpy as np
+import holoviews as hv
 
 from whateels.components import SplitJs, ModalManager, ColorPickerModal, ConfirmationModal, InfoModal
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from whateels.components import CustomPage
+    from whateels.templates import GeneralPageTemplate
 
 class DemoPageView:
     
     _STRETCH_BOTH = 'stretch_both'
     _STRETCH_WIDTH = 'stretch_width'
     
-    def __init__(self, model, custom_page : "CustomPage") -> None:
+    def __init__(self, model, custom_page : "GeneralPageTemplate") -> None:
         self._left_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
@@ -67,62 +67,58 @@ class DemoPageView:
         open_info_button = pn.widgets.Button(name="Open Info Modal", button_type="primary")
         open_info_button.on_click(lambda event: self._modal_manager.open_modal('Info Modal'))
         self._left_sidebar.append(open_info_button)
+
+        # Reload button
+        reload_button = pn.widgets.Button(name="Reload Page", button_type="danger")
+        reload_button.on_click(lambda event: setattr(pn.state.location, 'reload', True))
+        self._left_sidebar.append(reload_button)
         
         # Simple heatmap (like paneA in spectrum_image_plot)
         ny, nx = 50, 50
         m_image = np.random.rand(ny, nx) * 100
-        
-        figA = go.Figure(data=[go.Heatmap(
-            z=m_image,
-            colorscale="Greys_r",
-            showscale=False
-        )])
-        figA.update_layout(
-            margin=dict(l=16, r=16, t=50, b=20),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
+
+        img = hv.Image(
+            (np.arange(nx), np.arange(ny), m_image),
+            kdims=['x', 'y'],
+            vdims=['Intensity'],
+        ).opts(
+            cmap='Greys_r',
+            colorbar=False,
+            xaxis=None,
+            yaxis=None,
+            invert_yaxis=True,
+            aspect='equal',
+            shared_axes=False,
         )
-        figA.update_yaxes(
-            autorange="reversed", 
-            showgrid=False, 
-            zeroline=False, 
-            showticklabels=False,
-            scaleanchor="x", 
-            scaleratio=1,
-            constrain='domain'
+
+        self.paneA = pn.pane.HoloViews(
+            img,
+            sizing_mode='scale_width',
+            styles={'margin': 'auto'},
         )
-        figA.update_xaxes(showgrid=False, zeroline=False, showticklabels=False)
-        
-        self.paneA = pn.pane.Plotly(
-            figA,
-            config={"responsive": True},
-            sizing_mode='stretch_both',
-            margin=0
-        )
-        
+
         # Simple line chart (like paneB in spectrum_image_plot)
-        energy = np.linspace(0, 100, 200)
-        spectrum = np.random.rand(200) * 1000
-        
-        figB = go.Figure(data=[go.Scatter(
-            x=energy,
-            y=spectrum,
-            mode="lines"
-        )])
-        figB.update_layout(
-            title="Spectrum",
-            margin=dict(l=16, r=16, t=48, b=16),
-            xaxis_title="Energy Loss (eV)",
-            yaxis_title="Intensity (a.u.)"
+        ny_b, nx_b = 30, 100
+        m_image_b = np.random.rand(ny_b, nx_b) * 100
+
+        img_b = hv.Image(
+            (np.arange(nx_b), np.arange(ny_b), m_image_b),
+            kdims=['x', 'y'],
+            vdims=['Intensity'],
+        ).opts(
+            cmap='Greys_r',
+            colorbar=False,
+            xaxis=None,
+            yaxis=None,
+            invert_yaxis=True,
+            shared_axes=False,
         )
-        
-        self.paneB = pn.pane.Plotly(
-            figB,
-            config={"responsive": True},
-            sizing_mode='stretch_both',
-            margin=0
+
+        self.paneB = pn.pane.HoloViews(
+            img_b,
+            styles={'margin': 'auto', 'width': '100%', 'border': '5px solid cyan'},
         )
-        
+
         splitjswrapper = SplitJs(
             left_column=pn.Column(
                 self.paneA,
@@ -131,19 +127,13 @@ class DemoPageView:
             right_column=pn.Column(
                 self.paneB,
                 sizing_mode=self._STRETCH_BOTH,
+                styles={'border' : '2px solid red'}
             ),
             sizing_mode=self._STRETCH_BOTH,
         )
-        
-        wrapper = pn.Row(
-            self.paneA,
-            self.paneB,
-            sizing_mode=self._STRETCH_BOTH,
-        )
-        
+
         self._main = pn.Column(
             splitjswrapper,
-            # wrapper,
             sizing_mode=self._STRETCH_BOTH
         )
         

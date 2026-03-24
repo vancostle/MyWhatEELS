@@ -15,14 +15,9 @@ class ClusteringView:
     
     def __init__(self, model: "ClusteringModel"):
         self._model = model
-        
-        # Load any provided CSS files
-        css_files = [
-            str(CSS_ROOT / "clustering.css"),
-            str(CSS_ROOT / "info_panel.css")
-        ]
 
-        LoadCSS(css_files)
+        # Load any provided CSS files
+        pn.config.css_files.append('/assets/css/clustering.css') # type: ignore
 
         self._main = ClusteringMainLayout(model)
         self._left_sidebar = ClusteringLeftSidebarLayout(model)

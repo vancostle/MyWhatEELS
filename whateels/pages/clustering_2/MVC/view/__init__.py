@@ -24,8 +24,8 @@ class Clustering2PageView:
         # Set notification position
         pn.state.notifications.position = 'bottom-left' # type: ignore
         
-        # Load CSS for clustering_2 page
-        LoadCSS([str(CSS_ROOT / "clustering_2.css")])
+        # Load any provided CSS files
+        pn.config.css_files.append('/assets/css/clustering_2.css') # type: ignore
 
         self._modal_manager = ModalManager(custom_page)
 

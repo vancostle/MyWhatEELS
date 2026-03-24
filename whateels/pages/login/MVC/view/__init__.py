@@ -1,12 +1,13 @@
-from whateels.helpers import CSS_ROOT, LoadCSS
 from .layouts import LoginMainLayout
+import panel as pn
 
 class LoginPageView:
     
     def __init__(self, model):
         
-        LoadCSS([str(CSS_ROOT / "login.css")])
-        
+        # Load any provided CSS files
+        pn.config.css_files.append('/assets/css/login.css') # type: ignore
+
         self._main = LoginMainLayout(
             width=400, 
             sizing_mode="stretch_both",

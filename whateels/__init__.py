@@ -1,5 +1,10 @@
+
+import time
+_whe_start_time = time.perf_counter()
 import panel as pn
 import holoviews as hv
+from pathlib import Path
+from whateels.helpers import KillProcess, ASSETS_ROOT
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
@@ -7,17 +12,15 @@ pn.extension(
     'filedropper', 'floatpanel',
     notifications=True,
     theme='default',
-    raw_css=[ # TODO: to remove all plotly css
-        ".plotly .modebar, .plotly .modebar-container, .plotly .modebar-group, .plotly .modebar-btn, .plotly .modebar-btn--hover { background: transparent !important; box-shadow: none !important; border: none !important; }",
-        ".plotly .modebar-btn { background: transparent !important; }",
-        ".plotly .modebar-btn svg, .plotly .modebar-btn path { fill: currentColor !important; stroke: currentColor !important; }",
-    ],
 )
+
+# Register static CSS and JS so they are injected into every page <head>
+pn.config.css_files.append('/assets/css/splash.css') # type: ignore
+pn.config.css_files.append('/assets/css/custom_page.css') # type: ignore
+pn.config.js_files['whatEELS_splash'] = '/assets/js/splash.js' # type: ignore
 
 # Initialize Holoviews with Bokeh backend
 hv.extension('bokeh') # type: ignore
-
-from whateels.helpers import LoadCSS, CSS_ROOT, KillProcess
 
 class App:
     """
@@ -35,9 +38,6 @@ class App:
     def run(self, port : int = _DEFAULT_PORT, show : bool = True):
         # Kill any process using the port
         KillProcess.by_port(port) # Ensure the port is free
-        
-        # Load custom CSS for the entire app
-        LoadCSS([str(CSS_ROOT / "custom_page.css")])
 
         # Cache imported class references so __import__ only hits the module
         # loader on the first visit; subsequent sessions reuse the cached class.
@@ -52,6 +52,7 @@ class App:
 
         # Define the pages for the application
         pages = {
+            # "": _lazy('whateels.pages.demo', 'DemoPage'),
             "/": _lazy('whateels.pages.home', 'HomePage'),
             "/metadata-details": _lazy('whateels.pages.metadata', 'Metadata'),
             "/clustering": _lazy('whateels.pages.clustering', 'Clustering'),
@@ -62,10 +63,12 @@ class App:
             # "/nlls": _lazy('whateels.pages.nlls', 'NLLS'),
         }
 
+        print(f"[WHE] App startup timer: {time.perf_counter() - _whe_start_time:.3f} seconds (before pn.serve)")
         return pn.serve(
             pages, # type: ignore
             title=self._title, 
             port=port,
             show=show,
             allow_websocket_origin=["*"],
+            static_dirs={"assets": str(ASSETS_ROOT)},
         )

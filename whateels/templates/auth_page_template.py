@@ -1,7 +1,5 @@
 import panel as pn
 
-from whateels.helpers import CSS_ROOT, LoadCSS
-
 class AuthPageTemplate(pn.template.FastListTemplate):
     """
     Authentication page template extending Panel's FastListTemplate.
@@ -9,6 +7,7 @@ class AuthPageTemplate(pn.template.FastListTemplate):
     
     def __init__(self, **kwargs) -> None:
         
-        LoadCSS([str(CSS_ROOT / "auth_page_template.css")])
+        # Load any provided CSS files
+        pn.config.css_files.append('/assets/css/login.css') # type: ignore
         
         super().__init__(**kwargs)
