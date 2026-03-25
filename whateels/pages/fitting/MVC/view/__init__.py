@@ -26,7 +26,6 @@ class FittingView:
 
         # CSS injection (replace with pn.config.css_files if not already done globally)
         pn.config.css_files.append('/assets/css/fitting.css') # type: ignore
-        pn.config.css_files.append('/assets/css/info_panel.css') # type: ignore
 
         # Placeholder
         self._no_file_placeholder = pn.Column(
