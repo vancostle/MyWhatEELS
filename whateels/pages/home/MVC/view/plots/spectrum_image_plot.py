@@ -58,7 +58,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def create_plots(self):
         left_column = pn.Column(
             self.paneA,
-            sizing_mode='stretch_both',
             align='center',
             margin=0,
         )
@@ -66,7 +65,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self.paneB,
             self.buttons_row if self.buttons_row is not None else self.fitting_button,
             self.range_slider_row,
-            sizing_mode='stretch_both',
             align='center',
             margin=0
         )
@@ -75,11 +73,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             right_column=right_column,
             sizing_mode='stretch_both',
         )
-
-    # create_dataset_info inherited from base class
-
-    # --- Plot setup override: capture base overlay after paneA is built ---
-    # (now handled by BaseSpectrumImagePlot._setup_plots)
 
     # --- Widget Setup ---
     def _setup_widgets(self):

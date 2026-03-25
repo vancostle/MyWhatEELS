@@ -2,7 +2,7 @@ import panel as pn
 
 from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton, SimpleDetails, ModalManager
-from whateels.base.mvc import BaseView
+from panel.pane import HTML
 from .modals import PeriodicTableOfElementsModal
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -10,41 +10,88 @@ if TYPE_CHECKING:
     from ..controller import QuantificationController
     from whateels.templates import GeneralPageTemplate
 
-class QuantificationView(BaseView):
-    
-    _STRETCH_WIDTH = "stretch_width"
-    _STRETCH_BOTH = "stretch_both"
-    
+class QuantificationView:
+    STRETCH_WIDTH = "stretch_width"
+    STRETCH_BOTH = "stretch_both"
+    STRETCH_HEIGHT = "stretch_height"
     _PERIODIC_TABLE_MODAL_ID = 'Periodic Table of Elements'
 
-    # --- Initialization ---
     def __init__(self, model: "QuantificationModel", custom_page: "GeneralPageTemplate"):
-        super().__init__(
-            model, 
-            css_files=[
-                str(CSS_ROOT / "quantification.css"),
-                str(CSS_ROOT / "info_panel.css")
-            ]
-        )
-
         self._model = model
         self._controller: Optional["QuantificationController"] = None
+
+        # Placeholders
+        self._loading_placeholder = pn.Column(
+            HTML(model.placeholders.LOADING_FILE, sizing_mode=self.STRETCH_BOTH),
+            sizing_mode=self.STRETCH_BOTH,
+        )
+        self._no_file_placeholder = pn.Column(
+            HTML(model.placeholders.NO_FILE_LOADED, sizing_mode=self.STRETCH_BOTH),
+            sizing_mode=self.STRETCH_BOTH,
+        )
+        self._error_placeholder = pn.Column(
+            HTML(model.placeholders.ERROR_FILE, sizing_mode=self.STRETCH_BOTH),
+            sizing_mode=self.STRETCH_BOTH,
+        )
+
+        # Layout containers
+        self._main = pn.Column(self._no_file_placeholder, sizing_mode=self.STRETCH_BOTH)
+        self._left_sidebar = pn.Column(sizing_mode=self.STRETCH_WIDTH)
+        self._right_sidebar = pn.Column(sizing_mode=self.STRETCH_WIDTH)
 
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
 
         self._quanti_add_element_button = pn.widgets.Button()
+        self._element_item_view_container = pn.Column(sizing_mode=self.STRETCH_BOTH)
 
-        self._element_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH)
-        
         self._modal_manager = ModalManager(custom_page)
-        
         self._modal_manager.register_modal(
             self._PERIODIC_TABLE_MODAL_ID,
             PeriodicTableOfElementsModal(custom_page=custom_page)
         )
 
         self._init_components()
+
+    @property
+    def main(self) -> pn.Column:
+        return self._main
+    @main.setter
+    def main(self, value: pn.Column):
+        self._main = value
+    @main.deleter
+    def main(self):
+        self._main.clear()
+
+    @property
+    def left_sidebar(self) -> pn.Column:
+        return self._left_sidebar
+    @left_sidebar.setter
+    def left_sidebar(self, value: pn.Column):
+        self._left_sidebar = value
+    @left_sidebar.deleter
+    def left_sidebar(self):
+        self._left_sidebar.clear()
+
+    @property
+    def right_sidebar(self) -> pn.Column:
+        return self._right_sidebar
+    @right_sidebar.setter
+    def right_sidebar(self, value: pn.Column):
+        self._right_sidebar = value
+    @right_sidebar.deleter
+    def right_sidebar(self):
+        self._right_sidebar.clear()
+
+    @property
+    def loading_placeholder(self) -> pn.viewable.Viewable:
+        return self._loading_placeholder
+    @property
+    def no_file_placeholder(self) -> pn.viewable.Viewable:
+        return self._no_file_placeholder
+    @property
+    def error_placeholder(self) -> pn.viewable.Viewable:
+        return self._error_placeholder
     
     def set_controller(self, controller: "QuantificationController"):
         """Set the controller for this view."""

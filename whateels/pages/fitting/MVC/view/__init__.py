@@ -2,34 +2,42 @@ import panel as pn
 
 from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton, SimpleDetails
-from whateels.base.mvc import BaseView
+from panel.viewable import Viewable
+from panel.pane import HTML
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ..model import FittingModel
 
-class FittingView(BaseView):
+
+class FittingView:
     """View layer for fitting page sidebars, controls, and main plotting container."""
-    
-    _STRETCH_WIDTH = "stretch_width"
-    _STRETCH_BOTH = "stretch_both"
+
+    _STRETCH_WIDTH = 'stretch_width'
+    _STRETCH_BOTH = 'stretch_both'
+    _STRETCH_HEIGHT = 'stretch_height'
 
     ELEMENT_EAXIS_THRESHOLD = 50
     COMPONENT_EAXIS_THRESHOLD = 4
     COMPONENT_EAXIS_THRESHOLD_VALUE = 50
 
-    # --- Initialization ---
     def __init__(self, model: "FittingModel"):
-        """Initialize fitting view widgets and base layout placeholders."""
-        super().__init__(
-            model, 
-            css_files=[
-                str(CSS_ROOT / "fitting.css"),
-                str(CSS_ROOT / "info_panel.css")
-            ]
+        self._model = model
+
+        # CSS injection (replace with pn.config.css_files if not already done globally)
+        pn.config.css_files.append('/assets/css/fitting.css') # type: ignore
+        pn.config.css_files.append('/assets/css/info_panel.css') # type: ignore
+
+        # Placeholder
+        self._no_file_placeholder = pn.Column(
+            HTML(model.placeholders.NO_FILE_LOADED, sizing_mode=self._STRETCH_BOTH),
+            sizing_mode=self._STRETCH_BOTH,
         )
 
-        self._model = model
+        # Layout containers
+        self._main = pn.Column(self._no_file_placeholder, sizing_mode=self._STRETCH_BOTH)
+        self._left_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
+        self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
 
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
@@ -37,8 +45,38 @@ class FittingView(BaseView):
         self._fitting_add_compontent_button = pn.widgets.Button()
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
         self._background_subtraction_switch: pn.widgets.Switch = pn.widgets.Switch()
-        
+
         self._init_components()
+
+    @property
+    def main(self) -> pn.Column:
+        return self._main
+    @main.setter
+    def main(self, value: pn.Column):
+        self._main = value
+    @main.deleter
+    def main(self):
+        self._main.clear()
+
+    @property
+    def left_sidebar(self) -> pn.Column:
+        return self._left_sidebar
+    @left_sidebar.setter
+    def left_sidebar(self, value: pn.Column):
+        self._left_sidebar = value
+    @left_sidebar.deleter
+    def left_sidebar(self):
+        self._left_sidebar.clear()
+
+    @property
+    def right_sidebar(self) -> pn.Column:
+        return self._right_sidebar
+    @right_sidebar.setter
+    def right_sidebar(self, value: pn.Column):
+        self._right_sidebar = value
+    @right_sidebar.deleter
+    def right_sidebar(self):
+        self._right_sidebar.clear()
 
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -143,7 +181,7 @@ class FittingView(BaseView):
         self._component_model_input = {
             "energy_center": pn.widgets.IntInput(
                 name='Energy Center',
-                sizing_mode=self.STRETCH_WIDTH,
+                sizing_mode=self._STRETCH_WIDTH,
                 value=500,
                 start=1,
                 end=10000,
@@ -156,12 +194,12 @@ class FittingView(BaseView):
                         "PseudoVoigtModel",
                         "SplitLorentzianModel"
                         ],
-                sizing_mode=self.STRETCH_WIDTH,
+                sizing_mode=self._STRETCH_WIDTH,
                 margin=(0,0,10,0)
             ),
             "energy_range": pn.widgets.EditableRangeSlider(
                 name='Energy Range',
-                sizing_mode=self.STRETCH_WIDTH,
+                sizing_mode=self._STRETCH_WIDTH,
                 value=  (540 - self.COMPONENT_EAXIS_THRESHOLD_VALUE, 540 + self.COMPONENT_EAXIS_THRESHOLD_VALUE),
                 start=540 - self.COMPONENT_EAXIS_THRESHOLD,
                 end=540 + self.COMPONENT_EAXIS_THRESHOLD,
@@ -170,7 +208,7 @@ class FittingView(BaseView):
             "flexibility": pn.widgets.Select(
                 name="Flexibility",
                 options=["Low", "Medium", "High", "Maximum"],  
-                sizing_mode=self.STRETCH_WIDTH,
+                sizing_mode=self._STRETCH_WIDTH,
                 margin=(0,0,10,0)
             )
         }
@@ -227,6 +265,6 @@ class FittingView(BaseView):
             background_subtraction_container,
             details,
             self._energy_map_toggle_button,
-            sizing_mode=self.STRETCH_BOTH,
+            sizing_mode=self._STRETCH_BOTH,
         )
         return right_sidebar
