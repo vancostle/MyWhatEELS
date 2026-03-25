@@ -204,7 +204,6 @@ class BaseSpectrumImagePlot(IPlot):
             yaxis=None,
             invert_yaxis=True,
             aspect='equal',
-            data_aspect=1,
             responsive=True,
             shared_axes=False,
         )
@@ -227,13 +226,11 @@ class BaseSpectrumImagePlot(IPlot):
 
         self.paneA = pn.pane.HoloViews(
             overlay,
-            sizing_mode='stretch_both',
             margin=0,
             styles={'margin': 'auto'},
         )
-        # Metadata consumed by SplitJs to keep paneA pixel ratio constant.
-        self.paneA._splitjs_preserve_pixel_ratio = True
-        self.paneA._splitjs_xy_ratio = float(nx) / float(ny) if ny else 1.0
+
+        self.paneA._splitjs_xy_ratio = float(nx) / float(ny) if ny else 1.0 # type: ignore
 
         # Capture base overlay for selection dot recomposition
         self._paneA_base_overlay = overlay

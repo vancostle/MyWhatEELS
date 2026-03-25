@@ -32,22 +32,22 @@ class SplitJs(JSComponent):
     def __init__(self, **params):
         super().__init__(**params)
 
-        self._left_column_hv = self._find_first_holoviews_pane(self.left_column)
-        self._right_column_hv = self._find_first_holoviews_pane(self.right_column)
+        self._left_column_hv : pn.pane.HoloViews = self._find_first_holoviews_pane(self.left_column)
+        self._right_column_hv : pn.pane.HoloViews = self._find_first_holoviews_pane(self.right_column)
 
-    def _find_first_holoviews_pane(self, column) -> "pn.pane.HoloViews | None":
+    def _find_first_holoviews_pane(self, column) -> "pn.pane.HoloViews":
         """Find the first HoloViews pane in a given column, if any."""
         if column is None:
-            return None
+            raise ValueError("Column cannot be None when searching for HoloViews panes.")
 
         children = getattr(column, 'objects', None)
         if children is None:
-            return None
+            raise ValueError("Column does not have 'objects' attribute to search for HoloViews panes.")
     
         for child in children:
             if isinstance(child, pn.pane.HoloViews):
                 return child
-        return None
+        raise ValueError("No HoloViews pane found in the given column.")
 
     def _handle_msg(self, data):
         """Handle messages from JavaScript"""
@@ -106,17 +106,13 @@ class SplitJs(JSComponent):
 
     def _apply_left_plot_pixel_ratio(self, widths: dict, heights: dict):
         """Resize paneA by fitting width/height simultaneously while preserving X/Y ratio."""
-        pane = self._left_column_hv
-        if pane is None or not isinstance(pane, pn.pane.HoloViews):
-            return
-
-        if not bool(getattr(pane, '_splitjs_preserve_pixel_ratio', False)):
-            return
+        left_column : pn.pane.HoloViews = self._left_column_hv
 
         try:
-            ratio = float(getattr(pane, '_splitjs_xy_ratio', 1.0))
-        except Exception:
+            ratio = float(getattr(left_column, '_splitjs_xy_ratio', 1.0))
+        except (ValueError, TypeError):
             ratio = 1.0
+
         if ratio <= 0:
             ratio = 1.0
 
@@ -136,9 +132,9 @@ class SplitJs(JSComponent):
         new_w = max(1, int(round(target_w)))
         new_h = max(1, int(round(target_h)))
 
-        if pane.width == new_w and pane.height == new_h and pane.sizing_mode == 'fixed':
+        if left_column.width == new_w and left_column.height == new_h and left_column.sizing_mode == 'fixed':
             return
 
-        pane.sizing_mode = 'fixed'
-        pane.width = new_w
-        pane.height = new_h
+        left_column.sizing_mode = 'fixed'
+        left_column.width = new_w
+        left_column.height = new_h

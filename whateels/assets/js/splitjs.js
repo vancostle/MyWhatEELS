@@ -68,7 +68,7 @@ export function render({ model }) {
     container._splitInstance = splitInstance;
 
     // Initial sync so Python can compute fixed plot dimensions immediately.
-    resizing(left, right, model, 'external_resize');
+    // resizing(left, right, model, 'external_resize');
 
     return container;
 }
