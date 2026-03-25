@@ -11,9 +11,9 @@ if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate
 
 class QuantificationView:
-    STRETCH_WIDTH = "stretch_width"
-    STRETCH_BOTH = "stretch_both"
-    STRETCH_HEIGHT = "stretch_height"
+    _STRETCH_WIDTH = "stretch_width"
+    _STRETCH_BOTH = "stretch_both"
+    _STRETCH_HEIGHT = "stretch_height"
     _PERIODIC_TABLE_MODAL_ID = 'Periodic Table of Elements'
 
     def __init__(self, model: "QuantificationModel", custom_page: "GeneralPageTemplate"):
@@ -22,28 +22,28 @@ class QuantificationView:
 
         # Placeholders
         self._loading_placeholder = pn.Column(
-            HTML(model.placeholders.LOADING_FILE, sizing_mode=self.STRETCH_BOTH),
-            sizing_mode=self.STRETCH_BOTH,
+            HTML(model.placeholders.LOADING_FILE, sizing_mode=self._STRETCH_BOTH),
+            sizing_mode=self._STRETCH_BOTH,
         )
         self._no_file_placeholder = pn.Column(
-            HTML(model.placeholders.NO_FILE_LOADED, sizing_mode=self.STRETCH_BOTH),
-            sizing_mode=self.STRETCH_BOTH,
+            HTML(model.placeholders.NO_FILE_LOADED, sizing_mode=self._STRETCH_BOTH),
+            sizing_mode=self._STRETCH_BOTH,
         )
         self._error_placeholder = pn.Column(
-            HTML(model.placeholders.ERROR_FILE, sizing_mode=self.STRETCH_BOTH),
-            sizing_mode=self.STRETCH_BOTH,
+            HTML(model.placeholders.ERROR_FILE, sizing_mode=self._STRETCH_BOTH),
+            sizing_mode=self._STRETCH_BOTH,
         )
 
         # Layout containers
-        self._main = pn.Column(self._no_file_placeholder, sizing_mode=self.STRETCH_BOTH)
-        self._left_sidebar = pn.Column(sizing_mode=self.STRETCH_WIDTH)
-        self._right_sidebar = pn.Column(sizing_mode=self.STRETCH_WIDTH)
+        self._main = pn.Column(self._no_file_placeholder, sizing_mode=self._STRETCH_BOTH)
+        self._left_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
+        self._right_sidebar = pn.Column(sizing_mode=self._STRETCH_WIDTH)
 
         self._error_container_layout = None
         self._dataset_info_layout: Optional[pn.viewable.Viewable] = None
 
         self._quanti_add_element_button = pn.widgets.Button()
-        self._element_item_view_container = pn.Column(sizing_mode=self.STRETCH_BOTH)
+        self._element_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH)
 
         self._modal_manager = ModalManager(custom_page)
         self._modal_manager.register_modal(
@@ -180,7 +180,7 @@ class QuantificationView:
         self._quanti_input = {
             "element_num": pn.widgets.IntInput(
                 name='Element Atomic Number',
-                sizing_mode=self.STRETCH_WIDTH,
+                sizing_mode=self._STRETCH_WIDTH,
                 value=1,
                 start=1,
                 end=99,
@@ -189,7 +189,7 @@ class QuantificationView:
             "shells_multiselect": pn.widgets.MultiChoice(
                 name="Subshells", 
                 options=[],
-                sizing_mode=self.STRETCH_WIDTH,
+                sizing_mode=self._STRETCH_WIDTH,
                 margin=(0,0,10,0)
             ),
         }
@@ -237,11 +237,11 @@ class QuantificationView:
 
         self._quanti_element_item = pn.Column(
             *[widget for widget in self._quanti_input.values()],
-            sizing_mode=self.STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH
         )
 
         self._element_item_view_container = pn.Column(
-            sizing_mode=self.STRETCH_BOTH,
+            sizing_mode=self._STRETCH_BOTH,
             css_classes=["element-container"],
         )
 
@@ -288,7 +288,7 @@ class QuantificationView:
             button_type='success',
             height=55,
             margin=(20,0,10,0),
-            sizing_mode=self.STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH
         )
 
         self._plot_elements_button = pn.widgets.Button(
@@ -296,7 +296,7 @@ class QuantificationView:
             button_type='success',
             height=55,
             margin=(20,0,10,0),
-            sizing_mode=self.STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH
         )
 
         right_sidebar = pn.Column(
@@ -308,10 +308,10 @@ class QuantificationView:
                     width=30,
                 ),
                 self._quanti_toggle_button,
-                sizing_mode=self.STRETCH_WIDTH,
+                sizing_mode=self._STRETCH_WIDTH,
                 margin=(10, 0, 0, 0)
             ),
-            sizing_mode=self.STRETCH_BOTH,
+            sizing_mode=self._STRETCH_BOTH,
         )
         return right_sidebar
     

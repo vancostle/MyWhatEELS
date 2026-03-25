@@ -7,6 +7,8 @@ export function render({ model }) {
     // Get Panel children
     const left = get_model_child(model, LEFT_COLUMN);
     const right = get_model_child(model, RIGHT_COLUMN);
+    left.style.overflowX = 'hidden'; // Prevent scrollbars during resizing
+    right.style.overflowX = 'hidden'; // Prevent scrollbars during resizing
 
     const container = document.createElement('div');
     container.className = 'split';
