@@ -3,7 +3,7 @@ import gc
 from whateels.errors.dm.data import DMPlotCreationError
 import panel as pn
 from .plots_factory import PlotsFactory
-from .layouts import HomePageLeftSidebar, HomePageMainLayout
+from .layouts import HomePageLeftSidebar, HomePageMainLayout, HomePageRightSidebar
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -27,6 +27,7 @@ class HomePageView:
             model,
             sizing_mode=self._STRETCH_WIDTH,
         )
+        self._right_sidebar = HomePageRightSidebar(model)
         
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
@@ -55,14 +56,19 @@ class HomePageView:
     def left_sidebar(self) -> HomePageLeftSidebar:
         """Left sidebar layout for controls and options."""
         return self._left_sidebar
-    @left_sidebar.setter
-    def left_sidebar(self, layout: HomePageLeftSidebar):
-        """Set the left sidebar layout."""
-        self._left_sidebar = layout
     @left_sidebar.deleter
     def left_sidebar(self):
         """Delete the left sidebar layout."""
         self._left_sidebar.clear()
+        
+    @property
+    def right_sidebar(self) -> HomePageRightSidebar:
+        """Right sidebar layout for dataset information."""
+        return self._right_sidebar
+    @right_sidebar.deleter
+    def right_sidebar(self):
+        """Delete the right sidebar layout."""
+        self._right_sidebar.clear()
         
     def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
         """
