@@ -7,10 +7,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 _WORKSPACE_ROOT = os.path.dirname(os.path.abspath(__file__))
 _SPLASH_TEMPLATE = os.path.join(_WORKSPACE_ROOT, "whateels", "assets", "html", "splash.html")
 
-def _build_html(app_name: str, target_port: int) -> str:
+def _build_html(target_port: int) -> str:
     with open(_SPLASH_TEMPLATE, encoding="utf-8") as f:
         template = f.read()
-    return template.replace("{{APP_NAME}}", app_name).replace("{{TARGET_PORT}}", str(target_port))
+    return template.replace("{{TARGET_PORT}}", str(target_port))
 
 def _make_handler(html: str):
     class _Handler(BaseHTTPRequestHandler):
@@ -45,9 +45,9 @@ def _make_handler(html: str):
     return _Handler
 
 
-def start(app_name: str, target_port: int, splash_port: int) -> None:
+def start(target_port: int, splash_port: int) -> None:
     """Start the splash HTTP server on *splash_port* and open the browser."""
-    html = _build_html(app_name, target_port)
+    html = _build_html(target_port)
     handler = _make_handler(html)
 
     server = HTTPServer(("localhost", splash_port), handler)

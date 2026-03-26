@@ -85,6 +85,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             css_classes=["my-range"]
         )
         self._range_slider_watcher = self.range_slider.param.watch(self._on_range_changed, 'value')
+        
+        self.remove_spikes_checkbox = pn.widgets.Checkbox(name="Remove Spikes", value=False)
         self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
         self.fitting_button.on_click(self._on_fitting_clicked)
         self.multifit_button = pn.widgets.Button(name="Multifit", button_type="warning")

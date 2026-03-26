@@ -89,20 +89,12 @@ class SplitJs(JSComponent):
         No cleanup needed; Bokeh restores to container size automatically.
         """
         self._apply_left_plot_pixel_ratio(widths=widths, heights=heights)
-        self.force_holoviews_resize()  # Final refresh to ensure everything is up-to-date after drag
 
     def _external_resize_event(self, widths: dict):
         """ Handle external resize event (e.g., window resize).
         This can be triggered by JavaScript when the window is resized, allowing us to refresh HoloViews panes if needed.
         """
         pass # No action needed during external resize since Bokeh handles resizing automatically, but we could call force_holoviews_resize() if we find it necessary
-        
-    def force_holoviews_resize(self):
-        """Force a refresh on HoloViews panes in both columns."""
-        if self._left_column_hv is not None and isinstance(self._left_column_hv, pn.pane.HoloViews):
-            self._left_column_hv.object = self._left_column_hv.object
-        if self._right_column_hv is not None and isinstance(self._right_column_hv, pn.pane.HoloViews):
-            self._right_column_hv.object = self._right_column_hv.object
 
     def _apply_left_plot_pixel_ratio(self, widths: dict, heights: dict):
         """Resize paneA by fitting width/height simultaneously while preserving X/Y ratio."""

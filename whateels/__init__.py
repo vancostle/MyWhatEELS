@@ -60,10 +60,8 @@ class App:
             "/multifit-details": _lazy('whateels.pages.multifitting', 'MultiFitting'),
             "/quantification": _lazy('whateels.pages.quantification', 'Quantification'),
             "/fitting": _lazy('whateels.pages.fitting', 'Fitting'),
-            # "/nlls": _lazy('whateels.pages.nlls', 'NLLS'),
         }
 
-        print(f"[WHE] App startup timer: {time.perf_counter() - _whe_start_time:.3f} seconds (before pn.serve)")
         return pn.serve(
             pages, # type: ignore
             title=self._title, 
