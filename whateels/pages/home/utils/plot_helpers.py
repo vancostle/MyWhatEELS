@@ -52,8 +52,10 @@ def plot_fit_traces(fig, x, y, y_fit):
     )
 
     # Overlay: base spectrum, fit, and background subtraction
-    overlay = fig * fit_curve * bg_sub
-    # Optionally, set legend position and style globally if needed
+    # framewise=True ensures y-axis auto-scales to the full overlay content
+    overlay = (fig * fit_curve * bg_sub).opts(
+        hv.opts.Overlay(framewise=True, responsive=True, shared_axes=False)
+    )
     return overlay
 
 def start_pc(pc):

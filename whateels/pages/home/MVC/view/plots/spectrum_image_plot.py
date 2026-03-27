@@ -289,7 +289,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._update_paneB(fig)
             return
 
-        self._update_paneB(self._figB_hover(self._last_hover_point or {"x": 0, "y": 0}))
+        # No hover yet — use default pixel (0, 0)
+        default_point = {"x": 0, "y": 0}
+        spec = get_pixel_spectrum(self._electron_count_data, default_point)
+        fig = self._figB_hover(default_point)
+        if spec is not None and remove_spikes:
+            spec = self._remove_spikes(spec)
+            fig = self._build_spike_removed_curve(spec, "Hover (x=0, y=0)")
+        if self._fitting_active and spec is not None:
+            try:
+                fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+            except Exception:
+                pass
+        self._update_paneB(fig)
         
     def _update_paneB(self, fig):
         if self._paneB_pipe is not None:
@@ -306,6 +318,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_active = event.new
         if self._range_slider is not None:
             self._range_slider.disabled = not event.new
+        # Reset stored y-range so the axis auto-scales to the new plot contents
+        # (fitting adds negative BG-subtraction area that would be clipped by old ylim)
+        self._current_y_range = None
+        self._current_y_autorange = True
         try:
             CacheManager.get_cached_app_state().plot_dataset = self._dataset
         except Exception:
