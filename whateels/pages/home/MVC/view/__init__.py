@@ -114,10 +114,9 @@ class HomePageView:
                 if chosen_plot is None:
                     raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
 
-                # Wire range slider and fitting switch into the sidebar
+                # Wire the plot's fitting SimpleDetails into the sidebar
                 if isinstance(chosen_plot, SpectrumImagePlot):
-                    self._right_sidebar.set_range_slider(chosen_plot._range_slider)
-                    self._right_sidebar.set_fitting_callback(chosen_plot.set_fitting_active)
+                    self._right_sidebar.set_fitting_details(chosen_plot.create_fitting_details())
                 
                 visualizer_plots = chosen_plot.create_plots()
                 

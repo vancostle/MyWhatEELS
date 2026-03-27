@@ -4,7 +4,7 @@ import numpy as np
 import holoviews as hv
 
 from whateels.helpers import SpectrumExtractor
-from whateels.components import SplitJs
+from whateels.components import SplitJs, SimpleDetails
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
@@ -41,6 +41,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Widget placeholders (filled by _setup_widgets, called after super)
         self._range_slider = pn.widgets.EditableRangeSlider()
         self._range_slider_watcher = None
+        self._fitting_switch = None
+        self._fitting_switch_watcher = None
+        self._multifit_link_pane = None
         self.remove_spikes_checkbox = None
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
@@ -83,13 +86,86 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
             value=(float(self._e_axis[0]), float(self._e_axis[-1])),
             sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["my-range"]
+            css_classes=["my-range"],
+            disabled=True,
         )
         self._range_slider_watcher = self._range_slider.param.watch(self._on_range_changed, 'value')
-        self._range_slider.disabled = True  # Initially disabled until fitting is activated
+
+        self._fitting_switch = pn.widgets.Switch(
+            name="Fitting",
+            value=False,
+            css_classes=["background-fitting-switch"],
+            styles={'height': '30px', 'max-height': '30px', 'display': 'flex',
+                    'align-items': 'center', 'justify-content': 'center', 'margin': '0px'}
+        )
+        self._fitting_switch_watcher = self._fitting_switch.param.watch(
+            self._on_fitting_switch_changed, 'value'
+        )
+
+        self._multifit_link_pane = pn.pane.HTML(
+            self._build_multifit_html(None),
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(8, 0, 0, 0),
+        )
 
         self.remove_spikes_checkbox = pn.widgets.Checkbox(name="Remove Spikes", value=False)
         self.remove_spikes_checkbox.param.watch(self._on_remove_spikes_changed, 'value')
+
+    # --- Fitting Details SimpleDetails builder ---
+    def create_fitting_details(self) -> SimpleDetails:
+        """Build and return the fitting SimpleDetails block for the sidebar."""
+        fitting_label = pn.pane.Markdown(
+            "## Fitting",
+            margin=0,
+            styles={'padding': '0px', 'height': '30px', 'display': 'flex',
+                    'align-items': 'center', 'justify-content': 'center'}
+        )
+        fitting_switch_container = pn.Row(
+            fitting_label,
+            self._fitting_switch,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["background-fitting-container"],
+            margin=(0, 0, 8, 0),
+            styles={'display': 'flex', 'align-items': 'center',
+                    'justify-content': 'center', 'padding': '0px'}
+        )
+        return SimpleDetails(
+            title="Fitting Information",
+            content=pn.Column(
+                fitting_switch_container,
+                self._range_slider,
+                self._multifit_link_pane,
+                sizing_mode=self._STRETCH_WIDTH,
+            ),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+    def _build_multifit_html(self, url: str | None) -> str:
+        if url and self._fitting_switch is not None and self._fitting_switch.value:
+            return (
+                f'<a href="{url}" target="_blank" '
+                f'style="display:flex;justify-content:center;text-align:center;width:100%;padding:8px;background-color:#f0ad4e;color:white;font-weight:bold;border-radius:4px;box-sizing:border-box;text-decoration:none;">'
+                f'Open Multifitting Page</a>'
+            )
+        return (
+            '<a class="btn btn-warning disabled" aria-disabled="true" '
+            'style="display:flex;justify-content:center;text-align:center;width:100%;padding:8px;background-color:#f0ad4e;color:white;font-weight:bold;border-radius:4px;box-sizing:border-box;opacity:0.5;pointer-events:none;">'
+            'Open Multifitting Page</a>'
+        )
+
+    def _update_multifit_url(self, *args) -> None:
+        if self._multifit_link_pane is None:
+            return
+        rs = self._range_slider
+        if rs is None:
+            self._multifit_link_pane.object = self._build_multifit_html(None)
+            return
+        min_val, max_val = rs.value
+        location = getattr(pn.state, 'location', None)
+        port = getattr(location, 'port', 5006)
+        hostname = getattr(location, 'hostname', 'localhost')
+        url = f"http://{hostname}:{port}/multifit-details?values={min_val},{max_val}"
+        self._multifit_link_pane.object = self._build_multifit_html(url)
 
     def _remove_spikes(self, spectrum, threshold=5.0, window=5):
         """
@@ -208,11 +284,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # without rebuilding the whole model tree, avoiding the stale-reference warning.
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
 
+    def _on_fitting_switch_changed(self, event) -> None:
+        """Handle fitting switch toggle: update state, slider, URL, and spectrum."""
+        self._fitting_active = event.new
+        if self._range_slider is not None:
+            self._range_slider.disabled = not event.new
+        try:
+            CacheManager.get_cached_app_state().plot_dataset = self._dataset
+        except Exception:
+            pass
+        self._update_multifit_url()
+        self._refresh_paneB()
+
     def _on_range_changed(self, event):
         """Refresh paneB when the fit range slider changes (only when fitting is active)."""
         if not self._fitting_active:
             return
         self._refresh_paneB()
+        self._update_multifit_url()
 
     def _on_remove_spikes_changed(self, event):
         """Refresh paneB immediately when the Remove Spikes checkbox is toggled."""
@@ -309,22 +398,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._last_hover_point = {"x": x, "y": y}
             self._show_spectrum(point=self._last_hover_point)
 
-    # --- Fitting and range behaviour ---
-    def set_fitting_active(self, active: bool) -> None:
-        """Called by the sidebar switch to toggle fitting on/off."""
-        self._fitting_active = active
-
-        range_slider = self._range_slider
-        if range_slider is not None:
-            range_slider.visible = active
-
-        try:
-            CacheManager.get_cached_app_state().plot_dataset = self._dataset
-        except Exception:
-            pass
-
-        self._refresh_paneB()
-
     @override
     def cleanup(self):
         """Stop periodic callback, unwatch widgets, and release all references."""
@@ -339,8 +412,17 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 pass
         self._range_slider_watcher = None
 
+        if self._fitting_switch_watcher is not None and self._fitting_switch is not None:
+            try:
+                self._fitting_switch.param.unwatch(self._fitting_switch_watcher)
+            except Exception:
+                pass
+        self._fitting_switch_watcher = None
+
         # Null out widget references
-        self._range_slider = None
+        self._range_slider = pn.widgets.EditableRangeSlider()
+        self._fitting_switch = None
+        self._multifit_link_pane = None
         self.remove_spikes_checkbox = None
 
         super().cleanup()
