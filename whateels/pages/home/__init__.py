@@ -1,4 +1,3 @@
-import time
 from whateels.templates import GeneralPageTemplate
 from .MVC import HomePageController, HomePageView, HomePageModel
 
@@ -9,8 +8,6 @@ class HomePage(GeneralPageTemplate):
     """
 
     def __init__(self):
-        start = time.perf_counter()
-
         # Model is created fresh each navigation — Panel's session lifecycle
         # handles cleanup of the old session's resources automatically.
         # AppState (user data) is preserved separately in pn.state.cache.
@@ -22,7 +19,6 @@ class HomePage(GeneralPageTemplate):
             title=model.constants.TITLE,
             main=[view.main],
             sidebar=[view.left_sidebar, view.left_sidebar.welcome_message],
+            right_sidebar=[view.right_sidebar],
             sidebar_width=260
         )
-        elapsed = time.perf_counter() - start
-        print(f"[DEBUG] Tiempo de carga HomePage: {elapsed:.3f} s")

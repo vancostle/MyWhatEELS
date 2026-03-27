@@ -39,20 +39,20 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._pc = None
 
         # Widget placeholders (filled by _setup_widgets, called after super)
-        self.range_slider = None
+        self._range_slider = pn.widgets.EditableRangeSlider()
         self._range_slider_watcher = None
         self.remove_spikes_checkbox = None
-        self.fitting_button = None
-        self._js_executor = None
-        self.multifit_button = None
-        self.buttons_row = None
-        self.range_slider_row = None
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
 
         # Widgets depend on _e_axis set by super().__init__()
         self._setup_widgets()
+        
+    @property
+    def range_slider(self) -> pn.widgets.EditableRangeSlider:
+        """Get the fit range slider widget."""
+        return self._range_slider
 
     # --- Public Layout Builders ---
 
@@ -65,8 +65,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         right_column = pn.Column(
             self.paneB,
-            self.buttons_row if self.buttons_row is not None else self.fitting_button,
-            self.range_slider_row,
+            self.remove_spikes_checkbox,
             align='center',
             margin=0
         )
@@ -78,7 +77,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     # --- Widget Setup ---
     def _setup_widgets(self):
-        self.range_slider = pn.widgets.EditableRangeSlider(
+        self._range_slider = pn.widgets.EditableRangeSlider(
             name="",
             start=float(self._e_axis[0]) if len(self._e_axis) > 0 else 0.0,
             end=float(self._e_axis[-1]) if len(self._e_axis) > 0 else 1.0,
@@ -86,33 +85,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["my-range"]
         )
-        self._range_slider_watcher = self.range_slider.param.watch(self._on_range_changed, 'value')
-        
+        self._range_slider_watcher = self._range_slider.param.watch(self._on_range_changed, 'value')
+        self._range_slider.disabled = True  # Initially disabled until fitting is activated
+
         self.remove_spikes_checkbox = pn.widgets.Checkbox(name="Remove Spikes", value=False)
         self.remove_spikes_checkbox.param.watch(self._on_remove_spikes_changed, 'value')
-
-        self.fitting_button = pn.widgets.Button(name="Fitting: OFF", button_type="primary")
-        self.fitting_button.on_click(self._on_fitting_clicked)
-        
-        self.multifit_button = pn.widgets.Button(name="Multifit", button_type="warning")
-        self.multifit_button.on_click(self._on_multifit_clicked)
-        self.multifit_button.visible = False
-
-        self._js_executor = pn.pane.HTML("", width=0, height=0)
-        self.buttons_row = pn.Row(
-            self.remove_spikes_checkbox,
-            self.fitting_button,
-            self.multifit_button,
-            self._js_executor,
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        self.range_slider_row = pn.Row(
-            pn.pane.HTML("<p class=\"range-label\">Range:</p>"),
-            self.range_slider,
-            sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["range-label-wrapper"],
-        )
-        self.range_slider_row.visible = False
 
     def _remove_spikes(self, spectrum, threshold=5.0, window=5):
         """
@@ -182,7 +159,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, title)
         if self._fitting_active and spec is not None:
-            fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
         self._update_paneB(fig)
 
     # --- Helper methods now imported from utils/plot_helpers.py ---
@@ -202,7 +179,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"ROI \u2014 sum (points={n_points})")
             if self._fitting_active and spec is not None:
-                fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+                fig = apply_fitting(fig, self._energy, spec, self._range_slider)
             self._update_paneB(fig)
             return
 
@@ -215,7 +192,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"Hover (x={j}, y={i})")
             if self._fitting_active and spec is not None:
-                fig = apply_fitting(fig, self._energy, spec, self.range_slider)
+                fig = apply_fitting(fig, self._energy, spec, self._range_slider)
             self._update_paneB(fig)
             return
 
@@ -230,37 +207,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Push the new element through the pipe — Bokeh updates data in-place
             # without rebuilding the whole model tree, avoiding the stale-reference warning.
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
-
-    def _on_multifit_clicked(self, event):
-        """Callback para el botón de multifit"""
-        # Publish the dataset now that multifit is requested.
-        
-        try:
-            CacheManager.get_cached_app_state().plot_dataset = self._dataset
-        except Exception:
-            print("Error publishing dataset to AppState for multifit.")
-        
-        minmax = get_range_slider_value(self.range_slider)
-        min_val, max_val = minmax if len(minmax) == 2 else (0, 1)
-
-        location = getattr(pn.state, 'location', None)
-        current_port = getattr(location, 'port', 5006)
-        hostname = getattr(location, 'hostname', 'localhost')
-        url_base = f"http://{hostname}:{current_port}"
-
-        values = f"{min_val},{max_val}"
-        url_with_params = f"{url_base}/multifit-details?values={values}"
-        
-        if self._js_executor is not None:
-            self._js_executor.object = f"""
-                <script>
-                    const timeout = setTimeout(() => {{
-                        window.open('{url_with_params}', '_blank');
-                        
-                        clearTimeout(timeout);
-                    }}, 0);
-                </script>
-            """
 
     def _on_range_changed(self, event):
         """Refresh paneB when the fit range slider changes (only when fitting is active)."""
@@ -364,28 +310,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._show_spectrum(point=self._last_hover_point)
 
     # --- Fitting and range behaviour ---
-    def _on_fitting_clicked(self, event):
-        self._fitting_active = not self._fitting_active
-        fitting_button = getattr(self, 'fitting_button', None)
+    def set_fitting_active(self, active: bool) -> None:
+        """Called by the sidebar switch to toggle fitting on/off."""
+        self._fitting_active = active
 
-        if fitting_button is not None:
-            fitting_button.name = f"Fitting: {'ON' if self._fitting_active else 'OFF'}"
-            fitting_button.button_type = "danger" if self._fitting_active else "primary"
+        range_slider = self._range_slider
+        if range_slider is not None:
+            range_slider.visible = active
 
-        range_slider_row = getattr(self, 'range_slider_row', None)
-        range_slider = getattr(self, 'range_slider', None)
+        try:
+            CacheManager.get_cached_app_state().plot_dataset = self._dataset
+        except Exception:
+            pass
 
-        if range_slider_row is not None:
-            range_slider_row.visible = self._fitting_active
-        elif range_slider is not None:
-            range_slider.visible = self._fitting_active
-
-        # Mostrar/ocultar botón de multifit (coincide con fitting)
-        multifit_button = getattr(self, 'multifit_button', None)
-        if multifit_button is not None:
-            multifit_button.visible = self._fitting_active
-
-        # Refresh current view
         self._refresh_paneB()
 
     @override
@@ -395,20 +332,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._pc = None
 
         # Unwatch range slider to sever the reference from the watcher to self
-        if self._range_slider_watcher is not None and self.range_slider is not None:
+        if self._range_slider_watcher is not None and self._range_slider is not None:
             try:
-                self.range_slider.param.unwatch(self._range_slider_watcher)
+                self._range_slider.param.unwatch(self._range_slider_watcher)
             except Exception:
                 pass
         self._range_slider_watcher = None
 
-        # Null out all widget references
-        self.range_slider = None
-        self.fitting_button = None
-        self.multifit_button = None
+        # Null out widget references
+        self._range_slider = None
         self.remove_spikes_checkbox = None
-        self._js_executor = None
-        self.buttons_row = None
-        self.range_slider_row = None
 
         super().cleanup()

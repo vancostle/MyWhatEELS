@@ -3,6 +3,7 @@ import gc
 from whateels.errors.dm.data import DMPlotCreationError
 import panel as pn
 from .plots_factory import PlotsFactory
+from .plots import SpectrumImagePlot
 from .layouts import HomePageLeftSidebar, HomePageMainLayout, HomePageRightSidebar
 
 from typing import TYPE_CHECKING
@@ -27,7 +28,10 @@ class HomePageView:
             model,
             sizing_mode=self._STRETCH_WIDTH,
         )
-        self._right_sidebar = HomePageRightSidebar(model)
+        self._right_sidebar = HomePageRightSidebar(
+            model,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
         
         # Store all dataset information
         self._all_dataset_info: list[pn.viewable.Viewable] = []
@@ -109,6 +113,11 @@ class HomePageView:
                 
                 if chosen_plot is None:
                     raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
+
+                # Wire range slider and fitting switch into the sidebar
+                if isinstance(chosen_plot, SpectrumImagePlot):
+                    self._right_sidebar.set_range_slider(chosen_plot._range_slider)
+                    self._right_sidebar.set_fitting_callback(chosen_plot.set_fitting_active)
                 
                 visualizer_plots = chosen_plot.create_plots()
                 

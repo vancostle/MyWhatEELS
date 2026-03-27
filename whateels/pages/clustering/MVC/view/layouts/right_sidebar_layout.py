@@ -105,6 +105,8 @@ class ClusteringRightSidebarLayout(pn.Column):
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"]
         )
+        
+        # TODO Correct Shift | SimpleDetails
 
         is_multifitting_available = self._model.is_multifit_available()
         self._background_subtraction_switch.disabled = not is_multifitting_available
