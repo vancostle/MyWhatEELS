@@ -20,5 +20,7 @@ class HomePage(GeneralPageTemplate):
             main=[view.main],
             sidebar=[view.left_sidebar, view.left_sidebar.welcome_message],
             right_sidebar=[view.right_sidebar],
-            sidebar_width=260
+            sidebar_width=260,
+            right_sidebar_width=378,
+            collapsed_right_sidebar=True,
         )

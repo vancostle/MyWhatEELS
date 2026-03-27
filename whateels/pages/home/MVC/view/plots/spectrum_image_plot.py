@@ -89,6 +89,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             css_classes=["my-range"],
             disabled=True,
         )
+        
+        self._range_slider_container = pn.Column(
+            self._range_slider,
+            margin=0,
+            styles={'padding': '0px'},
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
         self._range_slider_watcher = self._range_slider.param.watch(self._on_range_changed, 'value')
 
         self._fitting_switch = pn.widgets.Switch(
@@ -133,7 +141,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             title="Fitting Information",
             content=pn.Column(
                 fitting_switch_container,
-                self._range_slider,
+                self._range_slider_container,
                 self._multifit_link_pane,
                 sizing_mode=self._STRETCH_WIDTH,
             ),
@@ -235,7 +243,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, title)
         if self._fitting_active and spec is not None:
-            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+            try:
+                fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+            except Exception:
+                pass
         self._update_paneB(fig)
 
     # --- Helper methods now imported from utils/plot_helpers.py ---
@@ -255,7 +266,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"ROI \u2014 sum (points={n_points})")
             if self._fitting_active and spec is not None:
-                fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                try:
+                    fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                except Exception:
+                    pass
             self._update_paneB(fig)
             return
 
@@ -268,7 +282,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"Hover (x={j}, y={i})")
             if self._fitting_active and spec is not None:
-                fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                try:
+                    fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                except Exception:
+                    pass
             self._update_paneB(fig)
             return
 

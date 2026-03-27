@@ -48,7 +48,7 @@ class SpectrumFitting:
         x_f = x[mask]
         y_f = y[mask]
         if x_f.size < 3:
-            return None, None
+            return None
         try:
             params, _ = curve_fit(SpectrumFitting.powerlaw, x_f, y_f, maxfev=MAXFEV)
             y_fit = SpectrumFitting.powerlaw(x, *params)
