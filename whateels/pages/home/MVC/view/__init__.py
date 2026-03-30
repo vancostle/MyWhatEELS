@@ -120,6 +120,7 @@ class HomePageView:
                     self._right_sidebar.set_remove_spikes_details(chosen_plot.create_remove_spikes_details())
                     self._right_sidebar.set_multifitting_details(chosen_plot.create_multifitting_details())
                     self._right_sidebar.set_preprocessors_button(chosen_plot.create_preprocessors_button())
+                    chosen_plot.set_view_refs(self._main, plots_tab)
                 
                 visualizer_plots = chosen_plot.create_plots()
                 

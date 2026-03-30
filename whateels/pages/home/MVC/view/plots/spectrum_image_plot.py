@@ -7,7 +7,7 @@ import lmfit
 
 from whateels.helpers import SpectrumExtractor
 from whateels.helpers.fitting.multifitting import MultiFit
-from whateels.components import SplitJs, SimpleDetails, ToggleButton
+from whateels.components import SplitJs, SimpleDetails, ToggleButton, ProgressDisplay
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
@@ -60,6 +60,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._preprocessors_applied = False
         self._apply_preprocessors_button = None
         self._multifit_electron_count_data = None
+        self._progress_display: ProgressDisplay = ProgressDisplay(name="Preprocessing")
+        self._main_ref = None
+        self._plots_tab_ref = None
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
@@ -225,6 +228,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def create_preprocessors_button(self) -> ToggleButton:
         """Return the Apply Active Preprocessors toggle button for the sidebar."""
         return self._apply_preprocessors_button
+
+    def set_view_refs(self, main, plots_tab) -> None:
+        """Inject main layout and plots tab references so the plot can show progress and restore content."""
+        self._main_ref = main
+        self._plots_tab_ref = plots_tab
 
     def create_multifitting_details(self) -> SimpleDetails:
         """Build and return the Multifitting SimpleDetails block for the sidebar."""
@@ -436,32 +444,95 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Multifitting switch toggled — batch computation is triggered by the Apply button."""
         pass
 
-    def _on_apply_preprocessors(self):
-        """Apply all active preprocessors to paneB and keep them active on hover."""
-        self._preprocessors_applied = True
-        self._current_y_range = None
-        self._current_y_autorange = True
-        if self._multifitting_switch.value:
-            threading.Thread(target=self._run_multifit, daemon=True).start()
-        else:
-            self._multifit_electron_count_data = None
-            self._refresh_paneB()
+    def _disable_sidebar_widgets(self):
+        """Disable all right-sidebar interactive widgets during preprocessing."""
+        self._fitting_switch.disabled = True
+        self._range_slider.disabled = True
+        self._remove_spikes_switch.disabled = True
+        self._spike_threshold_slider.disabled = True
+        self._multifitting_switch.disabled = True
+        if self._apply_preprocessors_button is not None:
+            self._apply_preprocessors_button.disabled = True
 
-    def _run_multifit(self):
-        """Background thread: fit and subtract PowerLaw background for every pixel, then refresh display."""
+    def _enable_sidebar_widgets(self):
+        """Re-enable right-sidebar widgets after preprocessing completes."""
+        self._fitting_switch.disabled = False
+        self._range_slider.disabled = not self._fitting_active
+        self._remove_spikes_switch.disabled = False
+        self._spike_threshold_slider.disabled = not bool(self._remove_spikes_switch.value)
+        self._multifitting_switch.disabled = False
+        if self._apply_preprocessors_button is not None:
+            self._apply_preprocessors_button.disabled = False
+
+    def _on_apply_preprocessors(self):
+        """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
+        self._disable_sidebar_widgets()
+        threading.Thread(target=self._run_preprocessors_thread, daemon=True).start()
+
+    def _run_preprocessors_thread(self):
+        """Background thread: show per-step progress, compute preprocessors, then restore the plots view."""
         try:
-            fit_range = tuple(self._range_slider.value) if self._fitting_active and self._range_slider is not None else None
-            mf = MultiFit(
-                self._dataset,
-                model=lmfit.models.PowerLawModel,
-                Eloss_x=self._e_axis,
-                fit_range=fit_range,
-            ).run(mode='subtracted')
-            fitted_ds = mf.to_dataset()
-            self._multifit_electron_count_data = fitted_ds['ElectronCount']
-        except Exception:
+            if self._main_ref is not None and self._plots_tab_ref is not None:
+                tab = pn.Tabs(("Applying Preprocessors...", self._progress_display))
+                self._main_ref.update(tab)
+
+            self._progress_display.reset()
+            self._progress_display.visible = True
+
+            remove_spikes = bool(self._remove_spikes_switch.value)
+            fitting = self._fitting_active
+            multifitting = bool(self._multifitting_switch.value)
+
+            self._progress_display.update(5, "Initializing preprocessors...", level='info')
+            time.sleep(1)
+
+            if remove_spikes:
+                self._progress_display.update(20, "Removing spikes from spectra...", level='info')
+                time.sleep(1)
+
+            if fitting:
+                self._progress_display.update(35, "Applying spectral fitting...", level='info')
+                time.sleep(1)
+
+            if multifitting:
+                self._progress_display.update(50, "Running multifitting — fitting power-law background to all pixels...", level='info')
+                time.sleep(1)
+                try:
+                    fit_range = tuple(self._range_slider.value) if fitting and self._range_slider is not None else None
+                    mf = MultiFit(
+                        self._dataset,
+                        model=lmfit.models.PowerLawModel,
+                        Eloss_x=self._e_axis,
+                        fit_range=fit_range,
+                    ).run(mode='subtracted')
+                    fitted_ds = mf.to_dataset()
+                    self._multifit_electron_count_data = fitted_ds['ElectronCount']
+                except Exception:
+                    self._multifit_electron_count_data = None
+            else:
+                self._multifit_electron_count_data = None
+
+            self._progress_display.update(90, "Finalizing...", level='info')
+            self._preprocessors_applied = True
+            self._current_y_range = None
+            self._current_y_autorange = True
+            time.sleep(1)
+
+            self._progress_display.completion("Preprocessors applied successfully!")
+            time.sleep(2)
+
+        except Exception as e:
+            self._progress_display.error(f"Processing failed: {str(e)}")
+            self._preprocessors_applied = False
             self._multifit_electron_count_data = None
-        pn.state.execute(self._refresh_paneB)
+            if self._apply_preprocessors_button is not None:
+                self._apply_preprocessors_button.toggle()
+            time.sleep(2)
+        finally:
+            if self._main_ref is not None and self._plots_tab_ref is not None:
+                self._main_ref.update(self._plots_tab_ref)
+            self._enable_sidebar_widgets()
+            pn.state.execute(self._refresh_paneB)
 
     def _on_display_raw_data(self):
         """Stop applying preprocessors and revert paneB to raw spectrum."""
@@ -591,5 +662,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._apply_preprocessors_button = None
         self._preprocessors_applied = False
         self._multifit_electron_count_data = None
+        self._main_ref = None
+        self._plots_tab_ref = None
 
         super().cleanup()
