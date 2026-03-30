@@ -47,6 +47,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         
         self._remove_spikes_switch = pn.widgets.Switch()
         self._remove_spikes_watcher = None
+        self._spike_threshold_slider = pn.widgets.FloatSlider()
+        self._spike_threshold_slider_watcher = None
+        self._spike_threshold = 5.0
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
@@ -97,9 +100,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             styles={'padding': '0px'},
             sizing_mode=self._STRETCH_WIDTH,
         )
-
         self._range_slider_watcher = self._range_slider.param.watch(self._on_range_changed, 'value')
-
         self._fitting_switch = pn.widgets.Switch(
             name="Fitting",
             value=False,
@@ -110,13 +111,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_switch_watcher = self._fitting_switch.param.watch(
             self._on_fitting_switch_changed, 'value'
         )
-
         self._multifit_link_pane = pn.pane.HTML(
             self._build_multifit_html(None),
             sizing_mode=self._STRETCH_WIDTH,
             margin=(8, 0, 0, 0),
         )
-        
         self._remove_spikes_switch = pn.widgets.Switch(
             name="Remove Spikes",
             value=False,
@@ -124,10 +123,20 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             styles={'height': '30px', 'max-height': '30px', 'display': 'flex',
                     'align-items': 'center', 'justify-content': 'center', 'margin': '0px'}
         )
-        
         self._remove_spikes_watcher = self._remove_spikes_switch.param.watch(
             self._on_remove_spikes_changed, 'value'
         )
+        self._spike_threshold_slider = pn.widgets.FloatSlider(
+            name="Spike Threshold",
+            start=1.0,
+            end=20.0,
+            step=0.1,
+            value=5.0,
+            sizing_mode=self._STRETCH_WIDTH,
+            disabled=True,
+        )
+        self._spike_threshold_slider_watcher = self._spike_threshold_slider.param.watch(self._on_spike_threshold_changed, 'value')
+        self._spike_threshold = 5.0
 
     # --- Fitting Details SimpleDetails builder ---
     def create_fitting_details(self) -> SimpleDetails:
@@ -174,10 +183,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             styles={'display': 'flex', 'align-items': 'center',
                     'justify-content': 'center', 'padding': '0px'}
         )
+        threshold_slider_container = pn.Column(
+            self._spike_threshold_slider,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
         return SimpleDetails(
             title="Remove Spikes Settings",
             content=pn.Column(
                 remove_spikes_container,
+                threshold_slider_container,
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
@@ -209,7 +223,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         url = f"http://{hostname}:{port}/multifit-details?values={min_val},{max_val}"
         self._multifit_link_pane.object = self._build_multifit_html(url)
 
-    def _remove_spikes(self, spectrum, threshold=5.0, window=5):
+    def _remove_spikes(self, spectrum, threshold=None, window=5):
         """
         Spike removal using a rolling median with edge padding.
         Replaces points that deviate from the local median by more than
@@ -221,6 +235,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         Returns:
             1D numpy array with spikes replaced by the local median
         """
+        if threshold is None:
+            threshold = self._spike_threshold
         if spectrum is None or len(spectrum) < window:
             return spectrum
         half = window // 2
@@ -378,8 +394,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_remove_spikes_changed(self, event):
         """Refresh paneB immediately when the Remove Spikes checkbox is toggled."""
+        self._spike_threshold_slider.disabled = not event.new
         self._refresh_paneB()
-    
+
+    def _on_spike_threshold_changed(self, event):
+        self._spike_threshold = event.new
+        if self._remove_spikes_switch.value:
+            self._refresh_paneB()
+
     # --- Callbacks setup (adds inactivity periodic callback on top of base) ---
     @override
     def _setup_callbacks(self):
@@ -496,5 +518,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_switch = pn.widgets.Switch()
         self._multifit_link_pane = None
         self._remove_spikes_switch = pn.widgets.Switch()
+        self._spike_threshold_slider = pn.widgets.FloatSlider()
 
         super().cleanup()
