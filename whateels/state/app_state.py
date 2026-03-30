@@ -70,6 +70,14 @@ class AppState(param.Parameterized):
         The last clustering result dictionary.
     """)
 
+    preprocessed_electron_count = param.Parameter(default=None, doc="""
+        The fully preprocessed ElectronCount DataArray, cached after the user
+        clicks 'Apply Active Preprocessors' on the home page.
+        Contains the result of all active data-transforming preprocessors
+        (spike removal, background subtraction) applied to every pixel.
+        None when no preprocessors have been applied or after reverting to raw.
+    """)
+
     def __init__(self):
         super().__init__()
 
@@ -145,6 +153,9 @@ class AppState(param.Parameterized):
     def clear_last_clustering_result(self):
         self.last_clustering_result = None
 
+    def clear_preprocessed_electron_count(self):
+        self.preprocessed_electron_count = None
+
     def clear_all(self):
         """Clear all shared state parameters."""
         self.clear_metadata()
@@ -153,3 +164,4 @@ class AppState(param.Parameterized):
         self.clear_elements_selected()
         self.clear_selected_tab_index()
         self.clear_last_clustering_result()
+        self.clear_preprocessed_electron_count()

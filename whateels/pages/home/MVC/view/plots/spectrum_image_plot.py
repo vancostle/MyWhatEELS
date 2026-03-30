@@ -4,6 +4,7 @@ import threading
 import numpy as np
 import holoviews as hv
 import lmfit
+import xarray as xr
 
 from whateels.helpers import SpectrumExtractor
 from whateels.helpers.fitting.multifitting import MultiFit
@@ -59,7 +60,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         self._preprocessors_applied = False
         self._apply_preprocessors_button = None
-        self._multifit_electron_count_data = None
+        self._preprocessed_electron_count = None
         self._progress_display: ProgressDisplay = ProgressDisplay(name="Preprocessing")
         self._main_ref = None
         self._plots_tab_ref = None
@@ -291,10 +292,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 filtered[i] = median
         return filtered
 
-    def _build_spike_removed_curve(self, spec, title):
-        """Rebuild an hv.Curve with spike-filtered spectrum, preserving the title."""
-        filtered = self._remove_spikes(spec)
-        return hv.Curve((self._energy, filtered), kdims=['x'], vdims=['y']).opts(
+    def _build_spectrum_curve(self, spec, title):
+        """Build an hv.Curve from a pre-processed 1D spectrum array (no further transformation)."""
+        return hv.Curve((self._energy, spec), kdims=['x'], vdims=['y']).opts(
             color='black', line_width=1.5,
             title=title,
             xlabel=self._X_AXIS_SPECTRUM_TITLE,
@@ -302,12 +302,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             responsive=True, shared_axes=False, framewise=True,
         )
 
+    def _build_spike_removed_curve(self, spec, title):
+        """Rebuild an hv.Curve with spike-filtered spectrum, preserving the title."""
+        filtered = self._remove_spikes(spec)
+        return self._build_spectrum_curve(filtered, title)
+
     def _get_display_data(self):
         """Return the electron count data cube to use for spectrum display.
-        Uses the multifit background-subtracted cube when multifitting is active and computed."""
-        if (self._preprocessors_applied and self._multifitting_switch.value
-                and self._multifit_electron_count_data is not None):
-            return self._multifit_electron_count_data
+        Returns the precomputed preprocessed cube when preprocessors have been applied."""
+        if self._preprocessors_applied and self._preprocessed_electron_count is not None:
+            return self._preprocessed_electron_count
         return self._electron_count_data
 
     def _show_spectrum(self, *, point=None, region_pairs=None):
@@ -336,9 +340,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             fig = self._figB_hover(point)
             
         if self._preprocessors_applied and spec is not None:
-            if self._remove_spikes_switch.value:
-                spec = self._remove_spikes(spec)
-                fig = self._build_spike_removed_curve(spec, title)
+            fig = self._build_spectrum_curve(spec, title)
             if self._fitting_active:
                 try:
                     fig = apply_fitting(fig, self._energy, spec, self._range_slider)
@@ -362,9 +364,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec, n_points = res
             fig = self._figB_region(self._region_pairs)
             if apply_preprocessors and spec is not None:
-                if self._remove_spikes_switch.value:
-                    spec = self._remove_spikes(spec)
-                    fig = self._build_spike_removed_curve(spec, f"ROI \u2014 sum (points={n_points})")
+                fig = self._build_spectrum_curve(spec, f"ROI — sum (points={n_points})")
                 if self._fitting_active:
                     try:
                         fig = apply_fitting(fig, self._energy, spec, self._range_slider)
@@ -379,9 +379,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = get_pixel_spectrum(self._get_display_data(), point)
             fig = self._figB_hover(point)
             if apply_preprocessors and spec is not None:
-                if self._remove_spikes_switch.value:
-                    spec = self._remove_spikes(spec)
-                    fig = self._build_spike_removed_curve(spec, f"Hover (x={j}, y={i})")
+                fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
                 if self._fitting_active:
                     try:
                         fig = apply_fitting(fig, self._energy, spec, self._range_slider)
@@ -395,9 +393,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         spec = get_pixel_spectrum(self._get_display_data(), default_point)
         fig = self._figB_hover(default_point)
         if apply_preprocessors and spec is not None:
-            if self._remove_spikes_switch.value:
-                spec = self._remove_spikes(spec)
-                fig = self._build_spike_removed_curve(spec, "Hover (x=0, y=0)")
+            fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
             if self._fitting_active:
                 try:
                     fig = apply_fitting(fig, self._energy, spec, self._range_slider)
@@ -437,7 +433,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_spike_threshold_changed(self, event):
         self._spike_threshold = event.new
-        if self._preprocessors_applied and self._remove_spikes_switch.value:
+        if self._preprocessors_applied:
+            # Threshold changed — cached preprocessing used the old value; must recompute
+            self._preprocessors_applied = False
+            self._preprocessed_electron_count = None
+            try:
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            except Exception:
+                pass
+            if self._apply_preprocessors_button is not None:
+                self._apply_preprocessors_button.toggle()
             self._refresh_paneB()
             
     def _on_multifitting_switch_changed(self, event):
@@ -470,7 +475,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         threading.Thread(target=self._run_preprocessors_thread, daemon=True).start()
 
     def _run_preprocessors_thread(self):
-        """Background thread: show per-step progress, compute preprocessors, then restore the plots view."""
+        """Background thread: precompute all active preprocessors across every pixel, cache result, then restore the plots view."""
         try:
             if self._main_ref is not None and self._plots_tab_ref is not None:
                 tab = pn.Tabs(("Applying Preprocessors...", self._progress_display))
@@ -484,50 +489,75 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             multifitting = bool(self._multifitting_switch.value)
 
             self._progress_display.update(5, "Initializing preprocessors...", level='info')
-            time.sleep(1)
+
+            # Work on a plain numpy copy so we can mutate freely
+            working_arr = np.asarray(self._electron_count_data).copy()
+            dimx, dimy, _ = working_arr.shape
+            total_pixels = dimx * dimy
 
             if remove_spikes:
-                self._progress_display.update(20, "Removing spikes from spectra...", level='info')
-                time.sleep(1)
+                self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
+                report_every = max(1, total_pixels // 20)
+                count = 0
+                for i in range(dimx):
+                    for j in range(dimy):
+                        working_arr[i, j, :] = self._remove_spikes(working_arr[i, j, :])
+                        count += 1
+                        if count % report_every == 0:
+                            pct = 10 + int(35 * count / total_pixels)
+                            self._progress_display.update(
+                                pct, f"Removing spikes: {count}/{total_pixels} pixels", level='info'
+                            )
 
             if fitting:
-                self._progress_display.update(35, "Applying spectral fitting...", level='info')
-                time.sleep(1)
+                self._progress_display.update(45, "Spectral fitting will be applied on display.", level='info')
+                time.sleep(0.3)
 
             if multifitting:
-                self._progress_display.update(50, "Running multifitting — fitting power-law background to all pixels...", level='info')
-                time.sleep(1)
+                self._progress_display.update(50, "Running multifitting...", level='info')
+
                 def multifit_progress_callback(progress, total):
                     percent = 50 + int(40 * progress / total)
-                    self._progress_display.update(percent, f"Processed {progress}/{total} pixels", level='info')
+                    self._progress_display.update(
+                        percent, f"Multifitting: {progress}/{total} pixels", level='info'
+                    )
+
                 try:
                     fit_range = tuple(self._range_slider.value) if fitting and self._range_slider is not None else None
                     mf = MultiFit(
-                        self._dataset,
+                        working_arr,
                         model=lmfit.models.PowerLawModel,
                         Eloss_x=self._e_axis,
                         fit_range=fit_range,
                     ).run(mode='subtracted', progress_callback=multifit_progress_callback)
-                    fitted_ds = mf.to_dataset()
-                    self._multifit_electron_count_data = fitted_ds['ElectronCount']
+                    working_arr = mf.get_fitted_data()
                 except Exception:
-                    self._multifit_electron_count_data = None
-            else:
-                self._multifit_electron_count_data = None
+                    pass
 
             self._progress_display.update(90, "Finalizing...", level='info')
+
+            preprocessed_da = xr.DataArray(
+                working_arr,
+                dims=self._electron_count_data.dims,
+                coords=self._electron_count_data.coords,
+            )
+            self._preprocessed_electron_count = preprocessed_da
+            try:
+                CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
+            except Exception:
+                pass
+
             self._preprocessors_applied = True
             self._current_y_range = None
             self._current_y_autorange = True
-            time.sleep(1)
-
+            time.sleep(0.5)
             self._progress_display.completion("Preprocessors applied successfully!")
             time.sleep(2)
 
         except Exception as e:
             self._progress_display.error(f"Processing failed: {str(e)}")
             self._preprocessors_applied = False
-            self._multifit_electron_count_data = None
+            self._preprocessed_electron_count = None
             if self._apply_preprocessors_button is not None:
                 self._apply_preprocessors_button.toggle()
             time.sleep(2)
@@ -540,7 +570,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_display_raw_data(self):
         """Stop applying preprocessors and revert paneB to raw spectrum."""
         self._preprocessors_applied = False
-        self._multifit_electron_count_data = None
+        self._preprocessed_electron_count = None
+        try:
+            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+        except Exception:
+            pass
         self._current_y_range = None
         self._current_y_autorange = True
         self._refresh_paneB()
@@ -664,7 +698,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch_watcher = None
         self._apply_preprocessors_button = None
         self._preprocessors_applied = False
-        self._multifit_electron_count_data = None
+        self._preprocessed_electron_count = None
         self._main_ref = None
         self._plots_tab_ref = None
 
