@@ -41,10 +41,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Widget placeholders (filled by _setup_widgets, called after super)
         self._range_slider = pn.widgets.EditableRangeSlider()
         self._range_slider_watcher = None
-        self._fitting_switch = None
+        self._fitting_switch = pn.widgets.Switch()
         self._fitting_switch_watcher = None
         self._multifit_link_pane = None
-        self.remove_spikes_checkbox = None
+        
+        self._remove_spikes_switch = pn.widgets.Switch()
+        self._remove_spikes_watcher = None
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
@@ -122,9 +124,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             styles={'height': '30px', 'max-height': '30px', 'display': 'flex',
                     'align-items': 'center', 'justify-content': 'center', 'margin': '0px'}
         )
-
-        self.remove_spikes_checkbox = pn.widgets.Checkbox(name="Remove Spikes", value=False)
-        self.remove_spikes_checkbox.param.watch(self._on_remove_spikes_changed, 'value')
+        
+        self._remove_spikes_watcher = self._remove_spikes_switch.param.watch(
+            self._on_remove_spikes_changed, 'value'
+        )
 
     # --- Fitting Details SimpleDetails builder ---
     def create_fitting_details(self) -> SimpleDetails:
@@ -167,7 +170,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             remove_spikes_label,
             self._remove_spikes_switch,
             sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["background-container"],
             margin=(0, 0, 8, 0),
             styles={'display': 'flex', 'align-items': 'center',
                     'justify-content': 'center', 'padding': '0px'}
@@ -181,7 +183,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
 
     def _build_multifit_html(self, url: str | None) -> str:
-        if url and self._fitting_switch is not None and self._fitting_switch.value:
+        if url and self._fitting_switch:
             return (
                 f'<a href="{url}" target="_blank" '
                 f'style="display:flex;justify-content:center;text-align:center;width:100%;padding:8px;background-color:#f0ad4e;color:white;font-weight:bold;border-radius:4px;box-sizing:border-box;text-decoration:none;">'
@@ -200,7 +202,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if rs is None:
             self._multifit_link_pane.object = self._build_multifit_html(None)
             return
-        min_val, max_val = rs.value
+        min_val, max_val = getattr(rs, 'value', (None, None))
         location = getattr(pn.state, 'location', None)
         port = getattr(location, 'port', 5006)
         hostname = getattr(location, 'hostname', 'localhost')
@@ -270,8 +272,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = get_pixel_spectrum(self._electron_count_data, point)
             fig = self._figB_hover(point)
 
-        if spec is not None and getattr(self, 'remove_spikes_checkbox', None) is not None:
-            if self.remove_spikes_checkbox.value:
+        if spec is not None and getattr(self, '_remove_spikes_switch', None) is not None:
+            if self._remove_spikes_switch.value:
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, title)
         if self._fitting_active and spec is not None:
@@ -286,15 +288,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         Unified logic to update paneB with the current region or hover point, applying fitting if active.
         """
-        remove_spikes = getattr(self, 'remove_spikes_checkbox', None) is not None and self.remove_spikes_checkbox.value
+        remove_spikes = getattr(self, '_remove_spikes_switch', None) is not None and self._remove_spikes_switch.value
 
         if self._region_pairs:
             res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
             spec = None
+            n_points = 0
             if res is not None:
                 spec, n_points = res
             fig = self._figB_region(self._region_pairs)
-            if spec is not None and remove_spikes:
+            if spec is not None and self._remove_spikes_switch.value:
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"ROI \u2014 sum (points={n_points})")
             if self._fitting_active and spec is not None:
@@ -310,7 +313,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             i, j = round(point['y']), round(point['x'])
             spec = get_pixel_spectrum(self._electron_count_data, point)
             fig = self._figB_hover(point)
-            if spec is not None and remove_spikes:
+            if spec is not None and self._remove_spikes_switch.value:
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"Hover (x={j}, y={i})")
             if self._fitting_active and spec is not None:
@@ -325,7 +328,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         default_point = {"x": 0, "y": 0}
         spec = get_pixel_spectrum(self._electron_count_data, default_point)
         fig = self._figB_hover(default_point)
-        if spec is not None and remove_spikes:
+        if spec is not None and self._remove_spikes_switch.value:
             spec = self._remove_spikes(spec)
             fig = self._build_spike_removed_curve(spec, "Hover (x=0, y=0)")
         if self._fitting_active and spec is not None:
@@ -394,8 +397,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # If there is no hover timestamp, ensure selection is shown and timer stopped
         if self._last_hover_ts is None:
             stop_pc(self._pc)
-            remove_spikes = getattr(self, 'remove_spikes_checkbox', None) is not None and self.remove_spikes_checkbox.value
-            if self._fitting_active or remove_spikes:
+            if getattr(self, '_remove_spikes_switch', None):
+                remove_spikes = getattr(self, '_remove_spikes_switch', None) and self._remove_spikes_switch.value
+            if self._fitting_active or self._remove_spikes_switch.value:
                 self._refresh_paneB()
             return
 
@@ -486,8 +490,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Null out widget references
         self._range_slider = pn.widgets.EditableRangeSlider()
-        self._fitting_switch = None
+        self._fitting_switch = pn.widgets.Switch()
         self._multifit_link_pane = None
-        self.remove_spikes_checkbox = None
+        self._remove_spikes_switch = pn.widgets.Switch()
 
         super().cleanup()
