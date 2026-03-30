@@ -497,6 +497,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if multifitting:
                 self._progress_display.update(50, "Running multifitting — fitting power-law background to all pixels...", level='info')
                 time.sleep(1)
+                def multifit_progress_callback(progress, total):
+                    percent = 50 + int(40 * progress / total)
+                    self._progress_display.update(percent, f"Processed {progress}/{total} pixels", level='info')
                 try:
                     fit_range = tuple(self._range_slider.value) if fitting and self._range_slider is not None else None
                     mf = MultiFit(
@@ -504,7 +507,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                         model=lmfit.models.PowerLawModel,
                         Eloss_x=self._e_axis,
                         fit_range=fit_range,
-                    ).run(mode='subtracted')
+                    ).run(mode='subtracted', progress_callback=multifit_progress_callback)
                     fitted_ds = mf.to_dataset()
                     self._multifit_electron_count_data = fitted_ds['ElectronCount']
                 except Exception:

@@ -13,19 +13,19 @@ except Exception:
     xr = None
     _HAS_XARRAY = False
 
-def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=1000):
+def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=1000, progress_callback=None):
     """
     Pixel-wise multifit using lmfit models with basic masking.
 
     Parameters:
-      data (np.ndarray): 3D array (dimx, dimy, spectrum_length)
-      model: lmfit model instance or class
-      Eloss_x (array-like): 1D energy-loss axis
-      fit_range (tuple or None): (xmin, xmax) to restrict fitting range (in same units as Eloss_x)
-      progress_every (int): print progress every N fits (0 to disable)
-      
+        data (np.ndarray): 3D array (dimx, dimy, spectrum_length)
+        model: lmfit model instance or class
+        Eloss_x (array-like): 1D energy-loss axis
+        fit_range (tuple or None): (xmin, xmax) to restrict fitting range (in same units as Eloss_x)
+        progress_every (int): print progress every N fits (0 to disable)
+        progress_callback (callable): optional callback(progress, total) for progress updates
     Returns:
-      List of fit result objects (or None for skipped pixels)
+        List of fit result objects (or None for skipped pixels)
     """
     import numpy as _np
     from inspect import isclass as _isclass
@@ -61,6 +61,7 @@ def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=
     progress = 0
 
     # Default: serial execution (preserve original behavior)
+    total = dimx * dimy
     for i in range(dimx):
         for j in range(dimy):
             y = _np.asarray(data_arr[i, j, :])
@@ -92,7 +93,8 @@ def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=
 
             progress += 1
             if progress_every and (progress % progress_every == 0):
-                print(f"  Processed {progress}/{dimx*dimy} pixels")
+                if progress_callback:
+                    progress_callback(progress, total)
 
     return results
 
@@ -143,11 +145,13 @@ def _fit_worker(args):
         return None
 
 
-def multifit_parallel(data, model, Eloss_x=None, fit_range=None, workers=None, progress_every=1000):
+def multifit_parallel(data, model, Eloss_x=None, fit_range=None, workers=None, progress_every=1000, progress_callback=None):
     """
     Parallel implementation of multifit that uses ProcessPoolExecutor.
     Returns a list of dict results (or None) in the same order as the pixels.
+    Accepts optional progress_callback(progress, total) for progress updates.
     """
+    # progress_callback is now a real argument, not via frame inspection
     import numpy as _np
     data_arr = _np.asarray(data)
     if data_arr.ndim != 3:
@@ -169,6 +173,7 @@ def multifit_parallel(data, model, Eloss_x=None, fit_range=None, workers=None, p
     with ProcessPoolExecutor(max_workers=max_workers) as exe:
         future_to_index = {exe.submit(_fit_worker, tasks[idx]): idx for idx in range(len(tasks))}
         processed = 0
+        total = len(tasks)
         for fut in as_completed(future_to_index):
             idx = future_to_index[fut]
             try:
@@ -178,7 +183,8 @@ def multifit_parallel(data, model, Eloss_x=None, fit_range=None, workers=None, p
             results[idx] = res
             processed += 1
             if progress_every and (processed % progress_every == 0):
-                print(f"  Processed {processed}/{len(tasks)} pixels (parallel)")
+                if progress_callback:
+                    progress_callback(processed, total)
 
     return results
 
@@ -346,7 +352,7 @@ class MultiFit:
             eloss_values = np.array([])
         self._coords = {'Eloss': AxisArray(eloss_values)}
 
-    def run(self, mode='subtracted', use_parallel=False, workers=None):
+    def run(self, mode='subtracted', use_parallel=False, workers=None, progress_callback=None):
         """
         Execute the multifit and generate fitted_data.
         
@@ -377,9 +383,9 @@ class MultiFit:
         # By default run serial implementation for compatibility
         if use_parallel:
             # Use parallel implementation that returns lightweight dicts
-            self.results = multifit_parallel(self.data, self.model, Eloss_x=self.Eloss_x, fit_range=self.fit_range, workers=workers)
+            self.results = multifit_parallel(self.data, self.model, Eloss_x=self.Eloss_x, fit_range=self.fit_range, workers=workers, progress_every=1000, progress_callback=progress_callback)
         else:
-            self.results = multifit_modified(self.data, self.model, Eloss_x=self.Eloss_x, fit_range=self.fit_range)
+            self.results = multifit_modified(self.data, self.model, Eloss_x=self.Eloss_x, fit_range=self.fit_range, progress_every=1000, progress_callback=progress_callback)
         self.fitted_data = create_data_from_multifit(self.results, self.data, mode=mode)
         return self
 

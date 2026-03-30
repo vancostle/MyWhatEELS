@@ -8,14 +8,14 @@ class HomePageRightSidebar(pn.Column):
     def __init__(self, model, **kwargs):
         self._model = model
 
+        self._remove_spikes_details_placeholder = pn.Column(sizing_mode='stretch_both', margin=(0, 0, 8, 0))
         self._fitting_details_placeholder = pn.Column(sizing_mode='stretch_both', margin=(0, 0, 8, 0))
-        self._remove_spikes_details_placeholder = pn.Column(sizing_mode='stretch_both')
         self._multifitting_details_placeholder = pn.Column(sizing_mode='stretch_both')
         self._preprocessors_button_placeholder = pn.Column(sizing_mode='stretch_width')
 
         super().__init__(
-            self._fitting_details_placeholder,
             self._remove_spikes_details_placeholder,
+            self._fitting_details_placeholder,
             self._multifitting_details_placeholder,
             self._preprocessors_button_placeholder,
             **kwargs
