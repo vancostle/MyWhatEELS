@@ -47,9 +47,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         
         self._remove_spikes_switch = pn.widgets.Switch()
         self._remove_spikes_watcher = None
+
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_threshold_slider_watcher = None
         self._spike_threshold = 5.0
+        
+        self._multifitting_switch = pn.widgets.Switch()
+        self._multifitting_switch_watcher = None
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
@@ -131,12 +135,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             start=1.0,
             end=20.0,
             step=0.1,
-            value=5.0,
+            value=self._spike_threshold,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
         )
         self._spike_threshold_slider_watcher = self._spike_threshold_slider.param.watch(self._on_spike_threshold_changed, 'value')
         self._spike_threshold = 5.0
+        
+        self._multifitting_switch = pn.widgets.Switch(
+            name="Multifitting",
+            value=False,
+            css_classes=["background-switch"],
+            styles={'height': '30px', 'max-height': '30px', 'display': 'flex',
+                    'align-items': 'center', 'justify-content': 'center', 'margin': '0px'}
+        )
+        
+        self._multifitting_switch_watcher = self._multifitting_switch.param.watch(
+            self._on_multifitting_switch_changed, 'value'
+        )
 
     # --- Fitting Details SimpleDetails builder ---
     def create_fitting_details(self) -> SimpleDetails:
@@ -192,6 +208,35 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             content=pn.Column(
                 remove_spikes_container,
                 threshold_slider_container,
+            ),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        
+    def create_multifitting_details(self) -> SimpleDetails:
+        """Build and return the Multifitting SimpleDetails block for the sidebar."""
+        
+        multiffitting_label = pn.pane.Markdown(
+            "## Multifitting",
+            margin=0,
+            styles={'padding': '0px', 'height': '30px', 'display': 'flex',
+                    'align-items': 'center', 'justify-content': 'center'}
+        )
+        
+        multifitting_switch_container = pn.Row(
+            multiffitting_label,
+            self._multifitting_switch,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 0, 8, 0),
+            styles={'display': 'flex', 'align-items': 'center',
+                    'justify-content': 'center', 'padding': '0px'}
+        )
+        
+        return SimpleDetails(
+            title="Multifitting",
+            content=pn.Column(
+                multifitting_switch_container,
+                self._multifit_link_pane,
+                sizing_mode=self._STRETCH_WIDTH,
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
@@ -399,8 +444,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_spike_threshold_changed(self, event):
         self._spike_threshold = event.new
-        if self._remove_spikes_switch.value:
+        remove_spikes_switch = getattr(self, '_remove_spikes_switch', None)
+        if remove_spikes_switch is not None and remove_spikes_switch.value:
             self._refresh_paneB()
+            
+    def _on_multifitting_switch_changed(self, event):
+        """Handle multifitting switch toggle: update state and refresh paneB."""
+        # Multifitting logic is currently handled in the multifitting page, so here we just trigger a paneB refresh to update the link state.
+        self._update_multifit_url()
+        self._refresh_paneB()
 
     # --- Callbacks setup (adds inactivity periodic callback on top of base) ---
     @override
@@ -519,5 +571,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_link_pane = None
         self._remove_spikes_switch = pn.widgets.Switch()
         self._spike_threshold_slider = pn.widgets.FloatSlider()
+        self._multifitting_switch = pn.widgets.Switch()
+        self._multifitting_switch_watcher = None
 
         super().cleanup()

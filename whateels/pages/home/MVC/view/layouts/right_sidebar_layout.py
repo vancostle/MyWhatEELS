@@ -11,6 +11,7 @@ class HomePageRightSidebar(pn.Column):
 
         self._fitting_details_placeholder = pn.Column(sizing_mode='stretch_both', margin=(0, 0, 8, 0))
         self._remove_spikes_details_placeholder = pn.Column(sizing_mode='stretch_both')
+        self._multifitting_details_placeholder = pn.Column(sizing_mode='stretch_both')
         
         self._apply_active_preprocessors_toggle_button = ToggleButton(
             initial_state=False,
@@ -25,6 +26,7 @@ class HomePageRightSidebar(pn.Column):
         super().__init__(
             self._fitting_details_placeholder,
             self._remove_spikes_details_placeholder,
+            self._multifitting_details_placeholder,
             self._apply_active_preprocessors_toggle_button,
             **kwargs
         )
@@ -40,3 +42,9 @@ class HomePageRightSidebar(pn.Column):
         self._remove_spikes_details_placeholder.clear()
         if details is not None:
             self._remove_spikes_details_placeholder.append(details)
+            
+    def set_multifitting_details(self, details) -> None:
+        """Replace the multifitting section with the SimpleDetails provided by the active plot."""
+        self._multifitting_details_placeholder.clear()
+        if details is not None:
+            self._multifitting_details_placeholder.append(details)
