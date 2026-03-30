@@ -271,9 +271,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             title = f"Hover (x={j}, y={i})"
             spec = get_pixel_spectrum(self._electron_count_data, point)
             fig = self._figB_hover(point)
+            
+        remove_spikes_switch = getattr(self, '_remove_spikes_switch', None)
 
-        if spec is not None and getattr(self, '_remove_spikes_switch', None) is not None:
-            if self._remove_spikes_switch.value:
+        if spec is not None and remove_spikes_switch is not None:
+            if remove_spikes_switch.value:
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, title)
         if self._fitting_active and spec is not None:
@@ -288,7 +290,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         Unified logic to update paneB with the current region or hover point, applying fitting if active.
         """
-        remove_spikes = getattr(self, '_remove_spikes_switch', None) is not None and self._remove_spikes_switch.value
 
         if self._region_pairs:
             res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
@@ -297,7 +298,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if res is not None:
                 spec, n_points = res
             fig = self._figB_region(self._region_pairs)
-            if spec is not None and self._remove_spikes_switch.value:
+
+            remove_spikes_switch = getattr(self, '_remove_spikes_switch', None)
+            if spec is not None and remove_spikes_switch is not None and remove_spikes_switch.value:
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"ROI \u2014 sum (points={n_points})")
             if self._fitting_active and spec is not None:
@@ -313,7 +316,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             i, j = round(point['y']), round(point['x'])
             spec = get_pixel_spectrum(self._electron_count_data, point)
             fig = self._figB_hover(point)
-            if spec is not None and self._remove_spikes_switch.value:
+            remove_spikes_switch = getattr(self, '_remove_spikes_switch', None)
+            if spec is not None and remove_spikes_switch is not None and remove_spikes_switch.value:
                 spec = self._remove_spikes(spec)
                 fig = self._build_spike_removed_curve(spec, f"Hover (x={j}, y={i})")
             if self._fitting_active and spec is not None:
@@ -328,7 +332,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         default_point = {"x": 0, "y": 0}
         spec = get_pixel_spectrum(self._electron_count_data, default_point)
         fig = self._figB_hover(default_point)
-        if spec is not None and self._remove_spikes_switch.value:
+        remove_spikes_switch = getattr(self, '_remove_spikes_switch', None)
+        if spec is not None and remove_spikes_switch is not None and remove_spikes_switch.value:
             spec = self._remove_spikes(spec)
             fig = self._build_spike_removed_curve(spec, "Hover (x=0, y=0)")
         if self._fitting_active and spec is not None:
@@ -374,8 +379,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_remove_spikes_changed(self, event):
         """Refresh paneB immediately when the Remove Spikes checkbox is toggled."""
         self._refresh_paneB()
-
-
+    
     # --- Callbacks setup (adds inactivity periodic callback on top of base) ---
     @override
     def _setup_callbacks(self):
@@ -397,9 +401,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # If there is no hover timestamp, ensure selection is shown and timer stopped
         if self._last_hover_ts is None:
             stop_pc(self._pc)
-            if getattr(self, '_remove_spikes_switch', None):
-                remove_spikes = getattr(self, '_remove_spikes_switch', None) and self._remove_spikes_switch.value
-            if self._fitting_active or self._remove_spikes_switch.value:
+            remove_spikes_switch = getattr(self, '_remove_spikes_switch', None)
+            if self._fitting_active or (remove_spikes_switch is not None and remove_spikes_switch.value):
                 self._refresh_paneB()
             return
 
