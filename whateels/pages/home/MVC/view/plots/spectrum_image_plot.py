@@ -351,20 +351,28 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if res is not None:
                 spec, n_points = res
                 title = f"ROI — sum (points={n_points})"
-            fig = self._figB_region(region_pairs)
+            if self._preprocessors_applied and spec is not None:
+                fig = self._build_spectrum_curve(spec, title)
+                if self._fitting_active:
+                    try:
+                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                    except Exception:
+                        pass
+            else:
+                fig = self._figB_region(region_pairs)
         elif point is not None:
             i, j = round(point['y']), round(point['x'])
             title = f"Hover (x={j}, y={i})"
             spec = get_pixel_spectrum(self._get_display_data(), point)
-            fig = self._figB_hover(point)
-            
-        if self._preprocessors_applied and spec is not None:
-            fig = self._build_spectrum_curve(spec, title)
-            if self._fitting_active:
-                try:
-                    fig = apply_fitting(fig, self._energy, spec, self._range_slider)
-                except Exception:
-                    pass
+            if self._preprocessors_applied and spec is not None:
+                fig = self._build_spectrum_curve(spec, title)
+                if self._fitting_active:
+                    try:
+                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                    except Exception:
+                        pass
+            else:
+                fig = self._figB_hover(point)
         self._update_paneB(fig)
 
     # --- Helper methods now imported from utils/plot_helpers.py ---
@@ -376,48 +384,60 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         apply_preprocessors = self._preprocessors_applied
 
         if self._region_pairs:
-            res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), self._region_pairs)
             spec = None
             n_points = 0
-            if res is not None:
-                spec, n_points = res
-            fig = self._figB_region(self._region_pairs)
-            if apply_preprocessors and spec is not None:
-                fig = self._build_spectrum_curve(spec, f"ROI — sum (points={n_points})")
-                if self._fitting_active:
-                    try:
-                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
-                    except Exception:
-                        pass
+            if apply_preprocessors:
+                res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), self._region_pairs)
+                if res is not None:
+                    spec, n_points = res
+                if spec is not None:
+                    fig = self._build_spectrum_curve(spec, f"ROI — sum (points={n_points})")
+                    if self._fitting_active:
+                        try:
+                            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                        except Exception:
+                            pass
+                else:
+                    fig = self._figB_region(self._region_pairs)
+            else:
+                fig = self._figB_region(self._region_pairs)
             self._update_paneB(fig)
             return
 
         if self._last_hover_point is not None:
             point = self._last_hover_point
             i, j = round(point['y']), round(point['x'])
-            spec = get_pixel_spectrum(self._get_display_data(), point)
-            fig = self._figB_hover(point)
-            if apply_preprocessors and spec is not None:
-                fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
-                if self._fitting_active:
-                    try:
-                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
-                    except Exception:
-                        pass
+            if apply_preprocessors:
+                spec = get_pixel_spectrum(self._get_display_data(), point)
+                if spec is not None:
+                    fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
+                    if self._fitting_active:
+                        try:
+                            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                        except Exception:
+                            pass
+                else:
+                    fig = self._figB_hover(point)
+            else:
+                fig = self._figB_hover(point)
             self._update_paneB(fig)
             return
 
         # No hover yet — use default pixel (0, 0)
         default_point = {"x": 0, "y": 0}
-        spec = get_pixel_spectrum(self._get_display_data(), default_point)
-        fig = self._figB_hover(default_point)
-        if apply_preprocessors and spec is not None:
-            fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
-            if self._fitting_active:
-                try:
-                    fig = apply_fitting(fig, self._energy, spec, self._range_slider)
-                except Exception:
-                    pass
+        if apply_preprocessors:
+            spec = get_pixel_spectrum(self._get_display_data(), default_point)
+            if spec is not None:
+                fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
+                if self._fitting_active:
+                    try:
+                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                    except Exception:
+                        pass
+            else:
+                fig = self._figB_hover(default_point)
+        else:
+            fig = self._figB_hover(default_point)
         self._update_paneB(fig)
         
     def _update_paneB(self, fig):
