@@ -536,32 +536,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
             if remove_spikes:
                 self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
-                from concurrent.futures import ProcessPoolExecutor, as_completed
+                from scipy.ndimage import median_filter
                 threshold = self._spike_threshold
                 window = 5
-                tasks = [(working_arr[i, j, :].copy(), threshold, window) for i in range(dimx) for j in range(dimy)]
-                report_every = max(1, total_pixels // 20)
-                results = [None] * total_pixels
-                with ProcessPoolExecutor() as executor:
-                    future_to_idx = {executor.submit(_spike_removal_worker, tasks[idx]): idx for idx in range(total_pixels)}
-                    count = 0
-                    for fut in as_completed(future_to_idx):
-                        idx = future_to_idx[fut]
-                        try:
-                            result = fut.result()
-                        except Exception:
-                            result = tasks[idx][0]  # fallback to original spectrum
-                        results[idx] = result
-                        count += 1
-                        if count % report_every == 0:
-                            pct = 10 + int(35 * count / total_pixels)
-                            self._progress_display.update(
-                                pct, f"Removing spikes: {count}/{total_pixels} pixels", level='info'
-                            )
-                for idx, spec in enumerate(results):
-                    i = idx // dimy
-                    j = idx % dimy
-                    working_arr[i, j, :] = spec
+                rolling_median = median_filter(working_arr, size=(1, 1, window), mode='nearest')
+                abs_dev = np.abs(working_arr - rolling_median)
+                mad = median_filter(abs_dev, size=(1, 1, window), mode='nearest')
+                spike_mask = (mad > 1e-12) & (abs_dev > threshold * mad)
+                working_arr[spike_mask] = rolling_median[spike_mask]
+                self._progress_display.update(44, f"Spike removal complete ({spike_mask.sum()} spikes removed).", level='info')
 
             if fitting:
                 self._progress_display.update(45, "Spectral fitting will be applied on display.", level='info')
