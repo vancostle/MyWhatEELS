@@ -20,6 +20,25 @@ if TYPE_CHECKING:
     from ...model import HomePageModel
     from xarray import Dataset
 
+
+def _spike_removal_worker(args):
+    """Module-level worker for parallel spike removal (must be picklable for ProcessPoolExecutor)."""
+    spectrum, threshold, window = args
+    if spectrum is None or len(spectrum) < window:
+        return spectrum
+    half = window // 2
+    filtered = spectrum.copy()
+    padded = np.pad(spectrum, half, mode='edge')
+    for i in range(len(spectrum)):
+        local = padded[i:i + window]
+        median = np.median(local)
+        mad = np.median(np.abs(local - median))
+        if mad < 1e-12:
+            continue
+        if abs(spectrum[i] - median) > threshold * mad:
+            filtered[i] = median
+    return filtered
+
 class SpectrumImagePlot(BaseSpectrumImagePlot):
     """
     Visualizador de Spectrum Image usando HoloViews + Panel (backend Bokeh).
@@ -497,17 +516,32 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
             if remove_spikes:
                 self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
+                from concurrent.futures import ProcessPoolExecutor, as_completed
+                threshold = self._spike_threshold
+                window = 5
+                tasks = [(working_arr[i, j, :].copy(), threshold, window) for i in range(dimx) for j in range(dimy)]
                 report_every = max(1, total_pixels // 20)
-                count = 0
-                for i in range(dimx):
-                    for j in range(dimy):
-                        working_arr[i, j, :] = self._remove_spikes(working_arr[i, j, :])
+                results = [None] * total_pixels
+                with ProcessPoolExecutor() as executor:
+                    future_to_idx = {executor.submit(_spike_removal_worker, tasks[idx]): idx for idx in range(total_pixels)}
+                    count = 0
+                    for fut in as_completed(future_to_idx):
+                        idx = future_to_idx[fut]
+                        try:
+                            result = fut.result()
+                        except Exception:
+                            result = tasks[idx][0]  # fallback to original spectrum
+                        results[idx] = result
                         count += 1
                         if count % report_every == 0:
                             pct = 10 + int(35 * count / total_pixels)
                             self._progress_display.update(
                                 pct, f"Removing spikes: {count}/{total_pixels} pixels", level='info'
                             )
+                for idx, spec in enumerate(results):
+                    i = idx // dimy
+                    j = idx % dimy
+                    working_arr[i, j, :] = spec
 
             if fitting:
                 self._progress_display.update(45, "Spectral fitting will be applied on display.", level='info')
