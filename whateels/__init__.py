@@ -57,7 +57,6 @@ class App:
             "/metadata-details": _lazy('whateels.pages.metadata', 'Metadata'),
             "/clustering": _lazy('whateels.pages.clustering', 'Clustering'),
             "/clustering-2": _lazy('whateels.pages.clustering_2', 'Clustering2Page'),
-            "/multifit-details": _lazy('whateels.pages.multifitting', 'MultiFitting'),
             "/quantification": _lazy('whateels.pages.quantification', 'Quantification'),
             "/fitting": _lazy('whateels.pages.fitting', 'Fitting'),
         }

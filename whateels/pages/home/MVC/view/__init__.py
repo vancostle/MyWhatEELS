@@ -119,6 +119,7 @@ class HomePageView:
                     self._right_sidebar.set_fitting_details(chosen_plot.create_fitting_details())
                     self._right_sidebar.set_remove_spikes_details(chosen_plot.create_remove_spikes_details())
                     self._right_sidebar.set_multifitting_details(chosen_plot.create_multifitting_details())
+                    self._right_sidebar.set_preprocessors_button(chosen_plot.create_preprocessors_button())
                 
                 visualizer_plots = chosen_plot.create_plots()
                 

@@ -1,5 +1,4 @@
 import panel as pn
-from whateels.components import ToggleButton
 
 class HomePageRightSidebar(pn.Column):
     """
@@ -12,22 +11,13 @@ class HomePageRightSidebar(pn.Column):
         self._fitting_details_placeholder = pn.Column(sizing_mode='stretch_both', margin=(0, 0, 8, 0))
         self._remove_spikes_details_placeholder = pn.Column(sizing_mode='stretch_both')
         self._multifitting_details_placeholder = pn.Column(sizing_mode='stretch_both')
-        
-        self._apply_active_preprocessors_toggle_button = ToggleButton(
-            initial_state=False,
-            states={
-                "on": {"label": 'Display Raw Data', "on_click": (lambda: print("On clicked")), "button_type": 'warning'},
-                "off": {"label": 'Apply Active Preprocessors', "on_click": (lambda: print("Off clicked")), "button_type": 'success'}
-            },
-            sizing_mode='stretch_width',
-            margin=(8, 0, 0, 0),
-        )
+        self._preprocessors_button_placeholder = pn.Column(sizing_mode='stretch_width')
 
         super().__init__(
             self._fitting_details_placeholder,
             self._remove_spikes_details_placeholder,
             self._multifitting_details_placeholder,
-            self._apply_active_preprocessors_toggle_button,
+            self._preprocessors_button_placeholder,
             **kwargs
         )
 
@@ -48,3 +38,10 @@ class HomePageRightSidebar(pn.Column):
         self._multifitting_details_placeholder.clear()
         if details is not None:
             self._multifitting_details_placeholder.append(details)
+
+    def set_preprocessors_button(self, button) -> None:
+        """Replace the preprocessors button with the ToggleButton provided by the active plot."""
+        self._preprocessors_button_placeholder.clear()
+        if button is not None:
+            self._preprocessors_button_placeholder.append(button)
+
