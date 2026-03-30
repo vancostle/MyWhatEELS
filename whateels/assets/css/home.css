@@ -82,14 +82,9 @@ p.range-label {
     justify-content: space-between;
 }
 
-.background-fitting-switch {
+.background-switch {
     display: grid;
     place-content: center;
-}
-
-.background-fitting-container {
-    max-height: 30px;
-    height: 30px;
 }
 
 #fitting {

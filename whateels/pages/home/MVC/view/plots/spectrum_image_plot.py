@@ -68,7 +68,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         right_column = pn.Column(
             self.paneB,
-            self.remove_spikes_checkbox,
             align='center',
             margin=0
         )
@@ -102,7 +101,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_switch = pn.widgets.Switch(
             name="Fitting",
             value=False,
-            css_classes=["background-fitting-switch"],
+            css_classes=["background-switch"],
             styles={'height': '30px', 'max-height': '30px', 'display': 'flex',
                     'align-items': 'center', 'justify-content': 'center', 'margin': '0px'}
         )
@@ -114,6 +113,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._build_multifit_html(None),
             sizing_mode=self._STRETCH_WIDTH,
             margin=(8, 0, 0, 0),
+        )
+        
+        self._remove_spikes_switch = pn.widgets.Switch(
+            name="Remove Spikes",
+            value=False,
+            css_classes=["background-switch"],
+            styles={'height': '30px', 'max-height': '30px', 'display': 'flex',
+                    'align-items': 'center', 'justify-content': 'center', 'margin': '0px'}
         )
 
         self.remove_spikes_checkbox = pn.widgets.Checkbox(name="Remove Spikes", value=False)
@@ -132,18 +139,43 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             fitting_label,
             self._fitting_switch,
             sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["background-fitting-container"],
+            css_classes=["background-container"],
             margin=(0, 0, 8, 0),
             styles={'display': 'flex', 'align-items': 'center',
                     'justify-content': 'center', 'padding': '0px'}
         )
         return SimpleDetails(
-            title="Fitting Information",
+            title="Fitting Settings",
             content=pn.Column(
                 fitting_switch_container,
                 self._range_slider_container,
                 self._multifit_link_pane,
                 sizing_mode=self._STRETCH_WIDTH,
+            ),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        
+    def create_remove_spikes_details(self) -> SimpleDetails:
+        """Build and return the Remove Spikes SimpleDetails block for the sidebar."""
+        remove_spikes_label = pn.pane.Markdown(
+            "## Remove Spikes",
+            margin=0,
+            styles={'padding': '0px', 'height': '30px', 'display': 'flex',
+                    'align-items': 'center', 'justify-content': 'center'}
+        )
+        remove_spikes_container = pn.Row(
+            remove_spikes_label,
+            self._remove_spikes_switch,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["background-container"],
+            margin=(0, 0, 8, 0),
+            styles={'display': 'flex', 'align-items': 'center',
+                    'justify-content': 'center', 'padding': '0px'}
+        )
+        return SimpleDetails(
+            title="Remove Spikes Settings",
+            content=pn.Column(
+                remove_spikes_container,
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
