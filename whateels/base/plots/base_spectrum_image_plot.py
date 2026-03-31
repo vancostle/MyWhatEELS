@@ -41,7 +41,6 @@ class BaseSpectrumImagePlot(IPlot):
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
-    # TODO: Consider making paneA_select_tools a parameter for flexibility in subclasses (e.g., disable region selection in clustering visualizer)
     def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss', paneA_select_tools=['lasso_select', 'box_select']):
         """
         Initialize spectrum image visualizer.
@@ -55,10 +54,10 @@ class BaseSpectrumImagePlot(IPlot):
         self._paneA_select_tools = paneA_select_tools
 
         # Energy axis
-        self._e_axis: np.ndarray = self._dataset.coords[self._eloss_name].values
+        self._e_axis = self._dataset.coords[self._eloss_name].values
 
         # ElectronCount data cube
-        self._electron_count_data: "Dataset" = self._dataset.ElectronCount
+        self._electron_count_data = self._dataset.ElectronCount
 
         # Range state for paneB (to preserve zoom/pan)
         self._current_x_range = None
@@ -78,7 +77,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._pending_selection_ts = None
         self._SELECTION_DEBOUNCE_MS = 200
         self._debounce_pc = None
-        self._double_tap_stream: hv_streams.DoubleTap | None = None
+        self._double_tap_stream = None  # type: ignore
 
         # Image width — used for index → (row, col) mapping in _on_paneA_selected
         self._nx = 0
@@ -168,6 +167,12 @@ class BaseSpectrumImagePlot(IPlot):
             sizing_mode='stretch_width',
             margin=0,
         )
+        
+    def _get_display_data(self):
+        """Return the electron count data cube to use for display (can be overridden by subclasses)."""
+        if self._electron_count_data is None:
+            raise RuntimeError("Electron count data is not set. Make sure the dataset has an 'ElectronCount' attribute and is loaded correctly.")
+        return self._electron_count_data
 
     # --- Plot / Pane Setup (HoloViews) ---
     def _setup_plots(self):
@@ -175,7 +180,7 @@ class BaseSpectrumImagePlot(IPlot):
         Initialize paneA (heatmap + invisible selection layer) and paneB
         (Pipe/DynamicMap spectrum) using HoloViews.
         """
-        m_image_da = self._electron_count_data.sum(self._eloss_name)
+        m_image_da = self._get_display_data().sum(self._eloss_name)
         m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
         if m_image.ndim != 2:
             raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
@@ -186,11 +191,11 @@ class BaseSpectrumImagePlot(IPlot):
         # Energy axis
         try:
             energy = np.asarray(self._e_axis)
-            if energy.shape[0] != self._electron_count_data.shape[-1]:
-                energy = np.arange(self._electron_count_data.shape[-1])
+            if energy.shape[0] != self._get_display_data().shape[-1]:
+                energy = np.arange(self._get_display_data().shape[-1])
         except Exception:
-            energy = np.arange(self._electron_count_data.shape[-1])
-        self._energy: np.ndarray = energy
+            energy = np.arange(self._get_display_data().shape[-1])
+        self._energy = energy
 
         # Background heatmap
         img = hv.Image(
@@ -278,7 +283,7 @@ class BaseSpectrumImagePlot(IPlot):
         if not point:
             point = {"x": 0, "y": 0}
         i, j = round(point["y"]), round(point["x"])
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+        spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
         return hv.Curve(
             (self._energy, spec),
             kdims=['x'],
@@ -296,7 +301,7 @@ class BaseSpectrumImagePlot(IPlot):
 
     def _figB_region(self, pairs):
         """Return an hv.Curve for a region (summed spectrum)."""
-        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
+        res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), pairs)
         if res is None:
             return self._figB_hover({"x": 0, "y": 0})
         spec, n_points = res

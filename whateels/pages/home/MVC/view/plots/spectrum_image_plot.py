@@ -1,4 +1,3 @@
-
 import panel as pn
 import time
 import threading
@@ -426,6 +425,37 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Push the new element through the pipe — Bokeh updates data in-place
             # without rebuilding the whole model tree, avoiding the stale-reference warning.
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+            
+    def _refresh_paneA(self):
+        """Rebuild paneA (heatmap) using the current display data (raw or preprocessed)."""
+        m_image_da = self._get_display_data().sum(self._eloss_name)
+        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        if m_image.ndim != 2:
+            raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
+        ny, nx = m_image.shape
+        self._nx = nx
+        img = hv.Image(
+            (np.arange(nx), np.arange(ny), m_image),
+            kdims=['x', 'y'],
+            vdims=['Intensity'],
+        ).opts(
+            cmap='Greys_r',
+            colorbar=False,
+            xaxis=None,
+            yaxis=None,
+            invert_yaxis=True,
+            aspect='equal',
+            responsive=True,
+            shared_axes=False,
+        )
+        # Overlay: heatmap + selection layer
+        overlay = (img * self._selectors).opts(
+            hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False)
+        )
+        self._paneA_base_overlay = overlay
+        self._update_selection_overlay(self._region_pairs)
+        if self.paneA is not None:
+            self.paneA.object = overlay
 
     def _on_fitting_switch_changed(self, event) -> None:
         """Handle fitting switch toggle: update state and slider only — refresh is triggered by the button."""
@@ -560,7 +590,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
             except Exception:
                 pass
-
             self._preprocessors_applied = True
             self._current_y_range = None
             self._current_y_autorange = True
@@ -579,10 +608,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if self._main_ref is not None and self._plots_tab_ref is not None:
                 self._main_ref.update(self._plots_tab_ref)
             self._enable_sidebar_widgets()
+            self._refresh_paneA()  # <--- Add this line
             pn.state.execute(self._refresh_paneB)
 
     def _on_display_raw_data(self):
-        """Stop applying preprocessors and revert paneB to raw spectrum."""
+        """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image."""
         self._preprocessors_applied = False
         self._preprocessed_electron_count = None
         try:
@@ -591,6 +621,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             pass
         self._current_y_range = None
         self._current_y_autorange = True
+        self._refresh_paneA()  # <--- Add this line
         self._refresh_paneB()
 
     # --- Callbacks setup (adds inactivity periodic callback on top of base) ---
