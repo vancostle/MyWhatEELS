@@ -614,7 +614,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             pn.state.execute(self._refresh_paneB)
 
     def _on_display_raw_data(self):
-        """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image."""
+        """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
         self._preprocessors_applied = False
         self._preprocessed_electron_count = None
         try:
@@ -623,7 +623,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             pass
         self._current_y_range = None
         self._current_y_autorange = True
-        self._refresh_paneA()  # <--- Add this line
+        self._refresh_paneA()
+        # Restore selection overlay after paneA is refreshed
+        self._update_selection_overlay(self._region_pairs)
         self._refresh_paneB()
 
     # --- Callbacks setup (adds inactivity periodic callback on top of base) ---
