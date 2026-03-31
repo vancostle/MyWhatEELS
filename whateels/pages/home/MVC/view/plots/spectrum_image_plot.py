@@ -608,7 +608,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if self._main_ref is not None and self._plots_tab_ref is not None:
                 self._main_ref.update(self._plots_tab_ref)
             self._enable_sidebar_widgets()
-            self._refresh_paneA()  # <--- Add this line
+            self._refresh_paneA()
+            # Restore selection overlay after paneA is refreshed
+            self._update_selection_overlay(self._region_pairs)
             pn.state.execute(self._refresh_paneB)
 
     def _on_display_raw_data(self):
