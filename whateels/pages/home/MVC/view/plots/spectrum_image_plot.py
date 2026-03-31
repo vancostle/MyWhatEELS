@@ -1,3 +1,4 @@
+
 import panel as pn
 import time
 import threading
@@ -5,6 +6,7 @@ import numpy as np
 import holoviews as hv
 import lmfit
 import xarray as xr
+from scipy.ndimage import median_filter
 
 from whateels.helpers import SpectrumExtractor
 from whateels.helpers.fitting.multifitting import MultiFit
@@ -19,25 +21,6 @@ from typing import TYPE_CHECKING, override
 if TYPE_CHECKING:
     from ...model import HomePageModel
     from xarray import Dataset
-
-
-def _spike_removal_worker(args):
-    """Module-level worker for parallel spike removal (must be picklable for ProcessPoolExecutor)."""
-    spectrum, threshold, window = args
-    if spectrum is None or len(spectrum) < window:
-        return spectrum
-    half = window // 2
-    filtered = spectrum.copy()
-    padded = np.pad(spectrum, half, mode='edge')
-    for i in range(len(spectrum)):
-        local = padded[i:i + window]
-        median = np.median(local)
-        mad = np.median(np.abs(local - median))
-        if mad < 1e-12:
-            continue
-        if abs(spectrum[i] - median) > threshold * mad:
-            filtered[i] = median
-    return filtered
 
 class SpectrumImagePlot(BaseSpectrumImagePlot):
     """
@@ -284,13 +267,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _remove_spikes(self, spectrum, threshold=None, window=5):
         """
-        Spike removal using a rolling median with edge padding.
-        Replaces points that deviate from the local median by more than
-        'threshold' times the local MAD.
+        Vectorized spike removal using median_filter and MAD, applied to a 1D spectrum.
         Args:
-            spectrum:  1D numpy array
+            spectrum: 1D numpy array
             threshold: spike detection sensitivity (higher = less aggressive)
-            window:    number of points in the rolling window (must be odd)
+            window: number of points in the rolling window (must be odd)
         Returns:
             1D numpy array with spikes replaced by the local median
         """
@@ -298,17 +279,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             threshold = self._spike_threshold
         if spectrum is None or len(spectrum) < window:
             return spectrum
-        half = window // 2
+        # Apply median filter to get rolling median
+        rolling_median = median_filter(spectrum, size=window, mode='nearest')
+        abs_dev = np.abs(spectrum - rolling_median)
+        mad = median_filter(abs_dev, size=window, mode='nearest')
+        spike_mask = (mad > 1e-12) & (abs_dev > threshold * mad)
         filtered = spectrum.copy()
-        padded = np.pad(spectrum, half, mode='edge')
-        for i in range(len(spectrum)):
-            local = padded[i:i + window]
-            median = np.median(local)
-            mad = np.median(np.abs(local - median))
-            if mad < 1e-12:
-                continue  # flat region — no spike possible
-            if abs(spectrum[i] - median) > threshold * mad:
-                filtered[i] = median
+        filtered[spike_mask] = rolling_median[spike_mask]
         return filtered
 
     def _build_spectrum_curve(self, spec, title):
