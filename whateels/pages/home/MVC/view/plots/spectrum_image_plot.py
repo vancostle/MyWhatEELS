@@ -5,7 +5,8 @@ import numpy as np
 import holoviews as hv
 import lmfit
 import xarray as xr
-from scipy.ndimage import median_filter
+
+from numpy.lib.stride_tricks import sliding_window_view
 from whateels.helpers import SpectrumExtractor
 from whateels.helpers.fitting.multifitting import MultiFit
 from whateels.components import SplitJs, SimpleDetails, ToggleButton, ProgressDisplay
@@ -55,12 +56,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_threshold_slider_watcher = None
-        self._spike_threshold = 0.5
+        self._spike_threshold = 5.0
         self._spike_window_slider = pn.widgets.IntSlider()
         self._spike_window_slider_watcher = None
         self._spike_window = 5
         self._hover_throttle_ts = None
-        self._last_rendered_hover_pixel = None
         
         self._multifitting_switch = pn.widgets.Switch()
         self._multifitting_switch_watcher = None
@@ -285,7 +285,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             sizing_mode=self._STRETCH_WIDTH,
         )
 
-    def _remove_spikes(self, spectrum, threshold=None, window=None):
+    def _remove_spikes(self, spectrum, threshold=None, window=5):
         """
         Spike removal using a rolling median with edge padding.
         Replaces points that deviate from the local median by more than
@@ -299,16 +299,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         if threshold is None:
             threshold = self._spike_threshold
-        if window is None:
-            window = self._spike_window
         if spectrum is None or len(spectrum) < window:
             return spectrum
-        rolling_median = median_filter(spectrum, size=window, mode='nearest')
-        abs_dev = np.abs(spectrum - rolling_median)
-        mad = median_filter(abs_dev, size=window, mode='nearest')
-        spike_mask = (mad > 1e-12) & (abs_dev > threshold * mad)
+        half = window // 2
         filtered = spectrum.copy()
-        filtered[spike_mask] = rolling_median[spike_mask]
+        padded = np.pad(spectrum, half, mode='edge')
+        for i in range(len(spectrum)):
+            local = padded[i:i + window]
+            median = np.median(local)
+            mad = np.median(np.abs(local - median))
+            if mad < 1e-12:
+                continue  # flat region — no spike possible
+            if abs(spectrum[i] - median) > threshold * mad:
+                filtered[i] = median
         return filtered
 
     def _build_spectrum_curve(self, spec, title):
@@ -325,20 +328,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Rebuild an hv.Curve with spike-filtered spectrum, preserving the title."""
         filtered = self._remove_spikes(spec)
         return self._build_spectrum_curve(filtered, title)
-
-    def _build_processed_spectrum(self, spec, title):
-        """Apply active display-time processors (remove spikes, fitting) to a spectrum."""
-        if spec is None:
-            return None
-        if bool(self._remove_spikes_switch.value):
-            spec = self._remove_spikes(spec)
-        fig = self._build_spectrum_curve(spec, title)
-        if self._fitting_active:
-            try:
-                fig = apply_fitting(fig, self._energy, spec, self._range_slider)
-            except Exception:
-                pass
-        return fig
 
     def _get_display_data(self):
         """Return the electron count data cube to use for spectrum display.
@@ -366,7 +355,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec, n_points = res
                 title = f"ROI — sum (points={n_points})"
             if self._preprocessors_applied and spec is not None:
-                fig = self._build_processed_spectrum(spec, title)
+                fig = self._build_spectrum_curve(spec, title)
+                if self._fitting_active:
+                    try:
+                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                    except Exception:
+                        pass
             else:
                 fig = self._figB_region(region_pairs)
         elif point is not None:
@@ -374,7 +368,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             title = f"Hover (x={j}, y={i})"
             spec = get_pixel_spectrum(self._get_display_data(), point)
             if self._preprocessors_applied and spec is not None:
-                fig = self._build_processed_spectrum(spec, title)
+                fig = self._build_spectrum_curve(spec, title)
+                if self._fitting_active:
+                    try:
+                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                    except Exception:
+                        pass
             else:
                 fig = self._figB_hover(point)
         self._update_paneB(fig)
@@ -395,7 +394,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 if res is not None:
                     spec, n_points = res
                 if spec is not None:
-                    fig = self._build_processed_spectrum(spec, f"ROI — sum (points={n_points})")
+                    fig = self._build_spectrum_curve(spec, f"ROI — sum (points={n_points})")
+                    if self._fitting_active:
+                        try:
+                            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                        except Exception:
+                            pass
                 else:
                     fig = self._figB_region(self._region_pairs)
             else:
@@ -409,7 +413,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if apply_preprocessors:
                 spec = get_pixel_spectrum(self._get_display_data(), point)
                 if spec is not None:
-                    fig = self._build_processed_spectrum(spec, f"Hover (x={j}, y={i})")
+                    fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
+                    if self._fitting_active:
+                        try:
+                            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                        except Exception:
+                            pass
                 else:
                     fig = self._figB_hover(point)
             else:
@@ -422,7 +431,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if apply_preprocessors:
             spec = get_pixel_spectrum(self._get_display_data(), default_point)
             if spec is not None:
-                fig = self._build_processed_spectrum(spec, "Hover (x=0, y=0)")
+                fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
+                if self._fitting_active:
+                    try:
+                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                    except Exception:
+                        pass
             else:
                 fig = self._figB_hover(default_point)
         else:
@@ -487,20 +501,48 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._refresh_paneB()
 
     def _on_remove_spikes_changed(self, event):
-        """Update spikes controls and refresh current spectrum view."""
+        """Update threshold slider state — refresh is triggered by the button."""
         self._spike_threshold_slider.disabled = not event.new
         self._spike_window_slider.disabled = not event.new
-        self._refresh_paneB()
+        if self._preprocessors_applied:
+            # Threshold changed — cached preprocessing used the old value; must recompute
+            self._preprocessors_applied = False
+            self._preprocessed_electron_count = None
+            try:
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            except Exception:
+                pass
+            if self._apply_preprocessors_button is not None:
+                self._apply_preprocessors_button.toggle()
+            self._refresh_paneB()
 
     def _on_spike_threshold_changed(self, event):
         self._spike_threshold = event.new
-        self._last_rendered_hover_pixel = None
-        self._refresh_paneB()
+        if self._preprocessors_applied:
+            # Threshold changed — cached preprocessing used the old value; must recompute
+            self._preprocessors_applied = False
+            self._preprocessed_electron_count = None
+            try:
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            except Exception:
+                pass
+            if self._apply_preprocessors_button is not None:
+                self._apply_preprocessors_button.toggle()
+            self._refresh_paneB()
 
     def _on_spike_window_changed(self, event):
         self._spike_window = event.new
-        self._last_rendered_hover_pixel = None
-        self._refresh_paneB()
+        if self._preprocessors_applied:
+            # Window changed — cached preprocessing used the old value; must recompute
+            self._preprocessors_applied = False
+            self._preprocessed_electron_count = None
+            try:
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            except Exception:
+                pass
+            if self._apply_preprocessors_button is not None:
+                self._apply_preprocessors_button.toggle()
+            self._refresh_paneB()
             
     def _on_multifitting_switch_changed(self, event):
         """Multifitting switch toggled — batch computation is triggered by the Apply button."""
@@ -555,8 +597,18 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             total_pixels = dimx * dimy
 
             if remove_spikes:
-                self._progress_display.update(10, f"Remove spikes enabled (window={self._spike_window}, threshold={self._spike_threshold}).", level='info')
-                self._progress_display.update(44, "Spike filtering will be applied on extracted spectra (display stage).", level='info')
+                self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
+                threshold = self._spike_threshold
+                window = self._spike_window
+                half = window // 2
+                padded = np.pad(working_arr, ((0, 0), (0, 0), (half, half)), mode='edge')
+                wins = sliding_window_view(padded, window_shape=window, axis=2)  # (dimx, dimy, nE, window)
+                wmed = np.median(wins, axis=-1)  # (dimx, dimy, nE)
+                dev_mat = np.abs(wins - wmed[..., np.newaxis])  # (dimx, dimy, nE, window)
+                wmad = np.median(dev_mat, axis=-1)  # (dimx, dimy, nE)
+                spike_mask = (wmad > 1e-12) & (np.abs(working_arr - wmed) > threshold * wmad)
+                working_arr[spike_mask] = wmed[spike_mask]
+                self._progress_display.update(44, f"Spike removal complete ({spike_mask.sum()} spikes removed).", level='info')
 
             if fitting:
                 self._progress_display.update(45, "Spectral fitting will be applied on display.", level='info')
@@ -680,20 +732,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         point = {"x": x, "y": y}
         self._last_hover_point = point
         now = self._now_ms()
-        pixel_key = (round(y), round(x))
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
-            self._last_rendered_hover_pixel = None
             self._last_hover_ts = now
             start_pc(self._pc)
         else:
-            if pixel_key == self._last_rendered_hover_pixel:
-                return
             # Throttle hover renders to avoid flooding the server with WebSocket updates
             if self._hover_throttle_ts is None or now - self._hover_throttle_ts >= self._HOVER_THROTTLE_MS:
                 self._show_spectrum(point=point)
                 self._hover_throttle_ts = now
-                self._last_rendered_hover_pixel = pixel_key
                 self._last_hover_ts = None
                 stop_pc(self._pc)
             else:
@@ -711,13 +758,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._last_hover_point = point
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
-            self._last_rendered_hover_pixel = None
             self._last_hover_ts = self._now_ms()
             start_pc(self._pc)
         else:
             self._show_spectrum(point=point)
             self._hover_throttle_ts = self._now_ms()
-            self._last_rendered_hover_pixel = (round(y), round(x))
             stop_pc(self._pc)
             self._last_hover_ts = None
 
@@ -810,6 +855,5 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._main_ref = None
         self._plots_tab_ref = None
         self._hover_throttle_ts = None
-        self._last_rendered_hover_pixel = None
 
         super().cleanup()
