@@ -55,6 +55,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_threshold_slider_watcher = None
         self._spike_threshold = 5.0
+        self._spike_window_slider = pn.widgets.IntSlider()
+        self._spike_window_slider_watcher = None
+        self._spike_window = 5
         
         self._multifitting_switch = pn.widgets.Switch()
         self._multifitting_switch_watcher = None
@@ -138,7 +141,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         self._spike_threshold_slider = pn.widgets.FloatSlider(
             name="Spike Threshold",
-            start=1.0,
+            start=0.5,
             end=20.0,
             step=0.1,
             value=self._spike_threshold,
@@ -147,6 +150,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         self._spike_threshold_slider_watcher = self._spike_threshold_slider.param.watch(self._on_spike_threshold_changed, 'value')
         self._spike_threshold = 5.0
+        self._spike_window_slider = pn.widgets.IntSlider(
+            name="Spike Window",
+            start=3,
+            end=21,
+            step=2,
+            value=self._spike_window,
+            sizing_mode=self._STRETCH_WIDTH,
+            disabled=True,
+        )
+        self._spike_window_slider_watcher = self._spike_window_slider.param.watch(self._on_spike_window_changed, 'value')
         
         self._multifitting_switch = pn.widgets.Switch(
             name="Multifitting",
@@ -218,11 +231,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._spike_threshold_slider,
             sizing_mode=self._STRETCH_WIDTH,
         )
+        window_slider_container = pn.Column(
+            self._spike_window_slider,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
         return SimpleDetails(
             title="Remove Spikes Settings",
             content=pn.Column(
                 remove_spikes_container,
                 threshold_slider_container,
+                window_slider_container,
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
@@ -482,11 +500,37 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_remove_spikes_changed(self, event):
         """Update threshold slider state — refresh is triggered by the button."""
         self._spike_threshold_slider.disabled = not event.new
+        self._spike_window_slider.disabled = not event.new
+        if self._preprocessors_applied:
+            # Threshold changed — cached preprocessing used the old value; must recompute
+            self._preprocessors_applied = False
+            self._preprocessed_electron_count = None
+            try:
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            except Exception:
+                pass
+            if self._apply_preprocessors_button is not None:
+                self._apply_preprocessors_button.toggle()
+            self._refresh_paneB()
 
     def _on_spike_threshold_changed(self, event):
         self._spike_threshold = event.new
         if self._preprocessors_applied:
             # Threshold changed — cached preprocessing used the old value; must recompute
+            self._preprocessors_applied = False
+            self._preprocessed_electron_count = None
+            try:
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            except Exception:
+                pass
+            if self._apply_preprocessors_button is not None:
+                self._apply_preprocessors_button.toggle()
+            self._refresh_paneB()
+
+    def _on_spike_window_changed(self, event):
+        self._spike_window = event.new
+        if self._preprocessors_applied:
+            # Window changed — cached preprocessing used the old value; must recompute
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
             try:
@@ -507,6 +551,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._range_slider.disabled = True
         self._remove_spikes_switch.disabled = True
         self._spike_threshold_slider.disabled = True
+        self._spike_window_slider.disabled = True
         self._multifitting_switch.disabled = True
         if self._apply_preprocessors_button is not None:
             self._apply_preprocessors_button.disabled = True
@@ -517,6 +562,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._range_slider.disabled = not self._fitting_active
         self._remove_spikes_switch.disabled = False
         self._spike_threshold_slider.disabled = not bool(self._remove_spikes_switch.value)
+        self._spike_window_slider.disabled = not bool(self._remove_spikes_switch.value)
         self._multifitting_switch.disabled = False
         if self._apply_preprocessors_button is not None:
             self._apply_preprocessors_button.disabled = False
@@ -550,7 +596,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if remove_spikes:
                 self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
                 threshold = self._spike_threshold
-                window = 5
+                window = self._spike_window
                 half = window // 2
                 padded = np.pad(working_arr, ((0, 0), (0, 0), (half, half)), mode='edge')
                 wins = sliding_window_view(padded, window_shape=window, axis=2)  # (dimx, dimy, nE, window)
@@ -746,11 +792,41 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 pass
         self._fitting_switch_watcher = None
 
+        if self._remove_spikes_watcher is not None and self._remove_spikes_switch is not None:
+            try:
+                self._remove_spikes_switch.param.unwatch(self._remove_spikes_watcher)
+            except Exception:
+                pass
+        self._remove_spikes_watcher = None
+
+        if self._spike_threshold_slider_watcher is not None and self._spike_threshold_slider is not None:
+            try:
+                self._spike_threshold_slider.param.unwatch(self._spike_threshold_slider_watcher)
+            except Exception:
+                pass
+        self._spike_threshold_slider_watcher = None
+
+        if self._spike_window_slider_watcher is not None and self._spike_window_slider is not None:
+            try:
+                self._spike_window_slider.param.unwatch(self._spike_window_slider_watcher)
+            except Exception:
+                pass
+        self._spike_window_slider_watcher = None
+
+        if self._multifitting_switch_watcher is not None and self._multifitting_switch is not None:
+            try:
+                self._multifitting_switch.param.unwatch(self._multifitting_switch_watcher)
+            except Exception:
+                pass
+        self._multifitting_switch_watcher = None
+
         # Null out widget references
         self._range_slider = pn.widgets.EditableRangeSlider()
         self._fitting_switch = pn.widgets.Switch()
         self._remove_spikes_switch = pn.widgets.Switch()
         self._spike_threshold_slider = pn.widgets.FloatSlider()
+        self._spike_window_slider = pn.widgets.IntSlider()
+        self._spike_window_slider_watcher = None
         self._multifitting_switch = pn.widgets.Switch()
         self._multifitting_switch_watcher = None
         self._apply_preprocessors_button = None
