@@ -1,6 +1,7 @@
 import panel as pn
 import time
 import threading
+import os
 import numpy as np
 import holoviews as hv
 import lmfit
@@ -65,6 +66,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._preprocessors_applied = False
         self._apply_preprocessors_button = None
         self._preprocessed_electron_count = None
+        self._despiked_cube = None
+        self._despike_cache_signature = None
+        self._multifit_cube = None
+        self._multifit_cache_signature = None
         self._raw_paneA_base_overlay = None
         self._progress_display: ProgressDisplay = ProgressDisplay(name="Preprocessing")
         self._main_ref = None
@@ -546,6 +551,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_spike_threshold_changed(self, event):
         self._spike_threshold = event.new
+        self._despiked_cube = None
+        self._despike_cache_signature = None
+        self._multifit_cube = None
+        self._multifit_cache_signature = None
         if self._preprocessors_applied:
             # Threshold changed — cached preprocessing used the old value; must recompute
             self._preprocessors_applied = False
@@ -560,6 +569,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_spike_window_changed(self, event):
         self._spike_window = int(event.new)
+        self._despiked_cube = None
+        self._despike_cache_signature = None
+        self._multifit_cube = None
+        self._multifit_cache_signature = None
         if self._preprocessors_applied:
             # Window changed — cached preprocessing used the old value; must recompute
             self._preprocessors_applied = False
@@ -619,18 +632,38 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
             self._progress_display.update(5, "Initializing preprocessors...", level='info')
 
-            # Work on a plain numpy copy so we can mutate freely
-            working_arr = np.asarray(self._electron_count_data).copy()
-            dimx, dimy, _ = working_arr.shape
+            raw_arr = np.asarray(self._electron_count_data)
+            dimx, dimy, n_energy = raw_arr.shape
             total_pixels = dimx * dimy
+            fit_range = tuple(self._range_slider.value) if fitting and self._range_slider is not None else None
+            input_signature = ('raw',)
+
+            despike_window = self._normalize_spike_window(self._spike_window, n_energy)
+            despike_signature = (round(float(self._spike_threshold), 6), int(despike_window))
+            use_cached_despiked = (
+                multifitting
+                and not remove_spikes
+                and self._despiked_cube is not None
+                and self._despike_cache_signature == despike_signature
+                and self._despiked_cube.shape == raw_arr.shape
+            )
+
+            # Work on a plain numpy copy so we can mutate freely
+            if use_cached_despiked:
+                working_arr = self._despiked_cube.copy()
+                input_signature = ('despiked', despike_signature)
+                self._progress_display.update(8, "Using cached despiked spectra for multifitting...", level='info')
+            else:
+                working_arr = raw_arr.copy()
 
             if remove_spikes:
                 self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
                 threshold = self._spike_threshold
-                n_energy = working_arr.shape[-1]
-                window = self._normalize_spike_window(self._spike_window, n_energy)
+                window = despike_window
 
                 if window < 3:
+                    self._despiked_cube = None
+                    self._despike_cache_signature = None
                     self._progress_display.update(
                         44,
                         "Spike removal skipped: energy axis too short.",
@@ -678,30 +711,55 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                         level='info',
                     )
 
+                    # Cache despiked spectra so multifitting can reuse them later.
+                    self._despiked_cube = working_arr.copy()
+                    self._despike_cache_signature = despike_signature
+                    input_signature = ('despiked', despike_signature)
+
             if fitting:
                 self._progress_display.update(45, "Spectral fitting will be applied on display.", level='info')
                 time.sleep(0.3)
 
             if multifitting:
-                self._progress_display.update(50, "Running multifitting...", level='info')
+                multifit_signature = (input_signature, fit_range, tuple(raw_arr.shape))
 
-                def multifit_progress_callback(progress, total):
-                    percent = 50 + int(40 * progress / total)
-                    self._progress_display.update(
-                        percent, f"Multifitting: {progress}/{total} pixels", level='info'
-                    )
+                if (
+                    self._multifit_cube is not None
+                    and self._multifit_cache_signature == multifit_signature
+                    and self._multifit_cube.shape == working_arr.shape
+                ):
+                    self._progress_display.update(50, "Using cached multifitting result...", level='info')
+                    working_arr = self._multifit_cube.copy()
+                else:
+                    self._progress_display.update(50, "Running multifitting...", level='info')
 
-                try:
-                    fit_range = tuple(self._range_slider.value) if fitting and self._range_slider is not None else None
-                    mf = MultiFit(
-                        working_arr,
-                        model=lmfit.models.PowerLawModel,
-                        Eloss_x=self._e_axis,
-                        fit_range=fit_range,
-                    ).run(mode='subtracted', progress_callback=multifit_progress_callback)
-                    working_arr = mf.get_fitted_data()
-                except Exception:
-                    pass
+                    def multifit_progress_callback(progress, total):
+                        percent = 50 + int(40 * progress / total)
+                        self._progress_display.update(
+                            percent, f"Multifitting: {progress}/{total} pixels", level='info'
+                        )
+
+                    try:
+                        cpu_count = os.cpu_count() or 1
+                        workers = max(1, min(8, cpu_count - 1)) if cpu_count > 1 else 1
+                        use_parallel = (total_pixels >= 512) and (workers > 1)
+
+                        mf = MultiFit(
+                            np.ascontiguousarray(working_arr),
+                            model=lmfit.models.PowerLawModel,
+                            Eloss_x=self._e_axis,
+                            fit_range=fit_range,
+                        ).run(
+                            mode='subtracted',
+                            use_parallel=use_parallel,
+                            workers=workers if use_parallel else None,
+                            progress_callback=multifit_progress_callback,
+                        )
+                        working_arr = mf.get_fitted_data()
+                        self._multifit_cube = np.asarray(working_arr).copy()
+                        self._multifit_cache_signature = multifit_signature
+                    except Exception:
+                        pass
 
             self._progress_display.update(90, "Finalizing...", level='info')
 
@@ -904,6 +962,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._apply_preprocessors_button = None
         self._preprocessors_applied = False
         self._preprocessed_electron_count = None
+        self._despiked_cube = None
+        self._despike_cache_signature = None
+        self._multifit_cube = None
+        self._multifit_cache_signature = None
         self._raw_paneA_base_overlay = None
         self._main_ref = None
         self._plots_tab_ref = None
