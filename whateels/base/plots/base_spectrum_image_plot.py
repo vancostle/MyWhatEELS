@@ -75,7 +75,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._hover_blocked = False
         self._pending_selection_index = None
         self._pending_selection_ts = None
-        self._SELECTION_DEBOUNCE_MS = 200
+        self._SELECTION_DEBOUNCE_MS = 600
         self._debounce_pc = None
         self._double_tap_stream = None  # type: ignore
 
