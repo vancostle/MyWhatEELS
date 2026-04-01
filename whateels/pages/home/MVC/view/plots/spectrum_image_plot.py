@@ -601,7 +601,20 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._apply_preprocessors_button.disabled = True
 
     def _enable_sidebar_widgets(self):
-        """Re-enable right-sidebar widgets after preprocessing completes."""
+        """Enable/disable sidebar widgets based on current preprocessing state."""
+        # While preprocessed view is active (orange raw-data button), keep controls frozen.
+        if self._preprocessors_applied:
+            self._fitting_switch.disabled = True
+            self._range_slider.disabled = True
+            self._remove_spikes_switch.disabled = True
+            self._spike_threshold_slider.disabled = True
+            self._spike_window_slider.disabled = True
+            self._multifitting_switch.disabled = True
+            if self._apply_preprocessors_button is not None:
+                # Keep the raw-data button enabled so user can return to raw data.
+                self._apply_preprocessors_button.disabled = False
+            return
+
         self._fitting_switch.disabled = False
         self._range_slider.disabled = not self._fitting_active
         self._remove_spikes_switch.disabled = False
@@ -615,6 +628,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
         self._disable_sidebar_widgets()
         threading.Thread(target=self._run_preprocessors_thread, daemon=True).start()
+
+    def _restore_after_preprocessors(self):
+        """Restore plots tab and refresh paneA/paneB on the main UI thread."""
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            self._main_ref.update(self._plots_tab_ref)
+        self._enable_sidebar_widgets()
+        self._refresh_paneA()
+        self._refresh_paneB()
 
     def _run_preprocessors_thread(self):
         """Background thread: precompute all active preprocessors across every pixel, cache result, then restore the plots view."""
@@ -788,11 +809,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._apply_preprocessors_button.toggle()
             time.sleep(2)
         finally:
-            if self._main_ref is not None and self._plots_tab_ref is not None:
-                self._main_ref.update(self._plots_tab_ref)
-            self._enable_sidebar_widgets()
-            self._refresh_paneA()
-            pn.state.execute(self._refresh_paneB)
+            try:
+                pn.state.execute(self._restore_after_preprocessors)
+            except Exception:
+                # Fallback path for non-server contexts.
+                self._restore_after_preprocessors()
 
     def _on_display_raw_data(self):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
@@ -813,6 +834,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._refresh_paneA()
 
         self._refresh_paneB()
+        self._enable_sidebar_widgets()
 
     # --- Callbacks setup (adds inactivity periodic callback on top of base) ---
     @override
