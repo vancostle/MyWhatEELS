@@ -540,7 +540,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._refresh_paneB()
 
     def _on_remove_spikes_changed(self, event):
-        """Update threshold slider state — refresh is triggered by the button."""
+        """Update threshold slider state — refresh is triggered by the Apply button."""
         self._spike_threshold_slider.disabled = not event.new
         self._spike_window_slider.disabled = not event.new
 
