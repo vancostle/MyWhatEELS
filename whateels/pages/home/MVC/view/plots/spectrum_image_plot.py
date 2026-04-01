@@ -285,7 +285,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             sizing_mode=self._STRETCH_WIDTH,
         )
 
-    def _remove_spikes(self, spectrum, threshold=None, window=5):
+    def _remove_spikes(self, spectrum, threshold=None, window=None):
         """
         Spike removal using a rolling median with edge padding.
         Replaces points that deviate from the local median by more than
@@ -299,6 +299,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         if threshold is None:
             threshold = self._spike_threshold
+        if window is None:
+            window = self._spike_window
         if spectrum is None or len(spectrum) < window:
             return spectrum
         half = window // 2
@@ -501,11 +503,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._refresh_paneB()
 
     def _on_remove_spikes_changed(self, event):
-        """Update threshold slider state — refresh is triggered by the button."""
+        """Update threshold slider state — refresh is triggered by the Apply button."""
         self._spike_threshold_slider.disabled = not event.new
         self._spike_window_slider.disabled = not event.new
         if self._preprocessors_applied:
-            # Threshold changed — cached preprocessing used the old value; must recompute
+            # Switch toggled — cached preprocessing is no longer valid; must recompute
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
             try:
