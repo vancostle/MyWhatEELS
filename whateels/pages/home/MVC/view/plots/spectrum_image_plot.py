@@ -33,6 +33,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     # Axis titles for spectrum plot
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+    _HOVER_THROTTLE_MS = 50   # minimum interval between hover renders (~20 fps)
+    _HOVER_FLUSH_MS = 100     # flush last pending hover after mouse idles this long
 
     def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         self._model = model
@@ -58,6 +60,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider = pn.widgets.IntSlider()
         self._spike_window_slider_watcher = None
         self._spike_window = 5
+        self._hover_throttle_ts = None
         
         self._multifitting_switch = pn.widgets.Switch()
         self._multifitting_switch_watcher = None
@@ -695,19 +698,27 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         return int(time.time() * 1000)
 
     def _check_inactivity(self):
-        # No selection -> nothing to do
+        now = self._now_ms()
         if not self._region_pairs:
-            stop_pc(self._pc)
+            # No region: flush the last throttled hover position once the mouse has idled
+            if self._last_hover_ts is not None and now - self._last_hover_ts >= self._HOVER_FLUSH_MS:
+                if self._last_hover_point is not None:
+                    self._show_spectrum(point=self._last_hover_point)
+                    self._hover_throttle_ts = now
+                self._last_hover_ts = None
+                stop_pc(self._pc)
+            elif self._last_hover_ts is None:
+                stop_pc(self._pc)
             return
 
-        # If there is no hover timestamp, ensure selection is shown and timer stopped
+        # Region selected — inactivity snaps back to region spectrum
         if self._last_hover_ts is None:
             stop_pc(self._pc)
             if self._preprocessors_applied:
                 self._refresh_paneB()
             return
 
-        if self._now_ms() - int(self._last_hover_ts) >= self._INACTIVITY_MS:
+        if now - int(self._last_hover_ts) >= self._INACTIVITY_MS:
             self._refresh_paneB()
             stop_pc(self._pc)
 
@@ -720,14 +731,22 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
         point = {"x": x, "y": y}
         self._last_hover_point = point
+        now = self._now_ms()
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
-            self._last_hover_ts = self._now_ms()
+            self._last_hover_ts = now
             start_pc(self._pc)
         else:
-            self._show_spectrum(point=point)
-            stop_pc(self._pc)
-            self._last_hover_ts = None
+            # Throttle hover renders to avoid flooding the server with WebSocket updates
+            if self._hover_throttle_ts is None or now - self._hover_throttle_ts >= self._HOVER_THROTTLE_MS:
+                self._show_spectrum(point=point)
+                self._hover_throttle_ts = now
+                self._last_hover_ts = None
+                stop_pc(self._pc)
+            else:
+                # Throttled — record pending hover so the PC can flush the final position
+                self._last_hover_ts = now
+                start_pc(self._pc)
 
     def _on_paneA_click(self, x=None, y=None):
         # HoloViews Tap delivers x, y directly as kwargs
@@ -743,6 +762,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             start_pc(self._pc)
         else:
             self._show_spectrum(point=point)
+            self._hover_throttle_ts = self._now_ms()
             stop_pc(self._pc)
             self._last_hover_ts = None
 
@@ -834,5 +854,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._preprocessed_electron_count = None
         self._main_ref = None
         self._plots_tab_ref = None
+        self._hover_throttle_ts = None
 
         super().cleanup()
