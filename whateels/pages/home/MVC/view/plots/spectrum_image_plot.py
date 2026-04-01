@@ -5,8 +5,8 @@ import numpy as np
 import holoviews as hv
 import lmfit
 import xarray as xr
-from scipy.ndimage import median_filter
 
+from numpy.lib.stride_tricks import sliding_window_view
 from whateels.helpers import SpectrumExtractor
 from whateels.helpers.fitting.multifitting import MultiFit
 from whateels.components import SplitJs, SimpleDetails, ToggleButton, ProgressDisplay
@@ -551,11 +551,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
                 threshold = self._spike_threshold
                 window = 5
-                rolling_median = median_filter(working_arr, size=(1, 1, window), mode='nearest')
-                abs_dev = np.abs(working_arr - rolling_median)
-                mad = median_filter(abs_dev, size=(1, 1, window), mode='nearest')
-                spike_mask = (mad > 1e-12) & (abs_dev > threshold * mad)
-                working_arr[spike_mask] = rolling_median[spike_mask]
+                half = window // 2
+                padded = np.pad(working_arr, ((0, 0), (0, 0), (half, half)), mode='edge')
+                wins = sliding_window_view(padded, window_shape=window, axis=2)  # (dimx, dimy, nE, window)
+                wmed = np.median(wins, axis=-1)  # (dimx, dimy, nE)
+                dev_mat = np.abs(wins - wmed[..., np.newaxis])  # (dimx, dimy, nE, window)
+                wmad = np.median(dev_mat, axis=-1)  # (dimx, dimy, nE)
+                spike_mask = (wmad > 1e-12) & (np.abs(working_arr - wmed) > threshold * wmad)
+                working_arr[spike_mask] = wmed[spike_mask]
                 self._progress_display.update(44, f"Spike removal complete ({spike_mask.sum()} spikes removed).", level='info')
 
             if fitting:
