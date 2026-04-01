@@ -382,6 +382,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return self._preprocessed_electron_count
         return self._electron_count_data
 
+    def _should_apply_visual_fitting(self) -> bool:
+        """Return True only when paneB should draw interactive fitting overlays."""
+        if not self._fitting_active:
+            return False
+        # When multifitting output is being displayed, avoid adding a second fitting overlay.
+        if self._preprocessors_applied and bool(self._multifitting_switch.value):
+            return False
+        return True
+
     def _show_spectrum(self, *, point=None, region_pairs=None):
         """
         Unified helper to extract spectrum (from point or region), apply fitting if needed, and update paneB.
@@ -402,7 +411,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 title = f"ROI — sum (points={n_points})"
             if self._preprocessors_applied and spec is not None:
                 fig = self._build_spectrum_curve(spec, title)
-                if self._fitting_active:
+                if self._should_apply_visual_fitting():
                     try:
                         fig = apply_fitting(fig, self._energy, spec, self._range_slider)
                     except Exception:
@@ -415,7 +424,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = get_pixel_spectrum(self._get_display_data(), point)
             if self._preprocessors_applied and spec is not None:
                 fig = self._build_spectrum_curve(spec, title)
-                if self._fitting_active:
+                if self._should_apply_visual_fitting():
                     try:
                         fig = apply_fitting(fig, self._energy, spec, self._range_slider)
                     except Exception:
@@ -441,7 +450,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     spec, n_points = res
                 if spec is not None:
                     fig = self._build_spectrum_curve(spec, f"ROI — sum (points={n_points})")
-                    if self._fitting_active:
+                    if self._should_apply_visual_fitting():
                         try:
                             fig = apply_fitting(fig, self._energy, spec, self._range_slider)
                         except Exception:
@@ -460,7 +469,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = get_pixel_spectrum(self._get_display_data(), point)
                 if spec is not None:
                     fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
-                    if self._fitting_active:
+                    if self._should_apply_visual_fitting():
                         try:
                             fig = apply_fitting(fig, self._energy, spec, self._range_slider)
                         except Exception:
@@ -478,7 +487,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = get_pixel_spectrum(self._get_display_data(), default_point)
             if spec is not None:
                 fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
-                if self._fitting_active:
+                if self._should_apply_visual_fitting():
                     try:
                         fig = apply_fitting(fig, self._energy, spec, self._range_slider)
                     except Exception:
@@ -627,23 +636,33 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_apply_preprocessors(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
         self._disable_sidebar_widgets()
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            tab = pn.Tabs(("Applying Preprocessors...", self._progress_display))
+            self._main_ref.update(tab)
         threading.Thread(target=self._run_preprocessors_thread, daemon=True).start()
+
+    def _finalize_preprocessors_ui(self):
+        """Final pane refresh once plots tab is mounted in the document."""
+        self._enable_sidebar_widgets()
+        self._refresh_paneA()
+        self._refresh_paneB()
 
     def _restore_after_preprocessors(self):
         """Restore plots tab and refresh paneA/paneB on the main UI thread."""
         if self._main_ref is not None and self._plots_tab_ref is not None:
             self._main_ref.update(self._plots_tab_ref)
-        self._enable_sidebar_widgets()
-        self._refresh_paneA()
-        self._refresh_paneB()
+        try:
+            doc = pn.state.curdoc
+            if doc is not None:
+                doc.add_next_tick_callback(self._finalize_preprocessors_ui)
+                return
+        except Exception:
+            pass
+        self._finalize_preprocessors_ui()
 
     def _run_preprocessors_thread(self):
         """Background thread: precompute all active preprocessors across every pixel, cache result, then restore the plots view."""
         try:
-            if self._main_ref is not None and self._plots_tab_ref is not None:
-                tab = pn.Tabs(("Applying Preprocessors...", self._progress_display))
-                self._main_ref.update(tab)
-
             self._progress_display.reset()
             self._progress_display.visible = True
 
