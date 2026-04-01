@@ -2,7 +2,6 @@ import numpy as np
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
 import plotly.graph_objs as go
-import os
 from typing import Tuple, Optional
 
 # Try to import xarray if available; otherwise operate in numpy-only mode
@@ -99,90 +98,139 @@ def multifit_modified(data, model, Eloss_x=None, fit_range=None, progress_every=
     return results
 
 
-def _fit_worker(args):
+def _fit_chunk_worker(args):
     """
-    Worker function for parallel fitting. Receives a tuple with
-    (y, x, model_class, fit_range)
+    Worker function for parallel fitting over a chunk of spectra.
+    Receives a tuple with (chunk_2d, x, model_class, fit_range).
 
-    Returns a dict with keys: 'best_fit_full' (numpy array or None) and
-    'best_fit' (subset fit) or None on failure.
+    Returns a list (same length as chunk) of dict results or None entries.
     """
     import numpy as _np
     from inspect import isclass as _isclass
-    y, x_full, model, fit_range = args
+    chunk, x_full, model, fit_range = args
+    n_chunk = int(len(chunk)) if hasattr(chunk, '__len__') else 0
     try:
+        chunk_arr = _np.asarray(chunk)
+        if chunk_arr.ndim != 2:
+            return [None] * n_chunk
+
         # Build model instance locally in worker process
         model_instance = model() if _isclass(model) else model
         x = _np.asarray(x_full)
-        # Build mask similar to main function
+
+        # Build masks reused by all spectra in the chunk
         mask_x = _np.isfinite(x) & (x > 0)
         if fit_range is not None:
             xmin, xmax = fit_range
             mask_x &= (x >= float(xmin)) & (x <= float(xmax))
+        x_valid_mask = _np.isfinite(x) & (x > 0)
+        x_valid = x[x_valid_mask]
 
-        mask = mask_x & _np.isfinite(y) & (y > 0)
-        if _np.count_nonzero(mask) < 3:
-            return None
+        out = [None] * chunk_arr.shape[0]
+        for i in range(chunk_arr.shape[0]):
+            y = _np.asarray(chunk_arr[i])
+            mask = mask_x & _np.isfinite(y) & (y > 0)
+            if _np.count_nonzero(mask) < 3:
+                continue
 
-        x_fit = x[mask]
-        y_fit = _np.asarray(y)[mask]
-        pars = model_instance.guess(y_fit, x=x_fit)
-        res = model_instance.fit(data=y_fit, params=pars, x=x_fit)
+            x_fit = x[mask]
+            y_fit = y[mask]
+            pars = model_instance.guess(y_fit, x=x_fit)
+            res = model_instance.fit(data=y_fit, params=pars, x=x_fit)
 
-        # Evaluate on full axis
-        try:
-            x_valid_mask = _np.isfinite(x) & (x > 0)
-            x_valid = x[x_valid_mask]
-            best_fit_full = _np.zeros_like(x)
-            best_fit_full[x_valid_mask] = res.eval(params=res.params, x=x_valid)
-        except Exception:
-            best_fit_full = None
+            # Evaluate on full axis
+            try:
+                best_fit_full = _np.zeros_like(x)
+                best_fit_full[x_valid_mask] = res.eval(params=res.params, x=x_valid)
+            except Exception:
+                best_fit_full = None
 
-        # best_fit may be subset
-        best_fit = getattr(res, 'best_fit', None)
-        return {'best_fit_full': best_fit_full, 'best_fit': best_fit}
+            out[i] = {'best_fit_full': best_fit_full, 'best_fit': getattr(res, 'best_fit', None)}
+
+        return out
     except Exception:
-        return None
+        return [None] * n_chunk
 
 
-def multifit_parallel(data, model, Eloss_x=None, fit_range=None, workers=None, progress_every=1000, progress_callback=None):
+def multifit_parallel(data, model, Eloss_x=None, fit_range=None, workers=None, progress_every=1000, progress_callback=None, chunk_size=None):
     """
     Parallel implementation of multifit that uses ProcessPoolExecutor.
     Returns a list of dict results (or None) in the same order as the pixels.
     Accepts optional progress_callback(progress, total) for progress updates.
     """
-    # progress_callback is now a real argument, not via frame inspection
     import numpy as _np
     data_arr = _np.asarray(data)
     if data_arr.ndim != 3:
         raise ValueError("data must be a 3D array shaped (dimx, dimy, spectrum_length).")
     dimx, dimy, spectrum_length = data_arr.shape
+    n_pixels = dimx * dimy
 
     x = _np.asarray(Eloss_x)
-    # Prepare args for each pixel
-    tasks = []
-    for i in range(dimx):
-        for j in range(dimy):
-            y = _np.asarray(data_arr[i, j, :])
-            tasks.append((y, x, model, fit_range))
+    if x.ndim != 1:
+        raise ValueError("Eloss_x must be a 1D array.")
+    if x.size != spectrum_length:
+        raise ValueError("Eloss_x length must match the third dimension of data.")
 
-    results = [None] * (dimx * dimy)
+    if n_pixels == 0:
+        return []
+
     # Use a reasonable default for workers
     max_workers = workers if workers is not None else max(1, (os.cpu_count() or 1) - 1)
+    if max_workers <= 1:
+        return multifit_modified(
+            data_arr,
+            model,
+            Eloss_x=x,
+            fit_range=fit_range,
+            progress_every=progress_every,
+            progress_callback=progress_callback,
+        )
+
+    flat = _np.ascontiguousarray(data_arr.reshape(n_pixels, spectrum_length))
+
+    if chunk_size is None:
+        # Heuristic: many medium chunks tends to be faster than per-pixel futures.
+        chunk_size = max(64, min(1024, n_pixels // max(1, max_workers * 6)))
+    chunk_size = max(16, int(chunk_size))
+
+    chunks = []
+    for start in range(0, n_pixels, chunk_size):
+        end = min(start + chunk_size, n_pixels)
+        chunks.append((start, end))
+
+    results = [None] * n_pixels
 
     with ProcessPoolExecutor(max_workers=max_workers) as exe:
-        future_to_index = {exe.submit(_fit_worker, tasks[idx]): idx for idx in range(len(tasks))}
+        future_to_span = {}
+        for start, end in chunks:
+            fut = exe.submit(
+                _fit_chunk_worker,
+                (flat[start:end], x, model, fit_range),
+            )
+            future_to_span[fut] = (start, end)
+
         processed = 0
-        total = len(tasks)
-        for fut in as_completed(future_to_index):
-            idx = future_to_index[fut]
+        total = n_pixels
+
+        for fut in as_completed(future_to_span):
+            start, end = future_to_span[fut]
+            n_chunk = end - start
             try:
-                res = fut.result()
+                chunk_res = fut.result()
             except Exception:
-                res = None
-            results[idx] = res
-            processed += 1
-            if progress_every and (processed % progress_every == 0):
+                chunk_res = [None] * n_chunk
+
+            if not isinstance(chunk_res, list):
+                chunk_res = [None] * n_chunk
+
+            if len(chunk_res) < n_chunk:
+                chunk_res = chunk_res + ([None] * (n_chunk - len(chunk_res)))
+            elif len(chunk_res) > n_chunk:
+                chunk_res = chunk_res[:n_chunk]
+
+            results[start:end] = chunk_res
+            processed += n_chunk
+            if progress_every and (processed % progress_every == 0 or processed == total):
                 if progress_callback:
                     progress_callback(processed, total)
 
@@ -202,61 +250,47 @@ def create_data_from_multifit(results, original_data, mode='subtracted'):
     Returns:
     - processed_data: 3D numpy array with processed spectra according to mode.
     """
-    dimx, dimy, spectrum_length = original_data.shape
-    processed_data = np.zeros((dimx, dimy, spectrum_length))
-    
-    index = 0
-    for x_i in range(dimx):
-        for y_i in range(dimy):
-            res = results[index]
-            if res is not None:
-                try:
-                    # Try to use best_fit_full (full spectrum) first
-                    # Support both lmfit.Result objects and simple dict-like results
-                    fit_spectrum = None
-                    if hasattr(res, 'best_fit_full') and res.best_fit_full is not None:
-                        fit_spectrum = res.best_fit_full
-                    elif isinstance(res, dict) and res.get('best_fit_full') is not None:
-                        fit_spectrum = res.get('best_fit_full')
+    orig = np.asarray(original_data)
+    dimx, dimy, spectrum_length = orig.shape
+    flat_orig = orig.reshape(-1, spectrum_length)
+    flat_out = flat_orig.copy()
 
-                    if fit_spectrum is not None:
-                        original_spectrum = original_data[x_i, y_i, :]
-                        
-                        if mode == 'subtracted':
-                            processed_data[x_i, y_i, :] = original_spectrum - fit_spectrum
-                        elif mode == 'fitted':
-                            processed_data[x_i, y_i, :] = fit_spectrum
-                        else:  # mode == 'original'
-                            processed_data[x_i, y_i, :] = original_spectrum
-                    else:
-                        # Fallback to res.best_fit (may be subset) or dict entry
-                        best_fit = None
-                        if hasattr(res, 'best_fit'):
-                            best_fit = res.best_fit
-                        elif isinstance(res, dict):
-                            best_fit = res.get('best_fit')
+    for idx, res in enumerate(results):
+        if res is None:
+            continue
 
-                        if best_fit is not None and len(best_fit) == spectrum_length:
-                            original_spectrum = original_data[x_i, y_i, :]
+        fit_spectrum = None
+        try:
+            # Fast path: full-length fit was provided.
+            if hasattr(res, 'best_fit_full') and res.best_fit_full is not None:
+                fit_spectrum = np.asarray(res.best_fit_full)
+            elif isinstance(res, dict) and res.get('best_fit_full') is not None:
+                fit_spectrum = np.asarray(res.get('best_fit_full'))
 
-                            if mode == 'subtracted':
-                                processed_data[x_i, y_i, :] = original_spectrum - best_fit
-                            elif mode == 'fitted':
-                                processed_data[x_i, y_i, :] = best_fit
-                            else:
-                                processed_data[x_i, y_i, :] = original_spectrum
-                        else:
-                            # Size mismatch or no best_fit - keep original data
-                            processed_data[x_i, y_i, :] = original_data[x_i, y_i, :]
-                except Exception:
-                    # Fallback to original data if error
-                    processed_data[x_i, y_i, :] = original_data[x_i, y_i, :]
-            else:
-                # No fit -> keep original data
-                processed_data[x_i, y_i, :] = original_data[x_i, y_i, :]
-            index += 1
-            
-    return processed_data
+            # Fallback: subset best_fit only if full-length and compatible.
+            if fit_spectrum is None:
+                best_fit = None
+                if hasattr(res, 'best_fit'):
+                    best_fit = res.best_fit
+                elif isinstance(res, dict):
+                    best_fit = res.get('best_fit')
+                if best_fit is not None:
+                    fit_spectrum = np.asarray(best_fit)
+
+            if fit_spectrum is None or fit_spectrum.shape[0] != spectrum_length:
+                continue
+
+            if mode == 'subtracted':
+                flat_out[idx] = flat_orig[idx] - fit_spectrum
+            elif mode == 'fitted':
+                flat_out[idx] = fit_spectrum
+            else:  # mode == 'original'
+                flat_out[idx] = flat_orig[idx]
+        except Exception:
+            # Keep original spectrum on any failure.
+            flat_out[idx] = flat_orig[idx]
+
+    return flat_out.reshape(dimx, dimy, spectrum_length)
 
 def save_fitted_data(fitted_data, folder=None, filename='fitted_data'):
     """
