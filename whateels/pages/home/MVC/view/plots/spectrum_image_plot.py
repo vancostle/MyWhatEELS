@@ -548,8 +548,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             pass
 
     def _on_range_changed(self, event):
-        """Refresh paneB when the fit range slider changes (only when preprocessors are applied and fitting is active)."""
-        if not self._preprocessors_applied or not self._fitting_active:
+        """Refresh paneB when the fit range slider changes (only when fitting is active)."""
+        if not self._fitting_active:
             return
         self._refresh_paneB()
 
@@ -568,10 +568,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Threshold changed — cached preprocessing used the old value; must recompute
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
-            try:
-                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
-            except Exception:
-                pass
+            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
             if self._apply_preprocessors_button is not None:
                 self._apply_preprocessors_button.toggle()
             self._refresh_paneB()
@@ -611,16 +608,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _enable_sidebar_widgets(self):
         """Enable/disable sidebar widgets based on current preprocessing state."""
-        # While preprocessed view is active (orange raw-data button), keep controls frozen.
         if self._preprocessors_applied:
-            self._fitting_switch.disabled = True
-            self._range_slider.disabled = True
+            # Spike controls are frozen — changing them would invalidate the preprocessed cube.
             self._remove_spikes_switch.disabled = True
             self._spike_threshold_slider.disabled = True
             self._spike_window_slider.disabled = True
-            self._multifitting_switch.disabled = True
+            # Fitting and multifitting are display-only and safe to use on the preprocessed data.
+            self._fitting_switch.disabled = False
+            self._range_slider.disabled = not self._fitting_active
+            self._multifitting_switch.disabled = False
             if self._apply_preprocessors_button is not None:
-                # Keep the raw-data button enabled so user can return to raw data.
                 self._apply_preprocessors_button.disabled = False
             return
 
@@ -925,7 +922,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     @override
     def _process_selection(self, index=None):
-        """Commit selection: run base logic then reset inactivity state."""
+        """Commit selection: reset y-range so paneB auto-scales to the new spectrum, then run base logic."""
+        self._current_y_range = None
+        self._current_y_autorange = True
         super()._process_selection(index)
         stop_pc(self._pc)
         self._last_hover_ts = None

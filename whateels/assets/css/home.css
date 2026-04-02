@@ -90,3 +90,7 @@ p.range-label {
 #fitting {
     margin: 0;
 }
+
+.bk-input-group:has(*[disabled="true"]) {
+    opacity: .5;
+}
