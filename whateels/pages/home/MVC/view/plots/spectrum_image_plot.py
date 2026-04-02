@@ -61,6 +61,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch_watcher = None
 
         self._preprocessors_applied = False
+        self._applied_spike_threshold: float | None = None
+        self._applied_spike_window: int | None = None
         self._apply_remove_spikes_button = ToggleButton()
         self._preprocessed_electron_count = None
         self._despiked_cube = None
@@ -501,13 +503,21 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._despike_cache_signature = None
         self._multifit_cube = None
         self._multifit_cache_signature = None
-        if self._preprocessors_applied:
-            # Threshold changed — cached preprocessing used the old value; must recompute
+        if self._applied_spike_threshold is None:
+            return
+        values_match = (
+            round(float(self._spike_threshold), 6) == self._applied_spike_threshold
+            and self._spike_window == self._applied_spike_window
+        )
+        if values_match and not self._preprocessors_applied:
+            self._preprocessors_applied = True
+            if self._preprocessed_electron_count is not None:
+                CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            self._apply_remove_spikes_button.toggle()
+        elif not values_match and self._preprocessors_applied:
             self._preprocessors_applied = False
-            self._preprocessed_electron_count = None
             CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
             self._apply_remove_spikes_button.toggle()
-            self._refresh_paneB()
 
     def _on_spike_window_changed(self, event):
         self._spike_window = int(event.new)
@@ -515,13 +525,21 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._despike_cache_signature = None
         self._multifit_cube = None
         self._multifit_cache_signature = None
-        if self._preprocessors_applied:
-            # Window changed — cached preprocessing used the old value; must recompute
+        if self._applied_spike_threshold is None:
+            return
+        values_match = (
+            round(float(self._spike_threshold), 6) == self._applied_spike_threshold
+            and self._spike_window == self._applied_spike_window
+        )
+        if values_match and not self._preprocessors_applied:
+            self._preprocessors_applied = True
+            if self._preprocessed_electron_count is not None:
+                CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            self._apply_remove_spikes_button.toggle()
+        elif not values_match and self._preprocessors_applied:
             self._preprocessors_applied = False
-            self._preprocessed_electron_count = None
             CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
             self._apply_remove_spikes_button.toggle()
-            self._refresh_paneB()
             
     def _on_multifitting_switch_changed(self, event):
         """Multifitting switch toggled — batch computation is triggered by the Apply button."""
@@ -540,15 +558,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Enable/disable sidebar widgets based on current preprocessing state."""
         self._fitting_switch.disabled = False
         self._range_slider.disabled = not self._fitting_active
+        self._spike_threshold_slider.disabled = False
+        self._spike_window_slider.disabled = False
         self._multifitting_switch.disabled = False
         self._apply_remove_spikes_button.disabled = False
-        if self._preprocessors_applied:
-            # Spike sliders are frozen — changing them would invalidate the preprocessed cube.
-            self._spike_threshold_slider.disabled = True
-            self._spike_window_slider.disabled = True
-        else:
-            self._spike_threshold_slider.disabled = False
-            self._spike_window_slider.disabled = False
 
     def _on_apply_remove_spikes(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
@@ -730,6 +743,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_electron_count = preprocessed_da
             CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
             self._preprocessors_applied = True
+            self._applied_spike_threshold = round(float(self._spike_threshold), 6)
+            self._applied_spike_window = self._spike_window
             self._current_y_range = None
             self._current_y_autorange = True
             time.sleep(0.5)
@@ -753,6 +768,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
         had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
         self._preprocessors_applied = False
+        self._applied_spike_threshold = None
+        self._applied_spike_window = None
         self._preprocessed_electron_count = None
         CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
         self._current_y_range = None
