@@ -64,7 +64,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch_watcher = None
 
         self._preprocessors_applied = False
-        self._apply_preprocessors_button = None
+        self._apply_preprocessors_button = ToggleButton()
         self._preprocessed_electron_count = None
         self._despiked_cube = None
         self._despike_cache_signature = None
@@ -187,7 +187,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             initial_state=False,
             states={
                 "on": {"label": 'Display Raw Data', "on_click": self._on_display_raw_data, "button_type": 'warning'},
-                "off": {"label": 'Apply Active Preprocessors', "on_click": self._on_apply_preprocessors, "button_type": 'success'},
+                "off": {"label": 'Apply Remove Spikes', "on_click": self._on_apply_remove_spikes, "button_type": 'success'},
             },
             sizing_mode=self._STRETCH_WIDTH,
             margin=(8, 0, 0, 0),
@@ -222,7 +222,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         
     def create_remove_spikes_details(self) -> SimpleDetails:
-        """Build and return the Remove Spikes SimpleDetails block for the sidebar."""
+        """Build and return the Remove Spikes SimpleDetails block for the sidebar, including the Apply/Raw button as last widget."""
         remove_spikes_label = pn.pane.Markdown(
             "## Remove Spikes",
             margin=0,
@@ -245,19 +245,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._spike_window_slider,
             sizing_mode=self._STRETCH_WIDTH,
         )
+        # Add the Apply/Display Raw Data button as the last widget
         return SimpleDetails(
             title="Remove Spikes Settings",
             content=pn.Column(
                 remove_spikes_container,
                 threshold_slider_container,
                 window_slider_container,
+                self._apply_preprocessors_button,
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
         
-    def create_preprocessors_button(self) -> ToggleButton:
-        """Return the Apply Active Preprocessors toggle button for the sidebar."""
-        return self._apply_preprocessors_button
+
 
     def set_view_refs(self, main, plots_tab) -> None:
         """Inject main layout and plots tab references so the plot can show progress and restore content."""
@@ -569,8 +569,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
             CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
-            if self._apply_preprocessors_button is not None:
-                self._apply_preprocessors_button.toggle()
+            self._apply_preprocessors_button.toggle()
             self._refresh_paneB()
 
     def _on_spike_window_changed(self, event):
@@ -587,8 +586,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
             except Exception:
                 pass
-            if self._apply_preprocessors_button is not None:
-                self._apply_preprocessors_button.toggle()
+            self._apply_preprocessors_button.toggle()
             self._refresh_paneB()
             
     def _on_multifitting_switch_changed(self, event):
@@ -603,8 +601,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_threshold_slider.disabled = True
         self._spike_window_slider.disabled = True
         self._multifitting_switch.disabled = True
-        if self._apply_preprocessors_button is not None:
-            self._apply_preprocessors_button.disabled = True
+        self._apply_preprocessors_button.disabled = True
 
     def _enable_sidebar_widgets(self):
         """Enable/disable sidebar widgets based on current preprocessing state."""
@@ -617,8 +614,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._fitting_switch.disabled = False
             self._range_slider.disabled = not self._fitting_active
             self._multifitting_switch.disabled = False
-            if self._apply_preprocessors_button is not None:
-                self._apply_preprocessors_button.disabled = False
+            self._apply_preprocessors_button.disabled = False
             return
 
         self._fitting_switch.disabled = False
@@ -627,37 +623,39 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_threshold_slider.disabled = not bool(self._remove_spikes_switch.value)
         self._spike_window_slider.disabled = not bool(self._remove_spikes_switch.value)
         self._multifitting_switch.disabled = False
-        if self._apply_preprocessors_button is not None:
-            self._apply_preprocessors_button.disabled = False
+        self._apply_preprocessors_button.disabled = False
 
-    def _on_apply_preprocessors(self):
+    def _on_apply_remove_spikes(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
-        self._disable_sidebar_widgets()
-        if self._main_ref is not None and self._plots_tab_ref is not None:
-            tab = pn.Tabs(("Applying Preprocessors...", self._progress_display))
-            self._main_ref.update(tab)
-        threading.Thread(target=self._run_preprocessors_thread, daemon=True).start()
 
-    def _finalize_preprocessors_ui(self):
+        self._disable_sidebar_widgets()
+
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            tab = pn.Tabs(("Applying Remove Spikes...", self._progress_display))
+            self._main_ref.update(tab)
+
+        threading.Thread(target=self._run_remove_spikes_thread, daemon=True).start()
+
+    def _finalize_remove_spikes_ui(self):
         """Final pane refresh once plots tab is mounted in the document."""
         self._enable_sidebar_widgets()
         self._refresh_paneA()
         self._refresh_paneB()
 
-    def _restore_after_preprocessors(self):
+    def _restore_after_remove_spikes(self):
         """Restore plots tab and refresh paneA/paneB on the main UI thread."""
         if self._main_ref is not None and self._plots_tab_ref is not None:
             self._main_ref.update(self._plots_tab_ref)
         try:
             doc = pn.state.curdoc
             if doc is not None:
-                doc.add_next_tick_callback(self._finalize_preprocessors_ui)
+                doc.add_next_tick_callback(self._finalize_remove_spikes_ui)
                 return
         except Exception:
             pass
-        self._finalize_preprocessors_ui()
+        self._finalize_remove_spikes_ui()
 
-    def _run_preprocessors_thread(self):
+    def _run_remove_spikes_thread(self):
         """Background thread: precompute all active preprocessors across every pixel, cache result, then restore the plots view."""
         try:
             self._progress_display.reset()
@@ -672,7 +670,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             raw_arr = np.asarray(self._electron_count_data)
             dimx, dimy, n_energy = raw_arr.shape
             total_pixels = dimx * dimy
-            fit_range = tuple(self._range_slider.value) if fitting and self._range_slider is not None else None
+            range_slider_value = get_range_slider_value(self._range_slider)
+            fit_range = range_slider_value if fitting else None
             input_signature = ('raw',)
 
             despike_window = self._normalize_spike_window(self._spike_window, n_energy)
@@ -821,15 +820,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._progress_display.error(f"Processing failed: {str(e)}")
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
-            if self._apply_preprocessors_button is not None:
-                self._apply_preprocessors_button.toggle()
+            self._apply_preprocessors_button.toggle()
             time.sleep(2)
         finally:
             try:
-                pn.state.execute(self._restore_after_preprocessors)
+                pn.state.execute(self._restore_after_remove_spikes)
             except Exception:
                 # Fallback path for non-server contexts.
-                self._restore_after_preprocessors()
+                self._restore_after_remove_spikes()
 
     def _on_display_raw_data(self):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
@@ -999,7 +997,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_window_slider = pn.widgets.IntSlider()
         self._multifitting_switch = pn.widgets.Switch()
-        self._apply_preprocessors_button = None
+        self._apply_preprocessors_button = ToggleButton()
         self._preprocessors_applied = False
         self._preprocessed_electron_count = None
         self._despiked_cube = None
