@@ -118,7 +118,6 @@ class HomePageView:
                 if isinstance(chosen_plot, SpectrumImagePlot):
                     self._right_sidebar.set_fitting_details(chosen_plot.create_fitting_details())
                     self._right_sidebar.set_remove_spikes_details(chosen_plot.create_remove_spikes_details())
-                    self._right_sidebar.set_multifitting_details(chosen_plot.create_multifitting_details())
                     chosen_plot.set_view_refs(self._main, plots_tab)
                 
                 visualizer_plots = chosen_plot.create_plots()

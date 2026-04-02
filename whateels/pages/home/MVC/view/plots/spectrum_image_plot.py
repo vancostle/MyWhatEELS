@@ -50,9 +50,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_switch = pn.widgets.Switch()
         self._fitting_switch_watcher = None
 
-        self._remove_spikes_switch = pn.widgets.Switch()
-        self._remove_spikes_watcher = None
-
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_threshold_slider_watcher = None
         self._spike_threshold = 5.0
@@ -64,7 +61,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch_watcher = None
 
         self._preprocessors_applied = False
-        self._apply_preprocessors_button = ToggleButton()
+        self._apply_remove_spikes_button = ToggleButton()
         self._preprocessed_electron_count = None
         self._despiked_cube = None
         self._despike_cache_signature = None
@@ -138,16 +135,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_switch_watcher = self._fitting_switch.param.watch(
             self._on_fitting_switch_changed, 'value'
         )
-        self._remove_spikes_switch = pn.widgets.Switch(
-            name="Remove Spikes",
-            value=False,
-            css_classes=["background-switch"],
-            styles={'height': '30px', 'max-height': '30px', 'display': 'flex',
-                    'align-items': 'center', 'justify-content': 'center', 'margin': '0px'}
-        )
-        self._remove_spikes_watcher = self._remove_spikes_switch.param.watch(
-            self._on_remove_spikes_changed, 'value'
-        )
         self._spike_threshold_slider = pn.widgets.FloatSlider(
             name="Spike Threshold",
             start=0.1,
@@ -155,7 +142,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             step=0.1,
             value=self._spike_threshold,
             sizing_mode=self._STRETCH_WIDTH,
-            disabled=True,
         )
         self._spike_threshold_slider_watcher = self._spike_threshold_slider.param.watch(self._on_spike_threshold_changed, 'value')
         self._spike_threshold = 5.0
@@ -167,7 +153,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             step=2,
             value=self._spike_window,
             sizing_mode=self._STRETCH_WIDTH,
-            disabled=True,
         )
         self._spike_window_slider_watcher = self._spike_window_slider.param.watch(self._on_spike_window_changed, 'value')
         
@@ -183,10 +168,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._on_multifitting_switch_changed, 'value'
         )
 
-        self._apply_preprocessors_button = ToggleButton(
+        self._apply_remove_spikes_button = ToggleButton(
             initial_state=False,
             states={
-                "on": {"label": 'Display Raw Data', "on_click": self._on_display_raw_data, "button_type": 'warning'},
+                "on": {"label": 'Revert Remove Spikes', "on_click": self._on_revert_remove_spikes, "button_type": 'warning'},
                 "off": {"label": 'Apply Remove Spikes', "on_click": self._on_apply_remove_spikes, "button_type": 'success'},
             },
             sizing_mode=self._STRETCH_WIDTH,
@@ -195,12 +180,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     # --- Fitting Details SimpleDetails builder ---
     def create_fitting_details(self) -> SimpleDetails:
-        """Build and return the fitting SimpleDetails block for the sidebar."""
+        """Build and return the multifitting SimpleDetails block for the sidebar."""
         fitting_label = pn.pane.Markdown(
             "## Fitting",
             margin=0,
-            styles={'padding': '0px', 'height': '30px', 'display': 'flex',
-                    'align-items': 'center', 'justify-content': 'center'}
+            styles={
+                'padding': '0px', 'height': '30px', 'display': 'flex',
+                'align-items': 'center', 'justify-content': 'center'
+            }
         )
         fitting_switch_container = pn.Row(
             fitting_label,
@@ -208,8 +195,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-container"],
             margin=(0, 0, 8, 0),
-            styles={'display': 'flex', 'align-items': 'center',
-                    'justify-content': 'center', 'padding': '0px'}
+            styles={
+                'display': 'flex', 'align-items': 'center',
+                'justify-content': 'center', 'padding': '0px'
+            }
         )
         return SimpleDetails(
             title="Fitting Settings",
@@ -223,20 +212,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         
     def create_remove_spikes_details(self) -> SimpleDetails:
         """Build and return the Remove Spikes SimpleDetails block for the sidebar, including the Apply/Raw button as last widget."""
-        remove_spikes_label = pn.pane.Markdown(
-            "## Remove Spikes",
-            margin=0,
-            styles={'padding': '0px', 'height': '30px', 'display': 'flex',
-                    'align-items': 'center', 'justify-content': 'center'}
-        )
-        remove_spikes_container = pn.Row(
-            remove_spikes_label,
-            self._remove_spikes_switch,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 0, 8, 0),
-            styles={'display': 'flex', 'align-items': 'center',
-                    'justify-content': 'center', 'padding': '0px'}
-        )
         threshold_slider_container = pn.Column(
             self._spike_threshold_slider,
             sizing_mode=self._STRETCH_WIDTH,
@@ -245,14 +220,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._spike_window_slider,
             sizing_mode=self._STRETCH_WIDTH,
         )
-        # Add the Apply/Display Raw Data button as the last widget
         return SimpleDetails(
             title="Remove Spikes Settings",
             content=pn.Column(
-                remove_spikes_container,
                 threshold_slider_container,
                 window_slider_container,
-                self._apply_preprocessors_button,
+                self._apply_remove_spikes_button,
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
@@ -263,34 +236,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Inject main layout and plots tab references so the plot can show progress and restore content."""
         self._main_ref = main
         self._plots_tab_ref = plots_tab
-
-    def create_multifitting_details(self) -> SimpleDetails:
-        """Build and return the Multifitting SimpleDetails block for the sidebar."""
-        
-        multiffitting_label = pn.pane.Markdown(
-            "## Multifitting",
-            margin=0,
-            styles={'padding': '0px', 'height': '30px', 'display': 'flex',
-                    'align-items': 'center', 'justify-content': 'center'}
-        )
-        
-        multifitting_switch_container = pn.Row(
-            multiffitting_label,
-            self._multifitting_switch,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 0, 8, 0),
-            styles={'display': 'flex', 'align-items': 'center',
-                    'justify-content': 'center', 'padding': '0px'}
-        )
-        
-        return SimpleDetails(
-            title="Multifitting",
-            content=pn.Column(
-                multifitting_switch_container,
-                sizing_mode=self._STRETCH_WIDTH,
-            ),
-            sizing_mode=self._STRETCH_WIDTH,
-        )
 
     def _normalize_spike_window(self, window: int, n_points: int) -> int:
         """Return a valid odd window in [3, n_points] for MAD-based despiking."""
@@ -409,7 +354,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if res is not None:
                 spec, n_points = res
                 title = f"ROI — sum (points={n_points})"
-            if self._preprocessors_applied and spec is not None:
+            if (self._preprocessors_applied or self._fitting_active) and spec is not None:
                 fig = self._build_spectrum_curve(spec, title)
                 if self._should_apply_visual_fitting():
                     try:
@@ -422,7 +367,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             i, j = round(point['y']), round(point['x'])
             title = f"Hover (x={j}, y={i})"
             spec = get_pixel_spectrum(self._get_display_data(), point)
-            if self._preprocessors_applied and spec is not None:
+            if (self._preprocessors_applied or self._fitting_active) and spec is not None:
                 fig = self._build_spectrum_curve(spec, title)
                 if self._should_apply_visual_fitting():
                     try:
@@ -439,7 +384,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         Unified logic to update paneB with the current region or hover point, applying fitting if active.
         """
 
-        apply_preprocessors = self._preprocessors_applied
+        apply_preprocessors = self._fitting_active
 
         if self._region_pairs:
             spec = None
@@ -538,25 +483,17 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._update_selection_overlay(self._region_pairs)
 
     def _on_fitting_switch_changed(self, event) -> None:
-        """Handle fitting switch toggle: update state and slider only — refresh is triggered by the button."""
+        """Handle fitting switch toggle: update state, slider, and immediately refresh paneB."""
         self._fitting_active = event.new
-        if self._range_slider is not None:
-            self._range_slider.disabled = not event.new
-        try:
-            CacheManager.get_cached_app_state().plot_dataset = self._dataset
-        except Exception:
-            pass
+        self._range_slider.disabled = not event.new
+        CacheManager.get_cached_app_state().plot_dataset = self._dataset
+        self._refresh_paneB()
 
     def _on_range_changed(self, event):
         """Refresh paneB when the fit range slider changes (only when fitting is active)."""
         if not self._fitting_active:
             return
         self._refresh_paneB()
-
-    def _on_remove_spikes_changed(self, event):
-        """Update threshold slider state — refresh is triggered by the Apply button."""
-        self._spike_threshold_slider.disabled = not event.new
-        self._spike_window_slider.disabled = not event.new
 
     def _on_spike_threshold_changed(self, event):
         self._spike_threshold = event.new
@@ -569,7 +506,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
             CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
-            self._apply_preprocessors_button.toggle()
+            self._apply_remove_spikes_button.toggle()
             self._refresh_paneB()
 
     def _on_spike_window_changed(self, event):
@@ -582,11 +519,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Window changed — cached preprocessing used the old value; must recompute
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
-            try:
-                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
-            except Exception:
-                pass
-            self._apply_preprocessors_button.toggle()
+            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            self._apply_remove_spikes_button.toggle()
             self._refresh_paneB()
             
     def _on_multifitting_switch_changed(self, event):
@@ -597,33 +531,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Disable all right-sidebar interactive widgets during preprocessing."""
         self._fitting_switch.disabled = True
         self._range_slider.disabled = True
-        self._remove_spikes_switch.disabled = True
         self._spike_threshold_slider.disabled = True
         self._spike_window_slider.disabled = True
         self._multifitting_switch.disabled = True
-        self._apply_preprocessors_button.disabled = True
+        self._apply_remove_spikes_button.disabled = True
 
     def _enable_sidebar_widgets(self):
         """Enable/disable sidebar widgets based on current preprocessing state."""
-        if self._preprocessors_applied:
-            # Spike controls are frozen — changing them would invalidate the preprocessed cube.
-            self._remove_spikes_switch.disabled = True
-            self._spike_threshold_slider.disabled = True
-            self._spike_window_slider.disabled = True
-            # Fitting and multifitting are display-only and safe to use on the preprocessed data.
-            self._fitting_switch.disabled = False
-            self._range_slider.disabled = not self._fitting_active
-            self._multifitting_switch.disabled = False
-            self._apply_preprocessors_button.disabled = False
-            return
-
         self._fitting_switch.disabled = False
         self._range_slider.disabled = not self._fitting_active
-        self._remove_spikes_switch.disabled = False
-        self._spike_threshold_slider.disabled = not bool(self._remove_spikes_switch.value)
-        self._spike_window_slider.disabled = not bool(self._remove_spikes_switch.value)
         self._multifitting_switch.disabled = False
-        self._apply_preprocessors_button.disabled = False
+        self._apply_remove_spikes_button.disabled = False
+        if self._preprocessors_applied:
+            # Spike sliders are frozen — changing them would invalidate the preprocessed cube.
+            self._spike_threshold_slider.disabled = True
+            self._spike_window_slider.disabled = True
+        else:
+            self._spike_threshold_slider.disabled = False
+            self._spike_window_slider.disabled = False
 
     def _on_apply_remove_spikes(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
@@ -661,7 +586,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._progress_display.reset()
             self._progress_display.visible = True
 
-            remove_spikes = bool(self._remove_spikes_switch.value)
+            remove_spikes = True
             fitting = self._fitting_active
             multifitting = bool(self._multifitting_switch.value)
 
@@ -670,9 +595,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             raw_arr = np.asarray(self._electron_count_data)
             dimx, dimy, n_energy = raw_arr.shape
             total_pixels = dimx * dimy
-            range_slider_value = get_range_slider_value(self._range_slider)
-            fit_range = range_slider_value if fitting else None
-            input_signature = ('raw',)
 
             despike_window = self._normalize_spike_window(self._spike_window, n_energy)
             despike_signature = (round(float(self._spike_threshold), 6), int(despike_window))
@@ -752,52 +674,53 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     self._despike_cache_signature = despike_signature
                     input_signature = ('despiked', despike_signature)
 
-            if fitting:
-                self._progress_display.update(45, "Spectral fitting will be applied on display.", level='info')
-                time.sleep(0.3)
+            # if fitting:
+            #     self._progress_display.update(45, "Spectral fitting will be applied on display.", level='info')
+            #     time.sleep(0.3)
 
-            if multifitting:
-                multifit_signature = (input_signature, fit_range, tuple(raw_arr.shape))
+            # if multifitting:
+            #     multifit_signature = (input_signature, fit_range, tuple(raw_arr.shape))
 
-                if (
-                    self._multifit_cube is not None
-                    and self._multifit_cache_signature == multifit_signature
-                    and self._multifit_cube.shape == working_arr.shape
-                ):
-                    self._progress_display.update(50, "Using cached multifitting result...", level='info')
-                    working_arr = self._multifit_cube.copy()
-                else:
-                    self._progress_display.update(50, "Running multifitting...", level='info')
+            #     if (
+            #         self._multifit_cube is not None
+            #         and self._multifit_cache_signature == multifit_signature
+            #         and self._multifit_cube.shape == working_arr.shape
+            #     ):
+            #         self._progress_display.update(50, "Using cached multifitting result...", level='info')
+            #         working_arr = self._multifit_cube.copy()
+            #     else:
+            #         self._progress_display.update(50, "Running multifitting...", level='info')
 
-                    def multifit_progress_callback(progress, total):
-                        percent = 50 + int(40 * progress / total)
-                        self._progress_display.update(
-                            percent, f"Multifitting: {progress}/{total} pixels", level='info'
-                        )
+            #         def multifit_progress_callback(progress, total):
+            #             percent = 50 + int(40 * progress / total)
+            #             self._progress_display.update(
+            #                 percent, f"Multifitting: {progress}/{total} pixels", level='info'
+            #             )
 
-                    try:
-                        cpu_count = os.cpu_count() or 1
-                        workers = max(1, min(8, cpu_count - 1)) if cpu_count > 1 else 1
-                        use_parallel = (total_pixels >= 512) and (workers > 1)
+            #         try:
+            #             cpu_count = os.cpu_count() or 1
+            #             workers = max(1, min(8, cpu_count - 1)) if cpu_count > 1 else 1
+            #             use_parallel = (total_pixels >= 512) and (workers > 1)
 
-                        mf = MultiFit(
-                            np.ascontiguousarray(working_arr),
-                            model=lmfit.models.PowerLawModel,
-                            Eloss_x=self._e_axis,
-                            fit_range=fit_range,
-                        ).run(
-                            mode='subtracted',
-                            use_parallel=use_parallel,
-                            workers=workers if use_parallel else None,
-                            progress_callback=multifit_progress_callback,
-                        )
-                        working_arr = mf.get_fitted_data()
-                        self._multifit_cube = np.asarray(working_arr).copy()
-                        self._multifit_cache_signature = multifit_signature
-                    except Exception:
-                        pass
+            #             mf = MultiFit(
+            #                 np.ascontiguousarray(working_arr),
+            #                 model=lmfit.models.PowerLawModel,
+            #                 Eloss_x=self._e_axis,
+            #                 fit_range=fit_range,
+            #             ).run(
+            #                 mode='subtracted',
+            #                 use_parallel=use_parallel,
+            #                 workers=workers if use_parallel else None,
+            #                 progress_callback=multifit_progress_callback,
+            #             )
+            #             working_arr = mf.get_fitted_data()
+            #             self._multifit_cube = np.asarray(working_arr).copy()
+            #             self._multifit_cache_signature = multifit_signature
+            #         except Exception:
+            #             pass
 
             self._progress_display.update(90, "Finalizing...", level='info')
+            time.sleep(0.5)
 
             preprocessed_da = xr.DataArray(
                 working_arr,
@@ -805,10 +728,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 coords=self._electron_count_data.coords,
             )
             self._preprocessed_electron_count = preprocessed_da
-            try:
-                CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
-            except Exception:
-                pass
+            CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
             self._preprocessors_applied = True
             self._current_y_range = None
             self._current_y_autorange = True
@@ -820,7 +740,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._progress_display.error(f"Processing failed: {str(e)}")
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
-            self._apply_preprocessors_button.toggle()
+            self._apply_remove_spikes_button.toggle()
             time.sleep(2)
         finally:
             try:
@@ -829,15 +749,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 # Fallback path for non-server contexts.
                 self._restore_after_remove_spikes()
 
-    def _on_display_raw_data(self):
+    def _on_revert_remove_spikes(self):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
         had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
         self._preprocessors_applied = False
         self._preprocessed_electron_count = None
-        try:
-            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
-        except Exception:
-            pass
+        CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
         self._current_y_range = None
         self._current_y_autorange = True
 
@@ -962,13 +879,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 pass
         self._fitting_switch_watcher = None
 
-        if self._remove_spikes_watcher is not None and self._remove_spikes_switch is not None:
-            try:
-                self._remove_spikes_switch.param.unwatch(self._remove_spikes_watcher)
-            except Exception:
-                pass
-        self._remove_spikes_watcher = None
-
         if self._spike_threshold_slider_watcher is not None and self._spike_threshold_slider is not None:
             try:
                 self._spike_threshold_slider.param.unwatch(self._spike_threshold_slider_watcher)
@@ -993,11 +903,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Null out widget references
         self._range_slider = pn.widgets.EditableRangeSlider()
         self._fitting_switch = pn.widgets.Switch()
-        self._remove_spikes_switch = pn.widgets.Switch()
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_window_slider = pn.widgets.IntSlider()
         self._multifitting_switch = pn.widgets.Switch()
-        self._apply_preprocessors_button = ToggleButton()
+        self._apply_remove_spikes_button = ToggleButton()
         self._preprocessors_applied = False
         self._preprocessed_electron_count = None
         self._despiked_cube = None
