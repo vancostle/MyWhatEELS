@@ -69,6 +69,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._preprocessed_electron_count = None
         self._multifit_previous_electron_count = None
         self._multifit_previous_source: str | None = None
+        self._multifit_input_had_spikes = False
         self._despiked_cube = None
         self._despike_cache_signature = None
         self._multifit_cube = None
@@ -503,6 +504,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Handle fitting switch toggle: update state, slider, and immediately refresh paneB."""
         self._fitting_active = event.new
         self._range_slider.disabled = not event.new
+        self._apply_sidebar_apply_locks()
         CacheManager.get_cached_app_state().plot_dataset = self._dataset
         self._refresh_paneB()
 
@@ -574,6 +576,21 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._apply_remove_spikes_button.disabled = True
         self._apply_multifitting_button.disabled = True
 
+    def _apply_sidebar_apply_locks(self):
+        """Lock only the controls of the currently applied preprocessor section."""
+        spikes_applied = self._preprocessors_applied and self._preprocessed_source == 'spikes'
+        multifit_applied = self._preprocessors_applied and self._preprocessed_source == 'multifit'
+        multifit_based_on_spikes = multifit_applied and self._multifit_input_had_spikes
+
+        # If Remove Spikes is currently applied, freeze only its own sliders.
+        self._spike_threshold_slider.disabled = spikes_applied or multifit_based_on_spikes
+        self._spike_window_slider.disabled = spikes_applied or multifit_based_on_spikes
+
+        # If Multifitting is currently applied, freeze only fitting controls.
+        self._fitting_switch.disabled = multifit_applied
+        self._multifitting_switch.disabled = multifit_applied
+        self._range_slider.disabled = multifit_applied or (not self._fitting_active)
+
     def _enable_sidebar_widgets(self):
         """Enable/disable sidebar widgets based on current preprocessing state."""
         self._fitting_switch.disabled = False
@@ -583,6 +600,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch.disabled = False
         self._apply_remove_spikes_button.disabled = False
         self._apply_multifitting_button.disabled = False
+        self._apply_sidebar_apply_locks()
 
     def _on_apply_remove_spikes(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
@@ -590,6 +608,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if self._apply_multifitting_button.is_on():
             self._apply_multifitting_button.toggle()
         self._multifitting_switch.value = False
+        self._multifit_input_had_spikes = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -630,6 +649,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         self._multifit_previous_source = (
             self._preprocessed_source if self._preprocessors_applied else None
+        )
+        self._multifit_input_had_spikes = (
+            self._preprocessors_applied and self._preprocessed_source == 'spikes'
         )
 
         threading.Thread(target=self._run_multifitting_thread, daemon=True).start()
@@ -757,6 +779,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
 
         self._multifitting_switch.value = False
+        self._multifit_input_had_spikes = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
         self._current_y_range = None
@@ -940,7 +963,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._current_y_range = None
             self._current_y_autorange = True
             time.sleep(0.5)
-            self._progress_display.completion("Preprocessors applied successfully!")
+            self._progress_display.completion("Despike applied successfully!")
             time.sleep(2)
 
         except Exception as e:
@@ -964,6 +987,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if self._apply_multifitting_button.is_on():
             self._apply_multifitting_button.toggle()
         self._multifitting_switch.value = False
+        self._multifit_input_had_spikes = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -1130,6 +1154,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._preprocessed_electron_count = None
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
+        self._multifit_input_had_spikes = False
         self._despiked_cube = None
         self._despike_cache_signature = None
         self._multifit_cube = None
