@@ -16,6 +16,7 @@ from whateels.pages.home.utils.plot_helpers import (
 )
 from whateels.state import CacheManager
 from whateels.base.plots.base_spectrum_image_plot import BaseSpectrumImagePlot
+from holoviews import streams as hv_streams
 
 from typing import TYPE_CHECKING, override
 if TYPE_CHECKING:
@@ -402,7 +403,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         Unified logic to update paneB with the current region or hover point, applying fitting if active.
         """
 
-        apply_preprocessors = self._fitting_active
+        apply_preprocessors = self._preprocessors_applied or self._fitting_active
 
         if self._region_pairs:
             spec = None
@@ -500,11 +501,62 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._paneA_base_overlay = overlay
         self._update_selection_overlay(self._region_pairs)
 
+    def _reset_paneB_pipe(self):
+        """Tear down and rebuild the Pipe + DynamicMap backing paneB.
+
+        Required when the HoloViews element structure changes (e.g. single Curve
+        Overlay → 3-element fitting Overlay and back).  Bokeh builds one renderer
+        per element in the first Overlay it sees; sending a structurally different
+        Overlay later leaves stale renderers and makes paneB go blank.
+        Replacing the DynamicMap forces Bokeh to build a fresh model tree.
+        """
+        if self._rangexy_stream is not None:
+            try:
+                self._rangexy_stream.remove_subscriber(self._on_paneB_range_changed)
+            except Exception:
+                pass
+            try:
+                self._rangexy_stream.clear()
+            except Exception:
+                pass
+            self._rangexy_stream = None
+
+        self._paneB_pipe = hv_streams.Pipe(data=None)
+        self._paneB_dmap = hv.DynamicMap(lambda data: data, streams=[self._paneB_pipe])
+
+        # Seed the pipe with a valid figure before assigning to paneB.object.
+        # Panel calls initialize_dynamic() immediately on assignment, which calls
+        # dmap[_initial_key()] — if the pipe still holds None, DynamicMap raises
+        # TypeError. Seeding first avoids that.
+        if self._region_pairs:
+            _seed = self._figB_region(self._region_pairs)
+        elif self._last_hover_point is not None:
+            _seed = self._figB_hover(self._last_hover_point)
+        else:
+            _seed = self._figB_hover({"x": 0, "y": 0})
+        if not isinstance(_seed, hv.Overlay):
+            _seed = hv.Overlay([_seed])
+        self._paneB_pipe.send(_seed)
+
+        # Rewire RangeXY to the new DynamicMap
+        self._rangexy_stream = hv_streams.RangeXY(source=self._paneB_dmap)
+        self._rangexy_stream.add_subscriber(self._on_paneB_range_changed)
+
+        if self.paneB is not None:
+            self.paneB.object = self._paneB_dmap
+
     def _on_fitting_switch_changed(self, event) -> None:
         """Handle fitting switch toggle: update state, slider, and immediately refresh paneB."""
         self._fitting_active = event.new
         self._range_slider.disabled = not event.new
         self._apply_sidebar_apply_locks()
+        # Reset y-range so paneB auto-scales to the new content.
+        self._current_y_range = None
+        self._current_y_autorange = True
+        # Toggling fitting changes the Overlay structure (1 vs 3 elements).
+        # Bokeh builds one renderer per element on first render and cannot handle
+        # the structural change cleanly — rebuild the pipe to get a fresh model.
+        self._reset_paneB_pipe()
         CacheManager.get_cached_app_state().plot_dataset = self._dataset
         self._refresh_paneB()
 
