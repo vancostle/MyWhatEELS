@@ -565,6 +565,20 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_apply_remove_spikes(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
+        # Reuse cached result if slider values haven't changed since last Apply.
+        current_threshold = round(float(self._spike_threshold), 6)
+        current_window = self._spike_window
+        if (
+            self._preprocessed_electron_count is not None
+            and self._applied_spike_threshold == current_threshold
+            and self._applied_spike_window == current_window
+        ):
+            self._preprocessors_applied = True
+            CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            self._current_y_range = None
+            self._current_y_autorange = True
+            self._finalize_remove_spikes_ui()
+            return
 
         self._disable_sidebar_widgets()
 
@@ -768,9 +782,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
         had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
         self._preprocessors_applied = False
-        self._applied_spike_threshold = None
-        self._applied_spike_window = None
-        self._preprocessed_electron_count = None
+        # Keep _preprocessed_electron_count and _applied_spike_threshold/_applied_spike_window in memory
+        # so re-clicking Apply with the same values skips recomputation.
         CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
         self._current_y_range = None
         self._current_y_autorange = True
