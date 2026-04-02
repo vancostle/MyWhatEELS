@@ -124,14 +124,14 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._compute_hdbscan_on_umap_button = pn.widgets.Button()
         
         # Initialize the layout with the created controls and details
-        data_source_details = self._create_data_source_details()
+        input_data_controls = self._create_data_source_controls()
         compute_umap_embedding_details = self._create_umap_simple_details(modal_manager, model)
         compute_hdbscan_embedding_details = self._create_hdbscan_simple_details()
         
         self.disable_hdbscan_controls() # HDBSCAN controls are disabled by default, as they depend on UMAP results, but UMAP results are not available at the beginning.
 
         super().__init__(
-            data_source_details,
+            input_data_controls,
             compute_umap_embedding_details,
             compute_hdbscan_embedding_details,
             sizing_mode=self._STRETCH_WIDTH,
@@ -204,14 +204,15 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         self._compute_hdbscan_on_umap_button.disabled = True
         
-    def _create_data_source_details(self) -> SimpleDetails:
+    def _create_data_source_controls(self) -> pn.Row:
         is_preprocessed_available = self._model.is_preprocessed_data_available()
 
         self._use_preprocessed_data_switch = pn.widgets.Switch(
-            name="Use Home preprocessed data",
+            name="Input Data",
             value=is_preprocessed_available,
             disabled=not is_preprocessed_available,
-            sizing_mode=self._STRETCH_WIDTH,
+            sizing_mode='stretch_both',
+            css_classes=["background-subtraction-switch"],
         )
 
         availability_message = (
@@ -220,22 +221,20 @@ class Clustering2RightSidebarLayout(pn.Column):
             else "No preprocessed data available. Apply preprocessing in Home first."
         )
 
-        source_content = pn.Row(
-            self._use_preprocessed_data_switch,
+        input_data_label = pn.pane.Markdown("### Input Data")
+
+        input_data_controls = pn.Row(
             pn.widgets.TooltipIcon(
-                value=Tooltip(content=availability_message, position="left"),
-                margin=(16, 0, 0, 0),
+                value=availability_message,
+                css_classes=["tooltip-icon"],
             ),
+            input_data_label,
+            self._use_preprocessed_data_switch,
             sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["background-subtraction-container"],
         )
 
-        return SimpleDetails(
-            title="Input Data",
-            content=pn.Column(source_content, sizing_mode=self._STRETCH_WIDTH),
-            expanded=True,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 0, 10, 0),
-        )
+        return input_data_controls
         
     def _create_umap_simple_details(self, modal_manager, model) -> SimpleDetails:
         n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)

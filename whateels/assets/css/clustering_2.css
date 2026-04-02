@@ -1,3 +1,23 @@
+.bk-body {
+    --switch-width: 50px;
+    --bar-height: 25px;
+    --switch-size: 25px;
+}
+
+.bk-bar {
+    transition-property: background-color;
+}
+
+.bk-knob {
+    border-radius: 100%;
+    transition-property: left, background-color;
+}
+
+.bk-bar, .bk-knob {
+    transition-duration: 0.3s;
+    transition-timing-function: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
 .umap-embedding-placeholder {
     background-color: #fafafa;
     box-shadow: 0px 0px 5px #d8d8d8;
@@ -46,4 +66,17 @@
         opacity: 0;
         transform: scale(0.7) translateY(-30px);
     }
+}
+
+.background-subtraction-switch {
+    display: grid;
+    place-content: center;
+}
+
+.background-subtraction-container {
+    max-height: 65px;
+}
+
+.tooltip-icon {
+    margin: 0;
 }
