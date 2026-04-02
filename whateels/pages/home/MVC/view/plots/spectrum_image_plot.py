@@ -63,8 +63,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._preprocessors_applied = False
         self._applied_spike_threshold: float | None = None
         self._applied_spike_window: int | None = None
+        self._preprocessed_source: str | None = None
         self._apply_remove_spikes_button = ToggleButton()
+        self._apply_multifitting_button = ToggleButton()
         self._preprocessed_electron_count = None
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source: str | None = None
         self._despiked_cube = None
         self._despike_cache_signature = None
         self._multifit_cube = None
@@ -180,6 +184,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             margin=(8, 0, 0, 0),
         )
 
+        self._apply_multifitting_button = ToggleButton(
+            initial_state=False,
+            states={
+                "on": {"label": 'Revert Multifitting', "on_click": self._on_revert_multifitting, "button_type": 'warning'},
+                "off": {"label": 'Apply Multifitting', "on_click": self._on_apply_multifitting, "button_type": 'success'},
+            },
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(8, 0, 0, 0),
+        )
+
     # --- Fitting Details SimpleDetails builder ---
     def create_fitting_details(self) -> SimpleDetails:
         """Build and return the multifitting SimpleDetails block for the sidebar."""
@@ -207,6 +221,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             content=pn.Column(
                 fitting_switch_container,
                 self._range_slider_container,
+                self._apply_multifitting_button,
                 sizing_mode=self._STRETCH_WIDTH,
             ),
             sizing_mode=self._STRETCH_WIDTH,
@@ -334,7 +349,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if not self._fitting_active:
             return False
         # When multifitting output is being displayed, avoid adding a second fitting overlay.
-        if self._preprocessors_applied and bool(self._multifitting_switch.value):
+        if self._preprocessors_applied and self._preprocessed_source == 'multifit':
             return False
         return True
 
@@ -505,6 +520,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_cache_signature = None
         if self._applied_spike_threshold is None:
             return
+        if self._preprocessed_source not in (None, 'spikes'):
+            return
         values_match = (
             round(float(self._spike_threshold), 6) == self._applied_spike_threshold
             and self._spike_window == self._applied_spike_window
@@ -526,6 +543,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_cube = None
         self._multifit_cache_signature = None
         if self._applied_spike_threshold is None:
+            return
+        if self._preprocessed_source not in (None, 'spikes'):
             return
         values_match = (
             round(float(self._spike_threshold), 6) == self._applied_spike_threshold
@@ -553,6 +572,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider.disabled = True
         self._multifitting_switch.disabled = True
         self._apply_remove_spikes_button.disabled = True
+        self._apply_multifitting_button.disabled = True
 
     def _enable_sidebar_widgets(self):
         """Enable/disable sidebar widgets based on current preprocessing state."""
@@ -562,14 +582,23 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider.disabled = False
         self._multifitting_switch.disabled = False
         self._apply_remove_spikes_button.disabled = False
+        self._apply_multifitting_button.disabled = False
 
     def _on_apply_remove_spikes(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
+        # A new despike application supersedes a previously displayed multifit output.
+        if self._apply_multifitting_button.is_on():
+            self._apply_multifitting_button.toggle()
+        self._multifitting_switch.value = False
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source = None
+
         # Reuse cached result if slider values haven't changed since last Apply.
         current_threshold = round(float(self._spike_threshold), 6)
         current_window = self._spike_window
         if (
             self._preprocessed_electron_count is not None
+            and self._preprocessed_source == 'spikes'
             and self._applied_spike_threshold == current_threshold
             and self._applied_spike_window == current_window
         ):
@@ -587,6 +616,154 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._main_ref.update(tab)
 
         threading.Thread(target=self._run_remove_spikes_thread, daemon=True).start()
+
+    def _on_apply_multifitting(self):
+        """Disable sidebar, show progress in main, then run multifitting in a background thread."""
+        self._disable_sidebar_widgets()
+
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            tab = pn.Tabs(("Applying Multifitting...", self._progress_display))
+            self._main_ref.update(tab)
+
+        self._multifit_previous_electron_count = (
+            self._preprocessed_electron_count if self._preprocessors_applied else None
+        )
+        self._multifit_previous_source = (
+            self._preprocessed_source if self._preprocessors_applied else None
+        )
+
+        threading.Thread(target=self._run_multifitting_thread, daemon=True).start()
+
+    def _build_multifit_signature(self, input_arr: np.ndarray, fit_range: tuple[float, float]):
+        """Build a stable cache signature for multifitting based on source, range, and shape."""
+        fit_range_signature = tuple(round(float(v), 6) for v in fit_range)
+        if self._apply_remove_spikes_button.is_on():
+            source_signature = (
+                'despiked',
+                round(float(self._spike_threshold), 6),
+                int(self._spike_window),
+            )
+        else:
+            source_signature = ('raw',)
+        return (source_signature, fit_range_signature, tuple(input_arr.shape))
+
+    def _run_multifitting_thread(self):
+        """Background thread: run multifitting for every pixel and cache the resulting cube."""
+        try:
+            self._progress_display.reset()
+            self._progress_display.visible = True
+            self._progress_display.update(5, "Initializing multifitting...", level='info')
+
+            input_da = self._get_display_data()
+            input_arr = np.asarray(input_da)
+            if input_arr.ndim != 3:
+                raise ValueError(f"Expected 3D spectrum image, got shape={input_arr.shape}")
+
+            dimx, dimy, _ = input_arr.shape
+            total_pixels = max(1, dimx * dimy)
+            fit_range = tuple(float(v) for v in get_range_slider_value(self._range_slider))
+            multifit_signature = self._build_multifit_signature(input_arr, fit_range)
+
+            if (
+                self._multifit_cube is not None
+                and self._multifit_cache_signature == multifit_signature
+                and self._multifit_cube.shape == input_arr.shape
+            ):
+                self._progress_display.update(55, "Using cached multifitting result...", level='info')
+                working_arr = self._multifit_cube.copy()
+            else:
+                self._progress_display.update(20, "Running multifitting...", level='info')
+
+                def multifit_progress_callback(progress, total):
+                    denom = max(1, int(total))
+                    percent = 20 + int(65 * min(progress, denom) / denom)
+                    self._progress_display.update(
+                        percent,
+                        f"Multifitting: {progress}/{denom} pixels",
+                        level='info',
+                    )
+
+                cpu_count = os.cpu_count() or 1
+                workers = max(1, min(8, cpu_count - 1)) if cpu_count > 1 else 1
+                use_parallel = (total_pixels >= 512) and (workers > 1)
+
+                mf = MultiFit(
+                    np.ascontiguousarray(input_arr),
+                    model=lmfit.models.PowerLawModel,
+                    Eloss_x=self._e_axis,
+                    fit_range=fit_range,
+                ).run(
+                    mode='subtracted',
+                    use_parallel=use_parallel,
+                    workers=workers if use_parallel else None,
+                    progress_callback=multifit_progress_callback,
+                )
+
+                working_arr = np.asarray(mf.get_fitted_data())
+                self._multifit_cube = working_arr.copy()
+                self._multifit_cache_signature = multifit_signature
+
+            self._progress_display.update(90, "Finalizing...", level='info')
+            time.sleep(0.5)
+
+            preprocessed_da = xr.DataArray(
+                working_arr,
+                dims=self._electron_count_data.dims,
+                coords=self._electron_count_data.coords,
+            )
+            self._preprocessed_electron_count = preprocessed_da
+            CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
+            self._preprocessors_applied = True
+            self._preprocessed_source = 'multifit'
+            self._multifitting_switch.value = True
+            self._current_y_range = None
+            self._current_y_autorange = True
+            self._progress_display.completion("Multifitting applied successfully!")
+            time.sleep(2)
+
+        except Exception as e:
+            self._progress_display.error(f"Multifitting failed: {str(e)}")
+
+            # Restore previous display state if multifitting fails.
+            self._preprocessed_electron_count = self._multifit_previous_electron_count
+            self._preprocessed_source = self._multifit_previous_source
+            if self._multifit_previous_electron_count is not None:
+                self._preprocessors_applied = True
+                CacheManager.get_cached_app_state().preprocessed_electron_count = self._multifit_previous_electron_count
+            else:
+                self._preprocessors_applied = False
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+
+            self._multifitting_switch.value = False
+            self._apply_multifitting_button.toggle()
+            time.sleep(2)
+        finally:
+            try:
+                pn.state.execute(self._restore_after_remove_spikes)
+            except Exception:
+                self._restore_after_remove_spikes()
+
+    def _on_revert_multifitting(self):
+        """Revert multifitting and restore the previous display cube (raw or despiked)."""
+        if self._multifit_previous_electron_count is not None:
+            self._preprocessed_electron_count = self._multifit_previous_electron_count
+            self._preprocessed_source = self._multifit_previous_source
+            self._preprocessors_applied = True
+            CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+        else:
+            self._preprocessed_electron_count = None
+            self._preprocessed_source = None
+            self._preprocessors_applied = False
+            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+
+        self._multifitting_switch.value = False
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source = None
+        self._current_y_range = None
+        self._current_y_autorange = True
+        self._refresh_paneA()
+        self._refresh_paneB()
+        self._enable_sidebar_widgets()
 
     def _finalize_remove_spikes_ui(self):
         """Final pane refresh once plots tab is mounted in the document."""
@@ -757,6 +934,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_electron_count = preprocessed_da
             CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
             self._preprocessors_applied = True
+            self._preprocessed_source = 'spikes'
             self._applied_spike_threshold = round(float(self._spike_threshold), 6)
             self._applied_spike_window = self._spike_window
             self._current_y_range = None
@@ -769,6 +947,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._progress_display.error(f"Processing failed: {str(e)}")
             self._preprocessors_applied = False
             self._preprocessed_electron_count = None
+            self._preprocessed_source = None
             self._apply_remove_spikes_button.toggle()
             time.sleep(2)
         finally:
@@ -781,7 +960,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_revert_remove_spikes(self):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
         had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
+
+        if self._apply_multifitting_button.is_on():
+            self._apply_multifitting_button.toggle()
+        self._multifitting_switch.value = False
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source = None
+
         self._preprocessors_applied = False
+        self._preprocessed_source = None
         # Keep _preprocessed_electron_count and _applied_spike_threshold/_applied_spike_window in memory
         # so re-clicking Apply with the same values skips recomputation.
         CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
@@ -937,8 +1124,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider = pn.widgets.IntSlider()
         self._multifitting_switch = pn.widgets.Switch()
         self._apply_remove_spikes_button = ToggleButton()
+        self._apply_multifitting_button = ToggleButton()
         self._preprocessors_applied = False
+        self._preprocessed_source = None
         self._preprocessed_electron_count = None
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source = None
         self._despiked_cube = None
         self._despike_cache_signature = None
         self._multifit_cube = None
