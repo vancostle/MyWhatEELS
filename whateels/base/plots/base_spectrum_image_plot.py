@@ -67,11 +67,14 @@ class BaseSpectrumImagePlot(IPlot):
 
         # Selection / hover state
         self._region_pairs = []
+        self._region_rows = np.array([], dtype=np.int32)
+        self._region_cols = np.array([], dtype=np.int32)
         self._last_hover_point = None
 
         # Overlay + lasso debounce state — must exist before _setup_plots() runs
         self._paneA_base_overlay = None
-        self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+        self._selection_overlay = hv.Rectangles([], kdims=['x0', 'y0', 'x1', 'y1'])
+        self._selection_pairs_ref = None
         self._hover_blocked = False
         self._pending_selection_index = None
         self._pending_selection_ts = None
@@ -237,7 +240,7 @@ class BaseSpectrumImagePlot(IPlot):
 
         self.paneA._splitjs_xy_ratio = float(nx) / float(ny) if ny else 1.0 # type: ignore
 
-        # Capture base overlay for selection dot recomposition
+        # Capture base overlay for selection overlay recomposition
         self._paneA_base_overlay = overlay
         self._update_selection_overlay([])
 
@@ -301,7 +304,7 @@ class BaseSpectrumImagePlot(IPlot):
 
     def _figB_region(self, pairs):
         """Return an hv.Curve for a region (summed spectrum)."""
-        res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), pairs)
+        res = self._get_spectrum_from_indices_fast(pairs)
         if res is None:
             return self._figB_hover({"x": 0, "y": 0})
         spec, n_points = res
@@ -319,6 +322,46 @@ class BaseSpectrumImagePlot(IPlot):
             shared_axes=False,
             framewise=True,
         )
+
+    def _get_spectrum_from_indices_fast(self, pairs):
+        """Fast ROI spectrum extraction using cached row/col arrays when available."""
+        if not pairs:
+            return None
+
+        data_values = self._get_display_data().values
+
+        use_cached = (
+            pairs is self._region_pairs
+            and self._region_rows.size > 0
+            and self._region_rows.size == len(pairs)
+        )
+
+        if use_cached:
+            ii = self._region_rows
+            jj = self._region_cols
+        else:
+            try:
+                arr = np.asarray(pairs, dtype=np.int64)
+                if arr.ndim == 2 and arr.shape[1] == 2:
+                    ii = arr[:, 0]
+                    jj = arr[:, 1]
+                else:
+                    ii, jj = zip(*pairs)
+                    ii = np.asarray(ii, dtype=np.int64)
+                    jj = np.asarray(jj, dtype=np.int64)
+            except Exception:
+                return None
+
+        try:
+            block = data_values[ii, jj, :]
+            return block.sum(axis=0), len(pairs)
+        except Exception:
+            # Fallback for data cubes using (x, y, E) order.
+            try:
+                block = data_values[jj, ii, :]
+                return block.sum(axis=0), len(pairs)
+            except Exception:
+                return SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), pairs)
 
     # --- paneB update ---
 
@@ -353,10 +396,28 @@ class BaseSpectrumImagePlot(IPlot):
     def _index_to_pairs(self, index):
         """Convert a flat Selection1D index list to (row, col) pairs."""
         if not index:
+            self._region_rows = np.array([], dtype=np.int32)
+            self._region_cols = np.array([], dtype=np.int32)
             return []
-        return list(dict.fromkeys(
-            (idx // self._nx, idx % self._nx) for idx in index
-        ))
+
+        idx = np.asarray(index, dtype=np.int64)
+        if idx.ndim != 1:
+            idx = idx.ravel()
+        if idx.size == 0:
+            self._region_rows = np.array([], dtype=np.int32)
+            self._region_cols = np.array([], dtype=np.int32)
+            return []
+
+        # Preserve first-seen order while removing duplicates.
+        first_pos = np.unique(idx, return_index=True)[1]
+        first_pos.sort()
+        uniq = idx[first_pos]
+
+        rows = (uniq // self._nx).astype(np.int32, copy=False)
+        cols = (uniq % self._nx).astype(np.int32, copy=False)
+        self._region_rows = rows
+        self._region_cols = cols
+        return list(zip(rows.tolist(), cols.tolist()))
 
     def _check_selection_debounce(self):
         """Periodic callback: flush a pending lasso selection after the debounce window."""
@@ -373,15 +434,44 @@ class BaseSpectrumImagePlot(IPlot):
             self._process_selection(index)
 
     def _update_selection_overlay(self, pairs):
-        """Rebuild the red-dot selection overlay and recompose paneA."""
+        """Rebuild a pixel-aligned selection overlay and recompose paneA."""
         if pairs:
-            xs = [col for row, col in pairs]
-            ys = [row for row, col in pairs]
-            self._selection_overlay = hv.Points(
-                (xs, ys), kdims=['x', 'y']
-            ).opts(color='red', size=5, alpha=0.5)
+            # Fast path: if the exact same selection list object is reused
+            # (common during pane refresh), reuse the already built overlay.
+            if self._selection_pairs_ref is not pairs:
+                # Draw one rectangle per selected pixel using pixel cell bounds.
+                # Image coordinates are centered on integer indices, so each pixel
+                # spans [idx-0.5, idx+0.5] in both axes.
+                if (
+                    pairs is self._region_pairs
+                    and self._region_rows.size > 0
+                    and self._region_rows.size == len(pairs)
+                ):
+                    ys = self._region_rows.astype(np.float32, copy=False)
+                    xs = self._region_cols.astype(np.float32, copy=False)
+                else:
+                    arr = np.asarray(pairs, dtype=np.float32)
+                    if arr.ndim == 2 and arr.shape[1] == 2:
+                        ys = arr[:, 0]
+                        xs = arr[:, 1]
+                    else:
+                        ys = np.fromiter((row for row, _ in pairs), dtype=np.float32, count=len(pairs))
+                        xs = np.fromiter((col for _, col in pairs), dtype=np.float32, count=len(pairs))
+
+                rect_data = {
+                    'x0': xs - 0.5,
+                    'y0': ys - 0.5,
+                    'x1': xs + 0.5,
+                    'y1': ys + 0.5,
+                }
+                self._selection_overlay = hv.Rectangles(
+                    rect_data,
+                    kdims=['x0', 'y0', 'x1', 'y1'],
+                ).opts(fill_color='red', fill_alpha=0.35, line_alpha=0, line_width=0)
+                self._selection_pairs_ref = pairs
         else:
-            self._selection_overlay = hv.Points([], kdims=['x', 'y'])
+            self._selection_overlay = hv.Rectangles([], kdims=['x0', 'y0', 'x1', 'y1'])
+            self._selection_pairs_ref = None
         if self._paneA_base_overlay is not None and self.paneA is not None:
             self.paneA.object = (
                 self._paneA_base_overlay * self._selection_overlay
@@ -436,9 +526,11 @@ class BaseSpectrumImagePlot(IPlot):
         self._hover_blocked = True
 
     def _on_paneA_double_tap(self, x=None, y=None):
-        """Reset lasso selection, clear red dots, and unblock hover."""
+        """Reset lasso selection, clear highlighted pixels, and unblock hover."""
         self._hover_blocked = False
         self._region_pairs = []
+        self._region_rows = np.array([], dtype=np.int32)
+        self._region_cols = np.array([], dtype=np.int32)
         self._pending_selection_index = None
         self._pending_selection_ts = None
         self._update_selection_overlay([])
@@ -546,6 +638,8 @@ class BaseSpectrumImagePlot(IPlot):
         self._electron_count_data = None  # type: ignore[assignment]
         self._energy = None  # type: ignore[assignment]
         self._region_pairs = []
+        self._region_rows = np.array([], dtype=np.int32)
+        self._region_cols = np.array([], dtype=np.int32)
         self.paneA = None
         self.paneB = None
         self._selectors = None
@@ -559,3 +653,4 @@ class BaseSpectrumImagePlot(IPlot):
         self._plots_layout = None
         self._paneA_base_overlay = None
         self._selection_overlay = None
+        self._selection_pairs_ref = None
