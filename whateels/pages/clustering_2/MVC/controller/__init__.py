@@ -1,5 +1,4 @@
 from whateels.helpers import SafeConverter, URLUtils
-from whateels.components import SplitJs
 import itertools, panel as pn, threading
 
 from typing import TYPE_CHECKING
@@ -42,22 +41,13 @@ class Clustering2PageController:
         # Set selected dataset in the model
         self._model.selected_dataset = all_datasets[tab_param]
 
-        electron_count = self._model.selected_dataset["ElectronCount"]
-        self._hdbscan = UMAP_HDBSCAN(electron_count_data=electron_count) # Initialize UMAP_HDBSCAN with electron count data from the selected dataset
+        # Build UMAP/HDBSCAN backend from the active data source (raw or Home-preprocessed).
+        self._hdbscan = UMAP_HDBSCAN(electron_count_data=self._resolve_electron_count_data())
 
-        eloss = self._model.selected_dataset["Eloss"].values # Get Eloss values from the selected dataset
-        eloss_min = float(eloss.min())
-        eloss_max = float(eloss.max())
-
-        view.right_sidebar.min_cut_signal.value = eloss_min
-        view.right_sidebar.min_cut_signal.start = eloss_min
-        view.right_sidebar.min_cut_signal.end = eloss_max
-        
-        view.right_sidebar.max_cut_signal.value = eloss_max
-        view.right_sidebar.max_cut_signal.start = eloss_min
-        view.right_sidebar.max_cut_signal.end = eloss_max
-        
-        view.right_sidebar.reset_cut_signal_button.on_click(self._reset_cut_signal_event) # Register callback for reset cut signal button
+        view.right_sidebar.use_preprocessed_data_switch.param.watch(
+            self._on_use_preprocessed_data_switch_changed,
+            'value',
+        )
         
         view.right_sidebar.hdbscan_activate_button.on_click(self._hdbscan_active_button_event) # Register callback for HDBSCAN activate button click
         
@@ -69,9 +59,83 @@ class Clustering2PageController:
     def is_valid_tab_and_dataset(self) -> bool:
         """Returns True if the controller was initialized with a valid tab and dataset, else False."""
         return self._is_valid_tab_and_dataset
+
+    def _has_valid_preprocessed_data(self, notify: bool = False) -> bool:
+        """Validate that Home-preprocessed data exists and is compatible with current dataset shape."""
+        if not self._model.is_preprocessed_data_available():
+            if notify:
+                pn.state.notifications.warning(
+                    "No preprocessed data available. Apply preprocessing in Home first.",
+                    duration=5000,
+                ) # type: ignore
+            return False
+
+        raw_electron_count = self._model.selected_dataset["ElectronCount"]
+        preprocessed = self._model.app_state.preprocessed_electron_count
+
+        try:
+            if preprocessed is None or len(preprocessed.shape) != 3:
+                raise ValueError("Expected a 3D preprocessed ElectronCount DataArray.")
+            if preprocessed.shape[0] != raw_electron_count.shape[0] or preprocessed.shape[1] != raw_electron_count.shape[1]:
+                raise ValueError(
+                    f"Spatial shape mismatch. Raw={raw_electron_count.shape[:2]}, preprocessed={preprocessed.shape[:2]}"
+                )
+        except Exception as e:
+            if notify:
+                pn.state.notifications.warning(
+                    f"Preprocessed data is not compatible with this tab. Using raw data. Details: {e}",
+                    duration=6000,
+                ) # type: ignore
+            return False
+
+        return True
+
+    def _resolve_electron_count_data(self):
+        """Return ElectronCount source according to the sidebar switch."""
+        use_preprocessed = self._model.should_use_preprocessed_data(
+            bool(self._view.right_sidebar.use_preprocessed_data_switch.value)
+        )
+
+        if use_preprocessed and self._has_valid_preprocessed_data(notify=True):
+            return self._model.app_state.preprocessed_electron_count
+
+        if use_preprocessed and self._view.right_sidebar.use_preprocessed_data_switch.value:
+            self._view.right_sidebar.use_preprocessed_data_switch.value = False
+
+        return self._model.selected_dataset["ElectronCount"]
+
+    def _reset_results_for_new_data_source(self) -> None:
+        """Clear previous results because they belong to a different input data source."""
+        self._model.umap_data_dict = dict()
+        self._model.completed_umap_count = 0
+
+        self._view.main.umap_wrapper.clear()
+        self._view.main.hdbscan_wrapper.clear()
+        self._view.main.heatmap_wrapper.clear()
+
+        self._view.right_sidebar.download_results_button.disabled = True
+        self._view.right_sidebar.hdbscan_selected_umap.options = {}
+        self._view.right_sidebar.disable_hdbscan_controls()
+
+    def _on_use_preprocessed_data_switch_changed(self, event) -> None:
+        """Rebuild backend and clear results when switching between raw and preprocessed input."""
+        if event.new and not self._has_valid_preprocessed_data(notify=True):
+            self._view.right_sidebar.use_preprocessed_data_switch.value = False
+            return
+
+        self._hdbscan = UMAP_HDBSCAN(electron_count_data=self._resolve_electron_count_data())
+        self._reset_results_for_new_data_source()
+        source_name = "Home preprocessed" if event.new else "raw"
+        pn.state.notifications.info(
+            f"Clustering input switched to {source_name} data. Recompute UMAP to continue.",
+            duration=3500,
+        ) # type: ignore
         
     def _on_umap_run_button_click(self) -> None:
         """Event handler for UMAP run button click."""
+        # Refresh backend in case Home preprocessing changed while this page remained open.
+        self._hdbscan = UMAP_HDBSCAN(electron_count_data=self._resolve_electron_count_data())
+
         # Start UMAP computation for all parameter combinations
         self._model.is_umap_computing = True
         self._model.was_umap_computing_canceled = False # Reset cancellation flag
@@ -182,42 +246,24 @@ class Clustering2PageController:
         # Start with the first placeholder
         process_next(index=0)
         
-    def _reset_cut_signal_event(self, _) -> None:
-        """Reset the cut signal to the original eloss range."""
-        original_min_eloss, original_max_eloss = self._hdbscan.get_original_eloss_range()
-        self._view.right_sidebar.min_cut_signal.value = original_min_eloss
-        self._view.right_sidebar.max_cut_signal.value = original_max_eloss
-        
     def _compute_umap_embedding_event(self, min_dist: float, n_neighbors: int, n_components: int, metric: str) -> dict:
         """Event handler for computing UMAP embedding when the button is clicked."""
-        
-        self._hdbscan.cut_signal(
-            min_eloss=self._view.right_sidebar.params.min_eloss,
-            max_eloss=self._view.right_sidebar.params.max_eloss
-        ) # Cut signal range in the data based on user input before computing UMAP embedding
-        
-        embeddings = []
+
         umap_data_dicts = dict()
         
-        embedding, umap_data_dict = self._hdbscan.compute_umap_embedding(
+        _, umap_data_dict = self._hdbscan.compute_umap_embedding(
             min_dist,
             n_neighbors,
             n_components,
             metric
         )
         
-        embeddings.append(embedding)
         umap_data_dicts.update(umap_data_dict)
         
         return umap_data_dicts
     
     def _compute_hdbscan_on_umap_event(self, event):
         """Event handler for computing HDBSCAN on UMAP embedding when the button is clicked."""
-        
-        self._hdbscan.cut_signal(
-            min_eloss=self._view.right_sidebar.params.min_eloss,
-            max_eloss=self._view.right_sidebar.params.max_eloss
-        ) # Cut signal range in the data based on user input before computing UMAP embedding
 
         self._view.main.hdbscan_wrapper.clear() # Clear previous HDBSCAN results from the main layout
 

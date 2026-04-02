@@ -1,4 +1,4 @@
-import panel as pn, param, pickle, io, zipfile, hdbscan
+import panel as pn, param, pickle, io, zipfile
 
 from whateels.components import SimpleDetails, ToggleButton
 from whateels.helpers import InMemoryFile, SafeConverter
@@ -13,20 +13,6 @@ if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate
 
 class _Clustering2RightSidebarParams(param.Parameterized):
-    min_eloss = param.Number(
-        default=0.1, 
-        step=0.1, 
-        bounds=(None, None), # No bounds, as the valid range of Eloss can vary significantly between datasets, and we want to allow users to set it according to their specific dataset characteristics.
-        label="Min Eloss", 
-        doc="Minimum Eloss value for cut signal range."
-    )
-    max_eloss = param.Number(
-        default=100.0, 
-        step=0.1, 
-        bounds=(None, None), # No bounds, as the valid range of Eloss can vary significantly between datasets, and we want to allow users to set it according to their specific dataset characteristics.
-        label="Max Eloss", 
-        doc="Maximum Eloss value for cut signal range."
-    )
     n_neighbors = param.List(
         default=[100, 500, 900], 
         item_type=int, 
@@ -120,10 +106,8 @@ class Clustering2RightSidebarLayout(pn.Column):
             )
         )
         
-        # Cut signal range inputs
-        self._min_cut_signal = pn.widgets.FloatInput()
-        self._max_cut_signal = pn.widgets.FloatInput()
-        self._reset_cut_signal_button = pn.widgets.Button()
+        # Data source controls
+        self._use_preprocessed_data_switch = pn.widgets.Switch()
         
         # UMAP parameters
         self._n_neighbors = pn.widgets.TextInput()
@@ -140,14 +124,14 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._compute_hdbscan_on_umap_button = pn.widgets.Button()
         
         # Initialize the layout with the created controls and details
-        cut_signal_details = self._create_cut_signal_details()
+        data_source_details = self._create_data_source_details()
         compute_umap_embedding_details = self._create_umap_simple_details(modal_manager, model)
         compute_hdbscan_embedding_details = self._create_hdbscan_simple_details()
         
         self.disable_hdbscan_controls() # HDBSCAN controls are disabled by default, as they depend on UMAP results, but UMAP results are not available at the beginning.
 
         super().__init__(
-            cut_signal_details,
+            data_source_details,
             compute_umap_embedding_details,
             compute_hdbscan_embedding_details,
             sizing_mode=self._STRETCH_WIDTH,
@@ -158,14 +142,8 @@ class Clustering2RightSidebarLayout(pn.Column):
     def params(self) -> _Clustering2RightSidebarParams:
         return self._params
     @property
-    def min_cut_signal(self) -> pn.widgets.FloatInput:
-        return self._min_cut_signal
-    @property
-    def max_cut_signal(self) -> pn.widgets.FloatInput:
-        return self._max_cut_signal
-    @property
-    def reset_cut_signal_button(self) -> pn.widgets.Button:
-        return self._reset_cut_signal_button
+    def use_preprocessed_data_switch(self) -> pn.widgets.Switch:
+        return self._use_preprocessed_data_switch
     @property
     def compute_umap_embedding_run_button(self) -> ToggleButton:
         return self._compute_umap_embedding_run_button
@@ -184,8 +162,7 @@ class Clustering2RightSidebarLayout(pn.Column):
     
     def disable_controls(self):
         """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
-        self._min_cut_signal.disabled = True
-        self._max_cut_signal.disabled = True
+        self._use_preprocessed_data_switch.disabled = True
         
         self._n_neighbors.disabled = True
         self._min_dist.disabled = True
@@ -198,9 +175,9 @@ class Clustering2RightSidebarLayout(pn.Column):
         
     def enable_controls(self):
         """ Enable controls in the right sidebar, typically called when UMAP computation is finished or when UMAP data is removed. Download button is not enabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
-        
-        self._min_cut_signal.disabled = False
-        self._max_cut_signal.disabled = False
+        self._use_preprocessed_data_switch.disabled = not self._model.is_preprocessed_data_available()
+        if self._use_preprocessed_data_switch.disabled:
+            self._use_preprocessed_data_switch.value = False
         
         self._n_neighbors.disabled = False
         self._min_dist.disabled = False
@@ -227,48 +204,37 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         self._compute_hdbscan_on_umap_button.disabled = True
         
-    def _create_cut_signal_details(self) -> SimpleDetails:
-        self._min_cut_signal = pn.widgets.FloatInput(
-            name=type(self._params).param.min_eloss.label,
-            value=self._params.min_eloss,
-            step=type(self._params).param.min_eloss.step,
-            start=type(self._params).param.min_eloss.bounds[0],
-            end=type(self._params).param.min_eloss.bounds[1],
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        self._max_cut_signal = pn.widgets.FloatInput(
-            name=type(self._params).param.max_eloss.label,
-            value=self._params.max_eloss,
-            step=type(self._params).param.max_eloss.step,
-            start=type(self._params).param.max_eloss.bounds[0],
-            end=type(self._params).param.max_eloss.bounds[1],
-            sizing_mode=self._STRETCH_WIDTH
-        )
-        
-        # Sync widget values back to params so cut_signal always uses the correct range
-        self._min_cut_signal.param.watch(lambda e: setattr(self._params, 'min_eloss', e.new), 'value')
-        self._max_cut_signal.param.watch(lambda e: setattr(self._params, 'max_eloss', e.new), 'value')
+    def _create_data_source_details(self) -> SimpleDetails:
+        is_preprocessed_available = self._model.is_preprocessed_data_available()
 
-        self._reset_cut_signal_button = pn.widgets.Button(
-            name="Reset Eloss Range",
-            button_type="warning",
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(10, 0, 0, 0)
-        )
-        
-        cut_signal_content = pn.Column(
-            self._min_cut_signal,
-            self._max_cut_signal,
-            self._reset_cut_signal_button,
+        self._use_preprocessed_data_switch = pn.widgets.Switch(
+            name="Use Home preprocessed data",
+            value=is_preprocessed_available,
+            disabled=not is_preprocessed_available,
             sizing_mode=self._STRETCH_WIDTH,
         )
-        
+
+        availability_message = (
+            "Use data preprocessed in Home (Cut Range or other applied preprocessors)."
+            if is_preprocessed_available
+            else "No preprocessed data available. Apply preprocessing in Home first."
+        )
+
+        source_content = pn.Row(
+            self._use_preprocessed_data_switch,
+            pn.widgets.TooltipIcon(
+                value=Tooltip(content=availability_message, position="left"),
+                margin=(16, 0, 0, 0),
+            ),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
         return SimpleDetails(
-            title="Cut Signal Range",
-            content=cut_signal_content,
-            expanded=False,
+            title="Input Data",
+            content=pn.Column(source_content, sizing_mode=self._STRETCH_WIDTH),
+            expanded=True,
             sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 0, 10, 0)
+            margin=(0, 0, 10, 0),
         )
         
     def _create_umap_simple_details(self, modal_manager, model) -> SimpleDetails:

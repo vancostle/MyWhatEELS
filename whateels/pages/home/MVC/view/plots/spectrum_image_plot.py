@@ -61,6 +61,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch = pn.widgets.Switch()
         self._multifitting_switch_watcher = None
 
+        self._cut_range_min_input = pn.widgets.FloatInput()
+        self._cut_range_max_input = pn.widgets.FloatInput()
+        self._cut_range_reset_button = pn.widgets.Button()
+        self._apply_cut_range_button = ToggleButton()
+        self._cut_range_active = False
+        self._cut_range_preprocessed_electron_count = None
+        self._applied_cut_range: tuple[float, float] | None = None
+
         self._preprocessors_applied = False
         self._applied_spike_threshold: float | None = None
         self._applied_spike_window: int | None = None
@@ -176,6 +184,43 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._on_multifitting_switch_changed, 'value'
         )
 
+        default_min_eloss = float(np.min(self._e_axis)) if len(self._e_axis) > 0 else 0.0
+        default_max_eloss = float(np.max(self._e_axis)) if len(self._e_axis) > 0 else 1.0
+
+        self._cut_range_min_input = pn.widgets.FloatInput(
+            name="Min Eloss",
+            value=default_min_eloss,
+            step=0.1,
+            start=default_min_eloss,
+            end=default_max_eloss,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        self._cut_range_max_input = pn.widgets.FloatInput(
+            name="Max Eloss",
+            value=default_max_eloss,
+            step=0.1,
+            start=default_min_eloss,
+            end=default_max_eloss,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        self._cut_range_reset_button = pn.widgets.Button(
+            name="Reset Eloss Range",
+            button_type="warning",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(8, 0, 0, 0),
+        )
+        self._cut_range_reset_button.on_click(self._on_reset_cut_range)
+
+        self._apply_cut_range_button = ToggleButton(
+            initial_state=False,
+            states={
+                "on": {"label": 'Revert Cut Range', "on_click": self._on_revert_cut_range, "button_type": 'warning'},
+                "off": {"label": 'Apply Cut Range', "on_click": self._on_apply_cut_range, "button_type": 'success'},
+            },
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(8, 0, 0, 0),
+        )
+
         self._apply_remove_spikes_button = ToggleButton(
             initial_state=False,
             states={
@@ -228,6 +273,20 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
+
+    def create_cut_range_details(self) -> SimpleDetails:
+        """Build and return the Cut Signal Range SimpleDetails block for the sidebar."""
+        return SimpleDetails(
+            title="Cut Signal Range Settings",
+            content=pn.Column(
+                self._cut_range_min_input,
+                self._cut_range_max_input,
+                self._cut_range_reset_button,
+                self._apply_cut_range_button,
+                sizing_mode=self._STRETCH_WIDTH,
+            ),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
         
     def create_remove_spikes_details(self) -> SimpleDetails:
         """Build and return the Remove Spikes SimpleDetails block for the sidebar, including the Apply/Raw button as last widget."""
@@ -255,6 +314,174 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Inject main layout and plots tab references so the plot can show progress and restore content."""
         self._main_ref = main
         self._plots_tab_ref = plots_tab
+
+    def _get_full_eloss_bounds(self) -> tuple[float, float]:
+        """Return the full available Eloss range from the current dataset."""
+        if len(self._e_axis) == 0:
+            return 0.0, 1.0
+        return float(np.min(self._e_axis)), float(np.max(self._e_axis))
+
+    def _normalize_cut_range_values(self) -> tuple[float, float]:
+        """Return a validated and clamped (min, max) cut range."""
+        full_min, full_max = self._get_full_eloss_bounds()
+        try:
+            min_eloss = float(self._cut_range_min_input.value)
+        except Exception:
+            min_eloss = full_min
+        try:
+            max_eloss = float(self._cut_range_max_input.value)
+        except Exception:
+            max_eloss = full_max
+
+        if min_eloss > max_eloss:
+            min_eloss, max_eloss = max_eloss, min_eloss
+
+        min_eloss = max(full_min, min(full_max, min_eloss))
+        max_eloss = max(full_min, min(full_max, max_eloss))
+
+        if min_eloss > max_eloss:
+            min_eloss, max_eloss = full_min, full_max
+
+        return min_eloss, max_eloss
+
+    def _build_cut_range_preprocessed_data(self):
+        """Slice ElectronCount by the selected Eloss range and return (data, range)."""
+        min_eloss, max_eloss = self._normalize_cut_range_values()
+        eloss_values = np.asarray(self._electron_count_data.coords[self._eloss_name].values)
+        if eloss_values.size == 0:
+            raise ValueError("Eloss axis is empty.")
+
+        ascending_eloss = bool(eloss_values[0] <= eloss_values[-1])
+        eloss_slice = slice(min_eloss, max_eloss) if ascending_eloss else slice(max_eloss, min_eloss)
+        cut_data = self._electron_count_data.sel({self._eloss_name: eloss_slice})
+
+        if cut_data.shape[-1] == 0:
+            raise ValueError("Selected cut range produced no Eloss samples.")
+
+        return cut_data, (min_eloss, max_eloss)
+
+    def _on_reset_cut_range(self, _=None):
+        """Reset cut range widgets to the full available Eloss bounds."""
+        full_min, full_max = self._get_full_eloss_bounds()
+        self._cut_range_min_input.value = full_min
+        self._cut_range_max_input.value = full_max
+
+    def _sync_range_slider_to_energy_axis(self, energy_axis, reset_value: bool = False):
+        """Clamp fitting slider bounds/value to the provided energy axis."""
+        axis = np.asarray(energy_axis, dtype=float)
+        axis = axis[np.isfinite(axis)]
+        if axis.size == 0:
+            return
+
+        axis_min = float(np.min(axis))
+        axis_max = float(np.max(axis))
+
+        current_range = get_range_slider_value(self._range_slider)
+        current_min = float(min(current_range[0], current_range[1]))
+        current_max = float(max(current_range[0], current_range[1]))
+
+        if reset_value:
+            new_min, new_max = axis_min, axis_max
+        else:
+            new_min = max(axis_min, min(axis_max, current_min))
+            new_max = max(axis_min, min(axis_max, current_max))
+            if new_min > new_max:
+                new_min, new_max = axis_min, axis_max
+
+        self._range_slider.start = axis_min
+        self._range_slider.end = axis_max
+        self._range_slider.value = (new_min, new_max)
+
+    def _get_clipped_fit_range(self, energy_axis, update_slider: bool = False) -> tuple[float, float]:
+        """Return fit range clipped to the provided energy axis bounds."""
+        axis = np.asarray(energy_axis, dtype=float)
+        axis = axis[np.isfinite(axis)]
+        if axis.size == 0:
+            return (0.0, 1.0)
+
+        axis_min = float(np.min(axis))
+        axis_max = float(np.max(axis))
+
+        fit_range = get_range_slider_value(self._range_slider)
+        fit_min = float(min(fit_range[0], fit_range[1]))
+        fit_max = float(max(fit_range[0], fit_range[1]))
+
+        clipped_min = max(axis_min, min(axis_max, fit_min))
+        clipped_max = max(axis_min, min(axis_max, fit_max))
+        if clipped_min > clipped_max:
+            clipped_min, clipped_max = axis_min, axis_max
+
+        if update_slider:
+            self._range_slider.value = (clipped_min, clipped_max)
+
+        return (clipped_min, clipped_max)
+
+    def _clear_cut_range_state(self, clear_preprocessed_payload: bool = False):
+        """Clear in-memory Cut Range state and optionally clear active preprocessed payload."""
+        self._cut_range_active = False
+        self._cut_range_preprocessed_electron_count = None
+        self._applied_cut_range = None
+        if clear_preprocessed_payload and self._preprocessed_source == 'cut_range':
+            self._preprocessed_electron_count = None
+            self._preprocessed_source = None
+            self._preprocessors_applied = False
+
+    def _on_apply_cut_range(self):
+        """Apply cut range and refresh Home plots with the selected Eloss window."""
+        # Cut Range supersedes any currently applied preprocessor output.
+        if self._apply_multifitting_button.is_on():
+            self._apply_multifitting_button.toggle()
+        self._multifitting_switch.value = False
+        self._multifit_input_had_spikes = False
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source = None
+
+        if self._apply_remove_spikes_button.is_on():
+            self._apply_remove_spikes_button.toggle()
+
+        try:
+            cut_data, normalized_range = self._build_cut_range_preprocessed_data()
+        except Exception as e:
+            pn.state.notifications.error(f"Failed to apply Cut Range: {e}", duration=5000) # type: ignore
+            # Keep button in OFF state after ToggleButton internal toggle executes.
+            self._apply_cut_range_button.toggle()
+            return
+
+        self._cut_range_preprocessed_electron_count = cut_data
+        self._applied_cut_range = normalized_range
+        self._cut_range_active = True
+        self._preprocessed_electron_count = cut_data
+        self._preprocessed_source = 'cut_range'
+        self._preprocessors_applied = True
+        CacheManager.get_cached_app_state().preprocessed_electron_count = cut_data
+        self._sync_range_slider_to_energy_axis(np.asarray(cut_data.coords[self._eloss_name].values), reset_value=False)
+        self._current_y_range = None
+        self._current_y_autorange = True
+        self._apply_sidebar_apply_locks()
+        self._refresh_paneA()
+        self._refresh_paneB()
+        pn.state.notifications.success(
+            f"Cut Range applied: Eloss [{normalized_range[0]:.3f}, {normalized_range[1]:.3f}]",
+            duration=4000,
+        ) # type: ignore
+
+    def _on_revert_cut_range(self):
+        """Revert cut range and restore Home plots to raw data."""
+        app_state = CacheManager.get_cached_app_state()
+        if app_state.preprocessed_electron_count is self._cut_range_preprocessed_electron_count:
+            app_state.clear_preprocessed_electron_count()
+
+        self._clear_cut_range_state(clear_preprocessed_payload=True)
+        self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
+        self._current_y_range = None
+        self._current_y_autorange = True
+        self._enable_sidebar_widgets()
+        self._refresh_paneA()
+        self._refresh_paneB()
+        pn.state.notifications.info(
+            "Cut Range reverted. Raw data is now active for downstream pages.",
+            duration=3500,
+        ) # type: ignore
 
     def _normalize_spike_window(self, window: int, n_points: int) -> int:
         """Return a valid odd window in [3, n_points] for MAD-based despiking."""
@@ -324,10 +551,18 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return_mask=False,
         )
 
+    # Home keeps its own curve builder because the displayed Eloss axis can change
+    # after preprocessors like Cut Range. BaseSpectrumImagePlot builds curves with
+    # self._energy from the original dataset, which can mismatch the active spectrum
+    # length and break paneB rendering when fitting toggles/reseeds.
     def _build_spectrum_curve(self, spec, title):
         """Build an hv.Curve from a pre-processed 1D spectrum array (no further transformation)."""
-        return hv.Curve((self._energy, spec), kdims=['x'], vdims=['y']).opts(
-            color='black', line_width=1.5,
+        spec_arr = np.asarray(spec)
+        energy_axis = self._get_display_energy_axis()
+        if energy_axis.shape[0] != spec_arr.shape[0]:
+            energy_axis = np.arange(spec_arr.shape[0], dtype=float)
+        return hv.Curve((energy_axis, spec_arr), kdims=['x'], vdims=['y']).opts(
+            color='black', line_width=1.5, alpha = 0.7,
             title=title,
             xlabel=self._X_AXIS_SPECTRUM_TITLE,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
@@ -339,12 +574,41 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         filtered = self._remove_spikes(spec)
         return self._build_spectrum_curve(filtered, title)
 
+    @override
+    def _figB_hover(self, point):
+        """Build hover spectrum using the active display energy axis."""
+        if not point:
+            point = {"x": 0, "y": 0}
+        i, j = round(point["y"]), round(point["x"])
+        spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+        return self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
+
+    @override
+    def _figB_region(self, pairs):
+        """Build region spectrum using the active display energy axis."""
+        res = self._get_spectrum_from_indices_fast(pairs)
+        if res is None:
+            return self._figB_hover({"x": 0, "y": 0})
+        spec, n_points = res
+        return self._build_spectrum_curve(spec, f"ROI — sum (points={n_points})")
+
     def _get_display_data(self):
         """Return the electron count data cube to use for spectrum display.
         Returns the precomputed preprocessed cube when preprocessors have been applied."""
         if self._preprocessors_applied and self._preprocessed_electron_count is not None:
             return self._preprocessed_electron_count
         return self._electron_count_data
+
+    def _get_display_energy_axis(self) -> np.ndarray:
+        """Return the Eloss axis associated with the currently displayed data cube."""
+        try:
+            display_data = self._get_display_data()
+            energy_axis = np.asarray(display_data.coords[self._eloss_name].values)
+            if energy_axis.size > 0:
+                return energy_axis
+        except Exception:
+            pass
+        return np.asarray(self._energy)
 
     def _should_apply_visual_fitting(self) -> bool:
         """Return True only when paneB should draw interactive fitting overlays."""
@@ -376,8 +640,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if (self._preprocessors_applied or self._fitting_active) and spec is not None:
                 fig = self._build_spectrum_curve(spec, title)
                 if self._should_apply_visual_fitting():
+                    energy_axis = self._get_display_energy_axis()
                     try:
-                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                        fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
                     except Exception:
                         pass
             else:
@@ -389,8 +654,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if (self._preprocessors_applied or self._fitting_active) and spec is not None:
                 fig = self._build_spectrum_curve(spec, title)
                 if self._should_apply_visual_fitting():
+                    energy_axis = self._get_display_energy_axis()
                     try:
-                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                        fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
                     except Exception:
                         pass
             else:
@@ -415,8 +681,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 if spec is not None:
                     fig = self._build_spectrum_curve(spec, f"ROI — sum (points={n_points})")
                     if self._should_apply_visual_fitting():
+                        energy_axis = self._get_display_energy_axis()
                         try:
-                            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                            fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
                         except Exception:
                             pass
                 else:
@@ -434,8 +701,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 if spec is not None:
                     fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
                     if self._should_apply_visual_fitting():
+                        energy_axis = self._get_display_energy_axis()
                         try:
-                            fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                            fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
                         except Exception:
                             pass
                 else:
@@ -452,8 +720,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if spec is not None:
                 fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
                 if self._should_apply_visual_fitting():
+                    energy_axis = self._get_display_energy_axis()
                     try:
-                        fig = apply_fitting(fig, self._energy, spec, self._range_slider)
+                        fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
                     except Exception:
                         pass
             else:
@@ -625,6 +894,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_threshold_slider.disabled = True
         self._spike_window_slider.disabled = True
         self._multifitting_switch.disabled = True
+        self._cut_range_min_input.disabled = True
+        self._cut_range_max_input.disabled = True
+        self._cut_range_reset_button.disabled = True
+        self._apply_cut_range_button.disabled = True
         self._apply_remove_spikes_button.disabled = True
         self._apply_multifitting_button.disabled = True
 
@@ -632,6 +905,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Lock only the controls of the currently applied preprocessor section."""
         spikes_applied = self._preprocessors_applied and self._preprocessed_source == 'spikes'
         multifit_applied = self._preprocessors_applied and self._preprocessed_source == 'multifit'
+        cut_range_applied = self._cut_range_active
         multifit_based_on_spikes = multifit_applied and self._multifit_input_had_spikes
 
         # If Remove Spikes is currently applied, freeze only its own sliders.
@@ -643,6 +917,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch.disabled = multifit_applied
         self._range_slider.disabled = multifit_applied or (not self._fitting_active)
 
+        # Freeze only the Cut Range section when Cut Range is currently applied.
+        self._cut_range_min_input.disabled = cut_range_applied
+        self._cut_range_max_input.disabled = cut_range_applied
+        self._cut_range_reset_button.disabled = cut_range_applied
+
     def _enable_sidebar_widgets(self):
         """Enable/disable sidebar widgets based on current preprocessing state."""
         self._fitting_switch.disabled = False
@@ -650,6 +929,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_threshold_slider.disabled = False
         self._spike_window_slider.disabled = False
         self._multifitting_switch.disabled = False
+        self._cut_range_min_input.disabled = False
+        self._cut_range_max_input.disabled = False
+        self._cut_range_reset_button.disabled = False
+        self._apply_cut_range_button.disabled = False
         self._apply_remove_spikes_button.disabled = False
         self._apply_multifitting_button.disabled = False
         self._apply_sidebar_apply_locks()
@@ -708,9 +991,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         threading.Thread(target=self._run_multifitting_thread, daemon=True).start()
 
-    def _build_multifit_signature(self, input_arr: np.ndarray, fit_range: tuple[float, float]):
+    def _build_multifit_signature(self, input_da, input_arr: np.ndarray, fit_range: tuple[float, float]):
         """Build a stable cache signature for multifitting based on source, range, and shape."""
         fit_range_signature = tuple(round(float(v), 6) for v in fit_range)
+        try:
+            input_eloss = np.asarray(input_da.coords[self._eloss_name].values)
+            eloss_signature = (
+                round(float(input_eloss[0]), 6),
+                round(float(input_eloss[-1]), 6),
+                int(input_eloss.size),
+            ) if input_eloss.size > 0 else (0.0, 0.0, 0)
+        except Exception:
+            eloss_signature = (0.0, 0.0, int(input_arr.shape[-1]))
+
         if self._apply_remove_spikes_button.is_on():
             source_signature = (
                 'despiked',
@@ -719,7 +1012,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             )
         else:
             source_signature = ('raw',)
-        return (source_signature, fit_range_signature, tuple(input_arr.shape))
+        if self._cut_range_active and self._applied_cut_range is not None:
+            source_signature = (
+                *source_signature,
+                'cut_range',
+                round(float(self._applied_cut_range[0]), 6),
+                round(float(self._applied_cut_range[1]), 6),
+            )
+        return (source_signature, fit_range_signature, eloss_signature, tuple(input_arr.shape))
 
     def _run_multifitting_thread(self):
         """Background thread: run multifitting for every pixel and cache the resulting cube."""
@@ -733,10 +1033,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if input_arr.ndim != 3:
                 raise ValueError(f"Expected 3D spectrum image, got shape={input_arr.shape}")
 
+            input_eloss = np.asarray(input_da.coords[self._eloss_name].values)
+            if input_eloss.shape[0] != input_arr.shape[-1]:
+                input_eloss = np.arange(input_arr.shape[-1], dtype=float)
+            fit_range = self._get_clipped_fit_range(input_eloss, update_slider=False)
+
             dimx, dimy, _ = input_arr.shape
             total_pixels = max(1, dimx * dimy)
-            fit_range = tuple(float(v) for v in get_range_slider_value(self._range_slider))
-            multifit_signature = self._build_multifit_signature(input_arr, fit_range)
+            multifit_signature = self._build_multifit_signature(input_da, input_arr, fit_range)
 
             if (
                 self._multifit_cube is not None
@@ -764,7 +1068,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 mf = MultiFit(
                     np.ascontiguousarray(input_arr),
                     model=lmfit.models.PowerLawModel,
-                    Eloss_x=self._e_axis,
+                    Eloss_x=input_eloss,
                     fit_range=fit_range,
                 ).run(
                     mode='subtracted',
@@ -782,8 +1086,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
             preprocessed_da = xr.DataArray(
                 working_arr,
-                dims=self._electron_count_data.dims,
-                coords=self._electron_count_data.coords,
+                dims=input_da.dims,
+                coords=input_da.coords,
             )
             self._preprocessed_electron_count = preprocessed_da
             CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
@@ -871,8 +1175,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
             self._progress_display.update(5, "Initializing preprocessors...", level='info')
 
-            raw_arr = np.asarray(self._electron_count_data)
-            dimx, dimy, n_energy = raw_arr.shape
+            input_da = self._get_display_data()
+            input_arr = np.asarray(input_da)
+            dimx, dimy, n_energy = input_arr.shape
             total_pixels = dimx * dimy
 
             despike_window = self._normalize_spike_window(self._spike_window, n_energy)
@@ -882,7 +1187,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 and not remove_spikes
                 and self._despiked_cube is not None
                 and self._despike_cache_signature == despike_signature
-                and self._despiked_cube.shape == raw_arr.shape
+                and self._despiked_cube.shape == input_arr.shape
             )
 
             # Work on a plain numpy copy so we can mutate freely
@@ -891,7 +1196,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 input_signature = ('despiked', despike_signature)
                 self._progress_display.update(8, "Using cached despiked spectra for multifitting...", level='info')
             else:
-                working_arr = raw_arr.copy()
+                working_arr = input_arr.copy()
 
             if remove_spikes:
                 self._progress_display.update(10, f"Removing spikes from {total_pixels} pixels...", level='info')
@@ -1003,8 +1308,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
             preprocessed_da = xr.DataArray(
                 working_arr,
-                dims=self._electron_count_data.dims,
-                coords=self._electron_count_data.coords,
+                dims=input_da.dims,
+                coords=input_da.coords,
             )
             self._preprocessed_electron_count = preprocessed_da
             CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
@@ -1020,9 +1325,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         except Exception as e:
             self._progress_display.error(f"Processing failed: {str(e)}")
-            self._preprocessors_applied = False
-            self._preprocessed_electron_count = None
-            self._preprocessed_source = None
+            if self._cut_range_active and self._cut_range_preprocessed_electron_count is not None:
+                self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
+                self._preprocessed_source = 'cut_range'
+                self._preprocessors_applied = True
+                CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            else:
+                self._preprocessors_applied = False
+                self._preprocessed_electron_count = None
+                self._preprocessed_source = None
+                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
             self._apply_remove_spikes_button.toggle()
             time.sleep(2)
         finally:
@@ -1043,15 +1355,29 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
-        self._preprocessors_applied = False
-        self._preprocessed_source = None
-        # Keep _preprocessed_electron_count and _applied_spike_threshold/_applied_spike_window in memory
-        # so re-clicking Apply with the same values skips recomputation.
-        CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+        restoring_cut_range = self._cut_range_active and self._cut_range_preprocessed_electron_count is not None
+        if restoring_cut_range:
+            self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
+            self._preprocessed_source = 'cut_range'
+            self._preprocessors_applied = True
+            CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            self._sync_range_slider_to_energy_axis(
+                np.asarray(self._preprocessed_electron_count.coords[self._eloss_name].values),
+                reset_value=False,
+            )
+        else:
+            self._preprocessors_applied = False
+            self._preprocessed_source = None
+            # Keep _preprocessed_electron_count and _applied_spike_threshold/_applied_spike_window in memory
+            # so re-clicking Apply with the same values skips recomputation.
+            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
         self._current_y_range = None
         self._current_y_autorange = True
 
-        if had_preprocessed and self._raw_paneA_base_overlay is not None and self.paneA is not None:
+        if restoring_cut_range:
+            self._refresh_paneA()
+        elif had_preprocessed and self._raw_paneA_base_overlay is not None and self.paneA is not None:
             self._paneA_base_overlay = self._raw_paneA_base_overlay
             self._update_selection_overlay(self._region_pairs)
         else:
@@ -1199,6 +1525,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_window_slider = pn.widgets.IntSlider()
         self._multifitting_switch = pn.widgets.Switch()
+        self._cut_range_min_input = pn.widgets.FloatInput()
+        self._cut_range_max_input = pn.widgets.FloatInput()
+        self._cut_range_reset_button = pn.widgets.Button()
+        self._apply_cut_range_button = ToggleButton()
+        self._cut_range_active = False
+        self._cut_range_preprocessed_electron_count = None
+        self._applied_cut_range = None
         self._apply_remove_spikes_button = ToggleButton()
         self._apply_multifitting_button = ToggleButton()
         self._preprocessors_applied = False

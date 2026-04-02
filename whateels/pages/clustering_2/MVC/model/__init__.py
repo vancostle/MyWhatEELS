@@ -42,6 +42,16 @@ class Clustering2PageModel:
     def loaded_umap_data(self):
         return self._loaded_umap_data
 
+    def is_preprocessed_data_available(self) -> bool:
+        """Return True when Home has published preprocessed ElectronCount data."""
+        return self._app_state.preprocessed_electron_count is not None
+
+    def should_use_preprocessed_data(self, switch_value: bool) -> bool:
+        """Return True when the UI switch is on and preprocessed data is available."""
+        if not switch_value:
+            return False
+        return self.is_preprocessed_data_available()
+
     @selected_dataset.setter
     def selected_dataset(self, dataset: "Dataset"):
         self._selected_dataset = dataset

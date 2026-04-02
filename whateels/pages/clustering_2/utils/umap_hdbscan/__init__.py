@@ -12,32 +12,10 @@ if TYPE_CHECKING:
 class UMAP_HDBSCAN:
     
     def __init__(self, electron_count_data : "DataArray"):
-        
-        self._saved_electron_count_data = copy.deepcopy(electron_count_data) # Keep a copy of original data for resetting if needed
+
         self._electron_count_data = copy.deepcopy(electron_count_data) # Deep copy to avoid modifying original data
         self._eloss = self._electron_count_data.coords["Eloss"].values
         self._data = np.array(self._electron_count_data)
-
-    def cut_signal(self, min_eloss, max_eloss) -> bool:
-        """Cuts the signal range based on min and max eloss values."""
-        
-        self._electron_count_data = self._saved_electron_count_data.copy() # Reset to original data before cutting
-        
-        try:
-            self._electron_count_data = self._electron_count_data.sel(Eloss=slice(min_eloss, max_eloss)) # Overwrite data with cut signal range
-            self._eloss = self._electron_count_data.coords["Eloss"].values # Update eloss values accordingly
-            self._data = np.array(self._electron_count_data) # Update data array with cut signal range
-            return True
-        except Exception:
-            return False
-        
-    def get_original_eloss_range(self) -> tuple[float, float]:
-        """Get the minimum and maximum eloss values from the electron count data before any cutting is applied."""
-        try:
-            eloss_values = self._saved_electron_count_data.coords["Eloss"].values
-            return float(eloss_values.min()), float(eloss_values.max())
-        except Exception:
-            return 0.0, 0.0
         
     def compute_umap_embedding(
         self,
