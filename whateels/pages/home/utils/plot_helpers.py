@@ -48,6 +48,7 @@ def plot_fit_traces(fig, x, y, y_fit):
     # Background subtraction area (y - y_fit)
     bg_sub = hv.Area((x, y - y_fit), kdims=['x'], vdims=['y'], label='Background Subtraction').opts(
         color='salmon',
+        line_color='salmon',
         alpha=0.4,
     )
 

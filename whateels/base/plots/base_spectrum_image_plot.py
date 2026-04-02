@@ -294,6 +294,7 @@ class BaseSpectrumImagePlot(IPlot):
         ).opts(
             color='black',
             line_width=1.5,
+            alpha=0.7,
             title=f"Hover (x={j}, y={i})",
             xlabel=self._X_AXIS_SPECTRUM_TITLE,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
@@ -315,6 +316,7 @@ class BaseSpectrumImagePlot(IPlot):
         ).opts(
             color='black',
             line_width=1.5,
+            alpha=0.7,
             title=f"ROI — sum (points={n_points})",
             xlabel=self._X_AXIS_SPECTRUM_TITLE,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
