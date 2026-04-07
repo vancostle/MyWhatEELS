@@ -71,26 +71,12 @@ class AppState(param.Parameterized):
         The last clustering result dictionary.
     """)
 
-    preprocessed_electron_count = param.Parameter(default=None, doc="""
-        The fully preprocessed ElectronCount DataArray, cached after the user
-        clicks 'Apply Active Preprocessors' on the home page.
-        Contains the result of all active data-transforming preprocessors
-        (spike removal, background subtraction) applied to every pixel.
-        None when no preprocessors have been applied or after reverting to raw.
-    """)
-
-    # Preprocessed counterparts of plot_dataset / all_datasets
     preprocessed_plot_dataset = param.Parameter(default=None, doc="""
-        Preprocessed version of plot_dataset. Set when the user applies
-        preprocessors on the home page. Used by pages (e.g. clustering) that
-        offer a 'Use preprocessed data' switch.
-        None if no preprocessing has been applied yet.
-    """)
-
-    preprocessed_all_datasets = param.List(default=list(), doc="""
-        Preprocessed counterpart of all_datasets. Each entry corresponds to
-        the same index in all_datasets but contains the preprocessed variant.
-        Empty until the user applies preprocessors on the home page.
+        Copy of plot_dataset with its ElectronCount replaced by the fully
+        preprocessed DataArray (spike removal, background subtraction, cut range).
+        Set when the user applies preprocessors on the home page.
+        None when no preprocessing has been applied or after reverting to raw.
+        Consumers access the ElectronCount via preprocessed_plot_dataset["ElectronCount"].
     """)
 
     def __init__(self):
@@ -168,14 +154,8 @@ class AppState(param.Parameterized):
     def clear_last_clustering_result(self):
         self.last_clustering_result = None
 
-    def clear_preprocessed_electron_count(self):
-        self.preprocessed_electron_count = None
-
     def clear_preprocessed_plot_dataset(self):
         self.preprocessed_plot_dataset = None
-
-    def clear_preprocessed_all_datasets(self):
-        self.preprocessed_all_datasets = []
 
     def clear_all(self):
         """Clear all shared state parameters."""
@@ -185,6 +165,4 @@ class AppState(param.Parameterized):
         self.clear_elements_selected()
         self.clear_selected_tab_index()
         self.clear_last_clustering_result()
-        self.clear_preprocessed_electron_count()
         self.clear_preprocessed_plot_dataset()
-        self.clear_preprocessed_all_datasets()

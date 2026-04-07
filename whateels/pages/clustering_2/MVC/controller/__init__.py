@@ -71,7 +71,7 @@ class Clustering2PageController:
             return False
 
         raw_electron_count = self._model.selected_dataset["ElectronCount"]
-        preprocessed = self._model.app_state.preprocessed_electron_count
+        preprocessed = self._model.app_state.preprocessed_plot_dataset["ElectronCount"]
 
         try:
             if preprocessed is None or len(preprocessed.shape) != 3:
@@ -97,7 +97,7 @@ class Clustering2PageController:
         )
 
         if use_preprocessed and self._has_valid_preprocessed_data(notify=True):
-            return self._model.app_state.preprocessed_electron_count
+            return self._model.app_state.preprocessed_plot_dataset["ElectronCount"]
 
         if use_preprocessed and self._view.right_sidebar.use_preprocessed_data_switch.value:
             self._view.right_sidebar.use_preprocessed_data_switch.value = False
