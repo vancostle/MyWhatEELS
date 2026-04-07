@@ -267,21 +267,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     # --- Quantification overlays ---
 
     def plot_quantification_elements(self, element_items: list):
-        res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, self._region_pairs)
+        # Keep ROI spectrum styling fully aligned with BaseSpectrumImagePlot
+        # (including alpha and default title/axes options).
+        res = self._get_spectrum_from_indices_fast(self._region_pairs)
         if res is None:
             return
-        spec, n_points = res
+        spec, _n_points = res
         self.selected_slice = spec
 
-        base_curve = hv.Curve(
-            (self._energy, spec), kdims=['x'], vdims=['y'], label='Spectrum',
-        ).opts(
-            color='black', line_width=1.5,
-            title=f"ROI — sum (points={n_points})",
-            xlabel=self._X_AXIS_SPECTRUM_TITLE,
-            ylabel=self._Y_AXIS_SPECTRUM_TITLE,
-            responsive=True, shared_axes=False, framewise=True,
-        )
+        base_curve = self._figB_region(self._region_pairs).relabel('Spectrum')
         curves = [base_curve]
         for i, element_item in enumerate(element_items):
             color = colors[i % len(colors)]
@@ -376,6 +370,17 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return float(np.trapezoid(y_arr, x_arr))
         except Exception:
             return float(np.trapz(y_arr, x_arr))
+
+    def _transparent_bokeh_hook(self, plot, element):
+        """Force fully transparent Bokeh figure background for HoloViews objects."""
+        fig = getattr(plot, 'state', None)
+        if fig is None:
+            return
+        fig.background_fill_color = None
+        fig.background_fill_alpha = 0
+        fig.border_fill_color = None
+        fig.border_fill_alpha = 0
+        fig.outline_line_alpha = 0
 
     def _get_quantification_eaxis(self, selected_slice):
         """Prefer physical Eloss axis when shape matches; otherwise fallback to plotting axis."""
@@ -563,6 +568,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             responsive=False,
             width=_PIE_SIZE,
             height=_PIE_SIZE,
+            bgcolor='rgba(0,0,0,0)',
+            hooks=[self._transparent_bokeh_hook],
             shared_axes=False,
             framewise=True,
         )
@@ -576,6 +583,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             text_baseline='middle',
             text_font_size='9pt',
             text_color='white',
+            hooks=[self._transparent_bokeh_hook],
         )
 
         return (pie * labels_overlay).opts(
@@ -584,6 +592,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 aspect='square',
                 width=_PIE_SIZE,
                 height=_PIE_SIZE,
+                bgcolor='rgba(0,0,0,0)',
+                hooks=[self._transparent_bokeh_hook],
                 shared_axes=False,
                 framewise=True,
             )
