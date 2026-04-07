@@ -62,8 +62,8 @@ class ClusteringRightSidebarLayout(pn.Column):
         )
         
     @property
-    def background_subtraction_switch(self) -> pn.widgets.Switch:
-        """Access the background-subtraction switch widget."""
+    def preprocessed_data_switch(self) -> pn.widgets.Switch:
+        """Access the preprocessed data switch widget."""
         return self._preprocessing_data_switch
     @property
     def spectral_run_button(self) -> pn.widgets.Button:
@@ -106,11 +106,11 @@ class ClusteringRightSidebarLayout(pn.Column):
             css_classes=["use-preprocessed-data-switch"]
         )
         
-        is_multifitting_available = self._model.is_multifit_available()
+        is_multifitting_available = self._model.is_preprocessed_data_available()
         self._preprocessing_data_switch.disabled = not is_multifitting_available
 
         preprocessing_data_tooltip = (
-            "Enable use of preprocessed data from multifit results." 
+            "Enable use of preprocessed data from the home page." 
             if is_multifitting_available else "Must do some preprocessing first at home page before using this option."
         )
         preprocessing_data_container = pn.Row(
