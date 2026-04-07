@@ -79,13 +79,23 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     # --- paneB override: static charts (bars/pie polygons) use direct rendering ---
 
+    def _is_quant_pie_polygons(self, obj) -> bool:
+        """Return True only for quantification pie polygon elements."""
+        if not isinstance(obj, hv.Polygons):
+            return False
+        try:
+            vdim_names = {vd.name for vd in obj.vdims}
+            return 'ProportionPct' in vdim_names
+        except Exception:
+            return False
+
     def _requires_static_paneB_render(self, fig) -> bool:
         """Return True when paneB should bypass the curve DynamicMap pipe."""
-        if isinstance(fig, (hv.Bars, hv.Polygons)):
+        if isinstance(fig, hv.Bars) or self._is_quant_pie_polygons(fig):
             return True
         if isinstance(fig, hv.Overlay):
             try:
-                return any(isinstance(el, hv.Polygons) for el in fig.values())
+                return any(self._is_quant_pie_polygons(el) for el in fig.values())
             except Exception:
                 return False
         return False
@@ -291,16 +301,43 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             y_fit = SpectrumFitting.fit_powerlaw_curve(
                 self._energy, self.selected_slice, range_values=element_item.fit_range
             )
+            quant_eaxis = self._get_quantification_eaxis(self.selected_slice)
             if y_fit is not None:
-                curves.append(hv.Curve(
-                    (self._energy, y_fit), kdims=['x'], vdims=['y'],
-                    label=f'{element_item.element} PowerLaw Fit',
-                ).opts(color=color, line_width=1.5))
-                bg_sub = self.selected_slice - y_fit
-                curves.append(hv.Area(
-                    (self._energy, bg_sub), kdims=['x'], vdims=['y'],
-                    label=f'{element_item.element} BG Subtraction',
-                ).opts(color=color, alpha=0.3, line_color=color, line_alpha=0.6))
+                x_fit = np.asarray(self._energy, dtype=float)
+                y_fit_arr = np.asarray(y_fit, dtype=float)
+                fit_mask = np.isfinite(x_fit) & np.isfinite(y_fit_arr)
+                if np.count_nonzero(fit_mask) >= 2:
+                    curves.append(hv.Curve(
+                        (x_fit[fit_mask], y_fit_arr[fit_mask]), kdims=['x'], vdims=['y'],
+                        label=f'{element_item.element} PowerLaw Fit',
+                    ).opts(color=color, line_width=1.5))
+
+                # Use Curve instead of Area to avoid HoloViews AreaMixin range issues
+                # on dynamic updates with multiple elements and slider changes.
+                bg_sub = np.asarray(self.selected_slice, dtype=float) - y_fit_arr
+                bg_mask = np.isfinite(x_fit) & np.isfinite(bg_sub)
+                if np.count_nonzero(bg_mask) >= 2:
+                    bg_x = x_fit[bg_mask]
+                    bg_y = bg_sub[bg_mask]
+                    bg_area = self._integrate_area(bg_x, bg_y)
+                    bg_label = (
+                        f"{element_item.element} BG Subtraction "
+                    )
+                    # Build a filled polygon between BG subtraction and baseline y=0
+                    # to preserve the original "area" aesthetics without hv.Area.
+                    poly_x = np.concatenate([bg_x, bg_x[::-1]])
+                    poly_y = np.concatenate([bg_y, np.zeros_like(bg_y)[::-1]])
+                    curves.append(hv.Polygons(
+                        [{'x': poly_x, 'y': poly_y}],
+                        kdims=['x', 'y'],
+                        label=bg_label,
+                    ).opts(
+                        color=color,
+                        alpha=0.3,
+                        line_color=color,
+                        line_alpha=0.6,
+                        show_legend=True,
+                    ))
             for ishell in element_item.shells:
                 eaxis_cs = element_item.cross_sections[ishell][0]
                 counts = element_item.cross_sections[ishell][1]
@@ -312,34 +349,91 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     y_extrapolated=y_fit if y_fit is not None else np.zeros_like(self.selected_slice),
                     chemical_shift=element_item.chemical_shift,
                     quant_range_values=element_item.quant_range,
-                    eaxis=self._energy, eaxis_cs=eaxis_cs,
+                    eaxis=quant_eaxis, eaxis_cs=eaxis_cs,
                     counts=counts, onset=onset, cross_section=cross_section,
                 )
                 xaxis, yaxis = cs_instance.get_data()
+                xaxis = np.asarray(xaxis, dtype=float)
+                yaxis = np.asarray(yaxis, dtype=float)
+                cs_mask = np.isfinite(xaxis) & np.isfinite(yaxis)
+                if np.count_nonzero(cs_mask) < 2:
+                    continue
                 curves.append(hv.Curve(
-                    (xaxis, yaxis), kdims=['x'], vdims=['y'],
+                    (xaxis[cs_mask], yaxis[cs_mask]), kdims=['x'], vdims=['y'],
                     label=f'{element_item.element} {ishell} OOS',
                 ).opts(line_width=1.5))
         except Exception:
             pass
         return curves
 
+    def _integrate_area(self, x, y) -> float:
+        """Compute signed area under y(x) using trapezoidal integration."""
+        x_arr = np.asarray(x, dtype=float)
+        y_arr = np.asarray(y, dtype=float)
+        if x_arr.size < 2 or y_arr.size < 2:
+            return 0.0
+        try:
+            return float(np.trapezoid(y_arr, x_arr))
+        except Exception:
+            return float(np.trapz(y_arr, x_arr))
+
+    def _get_quantification_eaxis(self, selected_slice):
+        """Prefer physical Eloss axis when shape matches; otherwise fallback to plotting axis."""
+        try:
+            e_axis = np.asarray(self._e_axis)
+            if selected_slice is not None and e_axis.shape[0] == np.asarray(selected_slice).shape[0]:
+                return e_axis
+        except Exception:
+            pass
+        return np.asarray(self._energy)
+
     def calculate_shell_data(self, selected_slice, element_item, y_extrapolated, ishell):
         eaxis = element_item.cross_sections[ishell][0]
         counts = element_item.cross_sections[ishell][1]
         onset = element_item.cross_sections[ishell][2]
         cross_section = element_item.cross_sections[ishell][3]
+        quant_eaxis = self._get_quantification_eaxis(selected_slice)
         cs_instance = add_cs(
             element=element_item.element, ishell=ishell,
             selected_slice=selected_slice, y_extrapolated=y_extrapolated,
             chemical_shift=element_item.chemical_shift,
             quant_range_values=element_item.quant_range,
-            eaxis=self._energy, eaxis_cs=eaxis,
+            eaxis=quant_eaxis, eaxis_cs=eaxis,
             counts=counts, onset=onset, cross_section=cross_section,
         )
         return cs_instance.get_data()
 
+    def _ensure_selected_slice_for_quantification(self):
+        """Try to recover selected_slice from pending/active ROI before quantification."""
+        if self.selected_slice is not None:
+            return
+
+        pending_index = self._pending_selection_index
+        has_pending_index = False
+        if pending_index is not None:
+            try:
+                has_pending_index = len(pending_index) > 0
+            except Exception:
+                has_pending_index = bool(pending_index)
+
+        # Flush debounced lasso selection if it exists.
+        if self._pending_selection_ts is not None and has_pending_index:
+            self._process_selection(pending_index)
+            self._pending_selection_index = None
+            self._pending_selection_ts = None
+            if self.selected_slice is not None:
+                return
+
+        # Fallback: recover from already committed region.
+        if self._region_pairs:
+            res = SpectrumExtractor.get_spectrum_from_indices(
+                self._electron_count_data, self._region_pairs
+            )
+            if res is not None:
+                self.selected_slice, _ = res
+
     def plot_quantification_pie(self, element_items):
+        self._ensure_selected_slice_for_quantification()
         if self.selected_slice is None:
             raise ValueError("No region selected. Use lasso/box on the image before running quantification.")
         element_data = []
