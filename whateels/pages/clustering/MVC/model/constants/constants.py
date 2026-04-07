@@ -13,7 +13,7 @@ class Constants:
     SINGLE_SPECTRUM = 'SSp'
     IMAGE = 'Img'
     
-    DEFAULT_BACKGROUND_SUBTRACTION = False
+    DEFAULT_USE_PREPROCESSED_DATA = False
     
     # Tabs clustering names
     TAB_KMEANS = "K-Means"

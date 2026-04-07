@@ -13,11 +13,11 @@ class ClusteringRightSidebarLayout(pn.Column):
     def __init__(self, model: "ClusteringModel"):
         self._model = model
         
-        self._background_subtraction_switch = pn.widgets.Switch(
-            name="Background-subtraction", 
-            value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
+        self._preprocessing_data_switch = pn.widgets.Switch(
+            name="Use Preprocessed Data", 
+            value=self._model.constants.DEFAULT_USE_PREPROCESSED_DATA, 
             sizing_mode='stretch_both',
-            css_classes=["background-subtraction-switch"]
+            css_classes=["use-preprocessed-data-switch"]
         )
     
         self._store_button = pn.widgets.FileDownload(
@@ -64,7 +64,7 @@ class ClusteringRightSidebarLayout(pn.Column):
     @property
     def background_subtraction_switch(self) -> pn.widgets.Switch:
         """Access the background-subtraction switch widget."""
-        return self._background_subtraction_switch
+        return self._preprocessing_data_switch
     @property
     def spectral_run_button(self) -> pn.widgets.Button:
         """Access the Spectral clustering run button."""
@@ -95,35 +95,33 @@ class ClusteringRightSidebarLayout(pn.Column):
         return self._kmeans_input   
         
     def _create_layout(self):
-        background_subtraction_label = pn.pane.Markdown(
-            "### Background-subtraction", 
+        preprocessing_data_label = pn.pane.Markdown(
+            "### Use Preprocessed Data", 
         )
 
-        self._background_subtraction_switch = pn.widgets.Switch(
-            name="Background-subtraction", 
-            value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
+        self._preprocessing_data_switch = pn.widgets.Switch(
+            name="Use Preprocessed Data", 
+            value=self._model.constants.DEFAULT_USE_PREPROCESSED_DATA, 
             sizing_mode='stretch_both',
-            css_classes=["background-subtraction-switch"]
+            css_classes=["use-preprocessed-data-switch"]
         )
         
-        # TODO Correct Shift | SimpleDetails
-
         is_multifitting_available = self._model.is_multifit_available()
-        self._background_subtraction_switch.disabled = not is_multifitting_available
+        self._preprocessing_data_switch.disabled = not is_multifitting_available
 
-        subtraction_bg_tooltip = (
-            "Enable background-subtraction from multifit results." 
+        preprocessing_data_tooltip = (
+            "Enable use of preprocessed data from multifit results." 
             if is_multifitting_available else "Must do Multifitting to enable the switch."
         )
-        background_subtraction_container = pn.Row(
+        preprocessing_data_container = pn.Row(
             pn.widgets.TooltipIcon(
-                value=subtraction_bg_tooltip, 
+                value=preprocessing_data_tooltip, 
                 css_classes=["tooltip-icon"]
             ),
-            background_subtraction_label,
-            self._background_subtraction_switch,
+            preprocessing_data_label,
+            self._preprocessing_data_switch,
             sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["background-subtraction-container"]
+            css_classes=["use-preprocessed-data-container"]
         )
 
         k_means_tab = self._create_k_means_tab()
@@ -182,7 +180,7 @@ class ClusteringRightSidebarLayout(pn.Column):
         self._store_button.callback = pn.bind(create_file)
 
         right_sidebar = pn.Column(
-            background_subtraction_container,
+            preprocessing_data_container,
             pn.Column(
                 clustering_tabs,
                 sizing_mode=self._STRETCH_BOTH,
