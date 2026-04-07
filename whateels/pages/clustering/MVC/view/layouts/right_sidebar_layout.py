@@ -111,7 +111,7 @@ class ClusteringRightSidebarLayout(pn.Column):
 
         preprocessing_data_tooltip = (
             "Enable use of preprocessed data from multifit results." 
-            if is_multifitting_available else "Must do Multifitting to enable the switch."
+            if is_multifitting_available else "Must do some preprocessing first at home page before using this option."
         )
         preprocessing_data_container = pn.Row(
             pn.widgets.TooltipIcon(

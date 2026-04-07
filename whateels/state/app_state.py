@@ -33,10 +33,16 @@ class AppState(param.Parameterized):
     """)
     # Reactive parameter to hold the dataset currently plotted in the visualizer
     plot_dataset = param.Parameter(default=None, doc="""
-        The xarray Dataset (or view) currently used to build figA/figB in the
+        The xarray Dataset (or view) currently used to build paneA/paneB in the
         SpectrumImageVisualizer. Stored here so other pages (e.g. multifitting)
         can access the same dataset instance.
     """)
+    
+    # Reactive parameter for all loaded datasets
+    all_datasets = param.List(default=list(), doc="""
+        List of all loaded EELS datasets (xarray.Dataset).
+    """)
+    
     spectra = param.Parameter(default=None, doc="""
         Spectra of selected data
     """)
@@ -47,11 +53,6 @@ class AppState(param.Parameterized):
 
     fitting_results = param.Parameter(default=None, doc="""
         The results of the fitting procedure, stored here for access across pages. 
-    """)
-
-    # Reactive parameter for all loaded datasets
-    all_datasets = param.List(default=list(), doc="""
-        List of all loaded EELS datasets (xarray.Dataset).
     """)
 
     filename = param.String(default="No file uploaded", doc="""
@@ -76,6 +77,20 @@ class AppState(param.Parameterized):
         Contains the result of all active data-transforming preprocessors
         (spike removal, background subtraction) applied to every pixel.
         None when no preprocessors have been applied or after reverting to raw.
+    """)
+
+    # Preprocessed counterparts of plot_dataset / all_datasets
+    preprocessed_plot_dataset = param.Parameter(default=None, doc="""
+        Preprocessed version of plot_dataset. Set when the user applies
+        preprocessors on the home page. Used by pages (e.g. clustering) that
+        offer a 'Use preprocessed data' switch.
+        None if no preprocessing has been applied yet.
+    """)
+
+    preprocessed_all_datasets = param.List(default=list(), doc="""
+        Preprocessed counterpart of all_datasets. Each entry corresponds to
+        the same index in all_datasets but contains the preprocessed variant.
+        Empty until the user applies preprocessors on the home page.
     """)
 
     def __init__(self):
@@ -156,6 +171,12 @@ class AppState(param.Parameterized):
     def clear_preprocessed_electron_count(self):
         self.preprocessed_electron_count = None
 
+    def clear_preprocessed_plot_dataset(self):
+        self.preprocessed_plot_dataset = None
+
+    def clear_preprocessed_all_datasets(self):
+        self.preprocessed_all_datasets = []
+
     def clear_all(self):
         """Clear all shared state parameters."""
         self.clear_metadata()
@@ -165,3 +186,5 @@ class AppState(param.Parameterized):
         self.clear_selected_tab_index()
         self.clear_last_clustering_result()
         self.clear_preprocessed_electron_count()
+        self.clear_preprocessed_plot_dataset()
+        self.clear_preprocessed_all_datasets()
