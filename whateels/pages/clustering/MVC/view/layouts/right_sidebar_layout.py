@@ -13,11 +13,11 @@ class ClusteringRightSidebarLayout(pn.Column):
     def __init__(self, model: "ClusteringModel"):
         self._model = model
         
-        self._preprocessing_data_switch = pn.widgets.Switch(
-            name="Use Preprocessed Data", 
-            value=self._model.constants.DEFAULT_USE_PREPROCESSED_DATA, 
+        self._background_subtraction_switch = pn.widgets.Switch(
+            name="Background-subtraction", 
+            value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
-            css_classes=["use-preprocessed-data-switch"]
+            css_classes=["background-subtraction-switch"]
         )
     
         self._store_button = pn.widgets.FileDownload(
@@ -95,15 +95,15 @@ class ClusteringRightSidebarLayout(pn.Column):
         return self._kmeans_input   
         
     def _create_layout(self):
-        preprocessing_data_label = pn.pane.Markdown(
-            "### Use Preprocessed Data", 
+        background_subtraction_label = pn.pane.Markdown(
+            "### Background-subtraction", 
         )
 
-        self._preprocessing_data_switch = pn.widgets.Switch(
-            name="Use Preprocessed Data", 
-            value=self._model.constants.DEFAULT_USE_PREPROCESSED_DATA, 
+        self._background_subtraction_switch = pn.widgets.Switch(
+            name="Background-subtraction", 
+            value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
-            css_classes=["use-preprocessed-data-switch"]
+            css_classes=["background-subtraction-switch"]
         )
         
         is_multifitting_available = self._model.is_preprocessed_data_available()
@@ -113,15 +113,15 @@ class ClusteringRightSidebarLayout(pn.Column):
             "Enable use of preprocessed data from the home page." 
             if is_multifitting_available else "Must do some preprocessing first at home page before using this option."
         )
-        preprocessing_data_container = pn.Row(
+        background_subtraction_container = pn.Row(
             pn.widgets.TooltipIcon(
-                value=preprocessing_data_tooltip, 
+                value=subtraction_bg_tooltip, 
                 css_classes=["tooltip-icon"]
             ),
-            preprocessing_data_label,
-            self._preprocessing_data_switch,
+            background_subtraction_label,
+            self._background_subtraction_switch,
             sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["use-preprocessed-data-container"]
+            css_classes=["background-subtraction-container"]
         )
 
         k_means_tab = self._create_k_means_tab()
@@ -180,7 +180,7 @@ class ClusteringRightSidebarLayout(pn.Column):
         self._store_button.callback = pn.bind(create_file)
 
         right_sidebar = pn.Column(
-            preprocessing_data_container,
+            background_subtraction_container,
             pn.Column(
                 clustering_tabs,
                 sizing_mode=self._STRETCH_BOTH,
