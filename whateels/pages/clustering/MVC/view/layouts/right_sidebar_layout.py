@@ -13,7 +13,7 @@ class ClusteringRightSidebarLayout(pn.Column):
     def __init__(self, model: "ClusteringModel"):
         self._model = model
         
-        self._background_subtraction_switch = pn.widgets.Switch(
+        self._preprocessing_data_switch = pn.widgets.Switch(
             name="Background-subtraction", 
             value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
@@ -99,7 +99,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             "### Background-subtraction", 
         )
 
-        self._background_subtraction_switch = pn.widgets.Switch(
+        self._preprocessing_data_switch = pn.widgets.Switch(
             name="Background-subtraction", 
             value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
@@ -115,11 +115,11 @@ class ClusteringRightSidebarLayout(pn.Column):
         )
         background_subtraction_container = pn.Row(
             pn.widgets.TooltipIcon(
-                value=subtraction_bg_tooltip, 
+                value=preprocessing_data_tooltip, 
                 css_classes=["tooltip-icon"]
             ),
             background_subtraction_label,
-            self._background_subtraction_switch,
+            self._preprocessing_data_switch,
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-subtraction-container"]
         )
