@@ -226,13 +226,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _process_selection(self, index=None):
         app_state = CacheManager.get_cached_app_state()
-        if not index:
-            pairs = []
-        else:
-            pairs = list(dict.fromkeys(
-                (idx // self._nx, idx % self._nx) for idx in index
-            ))
+        pairs = self._index_to_pairs(index)
         self._region_pairs = pairs
+        self._update_selection_overlay(pairs)
         if not pairs:
             self._hover_blocked = False
             if self._pc and self._pc.running:
@@ -240,6 +236,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._last_hover_ts = None
             if self._last_hover_point is not None:
                 self._update_paneB(self._figB_hover(self._last_hover_point))
+            if self.on_selection_change:
+                self.on_selection_change(False)
             return
         if app_state.quantification_elements:
             self.plot_quantification_elements(app_state.quantification_elements)
@@ -249,13 +247,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._pc.stop()
         self._last_hover_ts = None
         self._hover_blocked = True
+        if self.on_selection_change:
+            self.on_selection_change(True)
 
+    @override
     def _on_paneA_double_tap(self, x=None, y=None):
         """Double-click resets the lasso selection and unblocks hover."""
-        self._hover_blocked = False
-        self._region_pairs = []
-        self._pending_selection_index = None
-        self._pending_selection_ts = None
+        super()._on_paneA_double_tap(x, y)
         self._last_hover_ts = None
         if self._pc and self._pc.running:
             self._pc.stop()
