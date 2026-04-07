@@ -141,18 +141,22 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_preprocessing_switch_changed(self):
         """Rebuild paneA heatmap and refresh paneB when the preprocessing switch is toggled."""
-        display_data = self._get_display_data()
-
         # Update energy axis to match the current display data's Eloss coordinates.
         # This is critical when cut-range preprocessing has changed the axis length.
+        display_data = self._get_display_data()
         try:
             self._energy = np.asarray(display_data.coords[self._eloss_name].values)
         except Exception:
             self._energy = np.asarray(self._e_axis)  # fallback to original
 
+        self._refresh_paneA()
+        self._refresh_paneB()
+
+    def _refresh_paneA(self):
+        """Rebuild paneA heatmap using the current display data."""
+        display_data = self._get_display_data()
         m_image_da = display_data.sum(self._eloss_name)
         m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
-
         ny, nx = m_image.shape
         img = hv.Image(
             (np.arange(nx), np.arange(ny), m_image),
@@ -169,10 +173,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             shared_axes=False,
         )
         self._paneA_base_overlay = img * self._selectors  # type: ignore
-        self._update_selection_overlay([])  # reset selection and recompose paneA
+        self._update_selection_overlay([])
 
-        # Refresh paneB at origin pixel from the new data source
-        self._paneB_pipe.send(hv.Overlay([self._figB_hover({"x": 0, "y": 0})]))
+    def _refresh_paneB(self):
+        """Refresh paneB using the last hover point or default pixel (0, 0)."""
+        self._current_x_range = None
+        self._current_y_range = None
+        point = self._last_hover_point if self._last_hover_point is not None else {"x": 0, "y": 0}
+        self._update_paneB(self._figB_hover(point))
 
     # --- Clustering Application Methods ---
     
