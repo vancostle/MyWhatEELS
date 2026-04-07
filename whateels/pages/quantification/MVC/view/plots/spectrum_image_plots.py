@@ -33,11 +33,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     Extends BaseSpectrumImagePlot with:
     - Inactivity timer: hover temporarily shows pixel spectrum, then reverts to ROI.
     - Quantification overlays: power-law fit, background subtraction, cross-sections.
-    - Quantification bar chart (replaces Plotly pie).
+    - Quantification pie chart built with pure HoloViews.
     """
 
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+    _QUANT_PIE_SIZE = 420
 
     def __init__(self, model: "QuantificationModel", dataset: "Dataset"):
         self._model = model
@@ -76,20 +77,42 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def get_e_axis(self):
         return self._e_axis
 
-    # --- paneB override: hv.Bars can't be sent through a Curve-typed Pipe/DynamicMap ---
+    # --- paneB override: static charts (bars/pie polygons) use direct rendering ---
+
+    def _requires_static_paneB_render(self, fig) -> bool:
+        """Return True when paneB should bypass the curve DynamicMap pipe."""
+        if isinstance(fig, (hv.Bars, hv.Polygons)):
+            return True
+        if isinstance(fig, hv.Overlay):
+            try:
+                return any(isinstance(el, hv.Polygons) for el in fig.values())
+            except Exception:
+                return False
+        return False
 
     @override
     def _update_paneB(self, fig):
-        if isinstance(fig, hv.Bars):
-            # Bar chart has categorical kdims — Bokeh can't update a curve renderer in-place.
-            # Set paneB.object directly to get a fresh render.
+        if self._requires_static_paneB_render(fig):
+            # Static charts use a different renderer than the curve DynamicMap.
+            # Rendering directly avoids Bokeh model type mismatches.
+            # Lock pane size so SplitJs resizing cannot stretch the pie chart.
+            self.paneB.sizing_mode = 'fixed'
+            self.paneB.width = self._QUANT_PIE_SIZE
+            self.paneB.height = self._QUANT_PIE_SIZE
+            self.paneB.align = ('center', 'center')
+            self.paneB.styles = {'margin': 'auto'}
             self.paneB.object = fig
-            self._paneB_bar_mode = True
+            self._paneB_static_mode = True
         else:
-            if getattr(self, '_paneB_bar_mode', False):
-                # Coming back from bar mode: restore the DynamicMap so the Pipe works again.
+            if getattr(self, '_paneB_static_mode', False):
+                # Restore the DynamicMap so the Pipe-based spectrum updates work again.
+                self.paneB.sizing_mode = 'stretch_both'
+                self.paneB.width = None
+                self.paneB.height = None
+                self.paneB.align = 'start'
+                self.paneB.styles = {}
                 self.paneB.object = self._paneB_dmap
-                self._paneB_bar_mode = False
+                self._paneB_static_mode = False
             super()._update_paneB(fig)
 
     @override
@@ -346,6 +369,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             except Exception as e:
                 raise e
         try:
+            element_color_map = {
+                str(element_item.element): colors[i % len(colors)]
+                for i, element_item in enumerate(element_items)
+            }
             q_list = []
             i = 0
             while i < len(element_data) - 1:
@@ -365,31 +392,107 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     )
                 q_list.append((element_item0.element, element_item1.element, q_aux))
                 i += 1
-            self._update_paneB(self._build_quant_bars(q_list))
+            self._update_paneB(self._build_quant_pie(q_list, element_color_map))
         except Exception as e:
             raise RuntimeError(f"Error in quantification calculation: {e}")
 
-    def _build_quant_bars(self, q_list):
-        """Build an hv.Bars chart from quantification ratios."""
-        # Matches Plotly's default color sequence (blue, red, then others)
+    def _build_quant_pie(self, q_list, element_color_map):
+        """Build a pure HoloViews pie chart using polygon wedges."""
         _QUANT_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
+        _RADIUS = 1.0
+        _LABEL_RADIUS = 0.67
+        _N_POINTS_PER_SLICE = 90
+        _PIE_SIZE = self._QUANT_PIE_SIZE
 
         abc_list = [1.0]
         for i in range(len(q_list)):
             abc_list.append(abc_list[i] / q_list[i][2])
-        total = sum(abc_list)
-        labels = [str(q_list[i][0]) for i in range(len(abc_list) - 1)] + [str(q_list[-1][1])]
-        proportions = [round(v / total * 100) for v in abc_list]
-        bar_colors = [_QUANT_COLORS[i % len(_QUANT_COLORS)] for i in range(len(labels))]
 
-        return hv.Bars(
-            list(zip(labels, proportions, bar_colors)),
-            kdims=['Element'], vdims=['Proportion', 'Color'],
+        total = float(sum(abc_list))
+        if total <= 0:
+            raise ValueError("Quantification proportions must sum to a positive value.")
+
+        labels = [str(q_list[i][0]) for i in range(len(abc_list) - 1)] + [str(q_list[-1][1])]
+        proportions = [float(v) / total for v in abc_list]
+
+        polygons = []
+        label_data = []
+        start_angle = np.pi / 2.0
+
+        for i, (label, prop) in enumerate(zip(labels, proportions)):
+            end_angle = start_angle - (2.0 * np.pi * prop)
+            theta = np.linspace(end_angle, start_angle, _N_POINTS_PER_SLICE)
+
+            xs = np.concatenate(([0.0], _RADIUS * np.cos(theta), [0.0]))
+            ys = np.concatenate(([0.0], _RADIUS * np.sin(theta), [0.0]))
+            color = element_color_map.get(str(label), _QUANT_COLORS[i % len(_QUANT_COLORS)])
+            pct = prop * 100.0
+
+            polygons.append({
+                'xs': xs,
+                'ys': ys,
+                'Element': label,
+                'ProportionPct': pct,
+                'Color': color,
+            })
+
+            mid_angle = 0.5 * (start_angle + end_angle)
+            label_x = _LABEL_RADIUS * np.cos(mid_angle)
+            label_y = _LABEL_RADIUS * np.sin(mid_angle)
+            label_data.append((label_x, label_y, f"{label}\n{pct:.1f}%"))
+
+            start_angle = end_angle
+
+        pie = hv.Polygons(
+            polygons,
+            kdims=['xs', 'ys'],
+            vdims=['Element', 'ProportionPct', 'Color'],
         ).opts(
-            title='Quantification',
-            xlabel='Element', ylabel='Proportion (%)',
+            title='Quantification Proportions in ROI',
             color='Color',
-            responsive=True, shared_axes=False, framewise=True,
+            line_color='white',
+            line_width=1,
+            alpha=0.95,
+            tools=['hover'],
+            hover_tooltips=[
+                ('Element', '@{Element}'),
+                ('Proportion', '@{ProportionPct}{0.2f}%'),
+            ],
+            xaxis=None,
+            yaxis=None,
+            show_grid=False,
+            show_frame=False,
+            xlim=(-1.15, 1.15),
+            ylim=(-1.15, 1.15),
+            aspect='square',
+            data_aspect=1,
+            responsive=False,
+            width=_PIE_SIZE,
+            height=_PIE_SIZE,
+            shared_axes=False,
+            framewise=True,
+        )
+
+        labels_overlay = hv.Labels(
+            label_data,
+            kdims=['x', 'y'],
+            vdims=['text'],
+        ).opts(
+            text_align='center',
+            text_baseline='middle',
+            text_font_size='9pt',
+            text_color='white',
+        )
+
+        return (pie * labels_overlay).opts(
+            hv.opts.Overlay(
+                responsive=False,
+                aspect='square',
+                width=_PIE_SIZE,
+                height=_PIE_SIZE,
+                shared_axes=False,
+                framewise=True,
+            )
         )
 
     # --- Cleanup ---
