@@ -208,7 +208,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         is_preprocessed_available = self._model.is_preprocessed_data_available()
 
         self._use_preprocessed_data_switch = pn.widgets.Switch(
-            name="Input Data",
+            name="Use Preprocessed Data",
             value=is_preprocessed_available,
             disabled=not is_preprocessed_available,
             sizing_mode='stretch_both',
@@ -221,7 +221,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             else "No preprocessed data available. Apply preprocessing in Home first."
         )
 
-        input_data_label = pn.pane.Markdown("### Input Data")
+        input_data_label = pn.pane.Markdown("### Use Preprocessed Data")
 
         input_data_controls = pn.Row(
             pn.widgets.TooltipIcon(
