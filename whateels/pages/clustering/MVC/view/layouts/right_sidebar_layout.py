@@ -14,7 +14,7 @@ class ClusteringRightSidebarLayout(pn.Column):
         self._model = model
         
         self._preprocessing_data_switch = pn.widgets.Switch(
-            name="Background-subtraction", 
+            name="Use Preprocessed Data", 
             value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"]
@@ -96,11 +96,11 @@ class ClusteringRightSidebarLayout(pn.Column):
         
     def _create_layout(self):
         background_subtraction_label = pn.pane.Markdown(
-            "### Background-subtraction", 
+            "### Use Preprocessed Data", 
         )
 
         self._preprocessing_data_switch = pn.widgets.Switch(
-            name="Background-subtraction", 
+            name="Use Preprocessed Data", 
             value=self._model.constants.DEFAULT_BACKGROUND_SUBTRACTION, 
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"]
