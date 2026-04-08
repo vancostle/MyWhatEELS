@@ -242,25 +242,33 @@ class QuantificationController(BaseController):
 
     def _run_quantification(self, event):
         if not self._model.app_state.quantification_elements:
-            raise RuntimeError("No elements to quantify.")
-        elif len(self._model.app_state.quantification_elements) < 2:
-            raise RuntimeError("At least two elements are required for quantification.")
-        else:
-            self._layout.plot_quantification_pie()    
+            print("No elements to quantify.")
+            return
+        if len(self._model.app_state.quantification_elements) < 2:
+            print("At least two elements are required for quantification.")
+            return
+        try:
+            self._layout.plot_quantification_pie()
+        except Exception as e:
+            print(f"Error plotting quantification pie chart: {e}")
 
     def _on_quanti_show(self):
         """Called when toggle button is clicked in OFF state (show quantification)."""
         if not self._model.app_state.quantification_elements:
-            self.view.quanti_toggle_button.toggle()  # Revert the toggle state
-            raise RuntimeError("No elements to quantify.")
-        elif len(self._model.app_state.quantification_elements) < 2:
-            self.view.quanti_toggle_button.toggle()  # Revert the toggle state
-            raise RuntimeError("At least two elements are required for quantification.")
+            # This callback runs before ToggleButton auto-toggles.
+            # Pre-toggle to keep final state OFF while avoiding exceptions in Panel callbacks.
+            self.view.quanti_toggle_button.toggle()
+            print("No elements to quantify.")
+            return
+        if len(self._model.app_state.quantification_elements) < 2:
+            self.view.quanti_toggle_button.toggle()
+            print("At least two elements are required for quantification.")
+            return
         try:
             self._layout.plot_quantification_pie()
         except Exception as e:
             self.view.quanti_toggle_button.toggle()
-            raise RuntimeError(f"Error plotting quantification pie chart: {e}")
+            print(f"Error plotting quantification pie chart: {e}")
 
     def _on_quanti_hide(self):
         """Called when toggle button is clicked in ON state (hide quantification)."""
