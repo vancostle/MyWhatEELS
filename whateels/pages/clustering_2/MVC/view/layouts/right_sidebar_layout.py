@@ -193,6 +193,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_selected_umap.disabled = False
         self._hdbscan_min_samples.disabled = False
         self._hdbscan_min_cluster_size.disabled = False
+        self._hdbscan_active_button.disabled = False
         
         self._compute_hdbscan_on_umap_button.disabled = False
         
@@ -201,6 +202,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_selected_umap.disabled = True
         self._hdbscan_min_samples.disabled = True
         self._hdbscan_min_cluster_size.disabled = True
+        self._hdbscan_active_button.disabled = True
         
         self._compute_hdbscan_on_umap_button.disabled = True
         
@@ -209,7 +211,7 @@ class Clustering2RightSidebarLayout(pn.Column):
 
         self._use_preprocessed_data_switch = pn.widgets.Switch(
             name="Use Preprocessed Data",
-            value=is_preprocessed_available,
+            value=False,
             disabled=not is_preprocessed_available,
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"],

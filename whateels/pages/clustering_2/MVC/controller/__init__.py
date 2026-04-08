@@ -118,16 +118,16 @@ class Clustering2PageController:
         self._view.right_sidebar.disable_hdbscan_controls()
 
     def _on_use_preprocessed_data_switch_changed(self, event) -> None:
-        """Rebuild backend and clear results when switching between raw and preprocessed input."""
+        """Swap the data source the page uses without clearing computed results."""
         if event.new and not self._has_valid_preprocessed_data(notify=True):
             self._view.right_sidebar.use_preprocessed_data_switch.value = False
             return
 
         self._hdbscan = UMAP_HDBSCAN(electron_count_data=self._resolve_electron_count_data())
-        self._reset_results_for_new_data_source()
         source_name = "Home preprocessed" if event.new else "raw"
+        self._reset_results_for_new_data_source() # Clear previous results because they belong to a different input data source
         pn.state.notifications.info(
-            f"Clustering input switched to {source_name} data. Recompute UMAP to continue.",
+            f"Clustering input switched to {source_name} data. Recompute UMAP to apply.",
             duration=3500,
         ) # type: ignore
         
