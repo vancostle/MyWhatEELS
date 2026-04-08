@@ -1121,7 +1121,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             ]
             for key, value in extra.items():
                 parts.append(f"{key}={value}")
-            print(" | ".join(parts), flush=True)
         except Exception:
             pass
 
@@ -1139,7 +1138,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             ]
             for key, value in extra.items():
                 parts.append(f"{key}={value}")
-            print(" | ".join(parts), flush=True)
         except Exception:
             pass
             
