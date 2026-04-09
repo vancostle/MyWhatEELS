@@ -63,12 +63,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Get axis name from model constants
         eloss_name = getattr(model.constants, 'ELOSS', 'Eloss') if hasattr(model, 'constants') else 'Eloss'
 
-        # Call parent constructor to setup base visualization
-        super().__init__(dataset, eloss_name)
-
-        # Store references for clustering features
+        # Store model/view before super().__init__ so _get_display_data() override
+        # can access them when _setup_plots() runs during parent construction.
         self._model: "ClusteringModel" = model
         self._view: "ClusteringView" = view
+
+        # Call parent constructor to setup base visualization
+        super().__init__(dataset, eloss_name)
         
         # Store original plots layout to restore after clustering
         self._plots_layout = None
@@ -114,9 +115,72 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             original_heatmap_ref=self._original_heatmap_ref
         )
 
+        # Wire preprocessing switch so toggling it immediately refreshes paneA/paneB
+        switch = self._view.right_sidebar.preprocessed_data_switch
+        self._preprocessing_switch_ref = switch
+        self._preprocessing_switch_watcher = switch.param.watch(
+            lambda e: self._on_preprocessing_switch_changed(), 'value'
+        )
+
         # Remove region selection state (lasso/box selection)
 
     # --- paneA setup / callbacks: handled by base ---
+
+    @override
+    def _get_display_data(self):
+        """Return active electron count data (raw or preprocessed based on switch state)."""
+        try:
+            switch = self._view.right_sidebar.preprocessed_data_switch
+            if switch and bool(switch.value):
+                preprocessed = self._model.app_state.preprocessed_plot_dataset
+                if preprocessed is not None:
+                    return preprocessed["ElectronCount"]
+        except AttributeError:
+            pass
+        return self._electron_count_data
+
+    def _on_preprocessing_switch_changed(self):
+        """Rebuild paneA heatmap and refresh paneB when the preprocessing switch is toggled."""
+        # Update energy axis to match the current display data's Eloss coordinates.
+        # This is critical when cut-range preprocessing has changed the axis length.
+        display_data = self._get_display_data()
+        try:
+            self._energy = np.asarray(display_data.coords[self._eloss_name].values)
+        except Exception:
+            self._energy = np.asarray(self._e_axis)  # fallback to original
+
+        self._refresh_paneA()
+        self._refresh_paneB()
+
+    def _refresh_paneA(self):
+        """Rebuild paneA heatmap using the current display data."""
+        display_data = self._get_display_data()
+        m_image_da = display_data.sum(self._eloss_name)
+        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        ny, nx = m_image.shape
+        img = hv.Image(
+            (np.arange(nx), np.arange(ny), m_image),
+            kdims=['x', 'y'],
+            vdims=['Intensity'],
+        ).opts(
+            cmap='Greys_r',
+            colorbar=False,
+            xaxis=None,
+            yaxis=None,
+            invert_yaxis=True,
+            aspect='equal',
+            responsive=True,
+            shared_axes=False,
+        )
+        self._paneA_base_overlay = img * self._selectors  # type: ignore
+        self._update_selection_overlay([])
+
+    def _refresh_paneB(self):
+        """Refresh paneB using the last hover point or default pixel (0, 0)."""
+        self._current_x_range = None
+        self._current_y_range = None
+        point = self._last_hover_point if self._last_hover_point is not None else {"x": 0, "y": 0}
+        self._update_paneB(self._figB_hover(point))
 
     # --- Clustering Application Methods ---
     
@@ -316,7 +380,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Get data cube for clustering, possibly with background subtraction."""
         # Check if background-subtraction is enabled
         try:
-            switch = self._view.right_sidebar.background_subtraction_switch
+            switch = self._view.right_sidebar.preprocessed_data_switch
             switch_value = bool(switch.value) if switch and switch.value is not None else False
             use_multifit = DataPreprocessor.should_use_multifit_data(self._model, switch_value)
         except Exception:
@@ -569,7 +633,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         Return an hv.Overlay for a specific pixel with clustering overlays.
         """
         overlays = []
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._electron_count_data, i, j)
+        display_data = self._get_display_data()
+        spec = SpectrumExtractor.get_spectrum_from_pixel(display_data, i, j)
         if spec is None:
             return hv.Overlay([])
 
@@ -599,7 +664,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             hasattr(self, '_last_clustering_input') and
             self._last_clustering_input is not None):
             try:
-                data_cube = np.asarray(self._electron_count_data.fillna(0.0))
+                data_cube = np.asarray(display_data.fillna(0.0))
                 ny, nx = data_cube.shape[0], data_cube.shape[1]
                 linear_idx = i * nx + j
                 if linear_idx < len(self._last_clustering_input):
@@ -725,6 +790,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 except Exception:
                     pass
 
+        # Unwatch preprocessing switch
+        if self._preprocessing_switch_ref is not None and self._preprocessing_switch_watcher is not None:
+            try:
+                self._preprocessing_switch_ref.param.unwatch(self._preprocessing_switch_watcher)
+            except Exception:
+                pass
+        self._preprocessing_switch_ref = None
+        self._preprocessing_switch_watcher = None
+
         # Release large numpy arrays
         self._clustering_results = None
         self._original_heatmap_data = None
@@ -747,6 +821,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._kmeans_run_button_watcher = None
         self._agglomerative_run_button_watcher = None
         self._spectral_run_button_watcher = None
+        self._preprocessing_switch_ref = None
+        self._preprocessing_switch_watcher = None
 
         # Release model/view refs
         self._model = None  # type: ignore[assignment]

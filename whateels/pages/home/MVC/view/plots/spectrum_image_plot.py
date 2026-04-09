@@ -464,7 +464,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._preprocessed_electron_count = cut_data
         self._preprocessed_source = 'cut_range'
         self._preprocessors_applied = True
-        CacheManager.get_cached_app_state().preprocessed_electron_count = cut_data
+        CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": cut_data})
         self._sync_range_slider_to_energy_axis(np.asarray(cut_data.coords[self._eloss_name].values), reset_value=False)
         self._current_y_range = None
         self._current_y_autorange = True
@@ -479,8 +479,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_revert_cut_range(self):
         """Revert cut range and restore Home plots to raw data."""
         app_state = CacheManager.get_cached_app_state()
-        if app_state.preprocessed_electron_count is self._cut_range_preprocessed_electron_count:
-            app_state.clear_preprocessed_electron_count()
+        if (
+            app_state.preprocessed_plot_dataset is not None
+            and app_state.preprocessed_plot_dataset["ElectronCount"] is self._cut_range_preprocessed_electron_count
+        ):
+            app_state.clear_preprocessed_plot_dataset()
 
         self._clear_cut_range_state(clear_preprocessed_payload=True)
         self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
@@ -1266,11 +1269,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if values_match and not self._preprocessors_applied:
             self._preprocessors_applied = True
             if self._preprocessed_electron_count is not None:
-                CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+                CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
             self._apply_remove_spikes_button.toggle()
         elif not values_match and self._preprocessors_applied:
             self._preprocessors_applied = False
-            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
             self._apply_remove_spikes_button.toggle()
 
     def _on_spike_window_changed(self, event):
@@ -1290,11 +1293,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if values_match and not self._preprocessors_applied:
             self._preprocessors_applied = True
             if self._preprocessed_electron_count is not None:
-                CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+                CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
             self._apply_remove_spikes_button.toggle()
         elif not values_match and self._preprocessors_applied:
             self._preprocessors_applied = False
-            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
             self._apply_remove_spikes_button.toggle()
             
     def _on_multifitting_switch_changed(self, event):
@@ -1371,7 +1374,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             and self._applied_spike_window == current_window
         ):
             self._preprocessors_applied = True
-            CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
             self._current_y_range = None
             self._current_y_autorange = True
             self._finalize_remove_spikes_ui()
@@ -1504,7 +1507,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 coords=input_da.coords,
             )
             self._preprocessed_electron_count = preprocessed_da
-            CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": preprocessed_da})
             self._preprocessors_applied = True
             self._preprocessed_source = 'multifit'
             self._multifitting_switch.value = True
@@ -1521,10 +1524,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_source = self._multifit_previous_source
             if self._multifit_previous_electron_count is not None:
                 self._preprocessors_applied = True
-                CacheManager.get_cached_app_state().preprocessed_electron_count = self._multifit_previous_electron_count
+                CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._multifit_previous_electron_count})
             else:
                 self._preprocessors_applied = False
-                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+                CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
 
             self._multifitting_switch.value = False
             self._apply_multifitting_button.toggle()
@@ -1541,12 +1544,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_electron_count = self._multifit_previous_electron_count
             self._preprocessed_source = self._multifit_previous_source
             self._preprocessors_applied = True
-            CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
         else:
             self._preprocessed_electron_count = None
             self._preprocessed_source = None
             self._preprocessors_applied = False
-            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
 
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
@@ -1726,7 +1729,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 coords=input_da.coords,
             )
             self._preprocessed_electron_count = preprocessed_da
-            CacheManager.get_cached_app_state().preprocessed_electron_count = preprocessed_da
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": preprocessed_da})
             self._preprocessors_applied = True
             self._preprocessed_source = 'spikes'
             self._applied_spike_threshold = round(float(self._spike_threshold), 6)
@@ -1743,12 +1746,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
                 self._preprocessed_source = 'cut_range'
                 self._preprocessors_applied = True
-                CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+                CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
             else:
                 self._preprocessors_applied = False
                 self._preprocessed_electron_count = None
                 self._preprocessed_source = None
-                CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+                CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
             self._apply_remove_spikes_button.toggle()
             time.sleep(2)
         finally:
@@ -1774,7 +1777,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
             self._preprocessed_source = 'cut_range'
             self._preprocessors_applied = True
-            CacheManager.get_cached_app_state().preprocessed_electron_count = self._preprocessed_electron_count
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
             self._sync_range_slider_to_energy_axis(
                 np.asarray(self._preprocessed_electron_count.coords[self._eloss_name].values),
                 reset_value=False,
@@ -1784,7 +1787,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_source = None
             # Keep _preprocessed_electron_count and _applied_spike_threshold/_applied_spike_window in memory
             # so re-clicking Apply with the same values skips recomputation.
-            CacheManager.get_cached_app_state().clear_preprocessed_electron_count()
+            CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
             self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
         self._current_y_range = None
         self._current_y_autorange = True

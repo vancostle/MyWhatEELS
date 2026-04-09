@@ -44,7 +44,7 @@ class Clustering2PageModel:
 
     def is_preprocessed_data_available(self) -> bool:
         """Return True when Home has published preprocessed ElectronCount data."""
-        return self._app_state.preprocessed_electron_count is not None
+        return self._app_state.preprocessed_plot_dataset is not None
 
     def should_use_preprocessed_data(self, switch_value: bool) -> bool:
         """Return True when the UI switch is on and preprocessed data is available."""

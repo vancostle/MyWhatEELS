@@ -93,25 +93,25 @@ class DataPreprocessor:
     @staticmethod
     def get_multifit_data(model: "ClusteringModel") -> "ndarray | None":
         """
-        Retrieve background-subtracted data from the model.
+        Retrieve preprocessed ElectronCount data from the model.
         
         Args:
             model: The clustering model instance
         
         Returns:
-            3D array (y, x, energy) with background-subtracted data,
-            or None if data cannot be retrieved
+            3D array (y, x, energy) with preprocessed data,
+            or None if no preprocessed data is available
         """
         try:
-            data_cube = model.get_multifit_data()
+            data_cube = model.get_preprocessed_electron_count_data()
             
             if data_cube is not None:
-                print(f"Using multifit data for clustering, shape: {data_cube.shape}")
+                print(f"Using preprocessed data for clustering, shape: {data_cube.shape}")
             
             return data_cube
                 
         except Exception as e:
-            print(f"Error retrieving multifit data from model: {e}")
+            print(f"Error retrieving preprocessed data from model: {e}")
             import traceback
             traceback.print_exc()
             return None

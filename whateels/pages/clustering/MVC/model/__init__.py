@@ -101,69 +101,54 @@ class ClusteringModel:
         """
         return str(self.app_state.filename) if self.app_state.filename is not None else "No file uploaded"
     
-    # --- Multifit Data Access Methods ---
+    # --- Preprocessed Data Access Methods ---
     
-    def is_multifit_available(self) -> bool:
+    def is_preprocessed_data_available(self) -> bool:
         """
-        Check if multifit data is available in the application state.
+        Check if preprocessed data is available in the application state.
         
         Returns:
-            bool: True if multifit data exists, False otherwise
+            bool: True if preprocessed_plot_dataset exists, False otherwise
         """
-        return self.app_state.multifit is not None
+        return self.app_state.preprocessed_plot_dataset is not None
     
-    def get_multifit_data(self) -> Optional[np.ndarray]:
+    def get_preprocessed_electron_count_data(self) -> Optional[np.ndarray]:
         """
-        Retrieve background-subtracted data from multifit results.
-        
-        The multifit results stored in AppState should be an xarray Dataset
-        with the same structure as the original data (ElectronCount variable
-        with coordinates x, y, Eloss) but with background subtracted.
+        Retrieve preprocessed ElectronCount data from AppState.
         
         Returns:
-            Optional[np.ndarray]: 3D array (y, x, energy) with background-subtracted data,
-                                 or None if data cannot be retrieved
+            Optional[np.ndarray]: 3D array with preprocessed data,
+                                 or None if no preprocessed data is available
         """
         try:
-            multifit_dataset = self.app_state.multifit
+            preprocessed = self.app_state.preprocessed_plot_dataset
             
-            if multifit_dataset is None:
+            if preprocessed is None:
                 return None
             
-            # Extract ElectronCount data from the multifit dataset
-            # The multifit should have the same structure as original dataset
-            if hasattr(multifit_dataset, 'ElectronCount'):
-                multifit_data = getattr(multifit_dataset, 'ElectronCount', None)
-                if multifit_data is not None:
-                    data_cube = np.asarray(multifit_data.fillna(0.0))
-                    return data_cube
-            elif isinstance(multifit_dataset, np.ndarray):
-                # If multifit is already a numpy array
-                return multifit_dataset
-            else:
-                return None
+            return np.asarray(preprocessed["ElectronCount"].fillna(0.0))
                 
         except Exception as e:
-            print(f"Error retrieving multifit data: {e}")
+            print(f"Error retrieving preprocessed data: {e}")
             import traceback
             traceback.print_exc()
             return None
     
     def should_use_background_subtraction(self, switch_value: bool) -> bool:
         """
-        Determine if background-subtracted data should be used for clustering.
+        Determine if preprocessed data should be used for clustering.
         
         Args:
             switch_value: Current value of the background-subtraction switch
         
         Returns:
-            bool: True if multifit data should be used (switch is ON and data available),
+            bool: True if preprocessed data should be used (switch is ON and data available),
                   False otherwise
         """
         if not switch_value:
             return False
         
-        if not self.is_multifit_available():
+        if not self.is_preprocessed_data_available():
             return False
         
         return True

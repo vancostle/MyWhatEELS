@@ -193,6 +193,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_selected_umap.disabled = False
         self._hdbscan_min_samples.disabled = False
         self._hdbscan_min_cluster_size.disabled = False
+        self._hdbscan_active_button.disabled = False
         
         self._compute_hdbscan_on_umap_button.disabled = False
         
@@ -201,6 +202,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_selected_umap.disabled = True
         self._hdbscan_min_samples.disabled = True
         self._hdbscan_min_cluster_size.disabled = True
+        self._hdbscan_active_button.disabled = True
         
         self._compute_hdbscan_on_umap_button.disabled = True
         
@@ -208,8 +210,8 @@ class Clustering2RightSidebarLayout(pn.Column):
         is_preprocessed_available = self._model.is_preprocessed_data_available()
 
         self._use_preprocessed_data_switch = pn.widgets.Switch(
-            name="Input Data",
-            value=is_preprocessed_available,
+            name="Use Preprocessed Data",
+            value=False,
             disabled=not is_preprocessed_available,
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"],
@@ -221,7 +223,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             else "No preprocessed data available. Apply preprocessing in Home first."
         )
 
-        input_data_label = pn.pane.Markdown("### Input Data")
+        input_data_label = pn.pane.Markdown("### Use Preprocessed Data")
 
         input_data_controls = pn.Row(
             pn.widgets.TooltipIcon(
