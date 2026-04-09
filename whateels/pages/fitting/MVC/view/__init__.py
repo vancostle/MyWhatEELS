@@ -24,8 +24,10 @@ class FittingView:
     def __init__(self, model: "FittingModel"):
         self._model = model
 
-        # CSS injection (replace with pn.config.css_files if not already done globally)
-        pn.config.css_files.append('/assets/css/fitting.css') # type: ignore
+        # Register page CSS once to avoid cross-document stylesheet ownership errors.
+        fitting_css = '/assets/css/fitting.css'
+        if fitting_css not in pn.config.css_files: # type: ignore
+            pn.config.css_files.append(fitting_css) # type: ignore
 
         # Placeholder
         self._no_file_placeholder = pn.Column(

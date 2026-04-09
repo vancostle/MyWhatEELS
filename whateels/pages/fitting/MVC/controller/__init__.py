@@ -133,6 +133,12 @@ class FittingController(BaseController):
         component_item = ComponentItem(energy_center, model_select, energy_range, str(flexibility))
         self._model.add_component(component_item, component_item.flexibility)
 
+        if getattr(component_item, 'amplitude_auto_expanded', False):
+            pn.state.notifications.info(
+                "Component amplitude guess was near zero; bounds were auto-expanded for fitting stability.",
+                duration=4500,
+            ) # type: ignore
+
         component_item_view = ComponentItemView(self, component_item,   
                                                 self._model, 
                                                 self._layout.get_energy_range(), 
@@ -234,10 +240,12 @@ class FittingController(BaseController):
         """Remove a component from the model and update the plot if needed."""
         should_update = self._model.remove_component(component_item)
         if should_update:
-            self.update_plot(self._model.ref_results if hasattr(self._model, 'ref_results') else None)
+            has_components = bool(self._model.dictionary.get('components'))
+            fit_result = getattr(self._model, 'ref_results', None) if has_components else None
+            self.update_plot(fit_result)
 
     def _background_subtraction_switch_watcher(self, event):
-        """Switch fitting source between raw and Home-preprocessed data, then refresh and refit."""
+        """Switch fitting source between raw/Home-preprocessed data and hard-reset derived outputs."""
         app_state = CacheManager.get_cached_app_state()
 
         if event.new and not self._has_valid_preprocessed_data(notify=True):
@@ -246,16 +254,17 @@ class FittingController(BaseController):
 
         app_state.plot_dataset = self._resolve_plot_dataset(bool(event.new))
 
-        # Rebuild paneA/paneB from selected source and refresh spectra cache.
-        self.layout.plot_image()
+        # Source changed: clear derived fit outputs and selection-dependent state.
+        app_state.fitting_results = None
+        app_state.spectra = None
+        self.energy_map_active = False
+        self.layout.reset_for_data_source_change()
 
-        # Refit components if they exist so all outputs align with selected source.
-        if self._model.dictionary.get('components'):
-            self._model.create_model()
-            fit_result = self._model.fit_reference()
-            self.layout.update_plot(fit_result)
-        else:
-            self.layout.update_plot()
+        source_name = "Home preprocessed" if event.new else "raw"
+        pn.state.notifications.info(
+            f"Fitting input switched to {source_name} data. Previous fit results were cleared; recompute to continue.",
+            duration=4000,
+        ) # type: ignore
 
     def get_energy_range(self):
         """Return the active energy range only when energy-map mode is enabled."""

@@ -323,3 +323,16 @@ class LayoutManager:
         """Restore the visualizer image view (without energy-map overlay)."""
         self._chosen_visualizers[0].plot_image()
 
+    def reset_for_data_source_change(self):
+        """Hard-reset derived fitting outputs after switching raw/preprocessed source."""
+        self.remove_best_fit_component_from_sidebar()
+        if not self._chosen_visualizers:
+            return
+
+        visualizer = self._chosen_visualizers[0]
+        if hasattr(visualizer, 'reset_for_data_source_change'):
+            visualizer.reset_for_data_source_change()
+        else:
+            visualizer.plot_image()
+            visualizer.update_plot()
+

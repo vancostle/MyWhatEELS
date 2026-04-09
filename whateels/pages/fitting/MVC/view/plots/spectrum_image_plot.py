@@ -220,6 +220,35 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
                             active_tools=['lasso_select'])
         )
 
+    def reset_for_data_source_change(self):
+        """Hard-reset derived fitting state after raw/preprocessed source switches.
+
+        Keeps component definitions in the sidebar/model, but clears:
+        - fit overlay/results cache
+        - ROI/lasso selection
+        - transient hover/timer state
+        """
+        app_state = CacheManager.get_cached_app_state()
+        app_state.fitting_results = None
+        app_state.spectra = None
+
+        # Clear current lasso/ROI and unblock hover interactions.
+        self._on_paneA_double_tap()
+
+        # Reset transient interaction state and any saved zoom ranges.
+        self._last_hover_ts = None
+        self._last_hover_point = {"x": 0, "y": 0}
+        self._current_x_range = None
+        self._current_y_range = None
+        self._current_x_autorange = None
+        self._current_y_autorange = None
+        if self._pc and self._pc.running:
+            self._pc.stop()
+
+        # Rebuild base image from the selected source and restore plain spectrum view.
+        self.plot_image()
+        self.update_plot()
+
     def _update_selection_overlay(self, pairs):
         """Inherited from base — red-dot overlay recomposition."""
         super()._update_selection_overlay(pairs)

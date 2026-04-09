@@ -90,10 +90,46 @@ class FittingModel(BaseModel):
             self._spectra, component_item.compo_type, component_item.energy_center, component_item.energy_range
         )
 
+        def _ensure_valid_bounds(lower: float, upper: float, minimum_span: float = 1e-12) -> tuple[float, float]:
+            """Ensure lmfit receives strictly ordered bounds (min < max)."""
+            lo = float(lower)
+            hi = float(upper)
+            if not np.isfinite(lo):
+                lo = 0.0
+            if not np.isfinite(hi):
+                hi = lo + minimum_span
+            if hi <= lo:
+                hi = lo + minimum_span
+            return lo, hi
+
+        center_min, center_max = _ensure_valid_bounds(
+            cen - dict_var[flex][0],
+            cen + dict_var[flex][1],
+            minimum_span=max(1e-6, abs(float(cen)) * 1e-6),
+        )
+
+        sigma_min, sigma_max = _ensure_valid_bounds(
+            0.5,
+            sigm + sigm * dict_var[flex][3],
+            minimum_span=1e-6,
+        )
+
+        amp_min_raw = amp * dict_var[flex][4]
+        amp_max_raw = amp * dict_var[flex][5]
+
+        # When amplitude guess is near zero (common after source switches/flat regions),
+        # give lmfit a non-zero search interval instead of min==max.
+        spectra_scale = float(np.nanmax(np.abs(np.asarray(self._spectra)))) if self._spectra is not None else 0.0
+        amp_span = max(1e-9, spectra_scale * 1e-6)
+        amp_min, amp_max = _ensure_valid_bounds(amp_min_raw, amp_max_raw, minimum_span=amp_span)
+        amplitude_auto_expanded = (amp_max_raw <= amp_min_raw) or (amp_max - amp_min <= amp_span * 1.000001)
+
         component_item.set_parameters(cen, sigm, amp)
-        component_item.set_center_range(cen - dict_var[flex][0], cen + dict_var[flex][1],)
-        component_item.set_sigma_range(0.5, sigm + sigm * dict_var[flex][3])
-        component_item.set_amplitude_range(amp * dict_var[flex][4], amp * dict_var[flex][5])
+        component_item.set_center_range(center_min, center_max)
+        component_item.set_sigma_range(sigma_min, sigma_max)
+        component_item.set_amplitude_range(amp_min, amp_max)
+        # UI/controller may inspect this to inform users when bounds were auto-regularized.
+        setattr(component_item, 'amplitude_auto_expanded', bool(amplitude_auto_expanded))
 
         self.dictionary['components'].append(component_item)
 
@@ -194,6 +230,7 @@ class FittingModel(BaseModel):
         if not self.dictionary['components']:
             print("NLLS Model: No components remaining after deletion")
             self._app_state.fitting_results = None
+            self.ref_results = None
             return True  # Signal to controller to update plot
         self.create_model()
         self.fit_reference()
