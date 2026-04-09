@@ -43,7 +43,7 @@ class FittingView:
 
         self._fitting_add_compontent_button = pn.widgets.Button()
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
-        self._background_subtraction_switch: pn.widgets.Switch = pn.widgets.Switch()
+        self._use_preprocessed_data_switch: pn.widgets.Switch = pn.widgets.Switch()
 
         self._init_components()
 
@@ -94,7 +94,7 @@ class FittingView:
     @property
     def background_subtraction_switch(self) -> pn.widgets.Switch:
         """Access the background subtraction switch."""
-        return self._background_subtraction_switch
+        return self._use_preprocessed_data_switch
     
     @property
     def energy_map_toggle_button(self) -> ToggleButton:
@@ -149,22 +149,22 @@ class FittingView:
         """Build right sidebar controls for component definition and fitting actions."""
 
         background_subtraction_label = pn.pane.Markdown(
-            "### Background-subtraction", 
+            "### Use Preprocessed Data", 
         )
 
-        self._background_subtraction_switch = pn.widgets.Switch(
-            name="Background-subtraction", 
+        self._use_preprocessed_data_switch = pn.widgets.Switch(
+            name="Use Preprocessed Data", 
             value=False, 
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"]
         )
 
-        is_multifitting_available = self._model.is_multifit_available()
-        self._background_subtraction_switch.disabled = not is_multifitting_available
+        is_preprocessed_available = self._model.is_preprocessed_data_available()
+        self._use_preprocessed_data_switch.disabled = not is_preprocessed_available
 
         subtraction_bg_tooltip = (
-            "Enable background-subtraction from multifit results." 
-            if is_multifitting_available else "Must do Multifitting to enable the switch."
+            "Enable use of Home preprocessed data for fitting."
+            if is_preprocessed_available else "Must do some preprocessing first at home page before using this option."
         )
         background_subtraction_container = pn.Row(
             pn.widgets.TooltipIcon(
@@ -172,7 +172,7 @@ class FittingView:
                 css_classes=["tooltip-icon"]
             ),
             background_subtraction_label,
-            self._background_subtraction_switch,
+            self._use_preprocessed_data_switch,
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-subtraction-container"]
         )

@@ -30,7 +30,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     - Inactivity timer: hover temporarily shows pixel spectrum, then reverts to ROI.
     - Fit-curve overlay: magenta filled area drawn on top of the ROI spectrum.
     - Energy map display: replaces paneA image with a green-to-pink heatmap.
-    - Multifit ROI extraction: reads from app_state.multifit when is_multifit is set.
+        - Data-source-aware ROI extraction: uses the currently selected data source
+            (raw or Home-preprocessed) from shared AppState.
     """
 
     # Axis titles for spectrum plot
@@ -67,6 +68,15 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         """Return the 1D energy axis associated with the current datacube."""
         return self._e_axis
 
+    @override
+    def _get_display_data(self):
+        """Return active ElectronCount source selected for fitting in AppState."""
+        app_state = CacheManager.get_cached_app_state()
+        dataset = app_state.plot_dataset
+        if dataset is not None and hasattr(dataset, 'ElectronCount'):
+            return dataset.ElectronCount
+        return self._electron_count_data
+
     # --- paneA setup override: now handled by base ---
 
     # --- Public layout builders (used by controller) ---
@@ -98,17 +108,13 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     @override
     def _figB_region(self, pairs):
-        """Return an hv.Curve for a region, using multifit data when active."""
-        app_state = CacheManager.get_cached_app_state()
-        if app_state.is_multifit:
-            multifit_data = xr.DataArray(app_state.multifit)
-            res = SpectrumExtractor.get_spectrum_from_indices(multifit_data, pairs)
-        else:
-            res = SpectrumExtractor.get_spectrum_from_indices(self._electron_count_data, pairs)
+        """Return an hv.Curve for a region using the currently selected data source."""
+        display_data = self._get_display_data()
+        res = SpectrumExtractor.get_spectrum_from_indices(display_data, pairs)
         if res is None:
             return self._figB_hover({"x": 0, "y": 0})
         spec, n_points = res
-        app_state.spectra = spec
+        CacheManager.get_cached_app_state().spectra = spec
         return hv.Curve(
             (self._energy, spec),
             kdims=['x'], vdims=['y'],
@@ -147,7 +153,14 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def plot_image(self):
         """Re-render the integrated intensity heatmap and reset fit/spectra shared state."""
-        m_image_da = self._electron_count_data.sum(self._model.constants.ELOSS)
+        display_data = self._get_display_data()
+
+        try:
+            self._energy = np.asarray(display_data.coords[self._model.constants.ELOSS].values)
+        except Exception:
+            self._energy = np.asarray(self._e_axis)
+
+        m_image_da = display_data.sum(self._model.constants.ELOSS)
         m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
         if m_image.ndim != 2:
             raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")

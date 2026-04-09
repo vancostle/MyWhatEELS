@@ -51,6 +51,13 @@ class FittingController(BaseController):
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
         self._nlls_user_update(view)
 
+        # Keep switch availability aligned with Home preprocessing state while page is open.
+        self._preprocessed_dataset_watcher = app_state.param.watch(
+            self._on_preprocessed_dataset_changed,
+            'preprocessed_plot_dataset',
+        )
+        self._sync_preprocessed_switch_state()
+
     @property
     def view(self) -> "FittingView":
         """Access the ClusteringView instance."""
@@ -86,7 +93,7 @@ class FittingController(BaseController):
 
             vis.on_region_committed = _on_region_committed
 
-        view._background_subtraction_switch.param.watch(self._background_subtraction_switch_watcher, 'value')
+        view._use_preprocessed_data_switch.param.watch(self._background_subtraction_switch_watcher, 'value')
 
         view._energy_map_toggle_button.on_click(self._energy_map_toggle_button_callback)
 
@@ -156,6 +163,68 @@ class FittingController(BaseController):
         if isinstance(value, list):
             return value[0]
         return value
+
+    def _has_valid_preprocessed_data(self, notify: bool = False) -> bool:
+        """Validate Home preprocessed dataset availability and basic spatial compatibility."""
+        app_state = CacheManager.get_cached_app_state()
+
+        preprocessed_dataset = app_state.preprocessed_plot_dataset
+        if preprocessed_dataset is None:
+            if notify:
+                pn.state.notifications.warning(
+                    "No preprocessed data available. Apply preprocessing in Home first.",
+                    duration=5000,
+                ) # type: ignore
+            return False
+
+        selected_idx = app_state.selected_tab_index_dataset
+        if not (isinstance(app_state.all_datasets, list) and 0 <= selected_idx < len(app_state.all_datasets)):
+            return False
+
+        raw_dataset = app_state.all_datasets[selected_idx]
+        try:
+            raw_e = raw_dataset["ElectronCount"]
+            pre_e = preprocessed_dataset["ElectronCount"]
+            if len(pre_e.shape) != 3:
+                raise ValueError("Expected a 3D preprocessed ElectronCount DataArray.")
+            if pre_e.shape[0] != raw_e.shape[0] or pre_e.shape[1] != raw_e.shape[1]:
+                raise ValueError(
+                    f"Spatial shape mismatch. Raw={raw_e.shape[:2]}, preprocessed={pre_e.shape[:2]}"
+                )
+        except Exception as e:
+            if notify:
+                pn.state.notifications.warning(
+                    f"Preprocessed data is not compatible with this tab. Using raw data. Details: {e}",
+                    duration=6000,
+                ) # type: ignore
+            return False
+
+        return True
+
+    def _resolve_plot_dataset(self, use_preprocessed: bool):
+        """Return raw or preprocessed dataset according to switch state and availability."""
+        app_state = CacheManager.get_cached_app_state()
+        selected_idx = app_state.selected_tab_index_dataset
+        raw_dataset = app_state.all_datasets[selected_idx]
+
+        if use_preprocessed and self._has_valid_preprocessed_data(notify=True):
+            return app_state.preprocessed_plot_dataset
+
+        return raw_dataset
+
+    def _sync_preprocessed_switch_state(self) -> None:
+        """Enable/disable the switch based on preprocessed availability and force-off when unavailable."""
+        switch = self._view.background_subtraction_switch
+        is_available = self._has_valid_preprocessed_data(notify=False)
+        switch.disabled = not is_available
+
+        # Force raw mode when preprocessed data disappears or becomes invalid.
+        if not is_available and bool(switch.value):
+            switch.value = False
+
+    def _on_preprocessed_dataset_changed(self, event) -> None:
+        """React to Home preprocessing publication/clear while fitting page is already open."""
+        self._sync_preprocessed_switch_state()
     
     def update_plot(self, fitting_results = None):
         """Proxy plot updates to layout manager."""
@@ -168,12 +237,25 @@ class FittingController(BaseController):
             self.update_plot(self._model.ref_results if hasattr(self._model, 'ref_results') else None)
 
     def _background_subtraction_switch_watcher(self, event):
-        """Toggle multifit background subtraction mode and refit if needed."""
+        """Switch fitting source between raw and Home-preprocessed data, then refresh and refit."""
         app_state = CacheManager.get_cached_app_state()
-        app_state.is_multifit = event.new
-        self.layout.update_plot()
-        self._model.create_model()
-        self._model.fit_reference()
+
+        if event.new and not self._has_valid_preprocessed_data(notify=True):
+            self._view.background_subtraction_switch.value = False
+            return
+
+        app_state.plot_dataset = self._resolve_plot_dataset(bool(event.new))
+
+        # Rebuild paneA/paneB from selected source and refresh spectra cache.
+        self.layout.plot_image()
+
+        # Refit components if they exist so all outputs align with selected source.
+        if self._model.dictionary.get('components'):
+            self._model.create_model()
+            fit_result = self._model.fit_reference()
+            self.layout.update_plot(fit_result)
+        else:
+            self.layout.update_plot()
 
     def get_energy_range(self):
         """Return the active energy range only when energy-map mode is enabled."""

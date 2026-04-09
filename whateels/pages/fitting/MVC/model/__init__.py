@@ -57,12 +57,16 @@ class FittingModel(BaseModel):
     
     def is_multifit_available(self) -> bool:
         """
-        Check if multifit data is available in the application state.
+        Backward-compatible alias for preprocessed data availability.
         
         Returns:
-            bool: True if multifit data exists, False otherwise
+            bool: True if preprocessed data exists, False otherwise
         """
-        return self._app_state.multifit is not None
+        return self.is_preprocessed_data_available()
+
+    def is_preprocessed_data_available(self) -> bool:
+        """Check if Home-published preprocessed dataset is available."""
+        return self._app_state.preprocessed_plot_dataset is not None
     
     def add_component(self, component_item: "ComponentItem", flex='low'):
         """Add a component, estimate initial params, rebuild model, and refit."""
