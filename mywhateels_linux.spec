@@ -1,91 +1,137 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
-import psutil
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 
 block_cipher = None
 
-# Locate OpenSSL DLLs from the Python installation
-import ssl
-ssl_paths = []
-if hasattr(ssl, 'get_default_verify_paths'):
-    ssl_dir = os.path.dirname(ssl.__file__)
-    python_dir = os.path.dirname(sys.executable)
-    # Common locations for OpenSSL DLLs
-    for search_dir in [ssl_dir, python_dir, os.path.join(python_dir, 'DLLs')]:
-        if os.path.exists(search_dir):
-            for file in os.listdir(search_dir):
-                if file.startswith(('libssl', 'libcrypto')) and file.endswith('.dll'):
-                    ssl_paths.append((os.path.join(search_dir, file), '.'))
-psutil_hidden = collect_submodules('psutil')
+
+def collect_optional_submodules(package_name):
+    try:
+        return collect_submodules(package_name)
+    except Exception:
+        return []
+
+
+def collect_optional_metadata(dist_name):
+    try:
+        return copy_metadata(dist_name)
+    except Exception:
+        return []
+
+
+def collect_optional_data(package_name):
+    try:
+        return collect_data_files(package_name)
+    except Exception:
+        return []
+
+
+core_hiddenimports = [
+    'whateels',
+    'whateels.pages',
+    'whateels.pages.home',
+    'whateels.pages.metadata',
+    'whateels.pages.clustering',
+    'whateels.pages.clustering_2',
+    'whateels.pages.quantification',
+    'whateels.pages.fitting',
+    'whateels.base',
+    'whateels.components',
+    'whateels.errors',
+    'whateels.helpers',
+    'whateels.interfaces',
+    'whateels.state',
+    'whateels.templates',
+    '_ssl',
+    '_hashlib',
+    'ssl',
+    'certifi',
+    'psutil',
+    'panel',
+    'bokeh',
+    'tornado',
+    'numpy',
+    'scipy',
+    'xarray',
+    'pandas',
+    'plotly',
+    'matplotlib',
+    'sklearn',
+    'lmfit',
+    'numba',
+    'holoviews',
+    'umap',
+    'hdbscan',
+]
+
+extra_hiddenimports = []
+for pkg in (
+    'whateels',
+    'whateels.pages',
+    'whateels.base',
+    'whateels.components',
+    'whateels.errors',
+    'whateels.helpers',
+    'whateels.interfaces',
+    'whateels.state',
+    'whateels.templates',
+    'panel',
+    'bokeh',
+    'holoviews',
+    'plotly',
+    'sklearn',
+    'scipy',
+    'numba',
+    'umap',
+    'hdbscan',
+    'xarray',
+    'lmfit',
+    'psutil',
+):
+    extra_hiddenimports.extend(collect_optional_submodules(pkg))
+
+extra_metadata = []
+for dist in (
+    'numpy',
+    'scipy',
+    'pandas',
+    'panel',
+    'bokeh',
+    'holoviews',
+    'plotly',
+    'scikit-learn',
+    'numba',
+    'llvmlite',
+    'xarray',
+    'lmfit',
+    'umap-learn',
+    'hdbscan',
+):
+    extra_metadata.extend(collect_optional_metadata(dist))
+
+extra_datas = []
+for pkg in ('panel', 'bokeh', 'holoviews'):
+    extra_datas.extend(collect_optional_data(pkg))
+
+hiddenimports = sorted(set(core_hiddenimports + extra_hiddenimports))
+datas = [
+    ('whateels/assets/css/*.css', 'whateels/assets/css'),
+    ('whateels/assets/html/*.html', 'whateels/assets/html'),
+    ('whateels/assets/js/*.js', 'whateels/assets/js'),
+    ('whateels/assets/img/*', 'whateels/assets/img'),
+    ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/assets/oos/Hartree_Xsections_FSalvat'),
+    *extra_metadata,
+    *extra_datas,
+]
+
 a = Analysis(
     ['main.py'],
     pathex=['.'],
-    binaries=ssl_paths,  # Include SSL DLLs
-    datas=[
-        ('whateels/assets/css/*.css', 'whateels/assets/css'),
-        ('whateels/assets/html/*.html', 'whateels/assets/html'),
-        ('whateels/assets/js/*.js', 'whateels/assets/js'),
-        ('whateels/assets/img/*', 'whateels/assets/img'),
-        ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/assets/oos/Hartree_Xsections_FSalvat')
-        # Add other asset folders as needed
-    ],
-    hiddenimports=[
-        *psutil_hidden,
-        # SSL and networking
-        '_ssl',
-        '_hashlib',
-        'ssl',
-        'certifi',
-
-        'psutil',
-        'psutil._pslinux',
-        'psutil._psutil_linux',
-
-        
-        # Panel and dependencies
-        'panel',
-        'panel.io',
-        'panel.io.server',
-        'panel.widgets',
-        'panel.pane',
-        'panel.template',
-        'bokeh',
-        'bokeh.server',
-        'bokeh.server.tornado',
-        'tornado',
-        'tornado.web',
-        'tornado.ioloop',
-        
-        # Scientific computing
-        'numpy',
-        'numpy.core',
-        'numpy.core._multiarray_umath',
-        'scipy',
-        'scipy.special',
-        'scipy.special._ufuncs_cxx',
-        'xarray',
-        'pandas',
-        
-        # Plotting
-        'plotly',
-        'plotly.graph_objs',
-        'matplotlib',
-        
-        # Machine learning
-        'sklearn',
-        'sklearn.cluster',
-        'sklearn.decomposition',
-        
-        # Fitting
-        'lmfit',
-        'lmfit.models',
-        
-        # Other
-        'numba',
-    ],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
@@ -102,7 +148,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     name='WhatEELS',
-    icon='whateels/assets/img/logo.ico',
+    icon='whateels/assets/img/we_white_logo.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -37,6 +37,7 @@ DIST_DIR = "dist"
 BUILD_DIR = "build"
 ZIP_NAME = "Whateels_dist.zip"
 TEMP_VENV = "temporal_venv"
+ICON_PATH = os.path.join("whateels", "assets", "img", "we_white_logo.ico")
 IS_WINDOWS = platform.system() == "Windows"
 TEMP_VENV_PY  = os.path.join(TEMP_VENV, "Scripts", "python.exe") if IS_WINDOWS else os.path.join(TEMP_VENV,"bin", "python")
 if IS_WINDOWS:
@@ -58,6 +59,17 @@ def run(cmd):
     result = subprocess.run(cmd, shell=True)
     if result.returncode != 0:
         raise RuntimeError(f"Error ejecutando: {cmd}")
+
+
+def check_required_imports(python_exe, modules):
+    import_check = "; ".join([f"import {mod}" for mod in modules])
+    result = subprocess.run(
+        f'"{python_exe}" -c "{import_check}"',
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return result.returncode == 0
 
 # Check for required files before running commands
 def check_file_exists(filename):
@@ -110,6 +122,7 @@ def check_antivirus_exclusion():
 
 check_file_exists("requirements.txt")
 check_file_exists("mywhateels.spec")
+check_file_exists(ICON_PATH)
 # Check pip for system Python
 check_pip_available(sys.executable)
 
@@ -155,21 +168,40 @@ else:
 
 # Check if dependencies are already installed
 try:
-    result = subprocess.run(
-        f'"{TEMP_VENV_PY}" -c "import panel; import psutil; import pyinstaller"',
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    if result.returncode == 0:
+    required_imports = [
+        "panel",
+        "holoviews",
+        "numpy",
+        "scipy",
+        "xarray",
+        "plotly",
+        "sklearn",
+        "lmfit",
+        "numba",
+        "umap",
+        "hdbscan",
+        "psutil",
+        "PyInstaller",
+    ]
+    if check_required_imports(TEMP_VENV_PY, required_imports):
         print_success("Dependencias ya instaladas en temporal_venv, omitiendo instalación...")
     else:
         print_info("Instalando dependencias...")
         run(COMMAND["install_deps"])
+        if not check_required_imports(TEMP_VENV_PY, required_imports):
+            raise RuntimeError(
+                "Faltan dependencias requeridas tras la instalación. "
+                "Revisa requirements.txt y el entorno temporal."
+            )
         print_success("Dependencias instaladas en temporal_venv.")
 except Exception:
     print_info("Instalando dependencias...")
     run(COMMAND["install_deps"])
+    if not check_required_imports(TEMP_VENV_PY, required_imports):
+        raise RuntimeError(
+            "Faltan dependencias requeridas tras la instalación. "
+            "Revisa requirements.txt y el entorno temporal."
+        )
     print_success("Dependencias instaladas en temporal_venv.")
 
 print_info("Construyendo ejecutable...\n")
