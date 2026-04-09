@@ -4,6 +4,7 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import holoviews as hv
 import xarray as xr
+import panel as pn
 
 from typing import TYPE_CHECKING, Optional, Any
 if TYPE_CHECKING:
@@ -136,11 +137,11 @@ class UMAP_HDBSCAN:
             kdims=['x', 'y']
         ).opts(
             xaxis=None, yaxis=None, colorbar=True, tools=['hover', 'lasso_select'], toolbar='right',
-            invert_yaxis=True, aspect='equal', responsive=True, frame_height=400, cmap=cmap_obj["colors"],
+            invert_yaxis=True, responsive=True, cmap=cmap_obj["colors"],
             title='HDBSCAN map'
         )
         
-        return img
+        return pn.pane.HoloViews(img, sizing_mode='stretch_both')
     
     def plot_mean_spectra_per_cluster(self, hdbscan_results, cmap_obj):
         """
