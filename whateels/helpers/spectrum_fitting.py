@@ -1,6 +1,5 @@
 from scipy.optimize import curve_fit
 import numpy as np
-import plotly.graph_objs as go
 
 class SpectrumFitting:
     """

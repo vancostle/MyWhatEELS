@@ -5,6 +5,12 @@ import panel as pn
 import holoviews as hv
 from pathlib import Path
 from whateels.helpers import KillProcess, ASSETS_ROOT
+from whateels.pages.home import HomePage
+from whateels.pages.metadata import Metadata
+from whateels.pages.clustering import Clustering
+from whateels.pages.clustering_2 import Clustering2Page
+from whateels.pages.quantification import Quantification
+from whateels.pages.fitting import Fitting
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
@@ -39,26 +45,19 @@ class App:
         # Kill any process using the port
         KillProcess.by_port(port) # Ensure the port is free
 
-        # Cache imported class references so __import__ only hits the module
-        # loader on the first visit; subsequent sessions reuse the cached class.
-        _cls_cache: dict = {}
-
-        def _lazy(module: str, cls: str):
+        def _lazy(page_cls):
             def _loader():
-                if cls not in _cls_cache:
-                    _cls_cache[cls] = getattr(__import__(module, fromlist=[cls]), cls)
-                return _cls_cache[cls]()
+                return page_cls()
             return _loader
 
         # Define the pages for the application
         pages = {
-            # "": _lazy('whateels.pages.demo', 'DemoPage'),
-            "/": _lazy('whateels.pages.home', 'HomePage'),
-            "/metadata-details": _lazy('whateels.pages.metadata', 'Metadata'),
-            "/clustering": _lazy('whateels.pages.clustering', 'Clustering'),
-            "/clustering-2": _lazy('whateels.pages.clustering_2', 'Clustering2Page'),
-            "/quantification": _lazy('whateels.pages.quantification', 'Quantification'),
-            "/fitting": _lazy('whateels.pages.fitting', 'Fitting'),
+            "/": _lazy(HomePage),
+            "/metadata-details": _lazy(Metadata),
+            "/clustering": _lazy(Clustering),
+            "/clustering-2": _lazy(Clustering2Page),
+            "/quantification": _lazy(Quantification),
+            "/fitting": _lazy(Fitting),
         }
 
         return pn.serve(

@@ -1,7 +1,6 @@
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
-import plotly.graph_objs as go
 from typing import Tuple, Optional
 
 # Try to import xarray if available; otherwise operate in numpy-only mode

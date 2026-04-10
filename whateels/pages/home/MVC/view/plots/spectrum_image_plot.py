@@ -7,6 +7,8 @@ import holoviews as hv
 import lmfit
 import xarray as xr
 from scipy.ndimage import median_filter
+from bokeh.events import Reset
+from bokeh.models import Range1d
 
 from whateels.helpers import SpectrumExtractor
 from whateels.helpers.fitting.multifitting import MultiFit
@@ -44,6 +46,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_active = False
         self._last_hover_ts = None
         self._pc = None
+        self._paneB_reset_stream = None
+        self._paneB_range_pc = None
+        self._paneB_attached_model_id = None
 
         # Widget placeholders (filled by _setup_widgets, called after super)
         self._range_slider = pn.widgets.EditableRangeSlider()
@@ -87,6 +92,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._progress_display: ProgressDisplay = ProgressDisplay(name="Preprocessing")
         self._main_ref = None
         self._plots_tab_ref = None
+        self._debug_paneB_ranges = False
+        self._debug_paneB_reset = True
+        self._paneB_range_mode = "autorange"
+        self._reset_in_progress = False  # Flag to prevent callback freeze during reset
+        self._reset_finalize_attempts = 0
+
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
@@ -570,6 +581,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             xlabel=self._X_AXIS_SPECTRUM_TITLE,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True, shared_axes=False, framewise=True,
+            axiswise=False,
         )
 
     def _build_spike_removed_curve(self, spec, title):
@@ -612,6 +624,111 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         except Exception:
             pass
         return np.asarray(self._energy)
+
+    def _set_paneB_autorange_state(self):
+        """Put paneB into its clean autorange state."""
+        self._paneB_range_mode = "autorange"
+        self._current_x_range = None
+        self._current_y_range = None
+        self._current_x_autorange = True
+        self._current_y_autorange = True
+
+    def _set_paneB_frozen_state(self, x_range=None, y_range=None):
+        """Freeze paneB to the latest valid Bokeh ranges."""
+        self._paneB_range_mode = "frozen"
+        if self._is_valid_range(x_range):
+            self._current_x_range = x_range
+            self._current_x_autorange = False
+        if self._is_valid_range(y_range):
+            self._current_y_range = y_range
+            self._current_y_autorange = False
+
+    def _get_live_paneB_bokeh_plot(self):
+        """Return the live bokeh figure for paneB, if it exists."""
+        try:
+            models = getattr(self.paneB, '_models', {}) if self.paneB is not None else {}
+            model_tuple = next(iter(models.values()), None) if models else None
+            if model_tuple:
+                return model_tuple[0]
+        except Exception:
+            pass
+        return None
+
+    def _apply_paneB_reset_to_live_model(self):
+        """Force the live paneB bokeh model back to full X bounds and Y autorange."""
+        bokeh_plot = self._get_live_paneB_bokeh_plot()
+        if bokeh_plot is None:
+            return False
+
+        axis = np.asarray(self._get_display_energy_axis(), dtype=float)
+        axis = axis[np.isfinite(axis)]
+        if axis.size == 0:
+            return False
+
+        full_x_min = float(np.min(axis))
+        full_x_max = float(np.max(axis))
+
+        try:
+            if isinstance(bokeh_plot.x_range, Range1d):
+                bokeh_plot.x_range.start = full_x_min
+                bokeh_plot.x_range.end = full_x_max
+                bokeh_plot.x_range.reset_start = full_x_min
+                bokeh_plot.x_range.reset_end = full_x_max
+            else:
+                bokeh_plot.x_range = Range1d(
+                    start=full_x_min,
+                    end=full_x_max,
+                    reset_start=full_x_min,
+                    reset_end=full_x_max,
+                )
+            y_start = getattr(bokeh_plot.y_range, 'start', None)
+            y_end = getattr(bokeh_plot.y_range, 'end', None)
+            y_ready = (
+                y_start is not None and y_end is not None and np.isfinite(y_start) and np.isfinite(y_end)
+            )
+            self._debug_paneB_reset_event(
+                "live_model_reset_applied",
+                x_min=full_x_min,
+                x_max=full_x_max,
+                y_ready=y_ready,
+                y_start=y_start,
+                y_end=y_end,
+            )
+            return bool(y_ready)
+        except Exception as exc:
+            self._debug_paneB_reset_event("live_model_reset_failed", error=repr(exc))
+            return False
+
+    def _sync_paneB_reset_baseline(self):
+        """Pin the live paneB reset baseline to the full spectrum without changing the current view."""
+        if self._reset_in_progress:
+            return False
+
+        bokeh_plot = self._get_live_paneB_bokeh_plot()
+        if bokeh_plot is None:
+            return False
+
+        axis = np.asarray(self._get_display_energy_axis(), dtype=float)
+        axis = axis[np.isfinite(axis)]
+        if axis.size == 0:
+            return False
+
+        full_x_min = float(np.min(axis))
+        full_x_max = float(np.max(axis))
+
+        try:
+            if isinstance(bokeh_plot.x_range, Range1d):
+                bokeh_plot.x_range.reset_start = full_x_min
+                bokeh_plot.x_range.reset_end = full_x_max
+            self._debug_paneB_reset_event(
+                "reset_baseline_synced",
+                x_min=full_x_min,
+                x_max=full_x_max,
+            )
+            return True
+        except Exception as exc:
+            self._debug_paneB_reset_event("reset_baseline_sync_failed", error=repr(exc))
+            return False
 
     def _should_apply_visual_fitting(self) -> bool:
         """Return True only when paneB should draw interactive fitting overlays."""
@@ -740,9 +857,292 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # (mixing plain Curve and Overlay causes an AssertionError in the cache).
             if fig is not None and not isinstance(fig, hv.Overlay):
                 fig = hv.Overlay([fig])
+            self._debug_paneB_state("update_paneB_before_send")
             # Push the new element through the pipe — Bokeh updates data in-place
             # without rebuilding the whole model tree, avoiding the stale-reference warning.
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+            # Keep the live Bokeh reset baseline pinned to the full spectrum on every update.
+            try:
+                doc = pn.state.curdoc
+                if doc is not None:
+                    doc.add_next_tick_callback(self._sync_paneB_reset_baseline)
+            except Exception:
+                pass
+            # Always re-check attachment because Panel/Bokeh may recreate the model.
+            try:
+                doc = pn.state.curdoc
+                if doc is not None:
+                    doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
+            except Exception:
+                pass
+
+    @override
+    def _set_ranges_and_convert(self, fig):
+        """Apply stored paneB ranges using base conversion behavior."""
+        if getattr(self, "_paneB_range_mode", "autorange") != "frozen":
+            return fig
+        return super()._set_ranges_and_convert(fig)
+
+    def _rewire_paneB_reset_stream(self):
+        """Wire PlotReset stream to clear persisted paneB ranges on toolbar reset."""
+        if self._paneB_reset_stream is not None:
+            try:
+                self._paneB_reset_stream.remove_subscriber(self._on_paneB_plot_reset)
+            except Exception:
+                pass
+            try:
+                self._paneB_reset_stream.clear()
+            except Exception:
+                pass
+            self._paneB_reset_stream = None
+
+        plot_reset_stream_cls = getattr(hv_streams, 'PlotReset', None)
+        if plot_reset_stream_cls is None:
+            return
+
+        try:
+            self._paneB_reset_stream = plot_reset_stream_cls(source=self._paneB_dmap)
+            self._paneB_reset_stream.add_subscriber(self._on_paneB_plot_reset)
+        except Exception:
+            self._paneB_reset_stream = None
+
+    def _ensure_paneB_range_callbacks(self):
+        """Attach Bokeh range callbacks to the live paneB figure once it exists."""
+        self._debug_paneB_state(
+            "ensure_attempt",
+            has_paneB=self.paneB is not None,
+            models_count=len(getattr(self.paneB, '_models', {}) or {}) if self.paneB is not None else 0,
+        )
+        if self.paneB is None:
+            return
+
+        models = getattr(self.paneB, '_models', None)
+        self._debug_paneB_state("ensure_models", models_type=type(models).__name__ if models is not None else None)
+        if not models:
+            return
+
+        model_tuple = next(iter(models.values()), None)
+        self._debug_paneB_state(
+            "ensure_model_tuple",
+            model_tuple_type=type(model_tuple).__name__ if model_tuple is not None else None,
+            model_tuple_len=len(model_tuple) if hasattr(model_tuple, '__len__') else None,
+        )
+        if not model_tuple:
+            return
+
+        try:
+            bokeh_plot = model_tuple[0]
+        except Exception:
+            self._debug_paneB_state("ensure_model_tuple_failed")
+            return
+
+        model_id = getattr(bokeh_plot, 'id', None)
+        self._debug_paneB_state(
+            "ensure_bokeh_plot",
+            bokeh_plot_type=type(bokeh_plot).__name__,
+            model_id=model_id,
+            already_attached=self._paneB_attached_model_id,
+        )
+        if model_id is None:
+            return
+
+        if self._paneB_attached_model_id == model_id:
+            return
+
+        try:
+            self._debug_paneB_state("ensure_before_callbacks")
+
+            # Force toolbar Reset in paneB to always return to full X domain.
+            full_axis = np.asarray(self._get_display_energy_axis(), dtype=float)
+            full_axis = full_axis[np.isfinite(full_axis)]
+            if full_axis.size > 0:
+                full_x_min = float(np.min(full_axis))
+                full_x_max = float(np.max(full_axis))
+                if isinstance(bokeh_plot.x_range, Range1d):
+                    bokeh_plot.x_range.reset_start = full_x_min
+                    bokeh_plot.x_range.reset_end = full_x_max
+                    if bokeh_plot.x_range.start is None or bokeh_plot.x_range.end is None:
+                        bokeh_plot.x_range.start = full_x_min
+                        bokeh_plot.x_range.end = full_x_max
+                else:
+                    bokeh_plot.x_range = Range1d(
+                        start=full_x_min,
+                        end=full_x_max,
+                        reset_start=full_x_min,
+                        reset_end=full_x_max,
+                    )
+
+            def _sync_from_bokeh_ranges(attr, old, new):
+                # If reset is in progress, don't freeze ranges during the transition
+                if getattr(self, '_reset_in_progress', False):
+                    self._debug_paneB_reset_event("sync_callback_skipped_during_reset")
+                    return
+                
+                try:
+                    x_range = (float(bokeh_plot.x_range.start), float(bokeh_plot.x_range.end))
+                except Exception:
+                    x_range = None
+                try:
+                    y_range = (float(bokeh_plot.y_range.start), float(bokeh_plot.y_range.end))
+                except Exception:
+                    y_range = None
+
+                # When x reaches the full spectrum bounds and we were frozen,
+                # treat that as a reset back to autorange mode.
+                try:
+                    axis = np.asarray(self._get_display_energy_axis(), dtype=float)
+                    axis = axis[np.isfinite(axis)]
+                    if axis.size > 0 and self._is_valid_range(x_range) and self._paneB_range_mode == "frozen":
+                        x0 = float(np.min(axis))
+                        x1 = float(np.max(axis))
+                        rx0, rx1 = float(x_range[0]), float(x_range[1])
+                        tol = max(1e-9, 1e-6 * max(1.0, abs(x1 - x0)))
+                        if abs(rx0 - x0) <= tol and abs(rx1 - x1) <= tol:
+                            self._set_paneB_autorange_state()
+                            self._debug_paneB_reset_event(
+                                "reset_like_range_detected",
+                                x_range=x_range,
+                                y_range=y_range,
+                            )
+                            # Some Panel/Bokeh combinations don't emit Reset events;
+                            # when full-domain reset-like ranges are detected, force
+                            # the full reset flow explicitly.
+                            try:
+                                self._on_paneB_plot_reset(source="range_detected")
+                            except Exception as exc:
+                                self._debug_paneB_reset_event("forced_reset_from_range_failed", error=repr(exc))
+                            return
+                except Exception:
+                    pass
+
+                if self._is_valid_range(x_range) or self._is_valid_range(y_range):
+                    self._set_paneB_frozen_state(x_range=x_range, y_range=y_range)
+
+                self._debug_paneB_state("bokeh_range_sync", x_range=x_range, y_range=y_range)
+
+            bokeh_plot.x_range.on_change('start', _sync_from_bokeh_ranges)
+            bokeh_plot.x_range.on_change('end', _sync_from_bokeh_ranges)
+            bokeh_plot.y_range.on_change('start', _sync_from_bokeh_ranges)
+            bokeh_plot.y_range.on_change('end', _sync_from_bokeh_ranges)
+
+            def _on_bokeh_reset_event(event):
+                self._debug_paneB_reset_event("bokeh_reset_event", event=type(event).__name__)
+                try:
+                    pn.state.notifications.info("paneB Reset capturado", duration=1200) # type: ignore
+                except Exception:
+                    pass
+                self._on_paneB_plot_reset()
+
+            bokeh_plot.on_event(Reset, _on_bokeh_reset_event)
+            self._paneB_attached_model_id = model_id
+            self._debug_paneB_state("attach_bokeh_range_callbacks", model_id=model_id)
+            if self._paneB_range_pc is not None:
+                try:
+                    if self._paneB_range_pc.running:
+                        self._paneB_range_pc.stop()
+                except Exception:
+                    pass
+        except Exception as exc:
+            self._debug_paneB_state("ensure_attach_failed", error=repr(exc))
+            pass
+
+    def _on_paneB_plot_reset(self, **_kwargs):
+        """Handle paneB toolbar reset by restoring autorange state for both axes."""
+        t0 = time.perf_counter()
+        self._reset_in_progress = True
+        self._reset_finalize_attempts = 0
+        self._debug_paneB_reset_event("reset_clicked")
+        self._set_paneB_autorange_state()
+        self._debug_paneB_reset_event("reset_state_cleared")
+        self._debug_paneB_state("plot_reset")
+        # Rebuild paneB so it comes back with a clean autorange model and no stale zoom state.
+        try:
+            self._reset_paneB_pipe()
+            self._debug_paneB_reset_event("paneB_pipe_rebuilt")
+        except Exception as exc:
+            self._debug_paneB_reset_event("paneB_pipe_rebuild_failed", error=repr(exc))
+        elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        self._debug_paneB_reset_event("reset_refresh_dispatched", elapsed_ms=elapsed_ms)
+        try:
+            doc = pn.state.curdoc
+            if doc is not None:
+                def _finalize_reset():
+                    self._reset_finalize_attempts += 1
+                    if self._apply_paneB_reset_to_live_model():
+                        self._reset_in_progress = False
+                        self._log_paneB_post_reset_state()
+                        self._debug_paneB_reset_event("reset_complete")
+                    else:
+                        # Try again on the next tick until the live y-range is ready.
+                        if self._reset_finalize_attempts < 20:
+                            try:
+                                doc.add_next_tick_callback(_finalize_reset)
+                                return
+                            except Exception:
+                                pass
+                        # Give up rather than keep the plot locked forever.
+                        self._reset_in_progress = False
+                
+                doc.add_next_tick_callback(_finalize_reset)
+        except Exception:
+            self._reset_in_progress = False
+
+    def _log_paneB_post_reset_state(self):
+        """Temporary: log live bokeh ranges right after reset render tick."""
+        if not getattr(self, '_debug_paneB_reset', False):
+            return
+        try:
+            models = getattr(self.paneB, '_models', {}) if self.paneB is not None else {}
+            model_tuple = next(iter(models.values()), None) if models else None
+            if not model_tuple:
+                self._debug_paneB_reset_event("post_reset_no_model")
+                return
+            bokeh_plot = model_tuple[0]
+            x_live = (float(bokeh_plot.x_range.start), float(bokeh_plot.x_range.end))
+            y_live = (float(bokeh_plot.y_range.start), float(bokeh_plot.y_range.end))
+            self._debug_paneB_reset_event(
+                "post_reset_live_ranges",
+                x_live=x_live,
+                y_live=y_live,
+                x_state=self._current_x_range,
+                y_state=self._current_y_range,
+                x_auto=self._current_x_autorange,
+                y_auto=self._current_y_autorange,
+                range_mode=self._paneB_range_mode,
+            )
+        except Exception as exc:
+            self._debug_paneB_reset_event("post_reset_log_failed", error=repr(exc))
+
+    def _debug_paneB_reset_event(self, label: str, **extra):
+        """Temporary debug trace for paneB reset latency and state transitions."""
+        if not getattr(self, '_debug_paneB_reset', False):
+            return
+        try:
+            parts = [
+                f"paneB_reset[{label}]",
+                f"ts={round(time.perf_counter(), 6)}",
+            ]
+            for key, value in extra.items():
+                parts.append(f"{key}={value}")
+        except Exception:
+            pass
+
+    def _debug_paneB_state(self, label: str, **extra):
+        """Temporary debug trace for paneB autorange/range persistence."""
+        if not getattr(self, '_debug_paneB_ranges', False):
+            return
+        try:
+            parts = [
+                f"paneB[{label}]",
+                f"x_range={self._current_x_range}",
+                f"y_range={self._current_y_range}",
+                f"x_auto={self._current_x_autorange}",
+                f"y_auto={self._current_y_autorange}",
+            ]
+            for key, value in extra.items():
+                parts.append(f"{key}={value}")
+        except Exception:
+            pass
             
     def _refresh_paneA(self):
         """Rebuild paneA (heatmap) using the current display data (raw or preprocessed)."""
@@ -795,6 +1195,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         self._paneB_pipe = hv_streams.Pipe(data=None)
         self._paneB_dmap = hv.DynamicMap(lambda data: data, streams=[self._paneB_pipe])
+        self._paneB_attached_model_id = None
 
         # Seed the pipe with a valid figure before assigning to paneB.object.
         # Panel calls initialize_dynamic() immediately on assignment, which calls
@@ -808,14 +1209,27 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             _seed = self._figB_hover({"x": 0, "y": 0})
         if not isinstance(_seed, hv.Overlay):
             _seed = hv.Overlay([_seed])
-        self._paneB_pipe.send(_seed)
+        self._paneB_pipe.send(self._set_ranges_and_convert(_seed))
 
         # Rewire RangeXY to the new DynamicMap
         self._rangexy_stream = hv_streams.RangeXY(source=self._paneB_dmap)
         self._rangexy_stream.add_subscriber(self._on_paneB_range_changed)
+        self._rewire_paneB_reset_stream()
 
         if self.paneB is not None:
             self.paneB.object = self._paneB_dmap
+            try:
+                doc = pn.state.curdoc
+                if doc is not None:
+                    doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
+            except Exception:
+                pass
+        if self._paneB_range_pc is not None:
+            try:
+                if not self._paneB_range_pc.running:
+                    self._paneB_range_pc.start()
+            except Exception:
+                pass
 
     def _on_fitting_switch_changed(self, event) -> None:
         """Handle fitting switch toggle: update state, slider, and immediately refresh paneB."""
@@ -1394,8 +1808,23 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _setup_callbacks(self):
         # All stream wiring (hover, tap, selection, rangexy) is handled by the base class.
         super()._setup_callbacks()
+        self._rewire_paneB_reset_stream()
+        try:
+            pn.state.onload(lambda: self._ensure_paneB_range_callbacks())
+        except Exception:
+            pass
+        self._paneB_range_pc = pn.state.add_periodic_callback(self._ensure_paneB_range_callbacks, period=200, start=True)
         # Periodic callback for inactivity logic (stopped by default)
         self._pc = pn.state.add_periodic_callback(self._check_inactivity, period=250, start=False)
+
+    @override
+    def _on_paneB_range_changed(self, x_range=None, y_range=None):
+        """Persist paneB zoom/pan ranges if RangeXY still emits values in this environment."""
+
+        if self._is_valid_range(x_range) or self._is_valid_range(y_range):
+            self._set_paneB_frozen_state(x_range=x_range, y_range=y_range)
+
+        self._debug_paneB_state("range_changed", x_range=x_range, y_range=y_range)
 
     # --- Inactivity logic ---
     def _now_ms(self):
@@ -1462,9 +1891,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Commit selection: reset y-range so paneB auto-scales to the new spectrum, then run base logic."""
         self._current_y_range = None
         self._current_y_autorange = True
+        self._debug_paneB_state("process_selection_before_base")
         super()._process_selection(index)
         stop_pc(self._pc)
         self._last_hover_ts = None
+        self._debug_paneB_state("process_selection_after_base")
 
     def _update_selection_overlay(self, pairs):
         """Inherited from base — red-dot overlay recomposition."""
@@ -1550,5 +1981,25 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._raw_paneA_base_overlay = None
         self._main_ref = None
         self._plots_tab_ref = None
+
+        if self._paneB_reset_stream is not None:
+            try:
+                self._paneB_reset_stream.remove_subscriber(self._on_paneB_plot_reset)
+            except Exception:
+                pass
+            try:
+                self._paneB_reset_stream.clear()
+            except Exception:
+                pass
+        self._paneB_reset_stream = None
+
+        if self._paneB_range_pc is not None:
+            try:
+                if self._paneB_range_pc.running:
+                    self._paneB_range_pc.stop()
+            except Exception:
+                pass
+        self._paneB_range_pc = None
+        self._paneB_attached_model_id = None
 
         super().cleanup()
