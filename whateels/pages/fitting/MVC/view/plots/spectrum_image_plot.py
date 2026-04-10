@@ -52,6 +52,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self.selected_slice = None
         self.range_slider = None
         self.fitting_button = None
+        self._ignore_selection_until_ms = 0
 
         # BaseSpectrumImagePlot.__init__ expects (dataset, eloss_name) and calls
         # _setup_plots() + _setup_callbacks() internally.
@@ -232,8 +233,13 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         app_state.fitting_results = None
         app_state.spectra = None
 
+        # Ignore stale Selection1D events for a short window while streams settle.
+        self._ignore_selection_until_ms = self._now_ms() + max(700, self._SELECTION_DEBOUNCE_MS)
+
         # Clear current lasso/ROI and unblock hover interactions.
         self._on_paneA_double_tap()
+        self._pending_selection_index = None
+        self._pending_selection_ts = None
 
         # Reset transient interaction state and any saved zoom ranges.
         self._last_hover_ts = None
@@ -247,7 +253,14 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
         # Rebuild base image from the selected source and restore plain spectrum view.
         self.plot_image()
-        self.update_plot()
+        self._update_paneB(self._figB_hover({"x": 0, "y": 0}))
+
+    @override
+    def _on_paneA_selected(self, index=None):
+        """Debounce selection and ignore stale lasso events right after source switches."""
+        if self._now_ms() < self._ignore_selection_until_ms:
+            return
+        super()._on_paneA_selected(index)
 
     def _update_selection_overlay(self, pairs):
         """Inherited from base — red-dot overlay recomposition."""

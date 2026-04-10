@@ -5,6 +5,32 @@ if TYPE_CHECKING:
     from param.parameterized import Event
  
 class SpectrumExtractor:
+
+    @staticmethod
+    def _as_row_col_energy(electron_count_data: "Dataset") -> np.ndarray:
+        """Return a 3D array in (row, col, energy) order when possible.
+
+        The fitting/clustering panes index spectra using image coordinates (row, col).
+        When source datasets are switched (raw/preprocessed), the energy axis order can
+        differ; this helper normalizes to keep hover/ROI extraction stable.
+        """
+        arr = np.asarray(electron_count_data.values)
+        if arr.ndim != 3:
+            return arr
+
+        energy_axis = arr.ndim - 1
+        try:
+            dims = [str(d).lower() for d in electron_count_data.dims]
+            for idx, dim_name in enumerate(dims):
+                if 'eloss' in dim_name:
+                    energy_axis = idx
+                    break
+        except Exception:
+            pass
+
+        if energy_axis != arr.ndim - 1:
+            arr = np.moveaxis(arr, energy_axis, arr.ndim - 1)
+        return arr
     
     @staticmethod
     def get_spectrum_from_pixel(electron_count_data: "Dataset", y: int, x: int) -> np.ndarray:
@@ -25,16 +51,17 @@ class SpectrumExtractor:
         If the indexing order is not [y, x, energy], attempts [x, y, energy].
         Returns zeros if extraction fails.
         """
+        data = SpectrumExtractor._as_row_col_energy(electron_count_data)
         try:
-            spec = electron_count_data.values[int(y), int(x), :].astype(float)
+            spec = data[int(y), int(x), :].astype(float)
             return spec
         except Exception:
             # Try alternative indexing order (x,y,E) if needed
             try:
-                spec = electron_count_data.values[int(x), int(y), :].astype(float)
+                spec = data[int(x), int(y), :].astype(float)
                 return spec
             except Exception:
-                return np.zeros(electron_count_data.shape[-1])
+                return np.zeros(data.shape[-1] if data.ndim >= 1 else 0)
 
     @staticmethod
     def get_spectrum_from_indices(electron_count_data: "Dataset", pairs) -> tuple[np.ndarray, int] | None:
@@ -55,15 +82,16 @@ class SpectrumExtractor:
         """
         if not pairs:
             return None
+        data = SpectrumExtractor._as_row_col_energy(electron_count_data)
         try:
             ii, jj = zip(*pairs)
-            block = electron_count_data.values[np.asarray(ii), np.asarray(jj), :]  # (N, nE)
+            block = data[np.asarray(ii), np.asarray(jj), :]  # (N, nE)
             return block.sum(axis=0), len(pairs)
         except Exception:
             # attempt swap if indexing order different
             try:
                 ii, jj = zip(*pairs)
-                block = electron_count_data.values[np.asarray(jj), np.asarray(ii), :]
+                block = data[np.asarray(jj), np.asarray(ii), :]
                 return block.sum(axis=0), len(pairs)
             except Exception:
                 return None
