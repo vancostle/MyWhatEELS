@@ -76,6 +76,17 @@ class FittingModel(BaseModel):
         self._spectra = self._app_state.spectra
         if self._spectra is None:
             raise ValueError("Fitting Model: No spectra data available to add component")
+
+        is_using_preprocessed = (
+            self._app_state.preprocessed_plot_dataset is not None
+            and dataset is self._app_state.preprocessed_plot_dataset
+        )
+        print(
+            "[FittingModel:add_component] source ",
+            f"using_preprocessed={is_using_preprocessed}, dataset_id={id(dataset)}, "
+            f"spectra_min={float(np.nanmin(np.asarray(self._spectra)))}, "
+            f"spectra_max={float(np.nanmax(np.asarray(self._spectra)))}"
+        )
         dict_var = {
             'Low': [3, 3, 0.1, 0.1, 0.5, 2],
             'Medium': [7, 7, 1, 1.25, 0, 3],
@@ -90,46 +101,33 @@ class FittingModel(BaseModel):
             self._spectra, component_item.compo_type, component_item.energy_center, component_item.energy_range
         )
 
-        def _ensure_valid_bounds(lower: float, upper: float, minimum_span: float = 1e-12) -> tuple[float, float]:
-            """Ensure lmfit receives strictly ordered bounds (min < max)."""
-            lo = float(lower)
-            hi = float(upper)
-            if not np.isfinite(lo):
-                lo = 0.0
-            if not np.isfinite(hi):
-                hi = lo + minimum_span
-            if hi <= lo:
-                hi = lo + minimum_span
-            return lo, hi
-
-        center_min, center_max = _ensure_valid_bounds(
-            cen - dict_var[flex][0],
-            cen + dict_var[flex][1],
-            minimum_span=max(1e-6, abs(float(cen)) * 1e-6),
+        print(
+            "[FittingModel:add_component] guessed values ",
+            f"model={component_item.compo_type}, center={cen}, sigma={sigm}, amplitude={amp}, "
+            f"energy_center_input={component_item.energy_center}, energy_range={component_item.energy_range}"
         )
 
-        sigma_min, sigma_max = _ensure_valid_bounds(
-            0.5,
-            sigm + sigm * dict_var[flex][3],
-            minimum_span=1e-6,
-        )
+        center_min = cen - dict_var[flex][0]
+        center_max = cen + dict_var[flex][1]
+
+        sigma_min = 0.5
+        sigma_max = sigm + sigm * dict_var[flex][3]
 
         amp_min_raw = amp * dict_var[flex][4]
         amp_max_raw = amp * dict_var[flex][5]
 
-        # When amplitude guess is near zero (common after source switches/flat regions),
-        # give lmfit a non-zero search interval instead of min==max.
-        spectra_scale = float(np.nanmax(np.abs(np.asarray(self._spectra)))) if self._spectra is not None else 0.0
-        amp_span = max(1e-9, spectra_scale * 1e-6)
-        amp_min, amp_max = _ensure_valid_bounds(amp_min_raw, amp_max_raw, minimum_span=amp_span)
-        amplitude_auto_expanded = (amp_max_raw <= amp_min_raw) or (amp_max - amp_min <= amp_span * 1.000001)
+        print(
+            "[FittingModel:add_component] raw amplitude bounds ",
+            f"amp_min_raw={amp_min_raw}, amp_max_raw={amp_max_raw}, flexibility={flex}"
+        )
+
+        amp_min = amp_min_raw
+        amp_max = amp_max_raw
 
         component_item.set_parameters(cen, sigm, amp)
         component_item.set_center_range(center_min, center_max)
         component_item.set_sigma_range(sigma_min, sigma_max)
         component_item.set_amplitude_range(amp_min, amp_max)
-        # UI/controller may inspect this to inform users when bounds were auto-regularized.
-        setattr(component_item, 'amplitude_auto_expanded', bool(amplitude_auto_expanded))
 
         self.dictionary['components'].append(component_item)
 
@@ -194,11 +192,39 @@ class FittingModel(BaseModel):
         # Approximate FWHM from the selected component energy window.
         fwhm  = (energy_range[1] - energy_range[0]) / 2
 
-        e_idx  = np.searchsorted(self._Eloss,Eloss_center)
+        if self._Eloss is None:
+            raise ValueError("Energy axis is not initialized for component parameter estimation")
+
+        eloss = np.asarray(self._Eloss)
+        spec = np.asarray(spectrum)
+        if spec.ndim != 1:
+            spec = np.ravel(spec)
+
+        # Center index from user-selected energy center.
+        e_idx = int(np.searchsorted(eloss, Eloss_center))
+        e_idx = int(np.clip(e_idx, 0, len(spec) - 1))
 
         cent = Eloss_center
 
-        h_eidx = max(0,spectrum[e_idx])
+        # Use local peak inside selected energy range (more robust on preprocessed signals
+        # where the center sample can be negative after preprocessing).
+        e_min, e_max = float(energy_range[0]), float(energy_range[1])
+        if e_min > e_max:
+            e_min, e_max = e_max, e_min
+        window_mask = (eloss >= e_min) & (eloss <= e_max)
+
+        if np.any(window_mask):
+            window_spec = spec[window_mask]
+        else:
+            lo = max(0, e_idx - 3)
+            hi = min(len(spec), e_idx + 4)
+            window_spec = spec[lo:hi]
+
+        finite_window = window_spec[np.isfinite(window_spec)]
+        if finite_window.size == 0:
+            h_eidx = max(0.0, float(spec[e_idx]))
+        else:
+            h_eidx = max(0.0, float(np.max(finite_window)))
 
         if compo_type == 'GaussianModel':
             sig = fwhm / np.sqrt(np.log(256))

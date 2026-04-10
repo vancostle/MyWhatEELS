@@ -93,7 +93,7 @@ class FittingController(BaseController):
 
             vis.on_region_committed = _on_region_committed
 
-        view._use_preprocessed_data_switch.param.watch(self._background_subtraction_switch_watcher, 'value')
+        view._use_preprocessed_data_switch.param.watch(self._preprocessed_data_switch_watcher, 'value')
 
         view._energy_map_toggle_button.on_click(self._energy_map_toggle_button_callback)
 
@@ -132,12 +132,6 @@ class FittingController(BaseController):
 
         component_item = ComponentItem(energy_center, model_select, energy_range, str(flexibility))
         self._model.add_component(component_item, component_item.flexibility)
-
-        if getattr(component_item, 'amplitude_auto_expanded', False):
-            pn.state.notifications.info(
-                "Component amplitude guess was near zero; bounds were auto-expanded for fitting stability.",
-                duration=4500,
-            ) # type: ignore
 
         component_item_view = ComponentItemView(self, component_item,   
                                                 self._model, 
@@ -244,7 +238,7 @@ class FittingController(BaseController):
             fit_result = getattr(self._model, 'ref_results', None) if has_components else None
             self.update_plot(fit_result)
 
-    def _background_subtraction_switch_watcher(self, event):
+    def _preprocessed_data_switch_watcher(self, event):
         """Switch fitting source between raw/Home-preprocessed data and hard-reset derived outputs."""
         app_state = CacheManager.get_cached_app_state()
 
@@ -253,6 +247,21 @@ class FittingController(BaseController):
             return
 
         app_state.plot_dataset = self._resolve_plot_dataset(bool(event.new))
+
+        raw_dataset = app_state.all_datasets[app_state.selected_tab_index_dataset]
+        pre_dataset = app_state.preprocessed_plot_dataset
+        selected_is_pre = app_state.plot_dataset is pre_dataset
+        selected_sum = None
+        try:
+            selected_sum = float(app_state.plot_dataset["ElectronCount"].sum())
+        except Exception:
+            pass
+        print(
+            "[FittingController:switch] ",
+            f"switch_on={bool(event.new)}, selected_is_preprocessed={selected_is_pre}, "
+            f"raw_id={id(raw_dataset)}, pre_id={id(pre_dataset) if pre_dataset is not None else None}, "
+            f"selected_id={id(app_state.plot_dataset)}, selected_sum={selected_sum}"
+        )
 
         # Source changed: clear derived fit outputs and selection-dependent state.
         app_state.fitting_results = None
