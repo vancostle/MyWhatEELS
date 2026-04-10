@@ -6,6 +6,7 @@ from whateels.errors.dm.data import DMPlotCreationError
 from whateels.helpers.constants import HTML_ROOT
 from ..visualizer_factory import VisualizerFactory
 from whateels.state import CacheManager
+from ...view.components.component_item_view import ComponentItemView
 
 if TYPE_CHECKING:
     from ...view import FittingView
@@ -153,6 +154,17 @@ class LayoutManager:
     def add_new_component_input(self, element_input_view: pn.viewable.Viewable):
         """Add a new element input component to the sidebar."""
         self._view.right_sidebar.append(element_input_view)
+
+    def clear_component_inputs_from_sidebar(self) -> None:
+        """Remove all component editor cards from the right sidebar."""
+
+        to_remove = [
+            item for item in list(self._view.right_sidebar)
+            if isinstance(item, ComponentItemView)
+        ]
+        for item in to_remove:
+            if item in self._view.right_sidebar:
+                self._view.right_sidebar.remove(item)
 
     def update_plot(self, fitting_results=None):
         """Refresh the main spectrum plot and optionally overlay fitting results.

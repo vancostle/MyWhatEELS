@@ -67,6 +67,19 @@ class FittingModel(BaseModel):
     def is_preprocessed_data_available(self) -> bool:
         """Check if Home-published preprocessed dataset is available."""
         return self._app_state.preprocessed_plot_dataset is not None
+
+    def reset_for_data_source_change(self) -> None:
+        """Clear registered components and fit artifacts after changing input source."""
+        self.dictionary['components'].clear()
+        self.dictionary['const'].clear()
+        self.dictionary['params'].clear()
+
+        self._models = 0
+        self._pars = 0
+        self._spectra = 0
+
+        self.ref_results = None
+        self._app_state.fitting_results = None
     
     def add_component(self, component_item: "ComponentItem", flex='low'):
         """Add a component, estimate initial params, rebuild model, and refit."""

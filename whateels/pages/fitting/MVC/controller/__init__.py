@@ -263,15 +263,18 @@ class FittingController(BaseController):
             f"selected_id={id(app_state.plot_dataset)}, selected_sum={selected_sum}"
         )
 
-        # Source changed: clear derived fit outputs and selection-dependent state.
-        app_state.fitting_results = None
+        # Source changed: clear components and all derived fit state.
+        self._model.reset_for_data_source_change()
+        self._layout.clear_component_inputs_from_sidebar()
         app_state.spectra = None
         self.energy_map_active = False
+        self._view.energy_map_toggle_button.disabled = True
+        self._view.fitting_add_component_button.disabled = True
         self.layout.reset_for_data_source_change()
 
         source_name = "Home preprocessed" if event.new else "raw"
         pn.state.notifications.info(
-            f"Fitting input switched to {source_name} data. Previous fit results were cleared; recompute to continue.",
+            f"Fitting input switched to {source_name} data. Existing components and fit results were reset.",
             duration=4000,
         ) # type: ignore
 
