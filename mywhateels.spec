@@ -105,7 +105,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     name='WhatEELS',
-    icon='whateels/assets/img/we_logo.ico',
+    icon='whateels/assets/img/we_color_logo.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

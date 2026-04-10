@@ -1,6 +1,7 @@
 import panel as pn
 
 from whateels.components import FileUploader
+from whateels.helpers.constants import ASSETS_ROOT
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -58,7 +59,7 @@ class HomePageLeftSidebar(pn.Column):
                 sizing_mode=self._STRETCH_WIDTH
             ),
             pn.pane.SVG(
-                'whateels/assets/img/we_rainbow_logo.svg',
+                str(ASSETS_ROOT / 'img' / 'we_rainbow_logo.svg'),
                 height=76,
                 align="center"
             ),

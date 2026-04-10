@@ -1,4 +1,5 @@
 import panel as pn
+from whateels.helpers.constants import ASSETS_ROOT
 
 class LoginMainLayout(pn.Column):
     
@@ -94,7 +95,7 @@ class LoginMainLayout(pn.Column):
     
     def _logo(self) -> pn.Column:
         logo = pn.pane.SVG(
-            "whateels/assets/img/we_rainbow_logo.svg", 
+            str(ASSETS_ROOT / 'img' / 'we_rainbow_logo.svg'), 
             sizing_mode="scale_height",
             styles={"min-width": "225px"},
             margin=0

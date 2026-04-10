@@ -10,6 +10,7 @@ import panel as pn
 from typing import Optional, List, Union
 from whateels.state import CacheManager
 from whateels.helpers.safe_converter import SafeConverter
+from whateels.helpers.constants import ASSETS_ROOT
 
 class GeneralPageTemplate(pn.template.FastListTemplate):
     """
@@ -87,8 +88,8 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
 
         # Build initialization parameters dynamically
         init_params = {
-            'logo': 'whateels/assets/img/we_whole_name_mixed_v0.svg',
-            'favicon': 'whateels/assets/img/we_white_logo.ico',
+            'logo': str(ASSETS_ROOT / 'img' / 'we_whole_name_mixed_v0.svg'),
+            'favicon': str(ASSETS_ROOT / 'img' / 'we_white_logo.ico'),
             'title': title,
             'main': main,
             'header': header,
