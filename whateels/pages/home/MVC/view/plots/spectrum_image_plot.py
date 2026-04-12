@@ -43,12 +43,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Homepage-specific state — must be set before super().__init__ triggers _setup_callbacks
         self._INACTIVITY_MS = 700
+        self._HOVER_DEBOUNCE_MS = 50  # min ms between hover renders to avoid flooding the event loop
         self._fitting_active = False
         self._last_hover_ts = None
+        self._last_hover_render_ts = None  # tracks last time hover actually triggered a render
         self._pc = None
         self._paneB_reset_stream = None
         self._paneB_range_pc = None
         self._paneB_attached_model_id = None
+        self._paneB_reset_baseline_dirty = True  # sync reset baseline on first render and after axis changes
 
         # Widget placeholders (filled by _setup_widgets, called after super)
         self._range_slider = pn.widgets.EditableRangeSlider()
@@ -402,6 +405,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._range_slider.start = axis_min
         self._range_slider.end = axis_max
         self._range_slider.value = (new_min, new_max)
+        # Energy axis changed — reset baseline must be resynced on next render.
+        self._paneB_reset_baseline_dirty = True
 
     def _get_clipped_fit_range(self, energy_axis, update_slider: bool = False) -> tuple[float, float]:
         """Return fit range clipped to the provided energy axis bounds."""
@@ -862,19 +867,25 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # without rebuilding the whole model tree, avoiding the stale-reference warning.
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
             # Keep the live Bokeh reset baseline pinned to the full spectrum on every update.
-            try:
-                doc = pn.state.curdoc
-                if doc is not None:
-                    doc.add_next_tick_callback(self._sync_paneB_reset_baseline)
-            except Exception:
-                pass
-            # Always re-check attachment because Panel/Bokeh may recreate the model.
-            try:
-                doc = pn.state.curdoc
-                if doc is not None:
-                    doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
-            except Exception:
-                pass
+            # Only sync when the energy axis may have changed (preprocessors applied).
+            if getattr(self, '_paneB_reset_baseline_dirty', True):
+                try:
+                    doc = pn.state.curdoc
+                    if doc is not None:
+                        def _sync_and_clear():
+                            self._sync_paneB_reset_baseline()
+                            self._paneB_reset_baseline_dirty = False
+                        doc.add_next_tick_callback(_sync_and_clear)
+                except Exception:
+                    pass
+            # Only attach range callbacks when the model is new or was reset.
+            if self._paneB_attached_model_id is None:
+                try:
+                    doc = pn.state.curdoc
+                    if doc is not None:
+                        doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
+                except Exception:
+                    pass
 
     @override
     def _set_ranges_and_convert(self, fig):
@@ -1856,9 +1867,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
         point = {"x": x, "y": y}
         self._last_hover_point = point
+
+        # Debounce: skip render if the last one was too recent.
+        # _last_hover_point is always updated above so the next render
+        # uses the most recent position.
+        now = self._now_ms()
+        if (
+            self._last_hover_render_ts is not None
+            and (now - self._last_hover_render_ts) < self._HOVER_DEBOUNCE_MS
+        ):
+            if self._region_pairs:
+                self._last_hover_ts = now
+                start_pc(self._pc)
+            return
+        self._last_hover_render_ts = now
+
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
-            self._last_hover_ts = self._now_ms()
+            self._last_hover_ts = now
             start_pc(self._pc)
         else:
             self._show_spectrum(point=point)
