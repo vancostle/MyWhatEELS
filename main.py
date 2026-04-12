@@ -17,16 +17,17 @@ SPLASH_PORT = 5007
 
 if __name__ == "__main__":
     try:
-        # Heavy imports are deferred here so that worker processes spawned by
-        # multiprocessing are intercepted by freeze_support() above before any
-        # Panel/HoloViews initialisation code runs.
+        # splash has only lightweight stdlib imports, so it loads instantly.
         import splash
-        from whateels import App
 
-        # 1. Start the splash server and open the browser instantly.
+        # 1. Open the browser with the splash screen BEFORE any heavy import.
+        #    The user sees the animation immediately while Panel/HoloViews load.
         splash.start(PORT, SPLASH_PORT)
 
-        # 2. Start the real Panel app (blocking - runs until Ctrl+C).
+        # 2. Heavy imports happen here, hidden behind the splash.
+        from whateels import App
+
+        # 3. Start the real Panel app (blocking - runs until Ctrl+C).
         app = App(title=APP_NAME)
         app.run(port=PORT, show=False)
     except Exception:

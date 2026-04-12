@@ -2,8 +2,10 @@
 import sys
 import panel as pn
 import holoviews as hv
-from whateels.helpers import KillProcess, ASSETS_ROOT
-from whateels.pages import HomePage, Metadata, Clustering, Clustering2Page, Quantification, Fitting
+# Import only what is strictly needed for startup — avoids triggering
+# scipy/numpy imports that live in the full helpers package.
+from whateels.helpers.kill_process import KillProcess
+from whateels.helpers.constants import ASSETS_ROOT
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
@@ -38,19 +40,24 @@ class App:
         # Kill any process using the port
         KillProcess.by_port(port) # Ensure the port is free
 
-        def _lazy(page_cls):
+        # Each page is imported and instantiated only when the user first
+        # visits that route — heavy dependencies (numpy, scipy, etc.) inside
+        # each page module are deferred until they are actually needed.
+        def _lazy(module_path: str, class_name: str):
             def _loader():
-                return page_cls()
+                import importlib
+                mod = importlib.import_module(module_path)
+                return getattr(mod, class_name)()
             return _loader
 
         # Define the pages for the application
         pages = {
-            "/": _lazy(HomePage),
-            "/metadata-details": _lazy(Metadata),
-            "/clustering": _lazy(Clustering),
-            "/clustering-2": _lazy(Clustering2Page),
-            "/quantification": _lazy(Quantification),
-            "/fitting": _lazy(Fitting),
+            "/": _lazy("whateels.pages.home", "HomePage"),
+            "/metadata-details": _lazy("whateels.pages.metadata", "Metadata"),
+            "/clustering": _lazy("whateels.pages.clustering", "Clustering"),
+            "/clustering-2": _lazy("whateels.pages.clustering_2", "Clustering2Page"),
+            "/quantification": _lazy("whateels.pages.quantification", "Quantification"),
+            "/fitting": _lazy("whateels.pages.fitting", "Fitting"),
         }
 
         return pn.serve(
