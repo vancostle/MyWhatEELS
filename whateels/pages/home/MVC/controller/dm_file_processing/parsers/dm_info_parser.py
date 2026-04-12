@@ -9,9 +9,6 @@ from whateels.errors.dm.parsing import (
     DMIdentifierError
 )
 from typing import List, Tuple, TextIO, Callable, Optional, Dict, Any
-from whateels.helpers.logging_utils import Logger
-
-_logger = Logger.get_logger("dm_infoparser.log", __name__)
 
 class DM_InfoParser:
     """
@@ -111,7 +108,6 @@ class DM_InfoParser:
 
         # logging header read - info level
         msg = f"DM version = {self.version} - File size (Bytes) = {file_size} - {self.endianness} endian"
-        _logger.info(msg)
 
     def _parse_Blocks(self, nnames, info_dictionary, parentBlock_name: str = "root"):
         """
@@ -236,7 +232,6 @@ class DM_InfoParser:
         # Check data size validity
         if size_Data_id < 1:
             msg = f"Invalid {size_Data_id = } < 1. DM does not support this id (parsing error?)"
-            _logger.exception(msg)
             raise IOError(msg)
 
         encryption_type = self.parser(self._file, "big")
@@ -253,7 +248,6 @@ class DM_InfoParser:
         delimiter = self._read_string(4)
         if delimiter != "%%%%":
             message = f"Error with the delimiter between blocks.\nExpected %%%%\nGot{delimiter}"
-            _logger.exception(message)
             raise DMDelimiterCharacterError(message)
 
     # =============================================================================
@@ -274,7 +268,6 @@ class DM_InfoParser:
         ):
             msg = f"The file-name given does not have a valid extension - {fname}.\
                 The extension should be one of the following : {self._valid_extensions}."
-            _logger.error(msg)
             raise DMVersionError(msg)
 
     def _get_callable_parsers_dictionary(self) -> Dict[str, Tuple[Callable, Callable, Callable]]:
@@ -319,7 +312,6 @@ class DM_InfoParser:
                 m0 = f"Expected EncryptionTypes of 15 or 20 for the DataSize {size_Data_id}"
                 m1 = f"Got {encryption_type} instead."
                 message = "\n".join([m0, m1])
-                _logger.exception(message)
                 raise IOError(message)
         else:
             if (size_Data_id, encryption_type) not in self._id_pairings:
@@ -327,7 +319,6 @@ class DM_InfoParser:
                 m1 = f"The possible (DataSize,EncryptionType) pairings are {self._id_pairings}."
                 m2 = "Check for possible parsing error and/or data corruption, and report"
                 message = "\n".join([m0, m1, m2])
-                _logger.exception(message)
                 raise IOError(message)
 
     def _check_multipleElementObjects_DataTypes(self, definition) -> None:
@@ -349,7 +340,6 @@ class DM_InfoParser:
                 message = (
                     f"Expected DM versions 3 or 4, got version number = {self.version}"
                 )
-                _logger.exception(message)
                 raise DMVersionError(message)
         current_position = self._file.tell()
         self._file.seek(current_position - nbytes, 0)
@@ -409,7 +399,6 @@ class DM_InfoParser:
                 string = string_byte_characters.decode(decoding_method)
             except UnicodeError as e:
                 msg = f"Failed reading with an encoding {decoding_method}"
-                _logger.warning(msg)
             else:
                 break
         return string
@@ -501,7 +490,6 @@ class DM_InfoParser:
             try:
                 data = "".join([chr(i) for i in data])
             except Exception as e:
-                _logger.warning(f"Skipped array-to-string conversion. Exception: {e}")
                 data = self._skip_string(length=length * 2)
         return data
 

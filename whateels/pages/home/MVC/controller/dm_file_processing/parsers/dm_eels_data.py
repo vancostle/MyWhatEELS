@@ -1,9 +1,6 @@
 
 import numpy as np
-from whateels.helpers.logging_utils import Logger
 from whateels.errors import *
-
-_logger = Logger.get_logger("dm_eels_data.log", __name__)
 
 class DM_EELS_data:
     """
@@ -52,7 +49,6 @@ class DM_EELS_data:
         
         if not infoDict:
             message = f"Expected an information dictionary from parser. None provided : {infoDict =}"
-            _logger.exception(message)
             raise DMEmptyInfoDictionary(message)
 
         self._all_spectral_info = self._filter_spectrum_images(infoDict)
@@ -110,16 +106,9 @@ class DM_EELS_data:
         try:
             alpha = image[self._IMAGE_TAGS][EELS][self._EXPERIMENTAL_CONDITIONS][CONVERGENCE_SEMI_ANGLE]
         except KeyError as e:
-            _logger.warning(WARNING_MESSAGE)
-            _logger.warning(e)
             self._recursively_add_key(
                 image, [self._IMAGE_TAGS, EELS, self._EXPERIMENTAL_CONDITIONS]
             )
-            _logger.info(
-                f"Added Route to the dictionary -> [{self._IMAGE_TAGS}][{EELS}][{self._EXPERIMENTAL_CONDITIONS}]"
-            )
-            _logger.info(f"Convergence angle alpha value updated to {alpha} mrad")
-
         return alpha
 
     def get_collection_angle(self, image: dict) -> float:
@@ -127,7 +116,6 @@ class DM_EELS_data:
 
         EELS = "EELS"
         COLLECTION_SEMI_ANGLE = "Collection semi-angle (mrad)"
-        WARNING_MESSAGE = "Expected a value for the collection angle. No such value in the parsed dictionary found"
         
         beta = 0 # Default value in mrad
 
@@ -135,16 +123,10 @@ class DM_EELS_data:
             beta = image[self._IMAGE_TAGS][EELS][self._EXPERIMENTAL_CONDITIONS][COLLECTION_SEMI_ANGLE]
         except KeyError as e:
 
-            _logger.warning(WARNING_MESSAGE)
-            _logger.warning(e)
             self._recursively_add_key(
                 image, 
                 [self._IMAGE_TAGS, EELS, self._EXPERIMENTAL_CONDITIONS]
             )
-            _logger.info(
-                f"Added Route to the dictionary -> [{self._IMAGE_TAGS}][{EELS}][{self._EXPERIMENTAL_CONDITIONS}]"
-            )
-            _logger.info(f"Collection angle beta value updated to {beta} mrad")
 
         return beta
 
@@ -230,7 +212,6 @@ class DM_EELS_data:
             
         except Exception:
             message = f"The dictionary provided after parsing the file does not contain spectral information.\n{infoDict.keys()}"
-            _logger.exception(message)
             raise DMNonEelsError(message)
 
     def _get_eels_data(self) -> list[np.ndarray]:
@@ -252,7 +233,6 @@ class DM_EELS_data:
                 dtype = self._supported_dtypes[idx]
             except KeyError:
                 message = KEY_ERROR_MESSAGE.format(idx=idx, filename=self._file.name)
-                _logger.exception(message)
                 raise DMNonSupportedDataType(message)
 
             bSize = image_data[self._IMAGE_DATA][DATA][BYTES_SIZE]
@@ -262,7 +242,6 @@ class DM_EELS_data:
             # Checking that the info is readable
             if bSize / nItems != np.dtype(dtype).itemsize:
                 message = READABLE_ERROR_MESSAGE.format(bSize=bSize, nItems=nItems, dtype=dtype)
-                _logger.error(message)
                 raise DMConflictingDataTypeRead(message)
 
             self._file.seek(offset)  # Seek to the data offset

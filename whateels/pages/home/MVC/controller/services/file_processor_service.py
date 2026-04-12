@@ -11,7 +11,6 @@ from whateels.errors.dm import (
     DMFileLoadingError, 
     DMFileUploadError
 )
-from whateels.helpers.logging_utils import Logger
 from ..dm_file_processing import DM_EELS_Reader
 from .data_processor_service import DataProcessorService
 from whateels.helpers.in_memory_file import InMemoryFile
@@ -31,7 +30,6 @@ class FileProcessorService:
         Init with model config.
         """
         self._model = model
-        self._logger = Logger.get_logger("dm_file_reader.log", __name__)
 
     # -- Public Methods --
 
@@ -43,17 +41,12 @@ class FileProcessorService:
             # Create enhanced in-memory file-like object from uploaded content
             self._model.in_memory_file = InMemoryFile(file_content, filename)
             
-            # Log memory processing info
-            file_size_mb = len(file_content) / (1024**2)
-            self._logger.info(f"Processing file {filename} ({file_size_mb:.2f} MB) in memory")
-
             # Load the DM3/DM4 file directly from memory
             all_datasets = self._load_dm_file(self._model.in_memory_file)
 
             if not all_datasets:
                 raise DMFileLoadingError(filename)
             
-            self._logger.info(f"Successfully processed {len(all_datasets)} dataset(s) from memory")
             return all_datasets
             
         except DMFileLoadingError:

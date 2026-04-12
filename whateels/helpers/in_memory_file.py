@@ -1,7 +1,4 @@
 import io
-from whateels.helpers.logging_utils import Logger
-
-_logger = Logger.get_logger("in_memory_file.log", __name__)
 
 class InMemoryFile(io.BytesIO):
     """
@@ -18,4 +15,3 @@ class InMemoryFile(io.BytesIO):
         """
         super().__init__(data)
         self.name = name
-        _logger.info(f"Processing file {name} ({self.getbuffer().nbytes / (1024 * 1024):.2f} MB) in memory")

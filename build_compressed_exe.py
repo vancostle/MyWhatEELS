@@ -35,7 +35,7 @@ def print_warning(msg):
 MAIN_SCRIPT = "main.py"  # Cambia si tu entrypoint es otro
 DIST_DIR = "dist"
 BUILD_DIR = "build"
-ZIP_NAME = "Whateels_dist.zip"
+ZIP_NAME = "WhatEELS.zip"
 TEMP_VENV = "temporal_venv"
 IS_WINDOWS = platform.system() == "Windows"
 TEMP_VENV_PY  = os.path.join(TEMP_VENV, "Scripts", "python.exe") if IS_WINDOWS else os.path.join(TEMP_VENV,"bin", "python")
@@ -43,7 +43,7 @@ if IS_WINDOWS:
     COMMAND = {
         "create_venv": f'"{sys.executable}" -m venv {TEMP_VENV}',
         "install_deps": f'"{TEMP_VENV_PY}" -m pip install -r requirements.txt',
-        "build_exe": f'"{TEMP_VENV_PY}" -m PyInstaller mywhateels.spec',
+        "build_exe": f'"{TEMP_VENV_PY}" -m PyInstaller --clean mywhateels.spec',    
     }
 else:
     COMMAND = {
@@ -193,12 +193,28 @@ if os.path.exists(ZIP_NAME):
     print_success("Archivo zip previo eliminado.")
 
 print_info("Comprimiendo ejecutable...")
-with zipfile.ZipFile(ZIP_NAME, "w", zipfile.ZIP_DEFLATED) as zipf:
-    for root, dirs, files in os.walk(DIST_DIR):
-        for file in files:
-            filepath = os.path.join(root, file)
-            arcname = os.path.relpath(filepath, start=DIST_DIR)
-            zipf.write(filepath, arcname=os.path.join(DIST_DIR, arcname))
+
+# Comprimir solo la carpeta WhatEELS (la que nos interesa)
+app_folder = os.path.join(DIST_DIR, "WhatEELS")
+
+if os.path.exists(app_folder):
+    with zipfile.ZipFile(ZIP_NAME, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(app_folder):
+            for file in files:
+                filepath = os.path.join(root, file)
+                arcname = os.path.relpath(filepath, start=app_folder)
+                zipf.write(filepath, arcname=arcname)
+    print_success(f"Carpeta 'WhatEELS' comprimida correctamente como '{ZIP_NAME}'.")
+else:
+    # Si no existe WhatEELS, comprimir lo que haya en dist
+    print_warning("No se encontró carpeta WhatEELS. Comprimiendo dist directamente...")
+    with zipfile.ZipFile(ZIP_NAME, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(DIST_DIR):
+            for file in files:
+                filepath = os.path.join(root, file)
+                arcname = os.path.relpath(filepath, start=DIST_DIR)
+                zipf.write(filepath, arcname=arcname)
+
 print_success(f"Carpeta '{DIST_DIR}' comprimida como '{ZIP_NAME}'.")
 
 # Show antivirus exclusion recommendation after build
@@ -256,20 +272,20 @@ if os.path.exists(BUILD_DIR):
         print_error(f"No se pudo eliminar '{BUILD_DIR}': {e}")
 
 # Remove dist directory
-if os.path.exists(DIST_DIR):
-    try:
-        shutil.rmtree(DIST_DIR, ignore_errors=False)
-        print_success(f"'{DIST_DIR}' eliminado.")
-    except PermissionError:
-        print_warning(f"Algunos archivos en '{DIST_DIR}' están en uso. Intentando eliminación forzada...")
-        time.sleep(1)
-        try:
-            shutil.rmtree(DIST_DIR, ignore_errors=True)
-            print_success(f"'{DIST_DIR}' eliminado.")
-        except Exception as e:
-            print_error(f"No se pudo eliminar completamente '{DIST_DIR}': {e}")
-    except Exception as e:
-        print_error(f"No se pudo eliminar '{DIST_DIR}': {e}")
+# if os.path.exists(DIST_DIR):
+#     try:
+#         shutil.rmtree(DIST_DIR, ignore_errors=False)
+#         print_success(f"'{DIST_DIR}' eliminado.")
+#     except PermissionError:
+#         print_warning(f"Algunos archivos en '{DIST_DIR}' están en uso. Intentando eliminación forzada...")
+#         time.sleep(1)
+#         try:
+#             shutil.rmtree(DIST_DIR, ignore_errors=True)
+#             print_success(f"'{DIST_DIR}' eliminado.")
+#         except Exception as e:
+#             print_error(f"No se pudo eliminar completamente '{DIST_DIR}': {e}")
+#     except Exception as e:
+#         print_error(f"No se pudo eliminar '{DIST_DIR}': {e}")
 
 print(f"\n{Colors.GREEN}{Colors.BOLD}¡Listo! Distribuye el archivo Whateels_dist.zip.{Colors.RESET}")
 print_info("El usuario debe descomprimirlo y ejecutar el .exe dentro de la carpeta dist/.")

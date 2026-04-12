@@ -1,16 +1,9 @@
 
-import time
-_whe_start_time = time.perf_counter()
+import sys
 import panel as pn
 import holoviews as hv
-from pathlib import Path
 from whateels.helpers import KillProcess, ASSETS_ROOT
-from whateels.pages.home import HomePage
-from whateels.pages.metadata import Metadata
-from whateels.pages.clustering import Clustering
-from whateels.pages.clustering_2 import Clustering2Page
-from whateels.pages.quantification import Quantification
-from whateels.pages.fitting import Fitting
+from whateels.pages import HomePage, Metadata, Clustering, Clustering2Page, Quantification, Fitting
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
@@ -67,4 +60,5 @@ class App:
             show=show,
             allow_websocket_origin=["*"],
             static_dirs={"assets": str(ASSETS_ROOT)},
+            on_session_destroyed=lambda _ : sys.exit(0) # Ensure full process termination on session close,
         )

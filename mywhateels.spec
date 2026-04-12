@@ -101,21 +101,27 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     name='WhatEELS',
     icon='whateels/assets/img/we_color_logo.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,  # Disable UPX - it's often flagged by antivirus
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
+    upx=False,
+    console=False,                    # Sin ventana negra
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    version='version_info.txt',  # Add version info from file
+    version='version_info.txt',
+)
+
+# === ESTO ES LO IMPORTANTE PARA ONEDIR ===
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    name='WhatEELS',                  # Nombre de la carpeta final
 )

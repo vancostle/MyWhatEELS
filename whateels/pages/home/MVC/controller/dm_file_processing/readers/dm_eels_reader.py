@@ -14,9 +14,6 @@ Example
 """
 
 from ..parsers import DM_InfoParser, DM_EELS_data
-from whateels.helpers.logging_utils import Logger
-
-_logger = Logger.get_logger("dm_file_reader.log", __name__)
 
 class DM_EELS_Reader:
     """
@@ -73,7 +70,6 @@ class DM_EELS_Reader:
         if isinstance(file_source, str):
             # File path - open it
             file_identifier = file_source
-            _logger.info(LOG_OPENING_FILE.format(filename=file_identifier))
             
             with open(file_source, FILE_MODE_READ_BINARY) as binary_file_stream:
                 file_metadata_dictionary, processed_all_eels_spectrums = self._process_file_stream(
@@ -82,7 +78,6 @@ class DM_EELS_Reader:
         else:
             # File-like object - ensure it has compatible interface
             file_identifier = getattr(file_source, 'name', 'memory_file')
-            _logger.info(LOG_OPENING_FILE.format(filename=file_identifier))
             
             # Reset file position to beginning and ensure compatibility
             file_source.seek(0)
@@ -111,31 +106,12 @@ class DM_EELS_Reader:
         Returns:
             tuple: (file_metadata_dictionary, processed_all_eels_spectrums)
         """
-        LOG_START_PARSING = "Starting file parsing for {filename}"
-        LOG_USING_PARSER = "Using parser: {parser}"
-        LOG_PARSING_SUCCESS = "File parsing completed successfully"
-        LOG_EELS_DATA_EXTRACTION = "Starting EELS data extraction using: {handler}"
-        LOG_EELS_DATA_EXTRACTION_SUCCESS = "EELS data extraction completed successfully"
-        LOG_SEPARATOR = "##############"
-
-        # Step 1: Parse file structure and extract metadata
-        _logger.info(LOG_START_PARSING.format(filename=file_identifier))
-        _logger.info(LOG_USING_PARSER.format(parser=parser.__module__))
 
         parser.file = binary_file_stream
         file_metadata_dictionary = parser.parse_file()
 
-        _logger.info(LOG_PARSING_SUCCESS)
-        _logger.info(LOG_SEPARATOR)
-
-        # Step 2: Extract and process EELS data
-        _logger.info(LOG_EELS_DATA_EXTRACTION.format(handler=handler.__module__))
-
         handler.get_file_data(binary_file_stream, infoDict=file_metadata_dictionary)
         processed_all_eels_spectrums: DM_EELS_data = handler.handle_eels_data()
-
-        _logger.info(LOG_EELS_DATA_EXTRACTION_SUCCESS)
-        _logger.info(LOG_SEPARATOR)
 
         return file_metadata_dictionary, processed_all_eels_spectrums
 
