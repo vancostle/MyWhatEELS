@@ -43,10 +43,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Homepage-specific state — must be set before super().__init__ triggers _setup_callbacks
         self._INACTIVITY_MS = 700
-        self._HOVER_DEBOUNCE_MS = 50  # min ms between hover renders to avoid flooding the event loop
+        self._HOVER_DEBOUNCE_MS = 80  # min ms between hover renders to avoid flooding the event loop
         self._fitting_active = False
         self._last_hover_ts = None
         self._last_hover_render_ts = None  # tracks last time hover actually triggered a render
+        self._last_rendered_pixel: tuple[int, int] | None = None  # pixel-level dedup: skip if same (i,j)
         self._pc = None
         self._paneB_reset_stream = None
         self._paneB_range_pc = None
@@ -1865,8 +1866,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
         if x is None or y is None:
             return
+
+        current_pixel = (round(y), round(x))
         point = {"x": x, "y": y}
         self._last_hover_point = point
+
+        # Pixel deduplication: if the mouse is still over the same integer pixel
+        # and there is no active region selection, there is nothing new to render.
+        if not self._region_pairs and self._last_rendered_pixel == current_pixel:
+            return
 
         # Debounce: skip render if the last one was too recent.
         # _last_hover_point is always updated above so the next render
@@ -1880,7 +1888,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._last_hover_ts = now
                 start_pc(self._pc)
             return
+
         self._last_hover_render_ts = now
+        self._last_rendered_pixel = current_pixel
 
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
@@ -1897,6 +1907,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
         if x is None or y is None:
             return
+        # Force re-render on click even if same pixel (user intent is explicit).
+        self._last_rendered_pixel = None
         point = {"x": x, "y": y}
         self._last_hover_point = point
         if self._region_pairs:
@@ -1917,6 +1929,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Commit selection: reset y-range so paneB auto-scales to the new spectrum, then run base logic."""
         self._current_y_range = None
         self._current_y_autorange = True
+        self._last_rendered_pixel = None  # force re-render on next hover even at same pixel
         self._debug_paneB_state("process_selection_before_base")
         super()._process_selection(index)
         stop_pc(self._pc)
@@ -1930,6 +1943,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     @override
     def _on_paneA_double_tap(self, x=None, y=None):
         """Reset selection (base), stop inactivity timer, optionally show hover spectrum."""
+        self._last_rendered_pixel = None  # force re-render on next hover even at same pixel
         super()._on_paneA_double_tap(x, y)
         stop_pc(self._pc)
         self._last_hover_ts = None
