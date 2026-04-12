@@ -40,24 +40,29 @@ class App:
         # Kill any process using the port
         KillProcess.by_port(port) # Ensure the port is free
 
-        # Each page is imported and instantiated only when the user first
-        # visits that route — heavy dependencies (numpy, scipy, etc.) inside
-        # each page module are deferred until they are actually needed.
-        def _lazy(module_path: str, class_name: str):
+        # Imports are static so PyInstaller can trace them, but placed here
+        # (inside run()) so they execute AFTER the splash screen is already
+        # visible. Heavy deps (numpy, scipy) are only pulled in at this point.
+        from whateels.pages.home import HomePage
+        from whateels.pages.metadata import Metadata
+        from whateels.pages.clustering import Clustering
+        from whateels.pages.clustering_2 import Clustering2Page
+        from whateels.pages.quantification import Quantification
+        from whateels.pages.fitting import Fitting
+
+        def _lazy(page_cls):
             def _loader():
-                import importlib
-                mod = importlib.import_module(module_path)
-                return getattr(mod, class_name)()
+                return page_cls()
             return _loader
 
         # Define the pages for the application
         pages = {
-            "/": _lazy("whateels.pages.home", "HomePage"),
-            "/metadata-details": _lazy("whateels.pages.metadata", "Metadata"),
-            "/clustering": _lazy("whateels.pages.clustering", "Clustering"),
-            "/clustering-2": _lazy("whateels.pages.clustering_2", "Clustering2Page"),
-            "/quantification": _lazy("whateels.pages.quantification", "Quantification"),
-            "/fitting": _lazy("whateels.pages.fitting", "Fitting"),
+            "/": _lazy(HomePage),
+            "/metadata-details": _lazy(Metadata),
+            "/clustering": _lazy(Clustering),
+            "/clustering-2": _lazy(Clustering2Page),
+            "/quantification": _lazy(Quantification),
+            "/fitting": _lazy(Fitting),
         }
 
         return pn.serve(
