@@ -179,9 +179,15 @@ class LayoutManager:
             self.remove_best_fit_component_from_sidebar()
         else:
             y_fit = fitting_results.best_fit if hasattr(fitting_results, 'best_fit') else fitting_results
+            # Use the NaN-stripped axis stored during fit_reference() so x and y_fit
+            # have the same length. Fall back to the full axis only when unavailable.
+            if hasattr(self._model, '_fit_eloss') and self._model._fit_eloss is not None:
+                x_plot = self._model._fit_eloss
+            else:
+                x_plot = state.plot_dataset.coords['Eloss'].values
             self._chosen_visualizers[0].update_plot()
             self._chosen_visualizers[0].plot_fitting(
-                state.plot_dataset.coords['Eloss'].values,
+                x_plot,
                 y_fit
             )
             best_fit_component = self.create_best_fit_info(fitting_results)
