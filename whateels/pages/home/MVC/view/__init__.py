@@ -19,8 +19,9 @@ class HomePageView:
     def __init__(self, model: "HomePageModel"):
         self._model = model
         
-        # Load any provided CSS files
-        pn.config.css_files.append('/assets/css/home.css') # type: ignore
+        # Load any provided CSS files (guard avoids duplicate ImportedStyleSheet models)
+        if '/assets/css/home.css' not in pn.config.css_files: # type: ignore
+            pn.config.css_files.append('/assets/css/home.css') # type: ignore
         
         # Layout components
         self._main = HomePageMainLayout(model)

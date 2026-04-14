@@ -24,8 +24,9 @@ class FileUploader(pn.Column):
         self._valid_extensions = valid_extensions
         self._multiple_files = multiple_files
         
-        # Load any provided CSS files
-        pn.config.css_files.append('/assets/css/file_uploader.css') # type: ignore
+        # Load any provided CSS files (guard avoids duplicate ImportedStyleSheet models)
+        if '/assets/css/file_uploader.css' not in pn.config.css_files: # type: ignore
+            pn.config.css_files.append('/assets/css/file_uploader.css') # type: ignore
         
         # Track the currently uploaded filename for removal callback
         self._current_filename = None

@@ -33,10 +33,4 @@ if __name__ == "__main__":
     except Exception:
         print("\n[WhatEELS] Startup error:\n")
         traceback.print_exc()
-        # Keep console open in frozen Windows executable so errors are readable.
-        if getattr(sys, "frozen", False) and os.name == "nt":
-            try:
-                input("\nPress Enter to close...")
-            except EOFError:
-                pass
         raise

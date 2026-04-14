@@ -13,8 +13,9 @@ class InfoPanel(pn.Column):
         show_metadata_button: bool = True,
         **params
     ):        
-        # Load any provided CSS files
-        pn.config.css_files.append('/assets/css/info_panel.css') # type: ignore
+        # Load any provided CSS files (guard avoids duplicate ImportedStyleSheet models)
+        if '/assets/css/info_panel.css' not in pn.config.css_files: # type: ignore
+            pn.config.css_files.append('/assets/css/info_panel.css') # type: ignore
 
         self._title = title
         self._link = link
