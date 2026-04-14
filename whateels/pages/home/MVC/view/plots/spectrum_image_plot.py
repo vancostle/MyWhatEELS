@@ -287,6 +287,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 sizing_mode=self._STRETCH_WIDTH,
             ),
             sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 0, 8, 0),
         )
 
     def create_cut_range_details(self) -> SimpleDetails:
@@ -301,6 +302,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 sizing_mode=self._STRETCH_WIDTH,
             ),
             sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 0, 8, 0),
         )
         
     def create_remove_spikes_details(self) -> SimpleDetails:
@@ -322,8 +324,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             ),
             sizing_mode=self._STRETCH_WIDTH,
         )
-        
-
 
     def set_view_refs(self, main, plots_tab) -> None:
         """Inject main layout and plots tab references so the plot can show progress and restore content."""

@@ -8,33 +8,13 @@ class HomePageRightSidebar(pn.Column):
     def __init__(self, model, **kwargs):
         self._model = model
 
-        self._cut_range_details_placeholder = pn.Column(sizing_mode='stretch_both', margin=(0, 0, 8, 0))
-        self._remove_spikes_details_placeholder = pn.Column(sizing_mode='stretch_both', margin=(0, 0, 8, 0))
-        self._fitting_details_placeholder = pn.Column(sizing_mode='stretch_both', margin=(0, 0, 8, 0))
+        self._preprocessed_settings = pn.Column(sizing_mode='stretch_both', margin=0)
         super().__init__(
-            self._cut_range_details_placeholder,
-            self._remove_spikes_details_placeholder,
-            self._fitting_details_placeholder,
+            self._preprocessed_settings,
             **kwargs
         )
-
-    def set_cut_range_details(self, details) -> None:
-        """Replace the cut range section with the SimpleDetails provided by the active plot."""
-        self._cut_range_details_placeholder.clear()
-        if details is not None:
-            self._cut_range_details_placeholder.append(details)
-
-    def set_fitting_details(self, details) -> None:
-        """Replace the multifitting section with the SimpleDetails provided by the active plot."""
-        self._fitting_details_placeholder.clear()
-        if details is not None:
-            self._fitting_details_placeholder.append(details)
-    
-    def set_remove_spikes_details(self, details) -> None:
-        """Replace the remove spikes section with the SimpleDetails provided by the active plot."""
-        self._remove_spikes_details_placeholder.clear()
-        if details is not None:
-            self._remove_spikes_details_placeholder.append(details)
-
-
-
+        
+    @property
+    def preprocessed_settings(self):
+        """Access the preprocessed settings layout for adding components."""
+        return self._preprocessed_settings

@@ -117,6 +117,7 @@ class HomePageController:
             # Clear UI components
             self._view.left_sidebar.remove_dataset_info()
             self._view.main.empty_placeholder()
+            self._view.right_sidebar.preprocessed_settings.clear()
             
             # Clear in-memory file to free resources
             del self._model.in_memory_file
