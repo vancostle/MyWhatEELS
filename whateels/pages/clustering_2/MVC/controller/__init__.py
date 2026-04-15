@@ -108,10 +108,8 @@ class Clustering2PageController:
         """Clear previous results because they belong to a different input data source."""
         self._model.umap_data_dict = dict()
         self._model.completed_umap_count = 0
-
-        self._view.main.umap_wrapper.clear()
-        self._view.main.hdbscan_wrapper.clear()
-        self._view.main.heatmap_wrapper.clear()
+        
+        self._view.main.clear() # Clear all results and placeholders from the main layout
 
         self._view.right_sidebar.download_results_button.disabled = True
         self._view.right_sidebar.hdbscan_selected_umap.options = {}
@@ -287,6 +285,8 @@ class Clustering2PageController:
             cmap_obj, min_samples, min_cluster_size
         )
         
+        self._view.main.append(self._view.main.hdbscan_wrapper) # Re-append the HDBSCAN wrapper to ensure it is visible after clearing
+        
         self._view.main.hdbscan_wrapper.append(
             pn.Column(
                 pn.Row(
@@ -295,11 +295,14 @@ class Clustering2PageController:
                     sizing_mode='stretch_width',
                     margin=0,
                 ),
-                hdbscan_umap_embedding_width_labels_plot,
                 sizing_mode='stretch_width',
                 margin=0,
             )
         )
+        
+        self._view.main.umap_embedding_wrapper.clear() # Clear UMAP embedding results from the main layout to emphasize HDBSCAN results
+        self._view.main.umap_embedding_wrapper.append(hdbscan_umap_embedding_width_labels_plot) # Show UMAP embedding with HDBSCAN labels in the UMAP embedding wrapper for reference
+        self._view.main.append(self._view.main.umap_embedding_wrapper) # Re-append the UMAP embedding wrapper to ensure it is visible after clearing
     
     def _on_umap_cancel_button_click(self) -> None:
         """Event handler for UMAP cancel button click."""
@@ -348,5 +351,8 @@ class Clustering2PageController:
         data : list[tuple[int, int, int, int, float]] = self._hdbscan.evaluate_umap(embedding)
         heatmap_overlay = self._hdbscan.plot_cluster_heatmap(data)
         
+        
         self._view.main.heatmap_wrapper.clear() # Clear previous heatmap from the main layout
         self._view.main.heatmap_wrapper.append(heatmap_overlay)
+        
+        self._view.main.append(self._view.main.heatmap_wrapper) # Re-append the heatmap wrapper to ensure it is visible after clearing

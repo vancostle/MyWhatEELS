@@ -5,7 +5,6 @@ from .layouts import (
     UmapEmbeddingPlaceholder,
 )
 from whateels.components import ModalManager
-from whateels.helpers import LoadCSS, CSS_ROOT
 import panel as pn
 import holoviews as hv
 import numpy as np
@@ -21,10 +20,10 @@ class Clustering2PageView:
     _STRETCH_BOTH = 'stretch_both'
     
     def __init__(self, model: "Clustering2PageModel", custom_page: "GeneralPageTemplate") -> None:
+
         # Set notification position
         pn.state.notifications.position = 'bottom-left' # type: ignore
         
-        # Load any provided CSS files
         pn.config.css_files.append('/assets/css/clustering_2.css') # type: ignore
 
         self._modal_manager = ModalManager(custom_page)
@@ -94,6 +93,7 @@ class Clustering2PageView:
             grid[row, col] = column_wrapper
             delay += delay_increment
 
+        self._main.append(self._main.umap_wrapper) # Ensure the UMAP wrapper is in the main layout
         self._main.umap_wrapper.append(grid)
         return self._result_panels
 

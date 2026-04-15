@@ -14,13 +14,14 @@ class Clustering2MainLayout(pn.Column):
         self._dm_file_uploaded_placeholder = DMFileUploadedPlaceholder()
         self._none_dm_file_uploaded_placeholder = NoneDMFileUploadedPlaceholder()
         
-        self._hdbscan_wrapper = pn.Column(sizing_mode=self._STRETCH_WIDTH, margin=0)
-        self._heatmap_wrapper = pn.Column(sizing_mode=self._STRETCH_WIDTH, margin=0)
-        self._umap_wrapper = pn.Column(sizing_mode=self._STRETCH_WIDTH, margin=0)
+        self._hdbscan_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['hdbscan-wrapper'])
+        self._heatmap_wrapper = pn.Column(margin=0, sizing_mode=self._STRETCH_WIDTH, css_classes=['heatmap-wrapper'])
+        self._umap_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['umap-wrapper'])
+        self._umap_embedding_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['umap-embedding-wrapper'])
         
-        self.append(self._hdbscan_wrapper)
-        self.append(self._heatmap_wrapper)
-        self.append(self._umap_wrapper)
+        # self.append(self._hdbscan_wrapper)
+        # self.append(self._heatmap_wrapper)
+        # self.append(self._umap_wrapper)
 
     @property
     def dm_file_uploaded_placeholder(self):
@@ -37,16 +38,21 @@ class Clustering2MainLayout(pn.Column):
     @property
     def hdbscan_wrapper(self):
         return self._hdbscan_wrapper
+    @property
+    def umap_embedding_wrapper(self):
+        return self._umap_embedding_wrapper
     
     @override
     def clear(self):
         self._umap_wrapper.clear()
         self._hdbscan_wrapper.clear()
         self._heatmap_wrapper.clear()
+        self._umap_embedding_wrapper.clear()
         cleared = super().clear()
         self.append(self._hdbscan_wrapper)
         self.append(self._heatmap_wrapper)
         self.append(self._umap_wrapper)
+        self.append(self._umap_embedding_wrapper)
         return cleared
         
     
