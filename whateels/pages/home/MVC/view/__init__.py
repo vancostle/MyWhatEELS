@@ -118,8 +118,8 @@ class HomePageView:
                 # Wire the plot's fitting SimpleDetails into the sidebar
                 if isinstance(chosen_plot, SpectrumImagePlot):
                     self._right_sidebar.preprocessed_settings.append(chosen_plot.create_cut_range_details())
-                    self._right_sidebar.preprocessed_settings.append(chosen_plot.create_fitting_details())
                     self._right_sidebar.preprocessed_settings.append(chosen_plot.create_remove_spikes_details())
+                    self._right_sidebar.preprocessed_settings.append(chosen_plot.create_fitting_details())
                     
                     chosen_plot.set_view_refs(self._main, plots_tab)
                 
