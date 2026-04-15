@@ -116,11 +116,7 @@ class HomePageView:
                     raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
 
                 # Wire the plot's fitting SimpleDetails into the sidebar
-                if isinstance(chosen_plot, SpectrumImagePlot):
-                    self._right_sidebar.preprocessed_settings.append(chosen_plot.create_cut_range_details())
-                    self._right_sidebar.preprocessed_settings.append(chosen_plot.create_remove_spikes_details())
-                    self._right_sidebar.preprocessed_settings.append(chosen_plot.create_fitting_details())
-                    
+                if isinstance(chosen_plot, SpectrumImagePlot):                    
                     chosen_plot.set_view_refs(self._main, plots_tab)
                 
                 plots = chosen_plot.create_plots()
@@ -160,8 +156,8 @@ class HomePageView:
         self._right_sidebar.preprocessed_settings.clear()
         if isinstance(self._all_plots[selected_tab_index], SpectrumImagePlot):
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_cut_range_details())
-            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_fitting_details())
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_remove_spikes_details())
+            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_fitting_details())
     
     def cleanup_plots(self):
         """Stop streams and release dataset references on all active plot instances.
