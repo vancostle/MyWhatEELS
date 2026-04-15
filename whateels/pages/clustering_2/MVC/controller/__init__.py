@@ -290,6 +290,7 @@ class Clustering2PageController:
             left_column=pn.Column(hdbscan_map_plot, margin=0, sizing_mode='stretch_both'),
             right_column=pn.Column(hdbscan_mean_spectra_plot, margin=0, sizing_mode='stretch_both'),
             sizing_mode='stretch_both',
+            margin=0,
         )
         
         self._view.main.hdbscan_wrapper.append(

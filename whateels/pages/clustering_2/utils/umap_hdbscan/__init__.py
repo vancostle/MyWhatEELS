@@ -141,7 +141,7 @@ class UMAP_HDBSCAN:
             title='HDBSCAN map'
         )
         
-        return pn.pane.HoloViews(img, sizing_mode='stretch_both', margin=0)
+        return pn.pane.HoloViews(img, margin=0, styles={'margin': 'auto'})
     
     def plot_mean_spectra_per_cluster(self, hdbscan_results, cmap_obj):
         """
