@@ -272,7 +272,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._fitting_switch,
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-container"],
-            margin=(0, 0, 8, 0),
+            margin=(0, 0, 0, 0),
             styles={
                 'display': 'flex', 'align-items': 'center',
                 'justify-content': 'center', 'padding': '0px'
@@ -287,7 +287,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 sizing_mode=self._STRETCH_WIDTH,
             ),
             sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 0, 8, 0),
+            margin=(0, 0, 0, 0),
         )
 
     def create_cut_range_details(self) -> SimpleDetails:
@@ -322,6 +322,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 window_slider_container,
                 self._apply_remove_spikes_button,
             ),
+            margin=(0, 0, 8, 0),
             sizing_mode=self._STRETCH_WIDTH,
         )
 
