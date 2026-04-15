@@ -1,5 +1,6 @@
 from whateels.helpers import SafeConverter, URLUtils
 import itertools, panel as pn, threading
+from whateels.components import SplitJs
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -285,20 +286,17 @@ class Clustering2PageController:
             cmap_obj, min_samples, min_cluster_size
         )
         
-        self._view.main.append(self._view.main.hdbscan_wrapper) # Re-append the HDBSCAN wrapper to ensure it is visible after clearing
+        splitjs = SplitJs(
+            left_column=pn.Column(hdbscan_map_plot, margin=0, sizing_mode='stretch_both'),
+            right_column=pn.Column(hdbscan_mean_spectra_plot, margin=0, sizing_mode='stretch_both'),
+            sizing_mode='stretch_both',
+        )
         
         self._view.main.hdbscan_wrapper.append(
-            pn.Column(
-                pn.Row(
-                    hdbscan_map_plot,
-                    hdbscan_mean_spectra_plot,
-                    sizing_mode='stretch_width',
-                    margin=0,
-                ),
-                sizing_mode='stretch_width',
-                margin=0,
-            )
+            splitjs,
         )
+        
+        self._view.main.append(self._view.main.hdbscan_wrapper) # Re-append the HDBSCAN wrapper to ensure it is visible after clearing
         
         self._view.main.umap_embedding_wrapper.clear() # Clear UMAP embedding results from the main layout to emphasize HDBSCAN results
         self._view.main.umap_embedding_wrapper.append(hdbscan_umap_embedding_width_labels_plot) # Show UMAP embedding with HDBSCAN labels in the UMAP embedding wrapper for reference

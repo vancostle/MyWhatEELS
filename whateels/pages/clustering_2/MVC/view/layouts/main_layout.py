@@ -14,7 +14,7 @@ class Clustering2MainLayout(pn.Column):
         self._dm_file_uploaded_placeholder = DMFileUploadedPlaceholder()
         self._none_dm_file_uploaded_placeholder = NoneDMFileUploadedPlaceholder()
         
-        self._hdbscan_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['hdbscan-wrapper'])
+        self._hdbscan_wrapper = pn.Column(margin=0, sizing_mode='stretch_both', min_height=500, css_classes=['hdbscan-wrapper'])
         self._heatmap_wrapper = pn.Column(margin=0, sizing_mode=self._STRETCH_WIDTH, css_classes=['heatmap-wrapper'])
         self._umap_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['umap-wrapper'])
         self._umap_embedding_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['umap-embedding-wrapper'])
@@ -48,11 +48,6 @@ class Clustering2MainLayout(pn.Column):
         self._hdbscan_wrapper.clear()
         self._heatmap_wrapper.clear()
         self._umap_embedding_wrapper.clear()
-        cleared = super().clear()
-        self.append(self._hdbscan_wrapper)
-        self.append(self._heatmap_wrapper)
-        self.append(self._umap_wrapper)
-        self.append(self._umap_embedding_wrapper)
-        return cleared
+        return super().clear()
         
     
