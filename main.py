@@ -7,8 +7,17 @@ import multiprocessing
 # instances and splash screens for each worker process.
 multiprocessing.freeze_support()
 
-import os
 import sys
+
+# On Windows, Python defaults to ProactorEventLoop (IOCP-based). Tornado's
+# WebSocket handling works best with SelectorEventLoop — ProactorEventLoop
+# adds measurable latency per small message, which is felt as sluggish hover
+# in the frozen exe. Set this before any asyncio/tornado/panel import.
+if sys.platform == 'win32':
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+import os
 import traceback
 
 APP_NAME = "WhatEELS"

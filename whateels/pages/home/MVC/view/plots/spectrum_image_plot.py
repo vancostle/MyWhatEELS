@@ -43,7 +43,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Homepage-specific state — must be set before super().__init__ triggers _setup_callbacks
         self._INACTIVITY_MS = 700
-        self._HOVER_DEBOUNCE_MS = 80  # min ms between hover renders to avoid flooding the event loop
+        self._HOVER_DEBOUNCE_MS = 0  # pixel deduplication handles redundant renders; no debounce needed
         self._fitting_active = False
         self._last_hover_ts = None
         self._last_hover_render_ts = None  # tracks last time hover actually triggered a render
@@ -53,6 +53,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._paneB_range_pc = None
         self._paneB_attached_model_id = None
         self._paneB_reset_baseline_dirty = True  # sync reset baseline on first render and after axis changes
+        self._paneB_reset_baseline_pending = False  # True while a next_tick_callback is already queued
+        self._paneB_range_cb_pending = False  # True while ensure_paneB_range_callbacks is already queued
 
         # Widget placeholders (filled by _setup_widgets, called after super)
         self._range_slider = pn.widgets.EditableRangeSlider()
@@ -868,24 +870,31 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Push the new element through the pipe — Bokeh updates data in-place
             # without rebuilding the whole model tree, avoiding the stale-reference warning.
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
-            # Keep the live Bokeh reset baseline pinned to the full spectrum on every update.
-            # Only sync when the energy axis may have changed (preprocessors applied).
-            if getattr(self, '_paneB_reset_baseline_dirty', True):
+            # Keep the live Bokeh reset baseline pinned to the full spectrum, but only
+            # schedule once — not on every hover frame.
+            if getattr(self, '_paneB_reset_baseline_dirty', True) and not getattr(self, '_paneB_reset_baseline_pending', False):
                 try:
                     doc = pn.state.curdoc
                     if doc is not None:
+                        self._paneB_reset_baseline_pending = True
                         def _sync_and_clear():
                             self._sync_paneB_reset_baseline()
                             self._paneB_reset_baseline_dirty = False
+                            self._paneB_reset_baseline_pending = False
                         doc.add_next_tick_callback(_sync_and_clear)
                 except Exception:
                     pass
-            # Only attach range callbacks when the model is new or was reset.
-            if self._paneB_attached_model_id is None:
+            # Only attach range callbacks when the model is new or was reset,
+            # and only schedule the callback once, not on every hover frame.
+            if self._paneB_attached_model_id is None and not getattr(self, '_paneB_range_cb_pending', False):
                 try:
                     doc = pn.state.curdoc
                     if doc is not None:
-                        doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
+                        self._paneB_range_cb_pending = True
+                        def _ensure_and_clear():
+                            self._ensure_paneB_range_callbacks()
+                            self._paneB_range_cb_pending = False
+                        doc.add_next_tick_callback(_ensure_and_clear)
                 except Exception:
                     pass
 
@@ -1209,6 +1218,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._paneB_pipe = hv_streams.Pipe(data=None)
         self._paneB_dmap = hv.DynamicMap(lambda data: data, streams=[self._paneB_pipe])
         self._paneB_attached_model_id = None
+        # Reset pending-guard flags so the new model gets its callbacks attached.
+        self._paneB_range_cb_pending = False
+        self._paneB_reset_baseline_pending = False
+        self._paneB_reset_baseline_dirty = True
 
         # Seed the pipe with a valid figure before assigning to paneB.object.
         # Panel calls initialize_dynamic() immediately on assignment, which calls
@@ -1234,7 +1247,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             try:
                 doc = pn.state.curdoc
                 if doc is not None:
-                    doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
+                    self._paneB_range_cb_pending = True
+                    def _ensure_and_clear_reset():
+                        self._ensure_paneB_range_callbacks()
+                        self._paneB_range_cb_pending = False
+                    doc.add_next_tick_callback(_ensure_and_clear_reset)
             except Exception:
                 pass
         if self._paneB_range_pc is not None:
