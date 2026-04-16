@@ -136,7 +136,7 @@ class UMAP_HDBSCAN:
             ),
             kdims=['x', 'y']
         ).opts(
-            xaxis=None, yaxis=None, colorbar=True, tools=['hover', 'lasso_select'], toolbar='right',
+            xaxis=None, yaxis=None, colorbar=True, tools=['hover'], toolbar='right',
             invert_yaxis=True, responsive=True, cmap=cmap_obj["colors"],
             title='HDBSCAN map'
         )
@@ -185,16 +185,12 @@ class UMAP_HDBSCAN:
         
         # Create NdOverlay
         overlay = hv.NdOverlay(mean_spectra_overlay).opts(
-            bgcolor='black',
-            legend_cols=False,
-            legend_position='right',
-            show_grid=True,
+            legend_position='top_right',
             ylabel='Intensity (counts)',
             xlabel='Energy Loss (eV)',
             title='Centroids of HDBSCAN on the UMAP embedding',
             tools=['lasso_select', 'box_select'],
             responsive=True,
-            frame_height=400,
         )
         
         return pn.pane.HoloViews(overlay, sizing_mode='stretch_both', margin=0)

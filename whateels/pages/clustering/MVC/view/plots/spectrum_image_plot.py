@@ -69,7 +69,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._view: "ClusteringView" = view
 
         # Call parent constructor to setup base visualization
-        super().__init__(dataset, eloss_name)
+        super().__init__(dataset, eloss_name, ['hover'])
         
         # Store original plots layout to restore after clustering
         self._plots_layout = None

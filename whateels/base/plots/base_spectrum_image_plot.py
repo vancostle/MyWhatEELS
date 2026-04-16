@@ -223,7 +223,7 @@ class BaseSpectrumImagePlot(IPlot):
             size=0,
             alpha=0,
             nonselection_alpha=0,
-            tools=['lasso_select', 'box_select'],
+            tools=self._paneA_select_tools,
             shared_axes=False,
         )
 
@@ -476,11 +476,13 @@ class BaseSpectrumImagePlot(IPlot):
             self._selection_pairs_ref = None
         if self._paneA_base_overlay is not None and self.paneA is not None:
             self.paneA.object = (
-                self._paneA_base_overlay * self._selection_overlay
+                self._paneA_base_overlay * self._selection_overlay # type: ignore
             ).opts(
                 hv.opts.Overlay(
-                    responsive=True, aspect='equal', shared_axes=False,
-                    active_tools=['lasso_select'],
+                    responsive=True, 
+                    aspect='equal', 
+                    shared_axes=False,
+                    tools=['hover']
                 )
             )
 

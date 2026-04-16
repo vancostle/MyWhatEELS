@@ -108,6 +108,7 @@ class ClusterVisualizer:
             shared_axes=False,
             aspect='equal',
             framewise=True,
+            tools=['hover']
         )
         return img
     
@@ -152,5 +153,6 @@ class ClusterVisualizer:
                 responsive=True,
                 shared_axes=False,
                 framewise=True,
+                tools=['hover']
             )
         )
