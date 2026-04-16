@@ -45,16 +45,24 @@ class UMAP_HDBSCAN:
         return embedding, umap_data_dict
 
     def _get_reshaped_data(self) -> Optional[np.ndarray]:
-        """Reshape electron count data to 2D array for UMAP processing."""
+        """Reshape electron count data to 2D array for UMAP processing.
+
+        NaN and Inf values are replaced with 0 so sklearn/UMAP never sees
+        non-finite inputs (e.g. from Cut Range preprocessing on the home page).
+        """
         try:
             shape = self._electron_count_data.shape
             if len(shape) == 2:
-                return np.array(self._electron_count_data)
+                arr = np.array(self._electron_count_data, dtype=float)
             elif len(shape) == 3:
                 n_y, n_x, n_eloss = shape
-                return np.array(self._electron_count_data).reshape(n_y * n_x, n_eloss)
+                arr = np.array(self._electron_count_data, dtype=float).reshape(n_y * n_x, n_eloss)
             else:
                 raise ValueError("Electron count data must be 2D or 3D.")
+            # Replace NaN/Inf so UMAP/sklearn never sees non-finite values.
+            if not np.all(np.isfinite(arr)):
+                arr = np.where(np.isfinite(arr), arr, 0.0)
+            return arr
         except Exception as e:
             print(f"Error processing electron count data: {e}")
             return None
