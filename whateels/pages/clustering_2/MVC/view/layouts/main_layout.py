@@ -18,10 +18,6 @@ class Clustering2MainLayout(pn.Column):
         self._heatmap_wrapper = pn.Column(margin=0, sizing_mode=self._STRETCH_WIDTH, css_classes=['heatmap-wrapper'])
         self._umap_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['umap-wrapper'])
         self._umap_embedding_wrapper = pn.Column(margin=0, styles={'width': '100%'}, css_classes=['umap-embedding-wrapper'])
-        
-        # self.append(self._hdbscan_wrapper)
-        # self.append(self._heatmap_wrapper)
-        # self.append(self._umap_wrapper)
 
     @property
     def dm_file_uploaded_placeholder(self):

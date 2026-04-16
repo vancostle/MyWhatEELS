@@ -1,6 +1,6 @@
 from whateels.helpers import SafeConverter, URLUtils
 import itertools, panel as pn, threading
-from whateels.components import SplitJs
+from ..view.plots import Clustering2SpectrumImagePlot
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -44,6 +44,15 @@ class Clustering2PageController:
 
         # Build UMAP/HDBSCAN backend from the active data source (raw or Home-preprocessed).
         self._hdbscan = UMAP_HDBSCAN(electron_count_data=self._resolve_electron_count_data())
+
+        # Spectrum image visualizer for the HDBSCAN results section.
+        # create_plots() is called once here so paneA/paneB Bokeh models are
+        # never duplicated across multiple Panel trees.
+        self._spectrum_plot = Clustering2SpectrumImagePlot(
+            self._model.selected_dataset,
+            eloss_name='Eloss',
+        )
+        self._spectrum_plot_layout = self._spectrum_plot.create_plots()
 
         view.right_sidebar.use_preprocessed_data_switch.param.watch(
             self._on_use_preprocessed_data_switch_changed,
@@ -277,25 +286,14 @@ class Clustering2PageController:
         hdbscan_results = self._hdbscan.compute_hdbscan_on_umap(embedding, min_samples, min_cluster_size)
         cmap_obj = self._hdbscan.get_nclusters_cmap(hdbscan_results, n_clusters=len(set(hdbscan_results.labels_)))
         
-        # Create the Holoviews figures and wrap them in Panel panes
-        hdbscan_map_plot = self._hdbscan.plot_hdbscan_map(hdbscan_results, cmap_obj)
-        hdbscan_mean_spectra_plot = self._hdbscan.plot_mean_spectra_per_cluster(hdbscan_results, cmap_obj)
         hdbscan_umap_embedding_width_labels_plot = self._hdbscan.plot_umap_embedding_with_labels(
             embedding, 
             hdbscan_results.labels_, 
             cmap_obj, min_samples, min_cluster_size
         )
         
-        splitjs = SplitJs(
-            left_column=pn.Column(hdbscan_map_plot, margin=0, sizing_mode='stretch_both'),
-            right_column=pn.Column(hdbscan_mean_spectra_plot, margin=0, sizing_mode='stretch_both'),
-            sizing_mode='stretch_both',
-            margin=0,
-        )
-        
-        self._view.main.hdbscan_wrapper.append(
-            splitjs,
-        )
+        self._spectrum_plot.update_hdbscan_results(hdbscan_results, cmap_obj)
+        self._view.main.hdbscan_wrapper.append(self._spectrum_plot_layout)
         
         self._view.main.append(self._view.main.hdbscan_wrapper) # Re-append the HDBSCAN wrapper to ensure it is visible after clearing
         
