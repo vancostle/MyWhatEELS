@@ -292,7 +292,11 @@ class Clustering2PageController:
             cmap_obj, min_samples, min_cluster_size
         )
         
-        self._spectrum_plot.update_hdbscan_results(hdbscan_results, cmap_obj)
+        self._spectrum_plot.update_hdbscan_results(
+            hdbscan_results,
+            cmap_obj,
+            electron_count_data=self._hdbscan._electron_count_data,
+        )
         self._view.main.hdbscan_wrapper.append(self._spectrum_plot_layout)
         
         self._view.main.append(self._view.main.hdbscan_wrapper) # Re-append the HDBSCAN wrapper to ensure it is visible after clearing

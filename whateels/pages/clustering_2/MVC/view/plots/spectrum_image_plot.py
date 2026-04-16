@@ -46,15 +46,27 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
     # Public API                                                           #
     # ------------------------------------------------------------------ #
 
-    def update_hdbscan_results(self, hdbscan_results, cmap_obj: dict) -> None:
+    def update_hdbscan_results(self, hdbscan_results, cmap_obj: dict, electron_count_data=None) -> None:
         """
         Swap paneA to the HDBSCAN cluster label map and paneB to mean spectra.
 
         Args:
-            hdbscan_results: Fitted HDBSCAN object with a ``labels_`` attribute.
-            cmap_obj:        Dict with a ``'colors'`` key — list of hex colours,
-                             one per unique label (including noise label −1 if present).
+            hdbscan_results:     Fitted HDBSCAN object with a ``labels_`` attribute.
+            cmap_obj:            Dict with a ``'colors'`` key — list of hex colours,
+                                 one per unique label (including noise label −1 if present).
+            electron_count_data: The ElectronCount DataArray that was actually fed to
+                                 UMAP/HDBSCAN (may differ from the raw dataset when the
+                                 "use preprocessed" switch is on). When provided, the
+                                 plot's internal data and energy axis are updated to match
+                                 so that mean spectra are drawn with the correct Eloss range.
         """
+        if electron_count_data is not None:
+            self._electron_count_data = electron_count_data
+            try:
+                self._energy = np.asarray(electron_count_data.coords[self._eloss_name].values)
+            except Exception:
+                self._energy = np.arange(electron_count_data.shape[-1])
+
         data_np = np.asarray(self._electron_count_data.fillna(0.0))
         ny, nx = data_np.shape[0], data_np.shape[1]
 
