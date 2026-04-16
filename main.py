@@ -19,6 +19,13 @@ if sys.platform == 'win32':
 
 import os
 import traceback
+import logging
+
+# Suppress verbose Tornado/Bokeh access logs — writing to a Win32 console window
+# is slower than a Unix terminal, and per-request logging adds overhead in the exe.
+logging.getLogger('tornado.access').setLevel(logging.ERROR)
+logging.getLogger('tornado.application').setLevel(logging.WARNING)
+logging.getLogger('bokeh').setLevel(logging.WARNING)
 
 APP_NAME = "WhatEELS"
 PORT = 5006

@@ -43,7 +43,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Homepage-specific state — must be set before super().__init__ triggers _setup_callbacks
         self._INACTIVITY_MS = 700
-        self._HOVER_DEBOUNCE_MS = 0  # pixel deduplication handles redundant renders; no debounce needed
+        self._HOVER_DEBOUNCE_MS = 20  # 20 ms prevents event-queue pileup in the frozen exe while remaining imperceptible
         self._fitting_active = False
         self._last_hover_ts = None
         self._last_hover_render_ts = None  # tracks last time hover actually triggered a render
@@ -104,6 +104,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._reset_in_progress = False  # Flag to prevent callback freeze during reset
         self._reset_finalize_attempts = 0
 
+        # Numpy cache for the fast hover path — avoids xarray _as_row_col_energy conversion
+        # on every mouse move. Invalidated automatically when _get_display_data() changes identity.
+        self._display_numpy_cache: np.ndarray | None = None
+        self._display_numpy_cache_source = None
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
@@ -600,11 +604,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     @override
     def _figB_hover(self, point):
-        """Build hover spectrum using the active display energy axis."""
+        """Build hover spectrum using the cached numpy array."""
         if not point:
             point = {"x": 0, "y": 0}
         i, j = round(point["y"]), round(point["x"])
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+        try:
+            spec = self._get_display_numpy()[i, j, :].astype(float)
+        except Exception:
+            spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
         return self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
 
     @override
@@ -622,6 +629,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if self._preprocessors_applied and self._preprocessed_electron_count is not None:
             return self._preprocessed_electron_count
         return self._electron_count_data
+
+    def _get_display_numpy(self) -> np.ndarray:
+        """Return a cached (row, col, energy) numpy array for the current display data.
+
+        Avoids calling SpectrumExtractor._as_row_col_energy (which does xarray .values
+        + dim-order inspection) on every hover event. The cache is invalidated automatically
+        when the underlying data source changes (preprocessors applied/reverted).
+        """
+        display_data = self._get_display_data()
+        if self._display_numpy_cache is None or self._display_numpy_cache_source is not display_data:
+            self._display_numpy_cache = SpectrumExtractor._as_row_col_energy(display_data)
+            self._display_numpy_cache_source = display_data
+        return self._display_numpy_cache
 
     def _get_display_energy_axis(self) -> np.ndarray:
         """Return the Eloss axis associated with the currently displayed data cube."""
@@ -779,17 +799,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         elif point is not None:
             i, j = round(point['y']), round(point['x'])
             title = f"Hover (x={j}, y={i})"
-            spec = get_pixel_spectrum(self._get_display_data(), point)
-            if (self._preprocessors_applied or self._fitting_active) and spec is not None:
-                fig = self._build_spectrum_curve(spec, title)
-                if self._should_apply_visual_fitting():
-                    energy_axis = self._get_display_energy_axis()
-                    try:
-                        fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
-                    except Exception:
-                        pass
-            else:
-                fig = self._figB_hover(point)
+            # Use cached numpy array — avoids xarray conversion and eliminates the
+            # previous double-extraction (spec was computed then discarded for _figB_hover).
+            try:
+                spec = self._get_display_numpy()[i, j, :].astype(float)
+            except Exception:
+                spec = get_pixel_spectrum(self._get_display_data(), point)
+            fig = self._build_spectrum_curve(spec, title)
+            if (self._preprocessors_applied or self._fitting_active) and self._should_apply_visual_fitting():
+                energy_axis = self._get_display_energy_axis()
+                try:
+                    fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
+                except Exception:
+                    pass
         self._update_paneB(fig)
 
     # --- Helper methods now imported from utils/plot_helpers.py ---
