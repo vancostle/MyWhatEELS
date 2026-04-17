@@ -224,7 +224,7 @@ class FittingView:
         )
         
         details = SimpleDetails(
-            title="Nlls Instructions",
+            title="NLLS Instructions",
             content=pn.Column(
                 *[widget for widget in self._component_model_input.values()],
                 self._fitting_add_compontent_button,
