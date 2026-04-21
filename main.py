@@ -33,7 +33,7 @@ SPLASH_PORT = 5007
 if __name__ == "__main__":
     try:
         # Print ASCII art banner on startup
-        print(art.text2art(APP_NAME, font='slant'))
+        print(art.text2art(APP_NAME))
 
         # Display a bold, red-background message to keep the window open
         init(autoreset=True)
