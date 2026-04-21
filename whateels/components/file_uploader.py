@@ -240,8 +240,6 @@ class FileUploader(pn.Column):
             if callable(self._on_file_removed_callback):
                 self._on_file_removed_callback(self._current_filename)
             self._current_filename = None
-            
-            print("Clearing messages after file removal")
     
     def _is_valid_file_extension(self, filename: str) -> bool:
         """
