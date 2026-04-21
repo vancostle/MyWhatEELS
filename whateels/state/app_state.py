@@ -82,39 +82,45 @@ class AppState(param.Parameterized):
     @param.depends('metadata', watch=True)
     def _on_metadata_change(self):
         """Called automatically when metadata parameter changes."""
-        print(f"Metadata updated via param: {self.metadata}")
+        # print(f"Metadata updated via param: {self.metadata}")
+        pass
             
     @param.depends('multifit', watch=True)
     def _on_multifit_change(self):
         """Called automatically when multifit parameter changes."""
-        print(f"Multifit updated via param: {self.multifit}")
+        # print(f"Multifit updated via param: {self.multifit}")
+        pass
 
     @param.depends('plot_dataset', watch=True)
     def _on_plot_dataset_change(self):
         """Called when the shared plot dataset changes."""
-        print("Plot dataset updated via param.")
+        # print("Plot dataset updated via param.")
+        pass
     
     @param.depends('all_datasets', watch=True)
     def _on_datasets_change(self):
         """Called automatically when all_datasets parameter changes."""
-        count = len(self.all_datasets) if isinstance(self.all_datasets, list) else 0
-        self.clear_elements_selected()
+        # count = len(self.all_datasets) if isinstance(self.all_datasets, list) else 0
+        # self.clear_elements_selected()
+        pass
         
     @param.depends('filename', watch=True)
     def _on_filename_change(self):
         """Called automatically when filename parameter changes."""
-        print(f"Filename updated via param: {self.filename}")
+        # print(f"Filename updated via param: {self.filename}")
         self.clear_elements_selected()
             
     @param.depends('selected_tab_index_dataset', watch=True)
     def _on_selected_tab_index_change(self):
         """Called automatically when selected_tab_index_dataset changes."""
-        print(f"Selected dataset tab index updated via param: {self.selected_tab_index_dataset}")
+        # print(f"Selected dataset tab index updated via param: {self.selected_tab_index_dataset}")
         self.clear_elements_selected()        
+
     @param.depends('last_clustering_result', watch=True)
     def _on_last_clustering_result_change(self):
         """Called automatically when last_clustering_result changes."""
-        print("Last clustering result updated via param.")
+        # print("Last clustering result updated via param.")
+        pass
 
     def clear_metadata(self):
         self.metadata = None

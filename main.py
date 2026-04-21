@@ -26,6 +26,14 @@ SPLASH_PORT = 5007
 
 if __name__ == "__main__":
     try:
+        # Print ASCII art banner on startup
+        print(art.text2art(APP_NAME, font='slant'))
+
+        # Display a bold, red-background message to keep the window open
+        init(autoreset=True)
+        msg = "Please keep this window open while WhatEELS is running."
+        print(Back.RED + Style.BRIGHT + Fore.WHITE + f"  {msg}  ".center(80))
+
         # splash has only lightweight stdlib imports, so it loads instantly.
         import splash
 

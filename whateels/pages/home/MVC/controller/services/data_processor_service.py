@@ -76,7 +76,7 @@ class DataProcessorService:
             return cleaned_dataset
 
         except Exception as e:
-            print(COULD_NOT_CLEAN_DATASET_MESSAGE.format(e))
+            # print(COULD_NOT_CLEAN_DATASET_MESSAGE.format(e))
             return dataset
 
     def determine_dataset_type(self, dataset: xr.Dataset, is_eels: bool) -> str:

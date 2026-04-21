@@ -124,7 +124,7 @@ class FileProcessorService:
         file_size = os.path.getsize(filepath)
 
         if file_size < MIN_FILE_SIZE:
-            print(FILE_SIZE_TOO_SMALL_MESSAGE)
+            # print(FILE_SIZE_TOO_SMALL_MESSAGE)
             return False
         return True
 
