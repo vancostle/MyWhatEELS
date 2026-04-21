@@ -37,3 +37,6 @@ pywin32-ctypes==0.2.3
 # ASCII art text support
 art==6.5
 colorama==0.4.6
+
+# Desktop app support
+pywebview==6.0
