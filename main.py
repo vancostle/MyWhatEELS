@@ -16,16 +16,23 @@ import sys
 if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    # Enable ANSI/VT escape-code processing in the Windows console
+    import ctypes
+    ctypes.windll.kernel32.SetConsoleMode(
+        ctypes.windll.kernel32.GetStdHandle(-11), 7
+    )
 
 import traceback, logging
-from colorama import Back, Style, Fore, init
+
+_ANSI_RED_BG_BOLD_WHITE = "\033[41;1;97m"
+_ANSI_RESET             = "\033[0m"
 
 _BANNER = r"""
- __        ___           _   _____ _______      ____
- \ \      / / |__   __ _| |_| ____|  ___| |    / ___|
-  \ \ /\ / /| '_ \ / _` | __|  _| |  _| | |    \__ \
-   \ V  V / | | | | (_| | |_| |___| |___| |___ ___) |
-    \_/\_/  |_| |_|\__,_|\__|_____|_____|_____|____/
+                __        ___           _   _____ _______      ____
+                \ \      / / |__   __ _| |_| ____|  ___| |    / ___|
+                 \ \ /\ / /| '_ \ / _` | __|  _| |  _| | |    \__ \
+                  \ V  V / | | | | (_| | |_| |___| |___| |___ ___) |
+                   \_/\_/  |_| |_|\__,_|\__|_____|_____|_____|____/
 
 """
 
@@ -45,9 +52,9 @@ if __name__ == "__main__":
         print(_BANNER)
 
         # Display a bold, red-background message to keep the window open
-        init(autoreset=True)
         msg = "Please keep this window open while WhatEELS is running."
-        print(Back.RED + Style.BRIGHT + Fore.WHITE + f"  {msg}  ".center(80))
+        print(f"{_ANSI_RED_BG_BOLD_WHITE}               {msg}                 {_ANSI_RESET}".center(80))
+        print("\n")
 
         # splash has only lightweight stdlib imports, so it loads instantly.
         import splash
