@@ -17,8 +17,17 @@ if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-import traceback, logging, art
+import traceback, logging
 from colorama import Back, Style, Fore, init
+
+_BANNER = r"""
+ __        ___           _   _____ _______      ____
+ \ \      / / |__   __ _| |_| ____|  ___| |    / ___|
+  \ \ /\ / /| '_ \ / _` | __|  _| |  _| | |    \__ \
+   \ V  V / | | | | (_| | |_| |___| |___| |___ ___) |
+    \_/\_/  |_| |_|\__,_|\__|_____|_____|_____|____/
+
+"""
 
 # Suppress verbose Tornado/Bokeh access logs — writing to a Win32 console window
 # is slower than a Unix terminal, and per-request logging adds overhead in the exe.
@@ -33,7 +42,7 @@ SPLASH_PORT = 5007
 if __name__ == "__main__":
     try:
         # Print ASCII art banner on startup
-        print(art.text2art(APP_NAME))
+        print(_BANNER)
 
         # Display a bold, red-background message to keep the window open
         init(autoreset=True)
