@@ -57,6 +57,11 @@ class FileProcessorService:
             if not all_datasets:
                 raise DMFileLoadingError(filename)
 
+            # Force xarray to materialize all lazy-loaded data into memory
+            # before we delete the temp file (prevents "unpack requires a buffer" errors)
+            for dataset in all_datasets:
+                dataset.load()
+
             return all_datasets
 
         except DMFileLoadingError:
