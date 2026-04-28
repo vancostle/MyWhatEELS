@@ -161,8 +161,12 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         except Exception:
             self._energy = np.asarray(self._e_axis)
 
-        m_image_da = display_data.sum(self._model.constants.ELOSS)
-        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        m_image_da = display_data
+        # Sum over the energy axis. np.sum() on the values directly produces
+        # a small 2D result without creating a large intermediate copy.
+        # Then clean NaNs on the small result (not the full 3D array).
+        m_image = np.sum(m_image_da.values, axis=2)
+        m_image = np.nan_to_num(m_image, nan=0.0, posinf=0.0, neginf=0.0)
         if m_image.ndim != 2:
             raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
 

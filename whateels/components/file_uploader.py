@@ -1,6 +1,7 @@
 import panel as pn
 
 from whateels.helpers import LoadCSS, CSS_ROOT
+from whateels.components.disk_streaming_file_dropper import DiskStreamingFileDropper
 from typing import Callable, Optional, Tuple
 
 class FileUploader(pn.Column):
@@ -82,12 +83,12 @@ class FileUploader(pn.Column):
         """
         self._on_file_removed_callback = callback
     
-    def _create_file_widget(self) -> Tuple[pn.widgets.FileDropper, pn.Column, pn.pane.HTML, pn.Column, pn.Column]:
+    def _create_file_widget(self) -> Tuple[DiskStreamingFileDropper, pn.Column, pn.pane.HTML, pn.Column, pn.Column]:
         """Create the main file dropper widget."""
         STRETCH_WIDTH = "stretch_width"
         STRETCH_BOTH = "stretch_both"
         
-        filedropper = pn.widgets.FileDropper(
+        filedropper = DiskStreamingFileDropper(
             sizing_mode=STRETCH_BOTH,
             multiple=self._multiple_files,  # Only allow single file uploads
             css_classes=['filedropper'],
@@ -115,7 +116,7 @@ class FileUploader(pn.Column):
 
             # Completely reset by replacing the FileDropper widget
             filedroppper_container.clear()
-            new_filedropper = pn.widgets.FileDropper(
+            new_filedropper = DiskStreamingFileDropper(
                 sizing_mode=STRETCH_WIDTH,
                 multiple=self._multiple_files,
                 css_classes=['filedropper'],

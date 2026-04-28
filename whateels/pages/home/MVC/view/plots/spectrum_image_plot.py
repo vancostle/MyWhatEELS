@@ -1190,8 +1190,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             
     def _refresh_paneA(self):
         """Rebuild paneA (heatmap) using the current display data (raw or preprocessed)."""
-        m_image_da = self._get_display_data().sum(self._eloss_name)
-        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        display_data = self._get_display_data()
+        # Sum over the energy axis. np.sum() on the values directly produces
+        # a small 2D result without creating a large intermediate copy.
+        # Then clean NaNs on the small result (not the full 3D array).
+        m_image = np.sum(display_data.values, axis=2)
+        m_image = np.nan_to_num(m_image, nan=0.0, posinf=0.0, neginf=0.0)
         if m_image.ndim != 2:
             raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
         ny, nx = m_image.shape

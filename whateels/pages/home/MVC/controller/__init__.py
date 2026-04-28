@@ -97,7 +97,7 @@ class HomePageController:
         except Exception as e:
             self._view.main.error_placeholder()
             raise DMFileUploadError(e)
-        
+
         
     def _handle_file_removal(self, filename: str) -> None:
         """

@@ -33,26 +33,55 @@ class FileProcessorService:
 
     # -- Public Methods --
 
-    def process_upload(self, filename: str, file_content: bytes) -> list[xr.Dataset]:
+    def process_upload(self, filename: str, file_content: bytes | str) -> list[xr.Dataset]:
         """
-        Process uploaded file in memory and return datasets.
+        Process an uploaded file and return datasets.
+
+        file_content can be:
+          - bytes  → small file buffered in RAM (classic Panel upload)
+          - str    → path to a temp file on disk (DiskStreamingFileDropper,
+                     used for large files that would cause MemoryError in RAM)
         """
+        temp_path = None
         try:
-            # Create enhanced in-memory file-like object from uploaded content
-            self._model.in_memory_file = InMemoryFile(file_content, filename)
-            
-            # Load the DM3/DM4 file directly from memory
-            all_datasets = self._load_dm_file(self._model.in_memory_file)
+            if isinstance(file_content, str):
+                # Large file: DiskStreamingFileDropper wrote chunks to a temp file.
+                # Load directly from the path — no RAM copy of the raw bytes.
+                temp_path = file_content
+                all_datasets = self._load_dm_file(temp_path)
+            else:
+                # Small file: classic in-memory path.
+                self._model.in_memory_file = InMemoryFile(file_content, filename)
+                all_datasets = self._load_dm_file(self._model.in_memory_file)
 
             if not all_datasets:
                 raise DMFileLoadingError(filename)
-            
+
             return all_datasets
-            
+
         except DMFileLoadingError:
             raise DMFileLoadingError(f"Failed to load DM3/DM4 file: {filename}")
         except Exception as e:
             raise DMFileUploadError(e)
+        finally:
+            # Delete the temp file once the reader is done with it
+            if temp_path is not None:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+    def process_from_path(self, filepath: str) -> list[xr.Dataset]:
+        """
+        Load a DM file directly from a local path.
+        Bypasses the WebSocket/browser upload — no RAM buffering of the raw bytes.
+        """
+        if not os.path.isfile(filepath):
+            raise DMFileLoadingError(f"File not found: {filepath}")
+        all_datasets = self._load_dm_file(filepath)
+        if not all_datasets:
+            raise DMFileLoadingError(filepath)
+        return all_datasets
 
     # -- Private Methods --
 
@@ -96,8 +125,9 @@ class FileProcessorService:
             self._handle_file_error(exception)
             return []
         finally:
-            # Clean up in-memory file reference
-            del self._model.in_memory_file
+            # Clean up in-memory file reference (only present for byte-stream uploads)
+            if hasattr(self._model, 'in_memory_file'):
+                del self._model.in_memory_file
         
     def _store_metadata(self, infoDict: dict | None = None) -> None:
         """

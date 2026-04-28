@@ -67,6 +67,7 @@ class HomePageLeftSidebar(pn.Column):
                 margin=(0, 0, 20, 0)
         )
 
+        self._path_input = None  # kept for potential future use
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
             pn.Spacer(height=10),
@@ -88,7 +89,6 @@ class HomePageLeftSidebar(pn.Column):
             del self.dataset_info
             
     def _create_file_uploader(self) -> FileUploader:
-        """Create the main file uploader widget."""
         forceed_success = False # Set to True for testing purposes
         initial_filename = None
         all_datasets = self._model.app_state.all_datasets
@@ -110,4 +110,4 @@ class HomePageLeftSidebar(pn.Column):
             reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
             force_success=forceed_success,
             initial_filename=initial_filename
-        )  
+        )
