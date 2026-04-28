@@ -34,7 +34,6 @@ pyinstaller-hooks-contrib==2025.8
 pefile==2023.2.7
 pywin32-ctypes==0.2.3
 
-colorama==0.4.6
 
 # Desktop app support
 pywebview==6.0
