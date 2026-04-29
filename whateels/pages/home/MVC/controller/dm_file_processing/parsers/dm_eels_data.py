@@ -1,3 +1,4 @@
+import os
 
 import numpy as np
 from whateels.errors import *
@@ -226,13 +227,16 @@ class DM_EELS_data:
         READABLE_ERROR_MESSAGE = "Size_in_bytes / Number_of_items = {bSize} != from NumPy expected size for {nItems} = {dtype}"
 
         all_eels_data = []
+        if self._file is None:
+            raise ValueError("File handle is not initialized")
+        file_obj = self._file
 
         for _, image_data in self._all_spectral_info.items():
             idx = image_data[self._IMAGE_DATA][DATA_TYPE]
             try:
                 dtype = self._supported_dtypes[idx]
             except KeyError:
-                message = KEY_ERROR_MESSAGE.format(idx=idx, filename=self._file.name)
+                message = KEY_ERROR_MESSAGE.format(idx=idx, filename=getattr(file_obj, 'name', 'unknown'))
                 raise DMNonSupportedDataType(message)
 
             bSize = image_data[self._IMAGE_DATA][DATA][BYTES_SIZE]
@@ -244,18 +248,35 @@ class DM_EELS_data:
                 message = READABLE_ERROR_MESSAGE.format(bSize=bSize, nItems=nItems, dtype=dtype)
                 raise DMConflictingDataTypeRead(message)
 
-            self._file.seek(offset)  # Seek to the data offset
             shape = self.get_shape(image_data)
-            
-            # Read binary data and convert to numpy array (compatible with file-like objects)
-            bytes_to_read = nItems * np.dtype(dtype).itemsize
-            binary_data = self._file.read(bytes_to_read)
-            
-            if len(binary_data) != bytes_to_read:
-                raise ValueError(f"Expected to read {bytes_to_read} bytes, but got {len(binary_data)} bytes")
-            
-            # Convert binary data to numpy array with specified dtype
-            array_data = np.frombuffer(binary_data, dtype=dtype, count=nItems).reshape(shape)
+
+            # Prefer disk-backed memory mapping for real files. This avoids allocating
+            # one huge bytes object on every upload/reupload cycle.
+            file_name = getattr(file_obj, 'name', None)
+            can_memmap = isinstance(file_name, str) and os.path.isfile(file_name)
+
+            if can_memmap:
+                assert isinstance(file_name, str)
+                array_data = np.memmap(
+                    file_name,
+                    dtype=dtype,
+                    mode='r',
+                    offset=offset,
+                    shape=shape,
+                    order='C',
+                )
+            else:
+                # Fallback for in-memory file-like objects (e.g. BytesIO uploads).
+                file_obj.seek(offset)  # Seek to the data offset
+                bytes_to_read = nItems * np.dtype(dtype).itemsize
+                binary_data = file_obj.read(bytes_to_read)
+
+                if len(binary_data) != bytes_to_read:
+                    raise ValueError(f"Expected to read {bytes_to_read} bytes, but got {len(binary_data)} bytes")
+
+                # Convert binary data to numpy array with specified dtype
+                array_data = np.frombuffer(binary_data, dtype=dtype, count=nItems).reshape(shape)
+
             all_eels_data.append(array_data)
 
         return all_eels_data

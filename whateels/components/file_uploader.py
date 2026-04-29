@@ -10,7 +10,7 @@ class FileUploader(pn.Column):
 
     def __init__(
         self,
-        on_file_uploaded_callback: Optional[Callable[[str, bytes], None]] = None,
+        on_file_uploaded_callback: Optional[Callable[[str, bytes | str], None]] = None,
         on_file_removed_callback: Optional[Callable[[str], None]] = None,
         reject_message: str = "File upload failed.",
         valid_extensions: tuple = (".dm3", ".dm4"),
@@ -54,7 +54,7 @@ class FileUploader(pn.Column):
             self._show_success_message()
     
     @property
-    def on_file_uploaded_callback(self) -> Optional[Callable[[str, bytes], None]]:
+    def on_file_uploaded_callback(self) -> Optional[Callable[[str, bytes | str], None]]:
         """Callback for file upload events."""
         return self._on_file_uploaded_callback
     
@@ -64,7 +64,7 @@ class FileUploader(pn.Column):
         return self._on_file_removed_callback
     
     @on_file_uploaded_callback.setter
-    def on_file_uploaded_callback(self, callback: Optional[Callable[[str, bytes], None]]):
+    def on_file_uploaded_callback(self, callback: Optional[Callable[[str, bytes | str], None]]):
         """
         Set the callback function for file upload events.
         

@@ -30,6 +30,7 @@ class FileProcessorService:
         Init with model config.
         """
         self._model = model
+        self._active_temp_file_path: str | None = None
 
     # -- Public Methods --
 
@@ -49,18 +50,15 @@ class FileProcessorService:
                 # Load directly from the path — no RAM copy of the raw bytes.
                 temp_path = file_content
                 all_datasets = self._load_dm_file(temp_path)
+                self._active_temp_file_path = temp_path
             else:
                 # Small file: classic in-memory path.
                 self._model.in_memory_file = InMemoryFile(file_content, filename)
                 all_datasets = self._load_dm_file(self._model.in_memory_file)
+                self._active_temp_file_path = None
 
             if not all_datasets:
                 raise DMFileLoadingError(filename)
-
-            # Force xarray to materialize all lazy-loaded data into memory
-            # before we delete the temp file (prevents "unpack requires a buffer" errors)
-            for dataset in all_datasets:
-                dataset.load()
 
             return all_datasets
 
@@ -69,12 +67,22 @@ class FileProcessorService:
         except Exception as e:
             raise DMFileUploadError(e)
         finally:
-            # Delete the temp file once the reader is done with it
-            if temp_path is not None:
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
+            # Keep streamed temp files alive for the session; downstream plot/data
+            # objects may still lazily access them after this method returns.
+            # Cleanup is handled by explicit removal flows.
+            pass
+
+    def cleanup_active_temp_file(self) -> None:
+        """Delete the currently tracked streamed temp file, if any."""
+        if not self._active_temp_file_path:
+            return
+        try:
+            if os.path.exists(self._active_temp_file_path):
+                os.unlink(self._active_temp_file_path)
+        except OSError:
+            pass
+        finally:
+            self._active_temp_file_path = None
 
     def process_from_path(self, filepath: str) -> list[xr.Dataset]:
         """
