@@ -9,6 +9,7 @@ from whateels.errors.dm.parsing import (
     DMIdentifierError
 )
 from typing import List, Tuple, TextIO, Callable, Optional, Dict, Any
+import struct
 
 class DM_InfoParser:
     """
@@ -159,9 +160,11 @@ class DM_InfoParser:
                 if not childrenBlock_name:
                     childrenBlock_name = f"GroupBlock{noNameBlock}"  # NoNameBlock
                     noNameBlock += 1
-                nnames = self._read_ParentBlockSize_info(
-                    read_block_size=True
-                )  # Number of names inside
+                if self.version == 4:
+                    # DM4 nested tag groups contain an extra 8-byte field before
+                    # the group header (open/sorted flags + tag count).
+                    self.parser(self._file, "big")
+                nnames = self._read_ParentBlockSize_info()  # Number of names inside
 
                 info_dictionary[childrenBlock_name] = dict()
                 # Recursion !
@@ -187,35 +190,34 @@ class DM_InfoParser:
     def _read_ParentBlockSize_info(self, read_block_size: bool = False) -> int:
         """
         Read number of named subblocks in current block.
-        
-        For DM4 files, optionally reads block size if read_block_size=True.
+
+        Tag-group headers store only two flag bytes followed by the tag count.
+        The read_block_size parameter is kept for compatibility but ignored.
         """
         # Skip deprecated boolean flags (ordered/opened)
         self._file.seek(2, 1)
-
-        if self.version == 4 and read_block_size:
-            # Read block size for DM4 format
-            block_size = self.parser(self._file, "big")
 
         number_of_names = self.parser(self._file, "big")
         return number_of_names
 
     def _read_ChildrenBlock_header(self) -> Tuple[int, str]:
         """
-        Read header info for current child block.
-        
-        Returns
-        -------
-        tuple[int, str]
-            (identifier, block_name) where identifier indicates block type:
-            - 20: Contains subblocks (parent)
-            - 21: Contains data
+        Read the header of a ChildrenBlock and return its identifier and name.
+
+        Returns:
+            tuple: Identifier and name of the ChildrenBlock.
+
+        Raises:
+            struct.error: If the buffer size is insufficient.
         """
-        identifier = dec.read_byte(self._file, "big")  # a single byte integer used as index
-        # Reading the name - a string
-        length = dec.read_short(self._file, "big")  # a double byte integer
-        block_name = self._read_string(length)
-        return identifier, block_name
+        try:
+            identifier = dec.read_byte(self._file, "big")
+            # Tag label is prefixed by a 2-byte big-endian length in DM3/DM4.
+            name_length = dec.read_short(self._file, "big")
+            childrenBlock_name = self._read_string(name_length)
+            return identifier, childrenBlock_name
+        except struct.error as e:
+            raise struct.error(f"Failed to read ChildrenBlock header: {e}")
 
     def _read_DataType_info(self) -> Tuple[int, int]:
         """
@@ -379,7 +381,9 @@ class DM_InfoParser:
 
     def _catch_string_format(self):
         """Get string length from file header."""
-        length = self.parser(self._file, "big")
+        # DM string payload sizes are stored as a fixed 4-byte big-endian
+        # integer in both DM3 and DM4.
+        length = dec.read_long(self._file, "big")
         return {"length": length}
 
     def _read_string(self, length: int, methods: List | None = None) -> str:

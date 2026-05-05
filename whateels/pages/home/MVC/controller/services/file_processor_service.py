@@ -3,7 +3,11 @@ Processes DM3/DM4 files to xarray datasets for electron microscopy.
 Pipeline: validate → extract → clean → create dataset → attach metadata → output xarray Dataset
 """
 
+import logging
 import os, numpy as np, xarray as xr
+import struct
+
+_log = logging.getLogger(__name__)
 from whateels.errors.dm import (
     DMEmptyInfoDictionary, 
     DMNonEelsError, 
@@ -34,43 +38,55 @@ class FileProcessorService:
 
     # -- Public Methods --
 
-    def process_upload(self, filename: str, file_content: bytes | str) -> list[xr.Dataset]:
+    def process_upload(self, filename: str, file_content: str | bytes) -> list[xr.Dataset]:
         """
-        Process an uploaded file and return datasets.
+        Process the uploaded file by validating and parsing it.
 
-        file_content can be:
-          - bytes  → small file buffered in RAM (classic Panel upload)
-          - str    → path to a temp file on disk (DiskStreamingFileDropper,
-                     used for large files that would cause MemoryError in RAM)
+        Args:
+            filename (str): The name of the uploaded file.
+            file_content (str | bytes): The file content or path to the file.
+
+        Returns:
+            list: Parsed datasets from the file.
+
+        Raises:
+            DMFileUploadError: If the file upload or processing fails.
         """
-        temp_path = None
+        temp_path = file_content if isinstance(file_content, str) else self._save_temp_file(filename, file_content)
+
+        # Validate file size before parsing.
+        # DM4 header bytes 4-11 store the body length (total_size - 16).
+        # We warn on mismatch but do not abort — the parser will handle partial files.
+        on_disk_size = os.path.getsize(temp_path)
         try:
-            if isinstance(file_content, str):
-                # Large file: DiskStreamingFileDropper wrote chunks to a temp file.
-                # Load directly from the path — no RAM copy of the raw bytes.
-                temp_path = file_content
-                all_datasets = self._load_dm_file(temp_path)
-                self._active_temp_file_path = temp_path
-            else:
-                # Small file: classic in-memory path.
-                self._model.in_memory_file = InMemoryFile(file_content, filename)
-                all_datasets = self._load_dm_file(self._model.in_memory_file)
-                self._active_temp_file_path = None
+            with open(temp_path, "rb") as f:
+                header = f.read(12)
+            if len(header) >= 12:
+                dm_version = struct.unpack(">I", header[0:4])[0]
+                if dm_version == 4:
+                    body_len = struct.unpack(">Q", header[4:12])[0]
+                elif dm_version == 3:
+                    body_len = struct.unpack(">I", header[4:8])[0]
+                else:
+                    body_len = None
+                if body_len is not None:
+                    expected_total = body_len + 16
+                    if on_disk_size != expected_total:
+                        _log.warning(
+                            "[FileProcessor] Size mismatch for '%s': "
+                            "header expects %d bytes, on_disk=%d bytes (delta=%d). "
+                            "File may be incomplete — proceeding anyway.",
+                            filename, expected_total, on_disk_size, on_disk_size - expected_total,
+                        )
+        except Exception as exc:
+            _log.warning("[FileProcessor] Could not read DM header for size check: %s", exc)
 
-            if not all_datasets:
-                raise DMFileLoadingError(filename)
-
-            return all_datasets
-
-        except DMFileLoadingError:
-            raise DMFileLoadingError(f"Failed to load DM3/DM4 file: {filename}")
+        try:
+            all_datasets = self._load_dm_file(temp_path)
         except Exception as e:
             raise DMFileUploadError(e)
-        finally:
-            # Keep streamed temp files alive for the session; downstream plot/data
-            # objects may still lazily access them after this method returns.
-            # Cleanup is handled by explicit removal flows.
-            pass
+
+        return all_datasets
 
     def cleanup_active_temp_file(self) -> None:
         """Delete the currently tracked streamed temp file, if any."""
