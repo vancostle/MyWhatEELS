@@ -1,7 +1,7 @@
 import panel as pn
 
-from whateels.components import FileUploaderRosetta
 from whateels.helpers.constants import ASSETS_ROOT
+from whateels.components import FileDialogUploader
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -15,7 +15,6 @@ class HomePageLeftSidebar(pn.Column):
         self._model = model
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
-        self._file_uploader: FileUploaderRosetta = FileUploaderRosetta() # Placeholder, will be set up below
         self._welcome_message = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
         super().__init__(
@@ -23,10 +22,6 @@ class HomePageLeftSidebar(pn.Column):
             **kwargs
         )
 
-    @property
-    def file_uploader(self) -> FileUploaderRosetta:
-        """FileUploader widget for file upload interactions."""
-        return self._file_uploader
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
@@ -46,7 +41,7 @@ class HomePageLeftSidebar(pn.Column):
 
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
-        self._file_uploader = self._create_file_uploader()
+        self._file_dialog_uploader = FileDialogUploader()
 
         self._welcome_message = pn.Column(
             pn.pane.Markdown(
@@ -69,7 +64,7 @@ class HomePageLeftSidebar(pn.Column):
 
         self._path_input = None  # kept for potential future use
         self._sidebar_container_layout = pn.Column(
-            self._file_uploader,
+            self._file_dialog_uploader,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -88,22 +83,3 @@ class HomePageLeftSidebar(pn.Column):
             self.remove(self.dataset_info)
             del self.dataset_info
             
-    def _create_file_uploader(self) -> FileUploaderRosetta:
-        forceed_success = False # Set to True for testing purposes
-        initial_filename = None
-        all_datasets = self._model.app_state.all_datasets
-        if all_datasets is None:
-            all_datasets = []
-            
-        if isinstance(all_datasets, list) and len(all_datasets) > 0:
-            # If datasets are already loaded, we might want to show different sidebar content
-            forceed_success = True
-            filename_candidate = self._model.app_state.filename
-            # Ensure initial_filename is only str or None
-            if isinstance(filename_candidate, str) or filename_candidate is None:
-                initial_filename = filename_candidate
-            else:
-                initial_filename = None
-
-        # Set up the FileUploaderRosetta with model constants
-        return FileUploaderRosetta()

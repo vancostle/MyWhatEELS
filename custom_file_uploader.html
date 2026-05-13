@@ -21,6 +21,11 @@
             padding: 10px;
         }
 
+        h2, p {
+            font-size: .9rem;
+            font-weight: normal;
+        }
+
         .wrapper {
             width: 275px;
             height: 70px;
@@ -35,7 +40,7 @@
 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 
-            box-shadow: 0px 0px 3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
         }
 
         #file-zone {
@@ -53,8 +58,6 @@
             & > h2 {
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 color: #35373b;
-                font-size: 16px;
-                font-weight: normal;
 
                 max-width: 100%;
                 padding: 0 12px;
@@ -103,14 +106,13 @@
                 padding: .5rem 1rem;
                 gap: .5rem;
 
-                box-shadow: 0px 0px 3px rgba(0, 0, 0, 0.1);
+                box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.2);
                 color: white;
                 width: inherit;
 
                 & > p {
                     flex: 1;
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    font-size: 18px;
                     max-width: 100%;
                     padding: 0;
 
@@ -231,9 +233,9 @@
     </style>
 </head>
 <body>
-    <div class="wrapper">
+    <!-- <div class="wrapper">
         <section id="file-zone" title="Click to select a dm3 or dm4 file">
-            <h2>Click to select a dm3 or dm4 file wefwef wefwfwfwefwe werfwefwefew</h2>
+            <h2>Click to select a dm3 or dm4 file</h2>
         </section>
         <section class="loading state">
             <div>
@@ -271,46 +273,127 @@
         <button class="active-reading-file-button">
             Activate reading file
         </button>
-    </div>
+    </div> -->
 
 </body>
 <script>
-    const fileZone = document.querySelector('#file-zone');
-    fileZone.addEventListener('click', _ => {
-        console.log('clicked');
-    })
+    /* HEADER THE CODE TO CREATE THE WHOLE LAYOUT */
+    const createCustomFileUploader = _ => {
+        // Wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'wrapper';
 
-    const activeSuccessBtn = document.querySelector('.active-success-button');
-    const activeFailedBtn = document.querySelector('.active-failed-button');
-    const activeReadingFileBtn = document.querySelector('.active-reading-file-button');
+        // File zone
+        const fileZone = document.createElement('section');
+        fileZone.id = 'file-zone';
+        fileZone.title = 'Click to select a dm3 or dm4 file';
+        const fileZoneH2 = document.createElement('h2');
+        fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
+        fileZone.appendChild(fileZoneH2);
 
-    activeSuccessBtn.addEventListener('click', _ => {
-        const successSection = document.querySelector('.success');
-        successSection.classList.toggle('actived-success-state');
-    });
+        // Loading state
+        const loadingSection = document.createElement('section');
+        loadingSection.className = 'loading state';
+        const loadingDiv = document.createElement('div');
+        const loadingP = document.createElement('p');
+        loadingP.textContent = 'Reading file...';
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        loadingDiv.appendChild(loadingP);
+        loadingDiv.appendChild(spinner);
+        loadingSection.appendChild(loadingDiv);
 
-    activeFailedBtn.addEventListener('click', _ => {
-        const failedSection = document.querySelector('.failed');
-        failedSection.classList.toggle('actived-failed-state');
-    });
+        // Success state
+        const successSection = document.createElement('section');
+        successSection.className = 'success state';
+        const successDiv = document.createElement('div');
+        const successP = document.createElement('p');
+        successP.textContent = 'STEM SI_HL.dm4';
+        const removeSuccessBtn = document.createElement('button');
+        removeSuccessBtn.className = 'remove-file success';
+        removeSuccessBtn.addEventListener('click', _ => {
+            successSection.classList.remove('actived-success-state');
+            loadingSection.classList.remove('actived-reading-file-state');
+            failedSection.classList.remove('actived-failed-state');
+        });
+        successDiv.appendChild(successP);
+        successDiv.appendChild(removeSuccessBtn);
+        successSection.appendChild(successDiv);
 
-    activeReadingFileBtn.addEventListener('click', _ => {
-        const loadingSection = document.querySelector('.loading');
-        loadingSection.classList.toggle('actived-reading-file-state');
-    });
+        // Failed state
+        const failedSection = document.createElement('section');
+        failedSection.className = 'failed state';
+        const failedDiv = document.createElement('div');
+        const failedP = document.createElement('p');
+        failedP.textContent = 'Failed to upload file!';
+        const removeFailedBtn = document.createElement('button');
+        removeFailedBtn.className = 'remove-file failed';
+        removeFailedBtn.addEventListener('click', _ => {
+            failedSection.classList.remove('actived-failed-state');
+            loadingSection.classList.remove('actived-reading-file-state');
+            successSection.classList.remove('actived-success-state');
+        });
+        failedDiv.appendChild(failedP);
+        failedDiv.appendChild(removeFailedBtn);
+        failedSection.appendChild(failedDiv);
 
-    const removeFileSuccessBtn = document.querySelector('.remove-file.success');
-    const removeFileFailedBtn = document.querySelector('.remove-file.failed');
+        // Append all sections to wrapper
+        wrapper.appendChild(fileZone);
+        wrapper.appendChild(loadingSection);
+        wrapper.appendChild(successSection);
+        wrapper.appendChild(failedSection);
 
-    removeFileSuccessBtn.addEventListener('click', _ => {
-        const successSection = document.querySelector('.success');
+        // Control buttons
+        const controlsDiv = document.createElement('div');
+        const btnSuccess = document.createElement('button');
+        btnSuccess.className = 'active-success-button';
+        btnSuccess.textContent = 'Activate success';
+        const btnFailed = document.createElement('button');
+        btnFailed.className = 'active-failed-button';
+        btnFailed.textContent = 'Activate failed';
+        const btnLoading = document.createElement('button');
+        btnLoading.className = 'active-reading-file-button';
+        btnLoading.textContent = 'Activate reading file';
+        controlsDiv.appendChild(btnSuccess);
+        controlsDiv.appendChild(btnFailed);
+        controlsDiv.appendChild(btnLoading);
+
+        // Add to body
+        document.body.appendChild(wrapper);
+        document.body.appendChild(controlsDiv);
+    }
+
+    // Call the function after DOM is ready
+    createCustomFileUploader();
+</script>
+<script>
+    const fileZone = document.getElementById('file-zone');
+    const loadingSection = document.querySelector('section.loading');
+    const successSection = document.querySelector('section.success');
+    const failedSection = document.querySelector('section.failed');
+
+    const activateLoadingState = _ => {
+        loadingSection.classList.add('actived-reading-file-state');
         successSection.classList.remove('actived-success-state');
-    });
-
-    removeFileFailedBtn.addEventListener('click', _ => {
-        const failedSection = document.querySelector('.failed');
         failedSection.classList.remove('actived-failed-state');
-    });
+    }
+
+    const activateSuccessState = _ => {
+        successSection.classList.add('actived-success-state');
+        loadingSection.classList.remove('actived-reading-file-state');
+        failedSection.classList.remove('actived-failed-state');
+    }
+
+    const activateFailedState = _ => {
+        failedSection.classList.add('actived-failed-state');
+        loadingSection.classList.remove('actived-reading-file-state');
+        successSection.classList.remove('actived-success-state');
+    }
+
+    document.querySelector('.active-reading-file-button').addEventListener('click', activateLoadingState);
+    document.querySelector('.active-success-button').addEventListener('click', activateSuccessState);
+    document.querySelector('.active-failed-button').addEventListener('click', activateFailedState);
 
 </script>
+
 </html>

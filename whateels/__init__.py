@@ -54,7 +54,7 @@ class App:
 
         # Define the pages for the application
         pages = {
-            "/": _lazy(HomePage), # Use the Rosetta Stone version of the homepage
+            "/": _lazy(HomePageTest), # Use the Rosetta Stone version of the homepage
             # "/metadata-details": _lazy(Metadata),
             # "/clustering": _lazy(Clustering),
             # "/clustering-2": _lazy(Clustering2Page),
