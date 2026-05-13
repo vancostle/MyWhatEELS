@@ -10,6 +10,8 @@ class FileDialogUploader(JSComponent):
     error_message = param.String("Error reading file!", doc="Message shown if there is an error during file reading.")
     accepted_file_types = param.List(default=['.dm3', '.dm4'], doc="List of accepted file extensions for upload.")
     
+    file_selected_callback = param.Parameter(doc="Callback function to be called when a file is selected.")
+    
     _stylesheets = [
         """
             * {
@@ -238,7 +240,7 @@ class FileDialogUploader(JSComponent):
     ]
     
     _esm = """
-        const createCustomFileUploader = _ => {
+        const createCustomFileUploader = model => {
             // Wrapper
             const wrapper = document.createElement('div');
             wrapper.className = 'wrapper';
@@ -247,6 +249,9 @@ class FileDialogUploader(JSComponent):
             const fileZone = document.createElement('section');
             fileZone.id = 'file-zone';
             fileZone.title = 'Click to select a dm3 or dm4 file';
+            fileZone.addEventListener('click', event => {
+               model.send_event('file_selected_clicked', event); 
+            });
             const fileZoneH2 = document.createElement('h2');
             fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
             fileZone.appendChild(fileZoneH2);
@@ -307,7 +312,11 @@ class FileDialogUploader(JSComponent):
         }
 
         export function render({ model }) {
-            const fileDialogUploader = createCustomFileUploader();
+            const fileDialogUploader = createCustomFileUploader(model);
             return fileDialogUploader;
-        }
+        }        
     """
+    
+    def _handle_file_selected_clicked(self, event):
+        # This is just an example of how to handle the event in Python.
+        print("File selected clicked!", event)
