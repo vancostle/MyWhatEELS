@@ -1,0 +1,26 @@
+from whateels.templates import GeneralPageTemplate
+from .MVC import HomePageController, HomePageView, HomePageModel
+
+class HomePageTest(GeneralPageTemplate):
+    """
+    HomePageTest class for the WhatEELS application.
+    This class extends GeneralPageTemplate to create a specific home page layout for testing purposes.
+    """
+
+    def __init__(self):
+        # Model is created fresh each navigation — Panel's session lifecycle
+        # handles cleanup of the old session's resources automatically.
+        # AppState (user data) is preserved separately in pn.state.cache.
+        model = HomePageModel()
+        view = HomePageView(model)
+        HomePageController(model, view)
+
+        super().__init__(
+            title=model.constants.TITLE,
+            main=[view.main],
+            sidebar=[view.left_sidebar, view.left_sidebar.welcome_message],
+            right_sidebar=[view.right_sidebar],
+            sidebar_width=260,
+            right_sidebar_width=378,
+            collapsed_right_sidebar=True,
+        )

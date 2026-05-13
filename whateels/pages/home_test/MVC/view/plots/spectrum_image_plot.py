@@ -43,14 +43,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Homepage-specific state — must be set before super().__init__ triggers _setup_callbacks
         self._INACTIVITY_MS = 700
-        self._HOVER_DEBOUNCE_MS = 40  # Lower redraw pressure for smoother hover responsiveness.
-        self._HOVER_PIPE_THROTTLE_MS = 33  # Coalesce hover-driven paneB sends to ~30 FPS.
+        self._HOVER_DEBOUNCE_MS = 20  # 20 ms prevents event-queue pileup in the frozen exe while remaining imperceptible
         self._fitting_active = False
         self._last_hover_ts = None
         self._last_hover_render_ts = None  # tracks last time hover actually triggered a render
-        self._last_paneB_send_ts: int | None = None
-        self._pending_paneB_hover_fig = None
-        self._paneB_hover_flush_pending = False
         self._last_rendered_pixel: tuple[int, int] | None = None  # pixel-level dedup: skip if same (i,j)
         self._pc = None
         self._paneB_reset_stream = None
@@ -613,7 +609,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             point = {"x": 0, "y": 0}
         i, j = round(point["y"]), round(point["x"])
         try:
-            spec = self._get_display_numpy()[i, j, :]
+            spec = self._get_display_numpy()[i, j, :].astype(float)
         except Exception:
             spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
         return self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
@@ -772,7 +768,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return False
         return True
 
-    def _show_spectrum(self, *, point=None, region_pairs=None, is_hover_event: bool = False):
+    def _show_spectrum(self, *, point=None, region_pairs=None):
         """
         Unified helper to extract spectrum (from point or region), apply fitting if needed, and update paneB.
         """
@@ -784,7 +780,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if not region_pairs:
                 # No region selected, show message or hover
                 if self._last_hover_point is not None:
-                    self._show_spectrum(point=self._last_hover_point, is_hover_event=is_hover_event)
+                    self._show_spectrum(point=self._last_hover_point)
                 return
             res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), region_pairs)
             if res is not None:
@@ -806,7 +802,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Use cached numpy array — avoids xarray conversion and eliminates the
             # previous double-extraction (spec was computed then discarded for _figB_hover).
             try:
-                spec = self._get_display_numpy()[i, j, :]
+                spec = self._get_display_numpy()[i, j, :].astype(float)
             except Exception:
                 spec = get_pixel_spectrum(self._get_display_data(), point)
             fig = self._build_spectrum_curve(spec, title)
@@ -816,7 +812,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
                 except Exception:
                     pass
-        self._update_paneB(fig, from_hover=is_hover_event)
+        self._update_paneB(fig)
 
     # --- Helper methods now imported from utils/plot_helpers.py ---
     def _refresh_paneB(self):
@@ -886,88 +882,43 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             fig = self._figB_hover(default_point)
         self._update_paneB(fig)
         
-    def _send_paneB_fig(self, fig):
-        if self._paneB_pipe is None:
-            return
-        # Always send an hv.Overlay so the DynamicMap type stays consistent
-        # (mixing plain Curve and Overlay causes an AssertionError in the cache).
-        if fig is not None and not isinstance(fig, hv.Overlay):
-            fig = hv.Overlay([fig])
-        self._debug_paneB_state("update_paneB_before_send")
-        # Push the new element through the pipe — Bokeh updates data in-place
-        # without rebuilding the whole model tree, avoiding the stale-reference warning.
-        self._paneB_pipe.send(self._set_ranges_and_convert(fig))
-        self._last_paneB_send_ts = self._now_ms()
-
-        # Keep the live Bokeh reset baseline pinned to the full spectrum, but only
-        # schedule once — not on every hover frame.
-        if getattr(self, '_paneB_reset_baseline_dirty', True) and not getattr(self, '_paneB_reset_baseline_pending', False):
-            try:
-                doc = pn.state.curdoc
-                if doc is not None:
-                    self._paneB_reset_baseline_pending = True
-                    def _sync_and_clear():
-                        self._sync_paneB_reset_baseline()
-                        self._paneB_reset_baseline_dirty = False
-                        self._paneB_reset_baseline_pending = False
-                    doc.add_next_tick_callback(_sync_and_clear)
-            except Exception:
-                pass
-        # Only attach range callbacks when the model is new or was reset,
-        # and only schedule the callback once, not on every hover frame.
-        if self._paneB_attached_model_id is None and not getattr(self, '_paneB_range_cb_pending', False):
-            try:
-                doc = pn.state.curdoc
-                if doc is not None:
-                    self._paneB_range_cb_pending = True
-                    def _ensure_and_clear():
-                        self._ensure_paneB_range_callbacks()
-                        self._paneB_range_cb_pending = False
-                    doc.add_next_tick_callback(_ensure_and_clear)
-            except Exception:
-                pass
-
-    def _flush_pending_hover_send(self):
-        self._paneB_hover_flush_pending = False
-        fig = self._pending_paneB_hover_fig
-        self._pending_paneB_hover_fig = None
-        if fig is None:
-            return
-        self._send_paneB_fig(fig)
-
-    def _update_paneB(self, fig, from_hover: bool = False):
-        if self._paneB_pipe is None:
-            return
-
-        if not from_hover:
-            self._pending_paneB_hover_fig = None
-            self._send_paneB_fig(fig)
-            return
-
-        now = self._now_ms()
-        if self._last_paneB_send_ts is None:
-            self._send_paneB_fig(fig)
-            return
-
-        elapsed = now - int(self._last_paneB_send_ts)
-        remaining = int(self._HOVER_PIPE_THROTTLE_MS - elapsed)
-        if remaining <= 0:
-            self._send_paneB_fig(fig)
-            return
-
-        # Coalesce bursty hover frames and flush only the latest one.
-        self._pending_paneB_hover_fig = fig
-        if self._paneB_hover_flush_pending:
-            return
-
-        doc = pn.state.curdoc
-        if doc is None:
-            return
-        try:
-            self._paneB_hover_flush_pending = True
-            doc.add_timeout_callback(self._flush_pending_hover_send, remaining)
-        except Exception:
-            self._paneB_hover_flush_pending = False
+    def _update_paneB(self, fig):
+        if self._paneB_pipe is not None:
+            # Always send an hv.Overlay so the DynamicMap type stays consistent
+            # (mixing plain Curve and Overlay causes an AssertionError in the cache).
+            if fig is not None and not isinstance(fig, hv.Overlay):
+                fig = hv.Overlay([fig])
+            self._debug_paneB_state("update_paneB_before_send")
+            # Push the new element through the pipe — Bokeh updates data in-place
+            # without rebuilding the whole model tree, avoiding the stale-reference warning.
+            self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+            # Keep the live Bokeh reset baseline pinned to the full spectrum, but only
+            # schedule once — not on every hover frame.
+            if getattr(self, '_paneB_reset_baseline_dirty', True) and not getattr(self, '_paneB_reset_baseline_pending', False):
+                try:
+                    doc = pn.state.curdoc
+                    if doc is not None:
+                        self._paneB_reset_baseline_pending = True
+                        def _sync_and_clear():
+                            self._sync_paneB_reset_baseline()
+                            self._paneB_reset_baseline_dirty = False
+                            self._paneB_reset_baseline_pending = False
+                        doc.add_next_tick_callback(_sync_and_clear)
+                except Exception:
+                    pass
+            # Only attach range callbacks when the model is new or was reset,
+            # and only schedule the callback once, not on every hover frame.
+            if self._paneB_attached_model_id is None and not getattr(self, '_paneB_range_cb_pending', False):
+                try:
+                    doc = pn.state.curdoc
+                    if doc is not None:
+                        self._paneB_range_cb_pending = True
+                        def _ensure_and_clear():
+                            self._ensure_paneB_range_callbacks()
+                            self._paneB_range_cb_pending = False
+                        doc.add_next_tick_callback(_ensure_and_clear)
+                except Exception:
+                    pass
 
     @override
     def _set_ranges_and_convert(self, fig):
@@ -1986,11 +1937,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._last_rendered_pixel = current_pixel
 
         if self._region_pairs:
-            self._show_spectrum(point=point, region_pairs=self._region_pairs, is_hover_event=True)
+            self._show_spectrum(point=point, region_pairs=self._region_pairs)
             self._last_hover_ts = now
             start_pc(self._pc)
         else:
-            self._show_spectrum(point=point, is_hover_event=True)
+            self._show_spectrum(point=point)
             stop_pc(self._pc)
             self._last_hover_ts = None
 

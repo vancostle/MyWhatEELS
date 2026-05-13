@@ -9,4 +9,5 @@ from .simple_details import SimpleDetails
 from .details import Details
 from .splitjs import SplitJs
 from .modal_manager import ModalManager
+from .file_uploader_rosetta import FileUploaderRosetta
 from .modals import * # Import all modals
