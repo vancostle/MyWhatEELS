@@ -1,6 +1,4 @@
-import panel as pn
-import param
-
+import panel as pn, param, subprocess, os
 from panel.custom import JSComponent
 
 class FileDialogUploader(JSComponent):
@@ -30,6 +28,13 @@ class FileDialogUploader(JSComponent):
             
             .file-dialog-uploader {
                 flex: 1;
+                
+                &:hover {
+                    cursor: pointer;
+                    & h2 {
+                        text-decoration: underline;
+                    }    
+                }
             }
 
             .wrapper {
@@ -71,16 +76,7 @@ class FileDialogUploader(JSComponent):
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                }
-
-                &:hover {
-                    background-color: rgb(240, 240, 240);
-                    cursor: pointer;
-                    border-color: rgb(43, 43, 43);
-
-                    & > h2 {
-                        color: rgb(43, 43, 43);
-                    }
+                    
                 }
             }
 
@@ -126,6 +122,25 @@ class FileDialogUploader(JSComponent):
                         overflow: hidden;
                         text-overflow: ellipsis;
                     }
+                }
+            }
+            
+            section.state.opening {
+                top: 150%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+
+                & > div {
+                    background-color: #a0aec0;
+                }
+
+                & .spinner {
+                    border: 4px solid rgba(255, 255, 255, 0.3);
+                    border-top: 4px solid white;
+                    border-radius: 50%;
+                    width: 24px;
+                    height: 24px;
+                    animation: spin 1s linear infinite;
                 }
             }
 
@@ -219,6 +234,10 @@ class FileDialogUploader(JSComponent):
                     background-color: white;
                 }
             }
+            
+            section.state.opening.actived-opening-dialog-state {
+                transform: translate(-50%, -150%);
+            }
 
             section.state.loading.actived-reading-file-state {
                 transform: translate(-50%, 50%);
@@ -250,11 +269,28 @@ class FileDialogUploader(JSComponent):
             fileZone.id = 'file-zone';
             fileZone.title = 'Click to select a dm3 or dm4 file';
             fileZone.addEventListener('click', event => {
-               model.send_event('file_selected_clicked', event); 
+                openingSection.classList.add('actived-opening-dialog-state');
+                loadingSection.classList.remove('actived-reading-file-state');
+                successSection.classList.remove('actived-success-state');
+                failedSection.classList.remove('actived-failed-state');
+
+                model.send_event('file_selected_clicked', event); 
             });
             const fileZoneH2 = document.createElement('h2');
             fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
             fileZone.appendChild(fileZoneH2);
+            
+            // Opening state
+            const openingSection = document.createElement('section');
+            openingSection.className = 'opening state';
+            const openingDiv = document.createElement('div');
+            const openingP = document.createElement('p');
+            openingP.textContent = 'Opening dialog...';
+            const openingSpinner = document.createElement('div');
+            openingSpinner.className = 'spinner';
+            openingDiv.appendChild(openingP);
+            openingDiv.appendChild(openingSpinner);
+            openingSection.appendChild(openingDiv);
 
             // Loading state
             const loadingSection = document.createElement('section');
@@ -304,6 +340,7 @@ class FileDialogUploader(JSComponent):
 
             // Append all sections to wrapper
             wrapper.appendChild(fileZone);
+            wrapper.appendChild(openingSection);
             wrapper.appendChild(loadingSection);
             wrapper.appendChild(successSection);
             wrapper.appendChild(failedSection);
@@ -317,6 +354,24 @@ class FileDialogUploader(JSComponent):
         }        
     """
     
-    def _handle_file_selected_clicked(self, event):
-        # This is just an example of how to handle the event in Python.
-        print("File selected clicked!", event)
+    def _handle_file_selected_clicked(self, _):
+
+        _OPEN_DIALOG_PS = """\
+            Add-Type -AssemblyName System.Windows.Forms
+            $d = New-Object System.Windows.Forms.OpenFileDialog
+            $d.Title  = 'Select a DigitalMicrograph file'
+            $d.Filter = 'DigitalMicrograph (*.dm3;*.dm4)|*.dm3;*.dm4|All files (*.*)|*.*'
+            $d.Multiselect = $false
+            if ($d.ShowDialog() -eq 'OK') { Write-Output $d.FileName }
+        """
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", _OPEN_DIALOG_PS],
+            capture_output=True, text=True,
+        )
+        path = result.stdout.strip()
+        if path and os.path.isfile(path):
+            print(f"Selected file: {path}")
+            # Here you could trigger a JS event or update a param to notify the frontend
+        else:
+            print("No file selected.")
+            
