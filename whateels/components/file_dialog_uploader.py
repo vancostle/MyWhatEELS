@@ -1,7 +1,64 @@
-import panel as pn, param, subprocess, os
+import panel as pn, param, os, ctypes
+from ctypes import wintypes
 from panel.custom import JSComponent
 
 class FileDialogUploader(JSComponent):
+
+    class _OPENFILENAMEW(ctypes.Structure):
+        _fields_ = [
+            ("lStructSize", wintypes.DWORD),
+            ("hwndOwner", wintypes.HWND),
+            ("hInstance", wintypes.HINSTANCE),
+            ("lpstrFilter", wintypes.LPCWSTR),
+            ("lpstrCustomFilter", wintypes.LPWSTR),
+            ("nMaxCustFilter", wintypes.DWORD),
+            ("nFilterIndex", wintypes.DWORD),
+            ("lpstrFile", wintypes.LPWSTR),
+            ("nMaxFile", wintypes.DWORD),
+            ("lpstrFileTitle", wintypes.LPWSTR),
+            ("nMaxFileTitle", wintypes.DWORD),
+            ("lpstrInitialDir", wintypes.LPCWSTR),
+            ("lpstrTitle", wintypes.LPCWSTR),
+            ("Flags", wintypes.DWORD),
+            ("nFileOffset", wintypes.WORD),
+            ("nFileExtension", wintypes.WORD),
+            ("lpstrDefExt", wintypes.LPCWSTR),
+            ("lCustData", wintypes.LPARAM),
+            ("lpfnHook", wintypes.LPVOID),
+            ("lpTemplateName", wintypes.LPCWSTR),
+            ("pvReserved", wintypes.LPVOID),
+            ("dwReserved", wintypes.DWORD),
+            ("FlagsEx", wintypes.DWORD),
+        ]
+
+    @staticmethod
+    def _open_windows_file_dialog() -> str:
+        OFN_FILEMUSTEXIST = 0x00001000
+        OFN_PATHMUSTEXIST = 0x00000800
+        OFN_EXPLORER = 0x00080000
+        OFN_HIDEREADONLY = 0x00000004
+
+        file_buffer = ctypes.create_unicode_buffer(65536)
+        filter_value = "DigitalMicrograph (*.dm3;*.dm4)\0*.dm3;*.dm4\0All files (*.*)\0*.*\0\0"
+
+        ofn = FileDialogUploader._OPENFILENAMEW()
+        ofn.lStructSize = ctypes.sizeof(FileDialogUploader._OPENFILENAMEW)
+        ofn.hwndOwner = ctypes.windll.user32.GetForegroundWindow()
+        ofn.lpstrFilter = filter_value
+        ofn.nFilterIndex = 1
+        ofn.lpstrFile = ctypes.cast(file_buffer, wintypes.LPWSTR)
+        ofn.nMaxFile = len(file_buffer)
+        ofn.lpstrTitle = "Select a DigitalMicrograph file"
+        ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY
+
+        selected = ctypes.windll.comdlg32.GetOpenFileNameW(ctypes.byref(ofn))
+        if selected:
+            return file_buffer.value.strip()
+
+        error_code = ctypes.windll.comdlg32.CommDlgExtendedError()
+        if error_code != 0:
+            print(f"Win32 dialog error code: {error_code}")
+        return ""
     
     default_message = param.String("Click to select a file", doc="Default message shown in the uploader area.")
     reading_message = param.String("Loading...", doc="Message shown while a file is being read.")
@@ -9,7 +66,11 @@ class FileDialogUploader(JSComponent):
     accepted_file_types = param.List(default=['.dm3', '.dm4'], doc="List of accepted file extensions for upload.")
     
     file_selected_callback = param.Parameter(doc="Callback function to be called when a file is selected.")
-    
+
+    def __init__(self, **params):
+        super().__init__(**params)
+        self.on_event('file_selected_clicked', self._handle_file_selected_clicked)
+
     _stylesheets = [
         """
             * {
@@ -274,7 +335,7 @@ class FileDialogUploader(JSComponent):
                 successSection.classList.remove('actived-success-state');
                 failedSection.classList.remove('actived-failed-state');
 
-                model.send_event('file_selected_clicked', event); 
+                model.send_event('file_selected_clicked', {}); 
             });
             const fileZoneH2 = document.createElement('h2');
             fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
@@ -355,23 +416,13 @@ class FileDialogUploader(JSComponent):
     """
     
     def _handle_file_selected_clicked(self, _):
+        print("File selection triggered in JS, opening file dialog in Python...")
+        path = self._open_windows_file_dialog()
 
-        _OPEN_DIALOG_PS = """\
-            Add-Type -AssemblyName System.Windows.Forms
-            $d = New-Object System.Windows.Forms.OpenFileDialog
-            $d.Title  = 'Select a DigitalMicrograph file'
-            $d.Filter = 'DigitalMicrograph (*.dm3;*.dm4)|*.dm3;*.dm4|All files (*.*)|*.*'
-            $d.Multiselect = $false
-            if ($d.ShowDialog() -eq 'OK') { Write-Output $d.FileName }
-        """
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", _OPEN_DIALOG_PS],
-            capture_output=True, text=True,
-        )
-        path = result.stdout.strip()
         if path and os.path.isfile(path):
             print(f"Selected file: {path}")
             # Here you could trigger a JS event or update a param to notify the frontend
         else:
             print("No file selected.")
-            
+        
+        print("File selection process completed.")
