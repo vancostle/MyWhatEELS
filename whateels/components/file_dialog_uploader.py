@@ -67,10 +67,6 @@ class FileDialogUploader(JSComponent):
     
     file_selected_callback = param.Parameter(doc="Callback function to be called when a file is selected.")
 
-    def __init__(self, **params):
-        super().__init__(**params)
-        self.on_event('file_selected_clicked', self._handle_file_selected_clicked)
-
     _stylesheets = [
         """
             * {
@@ -423,6 +419,7 @@ class FileDialogUploader(JSComponent):
             print(f"Selected file: {path}")
             # Here you could trigger a JS event or update a param to notify the frontend
         else:
+            self._send_event(_)
             print("No file selected.")
         
         print("File selection process completed.")
