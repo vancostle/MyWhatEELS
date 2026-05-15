@@ -85,10 +85,10 @@
                     padding: .5rem;
                     border-radius: 4px;
                     border: 1px solid #ccc;
+                    width: 100%;
                 }
 
                 & input[type="submit"] {
-                    /* flex: 1; */
                     width: auto;
                     background-color: #3182ce;
                     color: white;
@@ -319,6 +319,7 @@
     </style>
 </head>
 <body>
+    <!--
     <div class="component-wrapper">
         <div class="file-uploader-wrapper">
             <section id="file-zone" title="Click to select a dm3 or dm4 file">
@@ -358,9 +359,9 @@
             </section>
         </div>
         <div class="path-option-wrapper">
-            <form>
+            <form >
                 <input type="text" placeholder="Or paste the file path here">
-                <input type="submit" value="Submit">
+                <input type="submit" value="Ok">
             </form>
         </div>
     </div>
@@ -379,116 +380,138 @@
             Activate reading file
         </button>
     </div>
+    -->
 </body>
 <script>
-    // /* HEADER THE CODE TO CREATE THE WHOLE LAYOUT */
-    // const createCustomFileUploader = _ => {
-    //     // Wrapper
-    //     const wrapper = document.createElement('div');
-    //     wrapper.className = 'wrapper';
+    /* HEADER THE CODE TO CREATE THE WHOLE LAYOUT */
+    const createCustomFileUploader = _ => {
+        // Component wrapper
+        const componentWrapper = document.createElement('div');
+        componentWrapper.className = 'component-wrapper';
 
-    //     // File zone
-    //     const fileZone = document.createElement('section');
-    //     fileZone.id = 'file-zone';
-    //     fileZone.title = 'Click to select a dm3 or dm4 file';
-    //     const fileZoneH2 = document.createElement('h2');
-    //     fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
-    //     fileZone.appendChild(fileZoneH2);
+        // File uploader wrapper
+        const fileUploaderWrapper = document.createElement('div');
+        fileUploaderWrapper.className = 'file-uploader-wrapper';
 
-    //     // Opening state
-    //     const openingSection = document.createElement('section');
-    //     openingSection.className = 'opening state';
-    //     const openingDiv = document.createElement('div');
-    //     const openingP = document.createElement('p');
-    //     openingP.textContent = 'Opening dialog...';
-    //     const openingSpinner = document.createElement('div');
-    //     openingSpinner.className = 'spinner';
-    //     openingDiv.appendChild(openingP);
-    //     openingDiv.appendChild(openingSpinner);
-    //     openingSection.appendChild(openingDiv);
+        // File zone
+        const fileZone = document.createElement('section');
+        fileZone.id = 'file-zone';
+        fileZone.title = 'Click to select a dm3 or dm4 file';
+        const fileZoneH2 = document.createElement('h2');
+        fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
+        fileZone.appendChild(fileZoneH2);
 
-    //     // Loading state
-    //     const loadingSection = document.createElement('section');
-    //     loadingSection.className = 'loading state';
-    //     const loadingDiv = document.createElement('div');
-    //     const loadingP = document.createElement('p');
-    //     loadingP.textContent = 'Reading file...';
-    //     const spinner = document.createElement('div');
-    //     spinner.className = 'spinner';
-    //     loadingDiv.appendChild(loadingP);
-    //     loadingDiv.appendChild(spinner);
-    //     loadingSection.appendChild(loadingDiv);
+        // Opening state
+        const openingSection = document.createElement('section');
+        openingSection.className = 'opening state';
+        const openingDiv = document.createElement('div');
+        const openingP = document.createElement('p');
+        openingP.textContent = 'Opening dialog...';
+        const openingSpinner = document.createElement('div');
+        openingSpinner.className = 'spinner';
+        openingDiv.appendChild(openingP);
+        openingDiv.appendChild(openingSpinner);
+        openingSection.appendChild(openingDiv);
 
-    //     // Success state
-    //     const successSection = document.createElement('section');
-    //     successSection.className = 'success state';
-    //     const successDiv = document.createElement('div');
-    //     const successP = document.createElement('p');
-    //     successP.textContent = 'STEM SI_HL.dm4';
-    //     const removeSuccessBtn = document.createElement('button');
-    //     removeSuccessBtn.className = 'remove-file success';
-    //     removeSuccessBtn.addEventListener('click', _ => {
-    //         openingSection.classList.remove('actived-opening-dialog-state');
-    //         successSection.classList.remove('actived-success-state');
-    //         loadingSection.classList.remove('actived-reading-file-state');
-    //         failedSection.classList.remove('actived-failed-state');
-    //     });
-    //     successDiv.appendChild(successP);
-    //     successDiv.appendChild(removeSuccessBtn);
-    //     successSection.appendChild(successDiv);
+        // Loading state
+        const loadingSection = document.createElement('section');
+        loadingSection.className = 'loading state';
+        const loadingDiv = document.createElement('div');
+        const loadingP = document.createElement('p');
+        loadingP.textContent = 'Reading file...';
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        loadingDiv.appendChild(loadingP);
+        loadingDiv.appendChild(spinner);
+        loadingSection.appendChild(loadingDiv);
 
-    //     // Failed state
-    //     const failedSection = document.createElement('section');
-    //     failedSection.className = 'failed state';
-    //     const failedDiv = document.createElement('div');
-    //     const failedP = document.createElement('p');
-    //     failedP.textContent = 'Failed to upload file!';
-    //     const removeFailedBtn = document.createElement('button');
-    //     removeFailedBtn.className = 'remove-file failed';
-    //     removeFailedBtn.addEventListener('click', _ => {
-    //         openingSection.classList.remove('actived-opening-dialog-state');
-    //         failedSection.classList.remove('actived-failed-state');
-    //         loadingSection.classList.remove('actived-reading-file-state');
-    //         successSection.classList.remove('actived-success-state');
-    //     });
-    //     failedDiv.appendChild(failedP);
-    //     failedDiv.appendChild(removeFailedBtn);
-    //     failedSection.appendChild(failedDiv);
+        // Success state
+        const successSection = document.createElement('section');
+        successSection.className = 'success state';
+        const successDiv = document.createElement('div');
+        const successP = document.createElement('p');
+        successP.textContent = 'STEM SI_HL.dm4';
+        const removeSuccessBtn = document.createElement('button');
+        removeSuccessBtn.className = 'remove-file success';
+        removeSuccessBtn.addEventListener('click', _ => {
+            openingSection.classList.remove('actived-opening-dialog-state');
+            successSection.classList.remove('actived-success-state');
+            loadingSection.classList.remove('actived-reading-file-state');
+            failedSection.classList.remove('actived-failed-state');
+        });
+        successDiv.appendChild(successP);
+        successDiv.appendChild(removeSuccessBtn);
+        successSection.appendChild(successDiv);
 
-    //     // Append all sections to wrapper
-    //     wrapper.appendChild(fileZone);
-    //     wrapper.appendChild(openingSection);
-    //     wrapper.appendChild(loadingSection);
-    //     wrapper.appendChild(successSection);
-    //     wrapper.appendChild(failedSection);
+        // Failed state
+        const failedSection = document.createElement('section');
+        failedSection.className = 'failed state';
+        const failedDiv = document.createElement('div');
+        const failedP = document.createElement('p');
+        failedP.textContent = 'Failed to upload file!';
+        const removeFailedBtn = document.createElement('button');
+        removeFailedBtn.className = 'remove-file failed';
+        removeFailedBtn.addEventListener('click', _ => {
+            openingSection.classList.remove('actived-opening-dialog-state');
+            failedSection.classList.remove('actived-failed-state');
+            loadingSection.classList.remove('actived-reading-file-state');
+            successSection.classList.remove('actived-success-state');
+        });
+        failedDiv.appendChild(failedP);
+        failedDiv.appendChild(removeFailedBtn);
+        failedSection.appendChild(failedDiv);
 
-    //     // Control buttons
-    //     const controlsDiv = document.createElement('div');
-    //     const btnSuccess = document.createElement('button');
-    //     btnSuccess.className = 'active-success-button';
-    //     btnSuccess.textContent = 'Activate success';
-    //     const btnFailed = document.createElement('button');
-    //     btnFailed.className = 'active-failed-button';
-    //     btnFailed.textContent = 'Activate failed';
-    //     const btnLoading = document.createElement('button');
-    //     btnLoading.className = 'active-reading-file-button';
-    //     btnLoading.textContent = 'Activate reading file';
-    //     const btnOpenDialog = document.createElement('button');
-    //     btnOpenDialog.className = 'active-open-dialog-button';
-    //     btnOpenDialog.textContent = 'Activate open dialog';
+        // Append all sections to fileUploaderWrapper
+        fileUploaderWrapper.appendChild(fileZone);
+        fileUploaderWrapper.appendChild(openingSection);
+        fileUploaderWrapper.appendChild(loadingSection);
+        fileUploaderWrapper.appendChild(successSection);
+        fileUploaderWrapper.appendChild(failedSection);
 
-    //     controlsDiv.appendChild(btnOpenDialog);
-    //     controlsDiv.appendChild(btnSuccess);
-    //     controlsDiv.appendChild(btnFailed);
-    //     controlsDiv.appendChild(btnLoading);
+        // Path option wrapper
+        const pathOptionWrapper = document.createElement('div');
+        pathOptionWrapper.className = 'path-option-wrapper';
+        const form = document.createElement('form');
+        const inputText = document.createElement('input');
+        inputText.type = 'text';
+        inputText.placeholder = 'Or paste the file path here';
+        const inputSubmit = document.createElement('input');
+        inputSubmit.type = 'submit';
+        inputSubmit.value = 'Ok';
+        form.appendChild(inputText);
+        form.appendChild(inputSubmit);
+        pathOptionWrapper.appendChild(form);
+
+        // Add wrappers to componentWrapper
+        componentWrapper.appendChild(fileUploaderWrapper);
+        componentWrapper.appendChild(pathOptionWrapper);
+
+        // Controls (outside componentWrapper)
+        const controlsDiv = document.createElement('div');
+        const btnOpenDialog = document.createElement('button');
+        btnOpenDialog.className = 'active-open-dialog-button';
+        btnOpenDialog.textContent = 'Activate open dialog';
+        const btnSuccess = document.createElement('button');
+        btnSuccess.className = 'active-success-button';
+        btnSuccess.textContent = 'Activate success';
+        const btnFailed = document.createElement('button');
+        btnFailed.className = 'active-failed-button';
+        btnFailed.textContent = 'Activate failed';
+        const btnLoading = document.createElement('button');
+        btnLoading.className = 'active-reading-file-button';
+        btnLoading.textContent = 'Activate reading file';
+        controlsDiv.appendChild(btnOpenDialog);
+        controlsDiv.appendChild(btnSuccess);
+        controlsDiv.appendChild(btnFailed);
+        controlsDiv.appendChild(btnLoading);
 
         // Add to body
-        // document.body.appendChild(wrapper);
-        // document.body.appendChild(controlsDiv);
-    // }
+        document.body.appendChild(componentWrapper);
+        document.body.appendChild(controlsDiv);
+    }
 
     // Call the function after DOM is ready
-    // createCustomFileUploader();
+    createCustomFileUploader();
 </script>
 <script>
     const fileZone = document.getElementById('file-zone');
