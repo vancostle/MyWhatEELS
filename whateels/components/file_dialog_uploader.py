@@ -330,6 +330,7 @@ class FileDialogUploader(JSComponent):
     ]
     
     _esm = """
+
         const createCustomFileUploader = model => {
             // Component wrapper
             const componentWrapper = document.createElement('div');
@@ -343,13 +344,6 @@ class FileDialogUploader(JSComponent):
             const fileZone = document.createElement('section');
             fileZone.id = 'file-zone';
             fileZone.title = 'Click to select a dm3 or dm4 file';
-            fileZone.addEventListener('click', event => {
-                openingSection.classList.add('actived-opening-dialog-state');
-                loadingSection.classList.remove('actived-reading-file-state');
-                successSection.classList.remove('actived-success-state');
-                failedSection.classList.remove('actived-failed-state');
-                model.send_event('file_selected_clicked', {});
-            });
             const fileZoneH2 = document.createElement('h2');
             fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
             fileZone.appendChild(fileZoneH2);
@@ -387,10 +381,7 @@ class FileDialogUploader(JSComponent):
             const removeSuccessBtn = document.createElement('button');
             removeSuccessBtn.className = 'remove-file success';
             removeSuccessBtn.addEventListener('click', _ => {
-                openingSection.classList.remove('actived-opening-dialog-state');
-                successSection.classList.remove('actived-success-state');
-                loadingSection.classList.remove('actived-reading-file-state');
-                failedSection.classList.remove('actived-failed-state');
+                removeAllStates(openingSection, loadingSection, successSection, failedSection);
             });
             successDiv.appendChild(successP);
             successDiv.appendChild(removeSuccessBtn);
@@ -405,14 +396,49 @@ class FileDialogUploader(JSComponent):
             const removeFailedBtn = document.createElement('button');
             removeFailedBtn.className = 'remove-file failed';
             removeFailedBtn.addEventListener('click', _ => {
-                openingSection.classList.remove('actived-opening-dialog-state');
-                failedSection.classList.remove('actived-failed-state');
-                loadingSection.classList.remove('actived-reading-file-state');
-                successSection.classList.remove('actived-success-state');
+                removeAllStates(openingSection, loadingSection, successSection, failedSection);
             });
             failedDiv.appendChild(failedP);
             failedDiv.appendChild(removeFailedBtn);
             failedSection.appendChild(failedDiv);
+
+            // State activation functions (now that all elements are declared)
+            const activeOpeningDialogState = () => {
+                openingSection.classList.add('actived-opening-dialog-state');
+                loadingSection.classList.remove('actived-reading-file-state');
+                successSection.classList.remove('actived-success-state');
+                failedSection.classList.remove('actived-failed-state');
+            }
+            const activeReadingFileState = () => {
+                loadingSection.classList.add('actived-reading-file-state');
+                openingSection.classList.remove('actived-opening-dialog-state');
+                successSection.classList.remove('actived-success-state');
+                failedSection.classList.remove('actived-failed-state');
+            }
+            const activeSuccessState = () => {
+                successSection.classList.add('actived-success-state');
+                openingSection.classList.remove('actived-opening-dialog-state');
+                loadingSection.classList.remove('actived-reading-file-state');
+                failedSection.classList.remove('actived-failed-state');
+            }
+            const activeFailedState = () => {
+                failedSection.classList.add('actived-failed-state');
+                openingSection.classList.remove('actived-opening-dialog-state');
+                loadingSection.classList.remove('actived-reading-file-state');
+                successSection.classList.remove('actived-success-state');
+            }
+            const removeAllStates = () => {
+                openingSection.classList.remove('actived-opening-dialog-state');
+                loadingSection.classList.remove('actived-reading-file-state');
+                successSection.classList.remove('actived-success-state');
+                failedSection.classList.remove('actived-failed-state');
+            }
+
+            // File zone event
+            fileZone.addEventListener('click', event => {
+                activeOpeningDialogState();
+                model.send_event('file_selected_clicked', {});
+            });
 
             // Append all sections to fileUploaderWrapper
             fileUploaderWrapper.appendChild(fileZone);
@@ -433,19 +459,15 @@ class FileDialogUploader(JSComponent):
             inputSubmit.value = 'Ok';
             form.addEventListener('submit', event => {
                 event.preventDefault();
-                
-                inputText.disabled = true;
-                inputSubmit.disabled = true;
 
-                loadingSection.classList.add('actived-reading-file-state');
-                openingSection.classList.remove('actived-opening-dialog-state');
-                successSection.classList.remove('actived-success-state');
-                failedSection.classList.remove('actived-failed-state');
-
-                const filePath = inputText.value;
+                const filePath = inputText.value.trim();
                 if (filePath) {
+                    inputText.disabled = true;
+                    inputSubmit.disabled = true;
+
+                    activeReadingFileState();
                     console.log(`File path submitted: ${filePath}`);
-                    // Optionally: self._send_event('file_path_submitted', data={'path': filePath})
+                    model.send_msg({ type: 'file_path_submitted', path: filePath });
                 }
             });
             form.appendChild(inputText);
@@ -466,13 +488,18 @@ class FileDialogUploader(JSComponent):
     """
     
     def _handle_file_selected_clicked(self, event):
-        print("File selection triggered in JS, opening file dialog in Python...")
+        print("Received 'file_selected_clicked' event from JS, opening file dialog...")
         path = self._open_windows_file_dialog()
-
         if path and os.path.isfile(path):
             print(f"Selected file: {path}")
             # Optionally: self._send_event('file_selected', data={'path': path})
         else:
             print("No file selected.")
-
         print("File selection process completed.")
+
+    def _handle_msg(self, msg):
+        if isinstance(msg, dict) and msg.get("type") == "file_path_submitted":
+            path = msg.get("path")
+            print(f"Received file path via msg: {path}")
+            # Add your logic for handling the submitted file path here
+            print("File path submission process completed.")
