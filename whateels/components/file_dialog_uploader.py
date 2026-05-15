@@ -432,7 +432,19 @@ class FileDialogUploader(JSComponent):
                 loadingSection.classList.remove('actived-reading-file-state');
                 successSection.classList.remove('actived-success-state');
                 failedSection.classList.remove('actived-failed-state');
+                inputText.disabled = false;
+                inputSubmit.disabled = false;
             }
+
+            // Listen for backend->frontend custom messages
+            model.on('msg:custom', msg => {
+                if (msg?.type === 'activate_failed_state') {
+                    activeFailedState();
+                }
+                if (msg?.type === 'remove_all_state') {
+                    removeAllStates();
+                }
+            });
 
             // File zone event
             fileZone.addEventListener('click', event => {
@@ -488,18 +500,20 @@ class FileDialogUploader(JSComponent):
     """
     
     def _handle_file_selected_clicked(self, event):
-        print("Received 'file_selected_clicked' event from JS, opening file dialog...")
         path = self._open_windows_file_dialog()
         if path and os.path.isfile(path):
             print(f"Selected file: {path}")
             # Optionally: self._send_event('file_selected', data={'path': path})
         else:
-            print("No file selected.")
-        print("File selection process completed.")
+            self._send_msg({'type': 'remove_all_state'})
 
-    def _handle_msg(self, msg):
+    def _handle_msg(self, msg): # type: ignore
         if isinstance(msg, dict) and msg.get("type") == "file_path_submitted":
             path = msg.get("path")
-            print(f"Received file path via msg: {path}")
-            # Add your logic for handling the submitted file path here
-            print("File path submission process completed.")
+            if path and os.path.isfile(path):
+                print(f"Selected file: {path}")
+                # Optionally: self._send_event('file_selected', data={'path': path})
+            else:
+                # Notify JS to activate the failed state
+                self._send_msg({'type': 'activate_failed_state'})
+                
