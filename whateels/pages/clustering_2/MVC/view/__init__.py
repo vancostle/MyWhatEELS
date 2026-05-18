@@ -93,7 +93,7 @@ class Clustering2PageView:
             grid[row, col] = column_wrapper
             delay += delay_increment
 
-        self._main.append(self._main.umap_wrapper) # Ensure the UMAP wrapper is in the main layout
+        self._main.append_once(self._main.umap_wrapper) # Ensure the UMAP wrapper is in the main layout
         self._main.umap_wrapper.append(grid)
         return self._result_panels
 
