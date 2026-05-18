@@ -150,6 +150,9 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         self._current_x_range = None
         self._current_y_range = None
         self._paneB_pipe.send(overlay)
+        if self.paneB is not None:
+            self.paneB.object = self._paneB_dmap
+            self.paneB.object = overlay
 
     # ------------------------------------------------------------------ #
     # HoloViews stream overrides                                           #
