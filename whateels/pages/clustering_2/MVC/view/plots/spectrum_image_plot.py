@@ -39,6 +39,7 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         self._cluster_labels_2d: np.ndarray | None = None   # (ny, nx) int labels
         self._cluster_centers: dict[int, np.ndarray] = {}   # label → mean spectrum (1-D)
         self._cmap_colors: list[str] = []                    # hex colour per unique label
+        self._current_norm: str = 'none'                     # normalization used for paneB spectra
 
         super().__init__(dataset, eloss_name, paneA_select_tools=['hover'])
 
@@ -46,7 +47,7 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
     # Public API                                                           #
     # ------------------------------------------------------------------ #
 
-    def update_hdbscan_results(self, hdbscan_results, cmap_obj: dict, electron_count_data=None) -> None:
+    def update_hdbscan_results(self, hdbscan_results, cmap_obj: dict, electron_count_data=None, available_norm: str = 'none') -> None:
         """
         Swap paneA to the HDBSCAN cluster label map and paneB to mean spectra.
 
@@ -59,7 +60,10 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
                                  "use preprocessed" switch is on). When provided, the
                                  plot's internal data and energy axis are updated to match
                                  so that mean spectra are drawn with the correct Eloss range.
+            available_norm:      Normalization method used before UMAP/HDBSCAN.
         """
+        self._current_norm = str(available_norm).lower()
+
         if electron_count_data is not None:
             self._electron_count_data = electron_count_data
             try:
@@ -137,7 +141,7 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
 
         overlay = hv.NdOverlay(curves_dict).opts(
             xlabel='Energy Loss (eV)',
-            ylabel='Intensity (a.u.)',
+            ylabel=self._get_intensity_ylabel(),
             title='Centroids of HDBSCAN on the UMAP embedding',
             legend_position='top_right',
             responsive=True,
@@ -153,6 +157,12 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         if self.paneB is not None:
             self.paneB.object = self._paneB_dmap
             self.paneB.object = overlay
+
+    def _get_intensity_ylabel(self) -> str:
+        """Return the paneB intensity label for the active normalization."""
+        if self._current_norm and self._current_norm != 'none':
+            return f'Normalized intensity ({self._current_norm})'
+        return 'Intensity (a.u.)'
 
     # ------------------------------------------------------------------ #
     # HoloViews stream overrides                                           #
@@ -172,4 +182,5 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         self._cluster_labels_2d = None
         self._cluster_centers = {}
         self._cmap_colors = []
+        self._current_norm = 'none'
         super().cleanup()

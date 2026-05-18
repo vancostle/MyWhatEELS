@@ -60,6 +60,20 @@ class UMAP_HDBSCAN:
         finite_data = np.where(np.isfinite(data_2d), data_2d, 0.0)
         return normalize(finite_data, norm=norm, axis=1, copy=True)
 
+    def get_electron_count_data_for_norm(self, available_norm: str):
+        """Return a DataArray shaped like ElectronCount after applying the selected norm."""
+        norm = str(available_norm).lower()
+        if norm == 'none':
+            return self._electron_count_data.copy()
+
+        data_2d = self._get_reshaped_data()
+        if data_2d is None:
+            raise ValueError("Could not prepare data for normalization.")
+
+        normalized_2d = self._apply_normalization(data_2d, norm)
+        normalized_values = normalized_2d.reshape(self._electron_count_data.shape)
+        return self._electron_count_data.copy(data=normalized_values)
+
     def _get_reshaped_data(self) -> Optional[np.ndarray]:
         """Reshape electron count data to 2D array for UMAP processing.
 

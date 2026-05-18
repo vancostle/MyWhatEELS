@@ -284,6 +284,7 @@ class Clustering2PageController:
         embedding_obj = selected_umap_dict
         # If embedding_obj is a dict or has 'embedding_' attribute, extract the array
         embedding = getattr(embedding_obj, 'embedding_', embedding_obj)
+        available_norm = getattr(embedding_obj, 'whateels_norm', 'none')
         # Get HDBSCAN parameters from UI
         min_samples = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_samples, default=4)
         min_cluster_size = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_cluster_size, default=100)
@@ -299,7 +300,8 @@ class Clustering2PageController:
         self._spectrum_plot.update_hdbscan_results(
             hdbscan_results,
             cmap_obj,
-            electron_count_data=self._hdbscan._electron_count_data,
+            electron_count_data=self._hdbscan.get_electron_count_data_for_norm(available_norm),
+            available_norm=available_norm,
         )
         self._view.main.hdbscan_wrapper.append(self._spectrum_plot_layout)
         
