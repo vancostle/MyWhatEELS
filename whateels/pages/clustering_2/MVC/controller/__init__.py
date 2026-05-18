@@ -153,6 +153,7 @@ class Clustering2PageController:
         self._view.left_sidebar.disable_controls()  # Disable controls in the left sidebar during computation
         self._view.right_sidebar.disable_hdbscan_controls()  # Disable hdbscan controls in the right sidebar during computation
         
+        available_norm = str(self._view.right_sidebar.params.available_norms)
         min_dist_list = self._view.right_sidebar.params.min_dist
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
         n_components = SafeConverter.to_int(self._view.right_sidebar.params.n_components, default=2)
@@ -170,7 +171,7 @@ class Clustering2PageController:
         
         # Wait a moment for UI to render before starting calculations
         pn.state.add_periodic_callback(
-            lambda: self._start_compute_umap_embedding(combinations, result_panels, n_components, metric),
+            lambda: self._start_compute_umap_embedding(combinations, result_panels, n_components, metric, available_norm),
             period=1000,  # 1000ms delay to let UI render
             count=1
         )
@@ -180,7 +181,8 @@ class Clustering2PageController:
         combinations : list[tuple[float, int]], 
         result_panels, 
         n_components : int, 
-        metric : str
+        metric : str,
+        available_norm : str,
     ) -> None:
         """Start UMAP calculation sequentially for each combination."""
         
@@ -228,7 +230,7 @@ class Clustering2PageController:
             def compute_and_callback():
                 # This runs in a separate thread to avoid blocking UI
                 nonlocal n_components, metric
-                umap_data = self._compute_umap_embedding_event(min_dist, n_neighbors, n_components, metric)
+                umap_data = self._compute_umap_embedding_event(min_dist, n_neighbors, n_components, metric, available_norm)
                 self._model.umap_data_dict.update(umap_data) # Get UMAP data
                 # Execute callback on main thread (thread-safe method for Panel)
                 pn.state.execute(on_complete)
@@ -239,6 +241,7 @@ class Clustering2PageController:
                     index, 
                     min_dist, 
                     n_neighbors, 
+                    available_norm,
                     self._model.umap_data_dict,
                 )
                 
@@ -254,7 +257,7 @@ class Clustering2PageController:
         # Start with the first placeholder
         process_next(index=0)
         
-    def _compute_umap_embedding_event(self, min_dist: float, n_neighbors: int, n_components: int, metric: str) -> dict:
+    def _compute_umap_embedding_event(self, min_dist: float, n_neighbors: int, n_components: int, metric: str, available_norm: str) -> dict:
         """Event handler for computing UMAP embedding when the button is clicked."""
 
         umap_data_dicts = dict()
@@ -263,7 +266,8 @@ class Clustering2PageController:
             min_dist,
             n_neighbors,
             n_components,
-            metric
+            metric,
+            available_norm,
         )
         
         umap_data_dicts.update(umap_data_dict)
@@ -326,7 +330,9 @@ class Clustering2PageController:
         
         combinations = [(min_dist, n_neighbors)]
         self._view.display_all_combination_placeholders(combinations)
-        self._view.replace_placeholder_with_umap_embedding(0, min_dist, n_neighbors, umap_data_dict)
+        umap_obj = next(iter(umap_data_dict.values()))
+        norm = getattr(umap_obj, 'whateels_norm', 'none')
+        self._view.replace_placeholder_with_umap_embedding(0, min_dist, n_neighbors, norm, umap_data_dict)
     
     def _on_file_removed(self) -> None:
         """Event handler for when file is removed."""

@@ -97,11 +97,17 @@ class Clustering2PageView:
         self._main.umap_wrapper.append(grid)
         return self._result_panels
 
-    def replace_placeholder_with_umap_embedding(self, index, min_dist, n_neighbors, umap_data_dict: dict):
+    def replace_placeholder_with_umap_embedding(self, index, min_dist, n_neighbors, available_norm, umap_data_dict: dict):
         """Replace a placeholder at the given index with a UMAP plot."""
         
         if index < len(self._result_columns):
-            emb = umap_data_dict[f'umap_data_{min_dist}_{n_neighbors}'].embedding_
+            preferred_key = f'umap_data_{available_norm}_{min_dist}_{n_neighbors}'
+            legacy_key = f'umap_data_{min_dist}_{n_neighbors}'
+            umap_key = preferred_key if preferred_key in umap_data_dict else legacy_key
+            if umap_key not in umap_data_dict:
+                umap_key = next(iter(umap_data_dict))
+
+            emb = umap_data_dict[umap_key].embedding_
             
             # Create Holoviews Points plot
             zers = np.zeros((emb.shape[0], 3))
@@ -119,7 +125,7 @@ class Clustering2PageView:
                 color='steelblue',
                 show_legend=False,
                 shared_axes=False,
-                title=f'UMAP on min_dist={min_dist}, n_neighbors={n_neighbors}',
+                title=f'UMAP on norm={available_norm}, min_dist={min_dist}, n_neighbors={n_neighbors}',
                 responsive=True
             )
             

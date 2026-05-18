@@ -53,14 +53,16 @@ class Clustering2LeftSidebarLayout(pn.Column):
             umap_obj = self._model.loaded_umap_data
             min_dist = umap_obj.min_dist
             n_neighbors = umap_obj.n_neighbors
+            available_norm = getattr(umap_obj, 'whateels_norm', 'none')
             
             # Create dict with the same format as computed data
             umap_data_dict = {
-                f'umap_data_{min_dist}_{n_neighbors}': umap_obj
+                f'umap_data_{available_norm}_{min_dist}_{n_neighbors}': umap_obj
             }
             
             # Display info using DatasetInformation component
             info_dict = {
+                "available_norms": available_norm,
                 "min_dist": min_dist,
                 "n_neighbors": n_neighbors,
                 "n_components": umap_obj.n_components,

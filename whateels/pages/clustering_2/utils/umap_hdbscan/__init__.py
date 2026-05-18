@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import holoviews as hv
 import xarray as xr
 import panel as pn
+from sklearn.preprocessing import normalize
 
 from typing import TYPE_CHECKING, Optional, Any
 if TYPE_CHECKING:
@@ -24,11 +25,16 @@ class UMAP_HDBSCAN:
         n_neighbors : int = 15,
         n_components : int = 2,
         metric : str = 'euclidean',
+        available_norm : str = 'none',
         random_state : int = 1
         
     ) -> tuple[Any, dict]:
         """ Compute UMAP embedding of the image spectra image. """
         data_2d = self._get_reshaped_data()
+        if data_2d is None:
+            raise ValueError("Could not prepare data for UMAP embedding.")
+
+        data_2d = self._apply_normalization(data_2d, available_norm)
         
         mapper = umap.UMAP(
             n_neighbors=n_neighbors,
@@ -38,11 +44,21 @@ class UMAP_HDBSCAN:
             metric=metric
         )
         embedding = mapper.fit_transform(data_2d)
+        mapper.whateels_norm = available_norm
         
         umap_data_dict = dict()
-        umap_data_dict['umap_data_{}_{}'.format(min_dist, n_neighbors)] = mapper
+        umap_data_dict['umap_data_{}_{}_{}'.format(available_norm, min_dist, n_neighbors)] = mapper
         
         return embedding, umap_data_dict
+
+    def _apply_normalization(self, data_2d: np.ndarray, available_norm: str) -> np.ndarray:
+        """Apply row-wise normalization before UMAP, preserving raw data when requested."""
+        norm = str(available_norm).lower()
+        if norm == 'none':
+            return data_2d
+
+        finite_data = np.where(np.isfinite(data_2d), data_2d, 0.0)
+        return normalize(finite_data, norm=norm, axis=1, copy=True)
 
     def _get_reshaped_data(self) -> Optional[np.ndarray]:
         """Reshape electron count data to 2D array for UMAP processing.
