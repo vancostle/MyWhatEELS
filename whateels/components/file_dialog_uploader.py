@@ -324,6 +324,13 @@ class FileDialogUploader(JSComponent):
     
     _esm = """
         const createCustomFileUploader = model => {
+            const acceptedExtensions = Array.isArray(model.accepted_file_types)
+                ? model.accepted_file_types.filter(ext => !!ext)
+                : [];
+            const extensionsLabel = acceptedExtensions.length
+                ? acceptedExtensions.join(' or ')
+                : 'file';
+
             const componentWrapper = document.createElement('div');
             componentWrapper.className = 'component-wrapper';
 
@@ -333,9 +340,9 @@ class FileDialogUploader(JSComponent):
             // File zone
             const fileZone = document.createElement('section');
             fileZone.id = 'file-zone';
-            fileZone.title = 'Click to select a dm3 or dm4 file';
+            fileZone.title = `Click to select a ${extensionsLabel}`;
             const fileZoneH2 = document.createElement('h2');
-            fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
+            fileZoneH2.textContent = `Click to select a ${extensionsLabel}`;
             fileZone.appendChild(fileZoneH2);
 
             // Opening state
@@ -486,10 +493,39 @@ class FileDialogUploader(JSComponent):
             return fileDialogUploader;
         }
     """
+
+    @staticmethod
+    def _normalize_extensions(extensions: object) -> list[str]:
+        normalized: list[str] = []
+        if not isinstance(extensions, (list, tuple, set)):
+            return normalized
+
+        for ext in extensions:
+            candidate = str(ext).strip().lower()
+            if not candidate:
+                continue
+            if not candidate.startswith('.'):
+                candidate = f".{candidate}"
+            if candidate not in normalized:
+                normalized.append(candidate)
+        return normalized
+
+    def _accepted_extensions(self) -> list[str]:
+        return self._normalize_extensions(getattr(self, "accepted_file_types", []))
+
+    def _is_allowed_file(self, path: str) -> bool:
+        if not os.path.isfile(path):
+            return False
+
+        extensions = self._accepted_extensions()
+        if not extensions:
+            return True
+
+        return os.path.splitext(path)[1].lower() in set(extensions)
     
     def _handle_file_selected_clicked(self, event):
-        path = open_native_file_dialog()
-        if path and os.path.isfile(path):
+        path = open_native_file_dialog(self._accepted_extensions())
+        if path and self._is_allowed_file(path):
             print(f"Selected file: {path}")
             # Optionally: self._send_event('file_selected', data={'path': path})
         else:
@@ -500,7 +536,7 @@ class FileDialogUploader(JSComponent):
             raw_path = msg.get("path")
             path = str(raw_path).strip() if raw_path is not None else ""
             print(f"Manual path submitted: {path}")
-            if path and os.path.isfile(path):
+            if path and self._is_allowed_file(path):
                 print(f"Selected file: {path}")
                 # Optionally: self._send_event('file_selected', data={'path': path})
             else:

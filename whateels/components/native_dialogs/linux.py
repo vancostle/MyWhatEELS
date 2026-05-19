@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+from collections.abc import Sequence
 from typing import Iterable
 
 
@@ -16,8 +17,20 @@ def _resolve_executable(command: str, absolute_fallbacks: Iterable[str]) -> str 
     return None
 
 
-def _is_supported_dm_file(path: str) -> bool:
-    return os.path.splitext(path)[1].lower() in {".dm3", ".dm4"}
+def _normalize_extensions(accepted_file_types: Sequence[str] | None) -> list[str]:
+    if not accepted_file_types:
+        return []
+
+    normalized: list[str] = []
+    for ext in accepted_file_types:
+        candidate = str(ext).strip().lower()
+        if not candidate:
+            continue
+        if not candidate.startswith("."):
+            candidate = f".{candidate}"
+        if candidate not in normalized:
+            normalized.append(candidate)
+    return normalized
 
 
 def _run_dialog(command: list[str]) -> str:
@@ -45,7 +58,7 @@ def _run_dialog(command: list[str]) -> str:
     return ""
 
 
-def open_linux_file_dialog() -> str:
+def open_linux_file_dialog(accepted_file_types: Sequence[str] | None = None) -> str:
     """Open a native Linux file dialog and return the selected path.
 
     Tries common desktop utilities in order:
@@ -54,18 +67,24 @@ def open_linux_file_dialog() -> str:
     3) yad
     Returns empty string on cancel or if no backend is available.
     """
+    extensions = _normalize_extensions(accepted_file_types)
+    extension_globs = " ".join(f"*{ext}" for ext in extensions) if extensions else "*"
+    extension_human = ", ".join(extensions) if extensions else "*"
+
     zenity = _resolve_executable("zenity", ("/usr/bin/zenity", "/bin/zenity"))
     if zenity:
         selected = _run_dialog([
             zenity,
             "--file-selection",
-            "--title=Select a DigitalMicrograph file",
-            "--file-filter=DigitalMicrograph files | *.dm3 *.dm4",
+            "--title=Select a file",
+            f"--file-filter=Supported files ({extension_human}) | {extension_globs}",
             "--file-filter=All files | *",
         ])
-        if not selected or _is_supported_dm_file(selected):
+        if not selected:
             return selected
-        print(f"Linux dialog selected unsupported file type: {selected}")
+        if not extensions or os.path.splitext(selected)[1].lower() in set(extensions):
+            return selected
+        print(f"Linux dialog selected unsupported file type: {selected}. Allowed: {', '.join(extensions)}")
         return ""
 
     kdialog = _resolve_executable("kdialog", ("/usr/bin/kdialog", "/bin/kdialog"))
@@ -74,13 +93,15 @@ def open_linux_file_dialog() -> str:
             kdialog,
             "--getopenfilename",
             "",
-            "*.dm3 *.dm4|DigitalMicrograph files\n*|All files",
+            f"{extension_globs}|Supported files ({extension_human})\n*|All files",
             "--title",
-            "Select a DigitalMicrograph file",
+            "Select a file",
         ])
-        if not selected or _is_supported_dm_file(selected):
+        if not selected:
             return selected
-        print(f"Linux dialog selected unsupported file type: {selected}")
+        if not extensions or os.path.splitext(selected)[1].lower() in set(extensions):
+            return selected
+        print(f"Linux dialog selected unsupported file type: {selected}. Allowed: {', '.join(extensions)}")
         return ""
 
     yad = _resolve_executable("yad", ("/usr/bin/yad", "/bin/yad"))
@@ -88,13 +109,15 @@ def open_linux_file_dialog() -> str:
         selected = _run_dialog([
             yad,
             "--file-selection",
-            "--title=Select a DigitalMicrograph file",
-            "--file-filter=DigitalMicrograph files (*.dm3 *.dm4) | *.dm3 *.dm4",
+            "--title=Select a file",
+            f"--file-filter=Supported files ({extension_human}) | {extension_globs}",
             "--file-filter=All files (*) | *",
         ])
-        if not selected or _is_supported_dm_file(selected):
+        if not selected:
             return selected
-        print(f"Linux dialog selected unsupported file type: {selected}")
+        if not extensions or os.path.splitext(selected)[1].lower() in set(extensions):
+            return selected
+        print(f"Linux dialog selected unsupported file type: {selected}. Allowed: {', '.join(extensions)}")
         return ""
 
     print("No supported Linux dialog backend found (zenity, kdialog, or yad).")

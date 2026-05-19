@@ -1,20 +1,42 @@
 import os
 import subprocess
+from collections.abc import Sequence
 
 
-def _is_supported_dm_file(path: str) -> bool:
-    return os.path.splitext(path)[1].lower() in {".dm3", ".dm4"}
+def _normalize_extensions(accepted_file_types: Sequence[str] | None) -> list[str]:
+    if not accepted_file_types:
+        return []
+
+    normalized: list[str] = []
+    for ext in accepted_file_types:
+        candidate = str(ext).strip().lower()
+        if not candidate:
+            continue
+        if not candidate.startswith("."):
+            candidate = f".{candidate}"
+        if candidate not in normalized:
+            normalized.append(candidate)
+    return normalized
 
 
-def open_macos_file_dialog() -> str:
+def open_macos_file_dialog(accepted_file_types: Sequence[str] | None = None) -> str:
     """Open a native macOS file dialog and return the selected path."""
     osascript = "/usr/bin/osascript" if os.path.exists("/usr/bin/osascript") else "osascript"
+    extensions = _normalize_extensions(accepted_file_types)
 
-    applescript = (
-        'set selectedFile to choose file with prompt "Select a DigitalMicrograph file" '
-        'without invisibles and multiple selections allowed false\n'
-        'POSIX path of selectedFile'
-    )
+    if extensions:
+        applescript_extensions = ", ".join(f'"{ext.lstrip(".")}"' for ext in extensions)
+        applescript = (
+            'set selectedFile to choose file with prompt "Select a file" '
+            f'of type {{{applescript_extensions}}} without invisibles and multiple selections allowed false\n'
+            'POSIX path of selectedFile'
+        )
+    else:
+        applescript = (
+            'set selectedFile to choose file with prompt "Select a file" '
+            'without invisibles and multiple selections allowed false\n'
+            'POSIX path of selectedFile'
+        )
 
     try:
         result = subprocess.run(
@@ -32,10 +54,13 @@ def open_macos_file_dialog() -> str:
         if not selected:
             return ""
 
-        if _is_supported_dm_file(selected):
+        if not extensions:
             return selected
 
-        print(f"macOS dialog selected unsupported file type: {selected}")
+        if os.path.splitext(selected)[1].lower() in set(extensions):
+            return selected
+
+        print(f"macOS dialog selected unsupported file type: {selected}. Allowed: {', '.join(extensions)}")
         return ""
 
     stderr = (result.stderr or "").strip()
