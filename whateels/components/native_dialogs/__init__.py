@@ -12,4 +12,14 @@ def open_native_file_dialog() -> str:
 
         return open_windows_file_dialog()
 
+    if sys.platform == "darwin":
+        from .macos import open_macos_file_dialog
+
+        return open_macos_file_dialog()
+
+    if sys.platform.startswith("linux"):
+        from .linux import open_linux_file_dialog
+
+        return open_linux_file_dialog()
+
     return ""

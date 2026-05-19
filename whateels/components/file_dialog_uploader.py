@@ -1,4 +1,4 @@
-import panel as pn, param, os
+import param, os
 from panel.custom import JSComponent
 from .native_dialogs import open_native_file_dialog
 
