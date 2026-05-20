@@ -10,13 +10,15 @@ class FileDialogUploader(JSComponent):
     error_message = param.String("Error reading file!", doc="Message shown if there is an error during file reading.")
     accepted_file_types = param.List(default=['.dm3', '.dm4'], doc="List of accepted file extensions for upload.")
     opening_dialog_message = param.String("Opening dialog...", doc="Message shown while the file dialog is open.")
-    
+    # When non-empty the component renders already in success state (back-navigation).
+    initial_filepath = param.String("", doc="Full path of a pre-loaded file. Shows success state on initial render.")
 
     def __init__(self, *args, on_file_uploaded_callback=None, on_file_removed_callback=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.on_file_uploaded_callback = on_file_uploaded_callback
         self.on_file_removed_callback = on_file_removed_callback
-        self._current_selected_path: str | None = None
+        # Restore tracked path from initial_filepath (back-navigation scenario).
+        self._current_selected_path: str | None = self.initial_filepath or None # type: ignore
 
     _stylesheets = [
         """
@@ -487,6 +489,9 @@ class FileDialogUploader(JSComponent):
                 if (msg?.type === 'remove_all_state') {
                     removeAllStates();
                 }
+                if (msg?.type === 'activate_reading_file_state') {
+                    activateReadingFileState();
+                }
                 if (msg?.type === 'file_selected' && msg?.path) {
                     activateSuccessState(msg.filename, msg.path);
                 }
@@ -566,6 +571,14 @@ class FileDialogUploader(JSComponent):
             componentWrapper.appendChild(wrapper);
             componentWrapper.appendChild(pathOptionWrapper);
 
+            // Restore success state when navigating back to a page that already
+            // has a file loaded (equivalent to FileUploader's force_success).
+            if (model.initial_filepath) {
+                const fp = model.initial_filepath;
+                const fname = fp.split(/[\\/]/).pop();
+                activateSuccessState(fname, fp);
+            }
+
             return componentWrapper;
         };
 
@@ -604,34 +617,17 @@ class FileDialogUploader(JSComponent):
 
         return os.path.splitext(path)[1].lower() in set(extensions)
 
-    def _call_uploaded_callback(self, path: str) -> None:
-        if not callable(self.on_file_uploaded_callback):
-            return
-
-        filename = os.path.basename(path)
-        try:
-            self.on_file_uploaded_callback(filename, path)
-        except TypeError:
-            # Backward compatibility with single-argument callbacks.
-            self.on_file_uploaded_callback(path)
-
-    def _call_removed_callback(self, path: str) -> None:
-        if not callable(self.on_file_removed_callback):
-            return
-
-        filename = os.path.basename(path)
-        try:
-            self.on_file_removed_callback(filename)
-        except TypeError:
-            # Backward compatibility with no-argument callbacks.
-            self.on_file_removed_callback()
-    
     def _handle_file_selected_clicked(self, event):
         path = open_native_file_dialog(self._accepted_extensions())
         if path and self._is_allowed_file(path):
+            filename = os.path.basename(path)
             self._current_selected_path = path
-            self._send_msg({'type': 'file_selected', 'path': path, 'filename': os.path.basename(path)})
-            self._call_uploaded_callback(path)
+            # Show reading state briefly while callback runs, then success.
+            # Mirrors FileUploader: store → show UI → call callback.
+            self._send_msg({'type': 'activate_reading_file_state'})
+            if callable(self.on_file_uploaded_callback):
+                self.on_file_uploaded_callback(filename, path)
+            self._send_msg({'type': 'file_selected', 'path': path, 'filename': filename})
         else:
             self._send_msg({'type': 'remove_all_state'})
 
@@ -640,17 +636,18 @@ class FileDialogUploader(JSComponent):
             raw_path = msg.get("path")
             path = str(raw_path).strip() if raw_path is not None else ""
             if path and self._is_allowed_file(path):
+                filename = os.path.basename(path)
                 self._current_selected_path = path
-                self._send_msg({'type': 'file_selected', 'path': path, 'filename': os.path.basename(path)})
-                self._call_uploaded_callback(path)
+                # JS already shows reading state on form submit.
+                if callable(self.on_file_uploaded_callback):
+                    self.on_file_uploaded_callback(filename, path)
+                self._send_msg({'type': 'file_selected', 'path': path, 'filename': filename})
             else:
                 self._send_msg({'type': 'activate_failed_state'})
 
-        if isinstance(msg, dict) and msg.get("type") == "remove_selected_file":
-            raw_path = msg.get("path")
-            path = str(raw_path).strip() if raw_path is not None else ""
-            removed_path = path or self._current_selected_path
-            if removed_path:
-                self._call_removed_callback(removed_path)
+        elif isinstance(msg, dict) and msg.get("type") == "remove_selected_file":
+            removed_path = self._current_selected_path
             self._current_selected_path = None
+            if removed_path and callable(self.on_file_removed_callback):
+                self.on_file_removed_callback(os.path.basename(removed_path))
                 

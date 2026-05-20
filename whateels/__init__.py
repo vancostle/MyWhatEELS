@@ -44,8 +44,8 @@ class App:
         # (inside run()) so they execute AFTER the splash screen is already
         # visible. Heavy deps (numpy, scipy) are only pulled in at this point.
         
-        # from whateels.pages import HomePage, Metadata, Clustering, Clustering2Page, Quantification, Fitting, HomePageRosetta
-        from whateels.pages import HomePageTest, HomePage
+        from whateels.pages import HomePage, Metadata, Clustering, Clustering2Page, Quantification, Fitting
+        # from whateels.pages import HomePageTest, HomePage
 
         def _lazy(page_cls):
             def _loader():
@@ -54,12 +54,12 @@ class App:
 
         # Define the pages for the application
         pages = {
-            "/": _lazy(HomePageTest), # Use the Rosetta Stone version of the homepage
-            # "/metadata-details": _lazy(Metadata),
-            # "/clustering": _lazy(Clustering),
-            # "/clustering-2": _lazy(Clustering2Page),
-            # "/quantification": _lazy(Quantification),
-            # "/fitting": _lazy(Fitting),
+            "/": _lazy(HomePage), # Use the Rosetta Stone version of the homepage
+            "/metadata-details": _lazy(Metadata),
+            "/clustering": _lazy(Clustering),
+            "/clustering-2": _lazy(Clustering2Page),
+            "/quantification": _lazy(Quantification),
+            "/fitting": _lazy(Fitting),
         }
 
         return pn.serve(

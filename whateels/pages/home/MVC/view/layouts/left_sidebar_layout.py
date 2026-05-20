@@ -1,6 +1,6 @@
 import panel as pn
 
-from whateels.components import FileUploader
+from whateels.components import FileDialogUploader
 from whateels.helpers.constants import ASSETS_ROOT
 
 from typing import TYPE_CHECKING, Optional
@@ -15,7 +15,7 @@ class HomePageLeftSidebar(pn.Column):
         self._model = model
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
-        self._file_uploader: FileUploader = FileUploader() # Placeholder, will be set up below
+        self._file_uploader: FileDialogUploader = FileDialogUploader() # Placeholder, will be set up below
         self._welcome_message = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
         super().__init__(
@@ -24,8 +24,8 @@ class HomePageLeftSidebar(pn.Column):
         )
 
     @property
-    def file_uploader(self) -> FileUploader:
-        """FileUploader widget for file upload interactions."""
+    def file_uploader(self) -> FileDialogUploader:
+        """FileDialogUploader widget for file upload interactions."""
         return self._file_uploader
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
@@ -88,26 +88,20 @@ class HomePageLeftSidebar(pn.Column):
             self.remove(self.dataset_info)
             del self.dataset_info
             
-    def _create_file_uploader(self) -> FileUploader:
-        forceed_success = False # Set to True for testing purposes
-        initial_filename = None
+    def _create_file_uploader(self) -> FileDialogUploader:
+        initial_filepath = ""
         all_datasets = self._model.app_state.all_datasets
-        if all_datasets is None:
-            all_datasets = []
-            
-        if isinstance(all_datasets, list) and len(all_datasets) > 0:
-            # If datasets are already loaded, we might want to show different sidebar content
-            forceed_success = True
-            filename_candidate = self._model.app_state.filename
-            # Ensure initial_filename is only str or None
-            if isinstance(filename_candidate, str) or filename_candidate is None:
-                initial_filename = filename_candidate
-            else:
-                initial_filename = None
 
-        # Set up the FileUploader with model constants
-        return FileUploader(
-            reject_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
-            force_success=forceed_success,
-            initial_filename=initial_filename
+        if isinstance(all_datasets, list) and len(all_datasets) > 0:
+            # Datasets already in AppState (back-navigation): restore success state.
+            # We only have the filename stored, not the full path, so we pass the
+            # filename alone — the JS will display it but clipboard-copy won't have a path.
+            filename_candidate = self._model.app_state.filename
+            if isinstance(filename_candidate, str) and filename_candidate:
+                initial_filepath = filename_candidate
+
+        return FileDialogUploader(
+            accepted_file_types=list(self._model.constants.FILE_DROPPER_VALID_EXTENSIONS),
+            error_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
+            initial_filepath=initial_filepath,
         )
