@@ -457,6 +457,8 @@ class FileDialogUploader(JSComponent):
                 openingSection.classList.remove('actived-opening-dialog-state');
                 successSection.classList.remove('actived-success-state');
                 failedSection.classList.remove('actived-failed-state');
+                inputText.disabled = true;
+                inputSubmit.disabled = true;
             };
 
             const activateSuccessState = (filename, fullpath) => {

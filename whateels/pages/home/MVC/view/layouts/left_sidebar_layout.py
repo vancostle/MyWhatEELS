@@ -101,6 +101,7 @@ class HomePageLeftSidebar(pn.Column):
                 initial_filepath = filename_candidate
 
         return FileDialogUploader(
+            default_message=self._model.constants.FILE_DROPPER_TITLE,
             accepted_file_types=list(self._model.constants.FILE_DROPPER_VALID_EXTENSIONS),
             error_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
             initial_filepath=initial_filepath,
