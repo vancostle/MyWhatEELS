@@ -70,7 +70,7 @@ class ElementItemView(pn.Column):
 
         self.quant_width_input = pn.widgets.FloatInput(
             name='Quantification Width',
-            value=50.,
+            value=element_item.quant_width,
             step=1e-1,
             styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
             visible=False
@@ -111,6 +111,7 @@ class ElementItemView(pn.Column):
     def _chemical_shift_watcher(self, event):
         self.element_item.chemical_shift = event.new
         self[2].end = self.energy[1] - self.element_item.chemical_shift
+        self.element_item._refresh_quant_range()
         self._controller.plot_elements()
 
     def _fit_range_watcher(self, event):
