@@ -254,6 +254,11 @@ class FileDialogUploader(JSComponent):
                 & .remove-file {
                     background-color: #1b650c;
                 }
+                
+                & p:hover {
+                    text-decoration: underline;
+                    cursor: pointer;
+                }
             }
 
             section.state.failed {
@@ -397,6 +402,23 @@ class FileDialogUploader(JSComponent):
             const successP = document.createElement('p');
             // Will be set dynamically when file is selected
             successP.textContent = '';
+            // Add click-to-copy functionality
+            successP.style.cursor = 'pointer';
+            let lastCopiedTimeout = null;
+            successP.addEventListener('click', () => {
+                const fullpath = successP.getAttribute('title');
+                if (fullpath) {
+                    navigator.clipboard.writeText(fullpath).then(() => {
+                        // Visual feedback: temporarily change text or show a tooltip
+                        const original = successP.textContent;
+                        successP.textContent = 'Copied on clipboard!';
+                        clearTimeout(lastCopiedTimeout);
+                        lastCopiedTimeout = setTimeout(() => {
+                            successP.textContent = original;
+                        }, 1000);
+                    });
+                }
+            });
             const removeSuccessBtn = document.createElement('button');
             removeSuccessBtn.className = 'remove-file success';
             successDiv.appendChild(successP);
@@ -440,6 +462,8 @@ class FileDialogUploader(JSComponent):
                 openingSection.classList.remove('actived-opening-dialog-state');
                 loadingSection.classList.remove('actived-reading-file-state');
                 failedSection.classList.remove('actived-failed-state');
+                inputText.disabled = true;
+                inputSubmit.disabled = true;
             };
 
             const activateFailedState = () => {
