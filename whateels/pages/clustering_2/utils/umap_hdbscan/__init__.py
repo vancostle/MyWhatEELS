@@ -173,10 +173,32 @@ class UMAP_HDBSCAN:
                         'y': np.arange(shape[0])}
             ),
             kdims=['x', 'y']
-        ).opts(
+        )
+
+        def _integer_colorbar_hook(plot, element):
+            fig = getattr(plot, 'state', None)
+            if fig is None:
+                return
+            try:
+                from bokeh.models import FixedTicker, NumeralTickFormatter
+                min_label = int(np.nanmin(clustering))
+                max_label = int(np.nanmax(clustering))
+                ticks = list(range(min_label, max_label + 1))
+                for cb in getattr(fig, 'right', []) or []:
+                    try:
+                        if hasattr(cb, 'ticker'):
+                            cb.ticker = FixedTicker(ticks=ticks)
+                        if hasattr(cb, 'formatter'):
+                            cb.formatter = NumeralTickFormatter(format='0')
+                    except Exception:
+                        continue
+            except Exception:
+                return
+
+        img = img.opts(
             xaxis=None, yaxis=None, colorbar=True, tools=['hover'], toolbar='right',
             invert_yaxis=True, responsive=True, cmap=cmap_obj["colors"],
-            title='HDBSCAN map'
+            title='HDBSCAN map', hooks=[_integer_colorbar_hook]
         )
         
         return pn.pane.HoloViews(img, margin=0, styles={'margin': 'auto'})

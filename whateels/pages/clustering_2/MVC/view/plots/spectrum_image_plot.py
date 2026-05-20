@@ -96,6 +96,26 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
     def _update_paneA_cluster_map(self, labels_2d: np.ndarray, nx: int, ny: int) -> None:
         """Replace paneA content with an HDBSCAN cluster-label heatmap."""
         cmap = self._cmap_colors if self._cmap_colors else 'Category20'
+        def _integer_colorbar_hook(plot, element):
+            fig = getattr(plot, 'state', None)
+            if fig is None:
+                return
+            try:
+                from bokeh.models import FixedTicker, NumeralTickFormatter
+                min_label = int(np.nanmin(labels_2d))
+                max_label = int(np.nanmax(labels_2d))
+                ticks = list(range(min_label, max_label + 1))
+                for cb in getattr(fig, 'right', []) or []:
+                    try:
+                        if hasattr(cb, 'ticker'):
+                            cb.ticker = FixedTicker(ticks=ticks)
+                        if hasattr(cb, 'formatter'):
+                            cb.formatter = NumeralTickFormatter(format='0')
+                    except Exception:
+                        continue
+            except Exception:
+                return
+
         img = hv.Image(
             xr.Dataset(
                 {'Labels': (['y', 'x'], labels_2d)},
@@ -110,6 +130,7 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
             responsive=True,
             shared_axes=False,
             cmap=cmap,
+            hooks=[_integer_colorbar_hook],
             title='HDBSCAN cluster map',
         )
         self._paneA_base_overlay = img * self._selectors  # type: ignore[operator]
