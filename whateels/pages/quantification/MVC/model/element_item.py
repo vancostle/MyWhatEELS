@@ -18,5 +18,10 @@ class ElementItem:
     def set_quant_width(self, quant_width):
         self.quant_width = quant_width
 
-    def set_quant_range(self, min_eaxis_cs):
-        self.quant_range = (min_eaxis_cs - self.chemical_shift, min_eaxis_cs + self.quant_width - self.chemical_shift)
+    def set_quant_range(self, min_eaxis_cs, max_eaxis_cs=None):
+        if max_eaxis_cs is None:
+            max_eaxis_cs = min_eaxis_cs
+        self.quant_range = (
+            min_eaxis_cs - self.chemical_shift,
+            max_eaxis_cs + self.quant_width - self.chemical_shift,
+        )
