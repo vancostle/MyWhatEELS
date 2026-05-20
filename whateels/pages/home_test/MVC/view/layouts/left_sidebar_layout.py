@@ -43,6 +43,8 @@ class HomePageLeftSidebar(pn.Column):
         """Create the sidebar layout with file uploader and spacing."""
         self._file_dialog_uploader = FileDialogUploader(
             default_message="Click to select a dm3 or dm4 file",
+            on_file_uploaded_callback=lambda filename, payload: print(f"File uploaded: {filename} ({payload})"),  # Placeholder callback, replace with actual handler
+            on_file_removed_callback=lambda filename: print(f"File removed: {filename}"),  # Placeholder callback, replace with actual handler
         )
 
         self._welcome_message = pn.Column(

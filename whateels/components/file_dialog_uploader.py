@@ -1,4 +1,5 @@
-import param, os
+import os
+import param
 from panel.custom import JSComponent
 from .native_dialogs import open_native_file_dialog
 
@@ -10,7 +11,12 @@ class FileDialogUploader(JSComponent):
     accepted_file_types = param.List(default=['.dm3', '.dm4'], doc="List of accepted file extensions for upload.")
     opening_dialog_message = param.String("Opening dialog...", doc="Message shown while the file dialog is open.")
     
-    file_selected_callback = param.Parameter(doc="Callback function to be called when a file is selected.")
+
+    def __init__(self, *args, on_file_uploaded_callback=None, on_file_removed_callback=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.on_file_uploaded_callback = on_file_uploaded_callback
+        self.on_file_removed_callback = on_file_removed_callback
+        self._current_selected_path: str | None = None
 
     _stylesheets = [
         """
@@ -487,6 +493,8 @@ class FileDialogUploader(JSComponent):
             });
 
             removeSuccessBtn.addEventListener('click', _ => {
+                const selectedPath = successP.getAttribute('title') || '';
+                model.send_msg({ type: 'remove_selected_file', path: selectedPath });
                 removeAllStates();
             });
 
@@ -595,12 +603,35 @@ class FileDialogUploader(JSComponent):
             return True
 
         return os.path.splitext(path)[1].lower() in set(extensions)
+
+    def _call_uploaded_callback(self, path: str) -> None:
+        if not callable(self.on_file_uploaded_callback):
+            return
+
+        filename = os.path.basename(path)
+        try:
+            self.on_file_uploaded_callback(filename, path)
+        except TypeError:
+            # Backward compatibility with single-argument callbacks.
+            self.on_file_uploaded_callback(path)
+
+    def _call_removed_callback(self, path: str) -> None:
+        if not callable(self.on_file_removed_callback):
+            return
+
+        filename = os.path.basename(path)
+        try:
+            self.on_file_removed_callback(filename)
+        except TypeError:
+            # Backward compatibility with no-argument callbacks.
+            self.on_file_removed_callback()
     
     def _handle_file_selected_clicked(self, event):
         path = open_native_file_dialog(self._accepted_extensions())
         if path and self._is_allowed_file(path):
-            print(f"Selected file: {path}")
+            self._current_selected_path = path
             self._send_msg({'type': 'file_selected', 'path': path, 'filename': os.path.basename(path)})
+            self._call_uploaded_callback(path)
         else:
             self._send_msg({'type': 'remove_all_state'})
 
@@ -608,11 +639,18 @@ class FileDialogUploader(JSComponent):
         if isinstance(msg, dict) and msg.get("type") == "file_path_submitted":
             raw_path = msg.get("path")
             path = str(raw_path).strip() if raw_path is not None else ""
-            print(f"Manual path submitted: {path}")
             if path and self._is_allowed_file(path):
-                print(f"Selected file: {path}")
+                self._current_selected_path = path
                 self._send_msg({'type': 'file_selected', 'path': path, 'filename': os.path.basename(path)})
+                self._call_uploaded_callback(path)
             else:
-                # Notify JS to activate the failed state
                 self._send_msg({'type': 'activate_failed_state'})
+
+        if isinstance(msg, dict) and msg.get("type") == "remove_selected_file":
+            raw_path = msg.get("path")
+            path = str(raw_path).strip() if raw_path is not None else ""
+            removed_path = path or self._current_selected_path
+            if removed_path:
+                self._call_removed_callback(removed_path)
+            self._current_selected_path = None
                 
