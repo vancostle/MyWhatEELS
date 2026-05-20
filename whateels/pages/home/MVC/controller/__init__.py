@@ -46,13 +46,13 @@ class HomePageController:
             # Initial layout setup based on existing datasets
             self._view.create_tab_and_dataset_info(all_datasets)
             
-    def _handle_file_upload(self, filename: str, file_content: bytes | str):
+    def _handle_file_upload(self, filename: str, file_content: str):
         """
         Handle complete file upload workflow: process file → create visualizations → update UI.
         
         Args:
             filename: Uploaded file name
-            file_content: Binary file content
+            file_content: Full local path to the selected file on disk
             
         Returns:
             bool: True if successful, False if failed
@@ -64,7 +64,6 @@ class HomePageController:
         try:
             # Release previous plot resources before loading a new file.
             self._view.cleanup_plots()
-            self._file_processor.cleanup_active_temp_file()
 
             # Clear any existing datasets and metadata
             app_state = self._model.app_state
@@ -117,16 +116,11 @@ class HomePageController:
             # Stop streams and release dataset refs on all active plot instances
             # before clearing the UI — this is what actually frees the numpy memory.
             self._view.cleanup_plots()
-            self._file_processor.cleanup_active_temp_file()
 
             # Clear UI components
             self._view.left_sidebar.remove_dataset_info()
             self._view.main.empty_placeholder()
             self._view.right_sidebar.preprocessed_settings.clear()
-            
-            # Clear in-memory file to free resources (only exists for byte uploads)
-            if hasattr(self._model, 'in_memory_file'):
-                del self._model.in_memory_file
             
             # Clear global AppState data
             self._model.app_state.clear_all()
