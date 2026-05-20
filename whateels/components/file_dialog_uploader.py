@@ -8,6 +8,7 @@ class FileDialogUploader(JSComponent):
     reading_message = param.String("Loading...", doc="Message shown while a file is being read.")
     error_message = param.String("Error reading file!", doc="Message shown if there is an error during file reading.")
     accepted_file_types = param.List(default=['.dm3', '.dm4'], doc="List of accepted file extensions for upload.")
+    opening_dialog_message = param.String("Opening dialog...", doc="Message shown while the file dialog is open.")
     
     file_selected_callback = param.Parameter(doc="Callback function to be called when a file is selected.")
 
@@ -29,13 +30,6 @@ class FileDialogUploader(JSComponent):
             
             .file-dialog-uploader {
                 flex: 1;
-                
-                &:hover {
-                    cursor: pointer;
-                    & h2 {
-                        text-decoration: underline;
-                    }    
-                }
             }
 
             .component-wrapper {
@@ -86,35 +80,48 @@ class FileDialogUploader(JSComponent):
                 gap: .5rem;
             }
 
-            .path-option-wrapper > form input:not([type="submit"]) {
+            .path-option-wrapper > form input {
                 flex: 1;
-                padding: .5rem;
                 border-radius: 4px;
                 border: 1px solid #ccc;
                 width: 100%;
+                
+                &:focus {
+                    outline: none;
+                    border-color: #3182ce;
+                }
             }
 
-            .path-option-wrapper > form input:not([type="submit"]):disabled {
+            .path-option-wrapper > form input:disabled {
                 cursor: not-allowed;
             }
 
-            .path-option-wrapper > form input[type="submit"] {
-                width: auto;
-                background-color: #3182ce;
-                color: white;
+            .path-option-wrapper > form button{
+                width: 1.3rem;
+                height: 1.3rem;
+                min-width: 1.3rem;
+                min-height: 1.3rem;
+                background-color: transparent;
                 border: none;
-                padding: .5rem 1rem;
+                padding: 0;
                 cursor: pointer;
-                transition: background-color 0.2s ease-in-out;
                 border-radius: 4px;
+                display: grid;
+                place-items: center;
             }
 
-            .path-option-wrapper > form input[type="submit"]:not(:disabled):hover {
-                background-color: #2c6cb0;
+            .path-option-wrapper > form button svg {
+                width: 100%;
+                height: 100%;
+                fill: #6b7280;
             }
 
-            .path-option-wrapper > form input[type="submit"]:disabled {
-                background-color: #a0aec0;
+            .path-option-wrapper > form button:not(:disabled):hover svg {
+                fill: #b946b8;
+            }
+
+            .path-option-wrapper > form button:disabled {
+                opacity: 0.5;
                 cursor: not-allowed;
             }
 
@@ -140,7 +147,15 @@ class FileDialogUploader(JSComponent):
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
-                    
+                }
+                
+                &:hover {
+                    cursor: pointer;
+
+                    & h2 {
+                        color: rgb(43, 43, 43);
+                        text-decoration: underline;
+                    }
                 }
             }
 
@@ -331,6 +346,12 @@ class FileDialogUploader(JSComponent):
                 ? acceptedExtensions.join(' or ')
                 : 'file';
 
+            // Get messages from model (Panel param values)
+            const defaultMessage = model.default_message || `Click to select a ${extensionsLabel}`;
+            const openingDialogMessage = model.opening_dialog_message || 'Opening dialog...';
+            const readingMessage = model.reading_message || 'Loading...';
+            const errorMessage = model.error_message || 'Error reading file!';
+
             const componentWrapper = document.createElement('div');
             componentWrapper.className = 'component-wrapper';
 
@@ -340,9 +361,9 @@ class FileDialogUploader(JSComponent):
             // File zone
             const fileZone = document.createElement('section');
             fileZone.id = 'file-zone';
-            fileZone.title = `Click to select a ${extensionsLabel}`;
+            fileZone.title = defaultMessage;
             const fileZoneH2 = document.createElement('h2');
-            fileZoneH2.textContent = `Click to select a ${extensionsLabel}`;
+            fileZoneH2.textContent = defaultMessage;
             fileZone.appendChild(fileZoneH2);
 
             // Opening state
@@ -350,7 +371,7 @@ class FileDialogUploader(JSComponent):
             openingSection.className = 'opening state';
             const openingDiv = document.createElement('div');
             const openingP = document.createElement('p');
-            openingP.textContent = 'Opening dialog...';
+            openingP.textContent = openingDialogMessage;
             const openingSpinner = document.createElement('div');
             openingSpinner.className = 'spinner';
             openingDiv.appendChild(openingP);
@@ -362,7 +383,7 @@ class FileDialogUploader(JSComponent):
             loadingSection.className = 'loading state';
             const loadingDiv = document.createElement('div');
             const loadingP = document.createElement('p');
-            loadingP.textContent = 'Reading file...';
+            loadingP.textContent = readingMessage;
             const spinner = document.createElement('div');
             spinner.className = 'spinner';
             loadingDiv.appendChild(loadingP);
@@ -374,7 +395,8 @@ class FileDialogUploader(JSComponent):
             successSection.className = 'success state';
             const successDiv = document.createElement('div');
             const successP = document.createElement('p');
-            successP.textContent = 'STEM SI_HL.dm4';
+            // Will be set dynamically when file is selected
+            successP.textContent = '';
             const removeSuccessBtn = document.createElement('button');
             removeSuccessBtn.className = 'remove-file success';
             successDiv.appendChild(successP);
@@ -386,7 +408,7 @@ class FileDialogUploader(JSComponent):
             failedSection.className = 'failed state';
             const failedDiv = document.createElement('div');
             const failedP = document.createElement('p');
-            failedP.textContent = 'Failed to upload file!';
+            failedP.textContent = errorMessage;
             const removeFailedBtn = document.createElement('button');
             removeFailedBtn.className = 'remove-file failed';
             failedDiv.appendChild(failedP);
@@ -407,20 +429,24 @@ class FileDialogUploader(JSComponent):
                 failedSection.classList.remove('actived-failed-state');
             };
 
+            const activateSuccessState = (filename, fullpath) => {
+                successP.textContent = filename || '';
+                if (fullpath) {
+                    successP.setAttribute('title', fullpath);
+                } else {
+                    successP.removeAttribute('title');
+                }
+                successSection.classList.add('actived-success-state');
+                openingSection.classList.remove('actived-opening-dialog-state');
+                loadingSection.classList.remove('actived-reading-file-state');
+                failedSection.classList.remove('actived-failed-state');
+            };
+
             const activateFailedState = () => {
                 failedSection.classList.add('actived-failed-state');
                 openingSection.classList.remove('actived-opening-dialog-state');
                 loadingSection.classList.remove('actived-reading-file-state');
                 successSection.classList.remove('actived-success-state');
-            };
-
-            const removeAllStates = () => {
-                openingSection.classList.remove('actived-opening-dialog-state');
-                loadingSection.classList.remove('actived-reading-file-state');
-                successSection.classList.remove('actived-success-state');
-                failedSection.classList.remove('actived-failed-state');
-                inputText.disabled = false;
-                inputSubmit.disabled = false;
             };
 
             // Listen for backend -> frontend custom messages
@@ -430,6 +456,9 @@ class FileDialogUploader(JSComponent):
                 }
                 if (msg?.type === 'remove_all_state') {
                     removeAllStates();
+                }
+                if (msg?.type === 'file_selected' && msg?.path) {
+                    activateSuccessState(msg.filename, msg.path);
                 }
             });
 
@@ -460,27 +489,47 @@ class FileDialogUploader(JSComponent):
             const inputText = document.createElement('input');
             inputText.type = 'text';
             inputText.placeholder = 'Or paste the file path here';
-            const inputSubmit = document.createElement('input');
+            const inputSubmit = document.createElement('button');
             inputSubmit.type = 'submit';
-            inputSubmit.value = 'Ok';
+            inputSubmit.title = 'Submit file path';
+            inputSubmit.ariaLabel = 'Submit file path';
+            inputSubmit.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" aria-hidden="true"><path d="M416 160L480 160C497.7 160 512 174.3 512 192L512 448C512 465.7 497.7 480 480 480L416 480C398.3 480 384 494.3 384 512C384 529.7 398.3 544 416 544L480 544C533 544 576 501 576 448L576 192C576 139 533 96 480 96L416 96C398.3 96 384 110.3 384 128C384 145.7 398.3 160 416 160zM406.6 342.6C419.1 330.1 419.1 309.8 406.6 297.3L278.6 169.3C266.1 156.8 245.8 156.8 233.3 169.3C220.8 181.8 220.8 202.1 233.3 214.6L306.7 288L96 288C78.3 288 64 302.3 64 320C64 337.7 78.3 352 96 352L306.7 352L233.3 425.4C220.8 437.9 220.8 458.2 233.3 470.7C245.8 483.2 266.1 483.2 278.6 470.7L406.6 342.7z"/></svg>';
+
+            const syncSubmitState = () => {
+                inputSubmit.disabled = !inputText.value.trim();
+            };
+
+            inputText.addEventListener('input', syncSubmitState);
+            syncSubmitState();
 
             form.addEventListener('submit', event => {
                 event.preventDefault();
 
                 const filePath = inputText.value.trim();
+                if (!filePath) {
+                    syncSubmitState();
+                    return;
+                }
                 console.log("Submitting file path from manual input:", filePath);
                 model.send_msg({ type: 'file_path_submitted', path: filePath });
 
-                if (filePath) {
-                    inputText.disabled = true;
-                    inputSubmit.disabled = true;
-                    activateReadingFileState();
-                }
+                inputText.disabled = true;
+                inputSubmit.disabled = true;
+                activateReadingFileState();
             });
 
             form.appendChild(inputText);
             form.appendChild(inputSubmit);
             pathOptionWrapper.appendChild(form);
+
+            const removeAllStates = () => {
+                openingSection.classList.remove('actived-opening-dialog-state');
+                loadingSection.classList.remove('actived-reading-file-state');
+                successSection.classList.remove('actived-success-state');
+                failedSection.classList.remove('actived-failed-state');
+                inputText.disabled = false;
+                syncSubmitState();
+            };
 
             componentWrapper.appendChild(wrapper);
             componentWrapper.appendChild(pathOptionWrapper);
@@ -527,7 +576,7 @@ class FileDialogUploader(JSComponent):
         path = open_native_file_dialog(self._accepted_extensions())
         if path and self._is_allowed_file(path):
             print(f"Selected file: {path}")
-            # Optionally: self._send_event('file_selected', data={'path': path})
+            self._send_msg({'type': 'file_selected', 'path': path, 'filename': os.path.basename(path)})
         else:
             self._send_msg({'type': 'remove_all_state'})
 
@@ -538,7 +587,7 @@ class FileDialogUploader(JSComponent):
             print(f"Manual path submitted: {path}")
             if path and self._is_allowed_file(path):
                 print(f"Selected file: {path}")
-                # Optionally: self._send_event('file_selected', data={'path': path})
+                self._send_msg({'type': 'file_selected', 'path': path, 'filename': os.path.basename(path)})
             else:
                 # Notify JS to activate the failed state
                 self._send_msg({'type': 'activate_failed_state'})

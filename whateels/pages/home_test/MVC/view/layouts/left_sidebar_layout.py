@@ -41,7 +41,9 @@ class HomePageLeftSidebar(pn.Column):
 
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
-        self._file_dialog_uploader = FileDialogUploader()
+        self._file_dialog_uploader = FileDialogUploader(
+            default_message="Click to select a dm3 or dm4 file",
+        )
 
         self._welcome_message = pn.Column(
             pn.pane.Markdown(
