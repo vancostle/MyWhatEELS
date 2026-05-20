@@ -159,9 +159,9 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         
         clustering_2_href = f'/clustering-2?tab={str(selected_tab_index)}' if is_eels_tab else '/clustering-2'
         # clustering_2_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
-        clustering_2_a_element = f'<a href="{clustering_2_href}" class="{LINK_ENABLE_ANIMATION_CLASS}">Clustering 2</a>'
+        clustering_2_a_element = f'<a href="{clustering_2_href}" class="{LINK_ENABLE_ANIMATION_CLASS}">Adv. Clustering</a>'
         
-        navigation_links.append((clustering_2_a_element,"Clustering 2"))
+        navigation_links.append((clustering_2_a_element,"Adv. Clustering"))
         
         quantification_href = f'/quantification?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
         quantification_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
