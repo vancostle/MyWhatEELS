@@ -13,6 +13,12 @@ if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate
 
 class _Clustering2RightSidebarParams(param.Parameterized):
+    available_norms = param.ObjectSelector(
+        default='none',
+        objects=('none', 'l1', 'l2', 'max'),
+        label="Available norms",
+        doc="Normalization method applied before UMAP."
+    )
     n_neighbors = param.List(
         default=[100, 500, 900], 
         item_type=int, 
@@ -110,6 +116,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._use_preprocessed_data_switch = pn.widgets.Switch()
         
         # UMAP parameters
+        self._available_norms = pn.widgets.Select()
         self._n_neighbors = pn.widgets.TextInput()
         self._min_dist = pn.widgets.TextInput()
         self._extra_umap_inputs_button = pn.widgets.ButtonIcon()
@@ -145,6 +152,9 @@ class Clustering2RightSidebarLayout(pn.Column):
     def use_preprocessed_data_switch(self) -> pn.widgets.Switch:
         return self._use_preprocessed_data_switch
     @property
+    def available_norms(self) -> pn.widgets.Select:
+        return self._available_norms
+    @property
     def compute_umap_embedding_run_button(self) -> ToggleButton:
         return self._compute_umap_embedding_run_button
     @property
@@ -164,6 +174,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
         self._use_preprocessed_data_switch.disabled = True
         
+        self._available_norms.disabled = True
         self._n_neighbors.disabled = True
         self._min_dist.disabled = True
         
@@ -179,6 +190,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         if self._use_preprocessed_data_switch.disabled:
             self._use_preprocessed_data_switch.value = False
         
+        self._available_norms.disabled = False
         self._n_neighbors.disabled = False
         self._min_dist.disabled = False
         
@@ -239,6 +251,21 @@ class Clustering2RightSidebarLayout(pn.Column):
         return input_data_controls
         
     def _create_umap_simple_details(self, modal_manager, model) -> SimpleDetails:
+        def update_available_norms(event):
+            new_value = event.new
+            if new_value in type(self._params).param.available_norms.objects:
+                self._params.available_norms = new_value
+            else:
+                self._available_norms.value = event.old
+
+        self._available_norms = pn.widgets.Select(
+            name=type(self._params).param.available_norms.label,
+            options=list(type(self._params).param.available_norms.objects),
+            value=type(self._params).param.available_norms.default,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+        self._available_norms.param.watch(update_available_norms, 'value')
+
         n_neighbors_str = ', '.join(str(n) for n in type(self._params).param.n_neighbors.default)
         
         self._n_neighbors = pn.widgets.TextInput(
@@ -334,6 +361,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         )
         
         compute_umap_embedding_content = pn.Column(
+            self._available_norms,
             n_neighbors_content,
             min_dist_content,
             pn.Row(

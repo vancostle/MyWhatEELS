@@ -37,6 +37,11 @@ class Clustering2MainLayout(pn.Column):
     @property
     def umap_embedding_wrapper(self):
         return self._umap_embedding_wrapper
+
+    def append_once(self, viewable):
+        """Append a child only if it is not already present in the main column."""
+        if not any(child is viewable for child in self.objects):
+            self.append(viewable)
     
     @override
     def clear(self):

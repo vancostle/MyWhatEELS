@@ -290,6 +290,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Build HoloViews fit + cross-section curves for one element."""
         curves = []
         try:
+            plot_min, plot_max = self._get_quantification_plot_window(element_item)
             y_fit = SpectrumFitting.fit_powerlaw_curve(
                 self._energy, self.selected_slice, range_values=element_item.fit_range
             )
@@ -297,7 +298,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if y_fit is not None:
                 x_fit = np.asarray(self._energy, dtype=float)
                 y_fit_arr = np.asarray(y_fit, dtype=float)
-                fit_mask = np.isfinite(x_fit) & np.isfinite(y_fit_arr)
+                fit_mask = (
+                    np.isfinite(x_fit)
+                    & np.isfinite(y_fit_arr)
+                    & (x_fit >= plot_min)
+                    & (x_fit <= plot_max)
+                )
                 if np.count_nonzero(fit_mask) >= 2:
                     curves.append(hv.Curve(
                         (x_fit[fit_mask], y_fit_arr[fit_mask]), kdims=['x'], vdims=['y'],
@@ -307,7 +313,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 # Use Curve instead of Area to avoid HoloViews AreaMixin range issues
                 # on dynamic updates with multiple elements and slider changes.
                 bg_sub = np.asarray(self.selected_slice, dtype=float) - y_fit_arr
-                bg_mask = np.isfinite(x_fit) & np.isfinite(bg_sub)
+                bg_mask = (
+                    np.isfinite(x_fit)
+                    & np.isfinite(bg_sub)
+                    & (x_fit >= plot_min)
+                    & (x_fit <= plot_max)
+                )
                 if np.count_nonzero(bg_mask) >= 2:
                     bg_x = x_fit[bg_mask]
                     bg_y = bg_sub[bg_mask]
@@ -347,7 +358,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 xaxis, yaxis = cs_instance.get_data()
                 xaxis = np.asarray(xaxis, dtype=float)
                 yaxis = np.asarray(yaxis, dtype=float)
-                cs_mask = np.isfinite(xaxis) & np.isfinite(yaxis)
+                cs_mask = (
+                    np.isfinite(xaxis)
+                    & np.isfinite(yaxis)
+                    & (xaxis >= plot_min)
+                    & (xaxis <= plot_max)
+                )
                 if np.count_nonzero(cs_mask) < 2:
                     continue
                 curves.append(hv.Curve(
@@ -368,6 +384,34 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return float(np.trapezoid(y_arr, x_arr))
         except Exception:
             return float(np.trapz(y_arr, x_arr))
+
+    def _get_quantification_plot_window(self, element_item):
+        """Return the x-axis window to display quantification overlays."""
+        fit_range = getattr(element_item, 'fit_range', None)
+        quant_range = getattr(element_item, 'quant_range', None)
+
+        if fit_range is not None and len(fit_range) >= 2:
+            plot_min = float(fit_range[0])
+        elif quant_range is not None and len(quant_range) >= 2:
+            plot_min = float(quant_range[0])
+        else:
+            plot_min = float(np.nanmin(self._energy))
+
+        if quant_range is not None and len(quant_range) >= 2:
+            plot_max = float(quant_range[1])
+        elif fit_range is not None and len(fit_range) >= 2:
+            plot_max = float(fit_range[1])
+        else:
+            plot_max = float(np.nanmax(self._energy))
+
+        if not np.isfinite(plot_min):
+            plot_min = float(np.nanmin(self._energy))
+        if not np.isfinite(plot_max):
+            plot_max = float(np.nanmax(self._energy))
+        if plot_max < plot_min:
+            plot_min, plot_max = plot_max, plot_min
+
+        return plot_min, plot_max
 
     def _transparent_bokeh_hook(self, plot, element):
         """Force fully transparent Bokeh figure background for HoloViews objects."""

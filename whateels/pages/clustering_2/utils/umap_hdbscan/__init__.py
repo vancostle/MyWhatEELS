@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import holoviews as hv
 import xarray as xr
 import panel as pn
+from sklearn.preprocessing import normalize
 
 from typing import TYPE_CHECKING, Optional, Any
 if TYPE_CHECKING:
@@ -24,11 +25,16 @@ class UMAP_HDBSCAN:
         n_neighbors : int = 15,
         n_components : int = 2,
         metric : str = 'euclidean',
+        available_norm : str = 'none',
         random_state : int = 1
         
     ) -> tuple[Any, dict]:
         """ Compute UMAP embedding of the image spectra image. """
         data_2d = self._get_reshaped_data()
+        if data_2d is None:
+            raise ValueError("Could not prepare data for UMAP embedding.")
+
+        data_2d = self._apply_normalization(data_2d, available_norm)
         
         mapper = umap.UMAP(
             n_neighbors=n_neighbors,
@@ -38,11 +44,35 @@ class UMAP_HDBSCAN:
             metric=metric
         )
         embedding = mapper.fit_transform(data_2d)
+        mapper.whateels_norm = available_norm
         
         umap_data_dict = dict()
-        umap_data_dict['umap_data_{}_{}'.format(min_dist, n_neighbors)] = mapper
+        umap_data_dict['umap_data_{}_{}_{}'.format(available_norm, min_dist, n_neighbors)] = mapper
         
         return embedding, umap_data_dict
+
+    def _apply_normalization(self, data_2d: np.ndarray, available_norm: str) -> np.ndarray:
+        """Apply row-wise normalization before UMAP, preserving raw data when requested."""
+        norm = str(available_norm).lower()
+        if norm == 'none':
+            return data_2d
+
+        finite_data = np.where(np.isfinite(data_2d), data_2d, 0.0)
+        return normalize(finite_data, norm=norm, axis=1, copy=True)
+
+    def get_electron_count_data_for_norm(self, available_norm: str):
+        """Return a DataArray shaped like ElectronCount after applying the selected norm."""
+        norm = str(available_norm).lower()
+        if norm == 'none':
+            return self._electron_count_data.copy()
+
+        data_2d = self._get_reshaped_data()
+        if data_2d is None:
+            raise ValueError("Could not prepare data for normalization.")
+
+        normalized_2d = self._apply_normalization(data_2d, norm)
+        normalized_values = normalized_2d.reshape(self._electron_count_data.shape)
+        return self._electron_count_data.copy(data=normalized_values)
 
     def _get_reshaped_data(self) -> Optional[np.ndarray]:
         """Reshape electron count data to 2D array for UMAP processing.
@@ -143,10 +173,32 @@ class UMAP_HDBSCAN:
                         'y': np.arange(shape[0])}
             ),
             kdims=['x', 'y']
-        ).opts(
+        )
+
+        def _integer_colorbar_hook(plot, element):
+            fig = getattr(plot, 'state', None)
+            if fig is None:
+                return
+            try:
+                from bokeh.models import FixedTicker, NumeralTickFormatter
+                min_label = int(np.nanmin(clustering))
+                max_label = int(np.nanmax(clustering))
+                ticks = list(range(min_label, max_label + 1))
+                for cb in getattr(fig, 'right', []) or []:
+                    try:
+                        if hasattr(cb, 'ticker'):
+                            cb.ticker = FixedTicker(ticks=ticks)
+                        if hasattr(cb, 'formatter'):
+                            cb.formatter = NumeralTickFormatter(format='0')
+                    except Exception:
+                        continue
+            except Exception:
+                return
+
+        img = img.opts(
             xaxis=None, yaxis=None, colorbar=True, tools=['hover'], toolbar='right',
             invert_yaxis=True, responsive=True, cmap=cmap_obj["colors"],
-            title='HDBSCAN map'
+            title='HDBSCAN map', hooks=[_integer_colorbar_hook]
         )
         
         return pn.pane.HoloViews(img, margin=0, styles={'margin': 'auto'})

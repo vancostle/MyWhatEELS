@@ -108,7 +108,18 @@ class ClusterVisualizer:
             shared_axes=False,
             aspect='equal',
             framewise=True,
-            tools=['hover']
+            tools=['hover'],
+            hooks=[
+                # Hook to force integer-only ticks on the colorbar for cluster labels
+                (lambda labels: (lambda plot, element: (
+                    (lambda: (
+                        [
+                            setattr(cb, 'ticker', __import__('bokeh.models', fromlist=['FixedTicker']).FixedTicker(ticks=list(range(int(np.nanmin(labels)), int(np.nanmax(labels)) + 1)))) or setattr(cb, 'formatter', __import__('bokeh.models', fromlist=['NumeralTickFormatter']).NumeralTickFormatter(format='0'))
+                            for cb in (getattr(getattr(plot, 'state', None), 'right', []) or [])
+                        ]
+                    ))()
+                )))(labels)
+            ]
         )
         return img
     
