@@ -37,7 +37,8 @@ class ClusterVisualizer:
         self,
         n_clusters: int,
         colormap: str | None = None,
-        index_order: list[int] | None = None
+        index_order: list[int] | None = None,
+        cluster_colors: list[str] | None = None
     ):
         """
         Initialize the cluster visualizer.
@@ -50,6 +51,7 @@ class ClusterVisualizer:
         self.n_clusters = n_clusters
         self.colormap = colormap or self.DEFAULT_COLORMAP
         self.index_order = index_order
+        self._provided_cluster_colors = cluster_colors
         
         # Build colors on initialization
         self.cluster_colors, self._listed_cmap = self._build_colors()
@@ -62,6 +64,11 @@ class ClusterVisualizer:
             Tuple of (cluster_colors, listed_cmap)
         """
         # Use default ordering for tab20-like palettes if not specified
+        if self._provided_cluster_colors is not None:
+            cluster_colors = list(self._provided_cluster_colors)
+            listed_cmap = ListedColormap(cluster_colors, name='cluster_cmap', N=max(len(cluster_colors), self.n_clusters))
+            return cluster_colors, listed_cmap
+
         index_order = self.index_order
         if index_order is None and 'tab20' in self.colormap:
             index_order = list(self.DEFAULT_ORDER)

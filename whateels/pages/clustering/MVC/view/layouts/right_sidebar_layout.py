@@ -31,7 +31,7 @@ class ClusteringRightSidebarLayout(pn.Column):
 
         self._kmeans_input = None  # Dictionary to hold K-Means input widgets
         self._kmeans_color_picker = pn.widgets.ColorPicker(
-            name='Cluster Color Picker',
+            name='K-Means Color Picker',
             value='#ffffff',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10,0,0,0),
@@ -47,7 +47,7 @@ class ClusteringRightSidebarLayout(pn.Column):
 
         self._agglomerative_input = None  # Dictionary to hold Agglomerative input widgets
         self._agglomerative_color_picker = pn.widgets.ColorPicker(
-            name='Cluster Color Picker',
+            name='Agglomerative Color Picker',
             value='#ffffff',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10,0,0,0),
@@ -63,7 +63,7 @@ class ClusteringRightSidebarLayout(pn.Column):
 
         self._spectral_input = None  # Dictionary to hold Spectral input widgets
         self._spectral_color_picker = pn.widgets.ColorPicker(
-            name='Cluster Color Picker',
+            name='Spectral Color Picker',
             value='#ffffff',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10,0,0,0),
