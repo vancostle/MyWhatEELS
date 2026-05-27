@@ -30,11 +30,18 @@ class ClusteringRightSidebarLayout(pn.Column):
         )
 
         self._kmeans_input = None  # Dictionary to hold K-Means input widgets
+        self._kmeans_color_picker = pn.widgets.ColorPicker(
+            name='Cluster Color Picker',
+            value='#ffffff',
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10,0,0,0),
+            disabled=True
+        )
         self._kmeans_run_button = pn.widgets.Button(
             name='Run K-Means',
             button_type='success',
             height=55,
-            margin=(20,0,0,0),
+            margin=(10,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -92,7 +99,11 @@ class ClusteringRightSidebarLayout(pn.Column):
     @property
     def kmeans_input(self):
         """Access the K-Means clustering input widgets."""
-        return self._kmeans_input   
+        return self._kmeans_input
+    @property
+    def kmeans_color_picker(self):
+        """Access the K-Means color picker widget."""
+        return self._kmeans_color_picker
         
     def _create_layout(self):
         background_subtraction_label = pn.pane.Markdown(
@@ -238,6 +249,7 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["kmeans-input-container"]
             ),
+            self._kmeans_color_picker,
             self._kmeans_run_button,
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["kmeans-tab"]

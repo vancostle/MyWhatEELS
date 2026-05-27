@@ -78,6 +78,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._frozen_pixel = None  # Store frozen pixel (i, j) from single click
         self._hover_disabled = False  # Disable hover after showing all clusters
         self._last_hover_point = None  # Store last hover position for re-enabling
+        self._init_kmeans_picker_after_apply = False
 
         # Clustering state
         self._clustering_results = None  # Will store (labels, centres) from clustering
@@ -425,6 +426,23 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._clustering_active = True
         self._frozen_pixel = None  # Reset frozen state
         self._hover_disabled = False  # Enable hover by default
+
+        # For K-Means, initialize picker state from the default pixel (0, 0)
+        # before any explicit click interaction.
+        if algorithm_name == "KMeans" and self._init_kmeans_picker_after_apply:
+            try:
+                default_i, default_j = 0, 0
+                cluster_label = int(labels[default_i, default_j])
+                color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
+                picker = self._view.right_sidebar.kmeans_color_picker
+                if picker is not None:
+                    picker.name = f"Cluster {cluster_label} Color ({default_i}, {default_j})"
+                    picker.value = color
+                    picker.disabled = False
+            except Exception:
+                pass
+            finally:
+                self._init_kmeans_picker_after_apply = False
     
     def _disable_all_clustering_buttons(self):
         """Disable all clustering buttons."""
@@ -555,6 +573,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     
     def run_kmeans_clustering(self, user_click=False):
         """Handle KMeans clustering button click."""
+        # Only enable default picker sync when K-Means was explicitly triggered by user.
+        self._init_kmeans_picker_after_apply = bool(user_click)
         self._disable_all_clustering_buttons()
 
         # Unlock Panel I/O for background processing
@@ -765,8 +785,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
         try:
             if self._clustering_active:
-                self._frozen_pixel = (int(y), int(x))
-                fig = self._plot_pixel_spectrum(int(y), int(x), title_prefix="Click (Frozen)")
+                i, j = int(y), int(x)
+                self._frozen_pixel = (i, j)
+
+                if self._clustering_results is not None:
+                    labels, _ = self._clustering_results
+                    cluster_label = int(labels[i, j])
+                    color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
+
+                    # Update picker only for K-Means clustering clicks.
+                    clustering_type = self._model.last_clustering_result.get('clustering', {}).get('type', None)
+                    if clustering_type == self._model.constants.TAB_KMEANS:
+                        picker = self._view.right_sidebar.kmeans_color_picker
+                        if picker is not None:
+                            picker.name = f"Cluster {cluster_label} Color ({i}, {j})"
+                            picker.value = color
+                            picker.disabled = False
+
+                fig = self._plot_pixel_spectrum(i, j, title_prefix="Click (Frozen)")
                 self._update_paneB(fig)
             else:
                 super()._on_paneA_click(x, y)
