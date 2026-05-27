@@ -46,6 +46,13 @@ class ClusteringRightSidebarLayout(pn.Column):
         )
 
         self._agglomerative_input = None  # Dictionary to hold Agglomerative input widgets
+        self._agglomerative_color_picker = pn.widgets.ColorPicker(
+            name='Cluster Color Picker',
+            value='#ffffff',
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10,0,0,0),
+            disabled=True
+        )
         self._agglomerative_run_button = pn.widgets.Button(
             name='Run Agglomerative',
             button_type='success',
@@ -55,6 +62,13 @@ class ClusteringRightSidebarLayout(pn.Column):
         )
 
         self._spectral_input = None  # Dictionary to hold Spectral input widgets
+        self._spectral_color_picker = pn.widgets.ColorPicker(
+            name='Cluster Color Picker',
+            value='#ffffff',
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10,0,0,0),
+            disabled=True
+        )
         self._spectral_run_button = pn.widgets.Button(
             name='Run Spectral',
             button_type='success',
@@ -104,6 +118,14 @@ class ClusteringRightSidebarLayout(pn.Column):
     def kmeans_color_picker(self):
         """Access the K-Means color picker widget."""
         return self._kmeans_color_picker
+    @property
+    def agglomerative_color_picker(self):
+        """Access the Agglomerative color picker widget."""
+        return self._agglomerative_color_picker
+    @property
+    def spectral_color_picker(self):
+        """Access the Spectral color picker widget."""
+        return self._spectral_color_picker
         
     def _create_layout(self):
         background_subtraction_label = pn.pane.Markdown(
@@ -310,6 +332,7 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["agglomerative-input-container"]
             ),
+            self._agglomerative_color_picker,
             self._agglomerative_run_button,
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["agglomerative-tab"]
@@ -377,6 +400,7 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["spectral-input-container"]
             ),
+            self._spectral_color_picker,
             self._spectral_run_button,
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["spectral-tab"]
