@@ -57,7 +57,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run Agglomerative',
             button_type='success',
             height=55,
-            margin=(20,0,0,0),
+            margin=(10,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -73,7 +73,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run Spectral',
             button_type='success',
             height=55,
-            margin=(20,0,0,0),
+            margin=(10,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 

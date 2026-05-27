@@ -162,6 +162,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_preprocessing_switch_changed(self):
         """Rebuild paneA heatmap and refresh paneB when the preprocessing switch is toggled."""
+        
+        # Disable all color pickers when toggling preprocessing switch to prevent inconsistent state
+        self._view.right_sidebar.kmeans_color_picker.disabled = True
+        self._view.right_sidebar.agglomerative_color_picker.disabled = True
+        self._view.right_sidebar.spectral_color_picker.disabled = True
+        
         # Update energy axis to match the current display data's Eloss coordinates.
         # This is critical when cut-range preprocessing has changed the axis length.
         display_data = self._get_display_data()
