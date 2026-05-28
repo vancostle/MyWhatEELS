@@ -128,6 +128,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_active_button = pn.widgets.Button()
         self._hdbscan_min_samples = pn.widgets.IntInput()
         self._hdbscan_min_cluster_size = pn.widgets.IntInput()
+        self._hdbscan_color_picker = pn.widgets.ColorPicker()
         self._compute_hdbscan_on_umap_button = pn.widgets.Button()
         
         # Initialize the layout with the created controls and details
@@ -160,6 +161,9 @@ class Clustering2RightSidebarLayout(pn.Column):
     @property
     def download_results_button(self) -> pn.widgets.FileDownload:
         return self._download_results_button
+    @property
+    def hdbscan_color_picker(self) -> pn.widgets.ColorPicker:
+        return self._hdbscan_color_picker
     @property
     def compute_hdbscan_embedding_run_button(self) -> pn.widgets.Button:
         return self._compute_hdbscan_on_umap_button
@@ -393,6 +397,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         )
 
     def _create_hdbscan_simple_details(self) -> SimpleDetails:
+        """Create the HDBSCAN simple details section. This includes the dropdown to select UMAP embedding, inputs for HDBSCAN parameters, and buttons to activate HDBSCAN controls and compute HDBSCAN on the selected UMAP embedding."""
         
         umap_data_dict_keys = list(self._model.umap_data_dict.keys()) if self._model.umap_data_dict is not None else []
         
@@ -441,11 +446,18 @@ class Clustering2RightSidebarLayout(pn.Column):
 
         self._hdbscan_min_cluster_size.param.watch(update_hdbscan_min_cluster_size, 'value')
 
+        self._hdbscan_color_picker = pn.widgets.ColorPicker(
+            name="HDBSCAN Cluster Color",
+            value="#ffffff",
+            sizing_mode=self._STRETCH_WIDTH,
+            disabled=True, # Color picker is disabled by default, as it depends on HDBSCAN results, but HDBSCAN results are not available at the beginning.
+        )
+
         self._compute_hdbscan_on_umap_button = pn.widgets.Button(
             name="Compute HDBSCAN on UMAP",
             button_type="success",
             height=55,
-            margin=0,
+            margin=(10, 0, 0, 0),
             sizing_mode=self._STRETCH_WIDTH
         )
             
@@ -454,12 +466,10 @@ class Clustering2RightSidebarLayout(pn.Column):
             self._hdbscan_active_button,
             self._hdbscan_min_samples,
             self._hdbscan_min_cluster_size,
-            pn.Row(
+            pn.Column(
+                self._hdbscan_color_picker,
                 self._compute_hdbscan_on_umap_button,
                 sizing_mode=self._STRETCH_WIDTH,
-                height=55,
-                margin=(10, 0, 0, 0),
-                styles={"display": "flex", "justify-content": "center", "align-items": "center", "gap": "10px"}
             ),
         )
         
