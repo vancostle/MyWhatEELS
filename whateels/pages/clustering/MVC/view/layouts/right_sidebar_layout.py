@@ -57,7 +57,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run Agglomerative',
             button_type='success',
             height=55,
-            margin=(10,0,0,0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -73,7 +73,7 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run Spectral',
             button_type='success',
             height=55,
-            margin=(10,0,0,0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -276,7 +276,7 @@ class ClusteringRightSidebarLayout(pn.Column):
                 self._kmeans_color_picker,
                 margin=0,
                 sizing_mode=self._STRETCH_WIDTH,
-                styles={'display' : 'flex', 'gap' : '10px', 'align-items' : 'center', 'justify-content' : 'center'}
+                styles={'display' : 'flex', 'gap' : '10px'}
             ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["kmeans-tab"]
@@ -337,8 +337,13 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["agglomerative-input-container"]
             ),
-            self._agglomerative_color_picker,
-            self._agglomerative_run_button,
+            pn.Row(
+                self._agglomerative_run_button,
+                self._agglomerative_color_picker,
+                margin=0,
+                styles={'display' : 'flex', 'gap' : '10px'},
+                sizing_mode=self._STRETCH_WIDTH,
+            ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["agglomerative-tab"]
         )
@@ -405,8 +410,13 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["spectral-input-container"]
             ),
-            self._spectral_color_picker,
-            self._spectral_run_button,
+            pn.Row(
+                self._spectral_run_button,
+                self._spectral_color_picker,
+                margin=0,
+                styles={'display' : 'flex', 'gap' : '10px'},
+                sizing_mode=self._STRETCH_WIDTH,
+            ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["spectral-tab"]
         )
