@@ -471,7 +471,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         self._suppress_color_picker_callbacks = True
         try:
-            picker.name = f"{algorithm_name} Cluster {cluster_label} Color (x: {j}, y: {i})"
+            picker.name = f"Cluster {cluster_label}"
             picker.value = color
             picker.disabled = False
         finally:

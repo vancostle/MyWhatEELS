@@ -451,6 +451,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             value="#ffffff",
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True, # Color picker is disabled by default, as it depends on HDBSCAN results, but HDBSCAN results are not available at the beginning.
+            styles={"padding" : "0"}
         )
 
         self._compute_hdbscan_on_umap_button = pn.widgets.Button(

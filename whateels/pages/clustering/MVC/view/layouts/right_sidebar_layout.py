@@ -31,7 +31,7 @@ class ClusteringRightSidebarLayout(pn.Column):
 
         self._kmeans_input = None  # Dictionary to hold K-Means input widgets
         self._kmeans_color_picker = pn.widgets.ColorPicker(
-            name='K-Means Color Picker',
+            name='Color Picker',
             value='#ffffff',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10,0,0,0),
@@ -41,13 +41,13 @@ class ClusteringRightSidebarLayout(pn.Column):
             name='Run K-Means',
             button_type='success',
             height=55,
-            margin=(10,0,0,0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
         self._agglomerative_input = None  # Dictionary to hold Agglomerative input widgets
         self._agglomerative_color_picker = pn.widgets.ColorPicker(
-            name='Agglomerative Color Picker',
+            name='Color Picker',
             value='#ffffff',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10,0,0,0),
@@ -63,11 +63,11 @@ class ClusteringRightSidebarLayout(pn.Column):
 
         self._spectral_input = None  # Dictionary to hold Spectral input widgets
         self._spectral_color_picker = pn.widgets.ColorPicker(
-            name='Spectral Color Picker',
+            name='Color Picker',
             value='#ffffff',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10,0,0,0),
-            disabled=True
+            disabled=True,
         )
         self._spectral_run_button = pn.widgets.Button(
             name='Run Spectral',
@@ -271,8 +271,13 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["kmeans-input-container"]
             ),
-            self._kmeans_color_picker,
-            self._kmeans_run_button,
+            pn.Row(
+                self._kmeans_run_button,
+                self._kmeans_color_picker,
+                margin=0,
+                sizing_mode=self._STRETCH_WIDTH,
+                styles={'display' : 'flex', 'gap' : '10px', 'align-items' : 'center', 'justify-content' : 'center'}
+            ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["kmeans-tab"]
         )
