@@ -261,7 +261,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Update visualization
             self._progress_display.update(65, "Visualizing K-Means results - creating heatmap...", level='info')
             time.sleep(0.1)
-            self._update_clustering_plots(labels, centres, available_norm, n_clusters, "KMeans")
+            self._update_clustering_plots(labels, centres, available_norm, n_clusters, constants.TAB_KMEANS)
             
             # Finalize
             self._orchestrator.finalize_clustering(n_clusters, "K-Means", self._plots_layout)
@@ -323,14 +323,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Update visualization
             self._progress_display.update(65, "Visualizing Agglomerative results - creating heatmap...", level='info')
             time.sleep(0.1)
-            self._update_clustering_plots(labels, centres, available_norm, n_clusters, "Agglomerative")
+            self._update_clustering_plots(labels, centres, available_norm, n_clusters, constants.TAB_AGGLOMERATIVE)
             
             # Finalize
-            self._orchestrator.finalize_clustering(n_clusters, "Agglomerative", self._plots_layout)
+            self._orchestrator.finalize_clustering(n_clusters, constants.TAB_AGGLOMERATIVE, self._plots_layout)
             pn.state.notifications.success("Agglomerative clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
-            self._orchestrator.handle_error(e, "Agglomerative", self._plots_layout)
+            self._orchestrator.handle_error(e, constants.TAB_AGGLOMERATIVE, self._plots_layout)
             pn.state.notifications.error(f"Agglomerative clustering failed: {str(e)}", duration=5000) #type: ignore
         finally:
             self._enable_all_clustering_buttons()
@@ -389,14 +389,17 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Update visualization
             self._progress_display.update(65, "Visualizing Spectral results - creating heatmap...", level='info')
             time.sleep(0.1)
-            self._update_clustering_plots(labels, centres, available_norm, n_clusters, "Spectral")
+            constants = self._model.constants
+            self._update_clustering_plots(labels, centres, available_norm, n_clusters, constants.TAB_SPECTRAL)
             
             # Finalize
-            self._orchestrator.finalize_clustering(n_clusters, "Spectral", self._plots_layout)
+            constants = self._model.constants
+            self._orchestrator.finalize_clustering(n_clusters, constants.TAB_SPECTRAL, self._plots_layout)
             pn.state.notifications.success("Spectral clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
-            self._orchestrator.handle_error(e, "Spectral", self._plots_layout)
+            constants = self._model.constants
+            self._orchestrator.handle_error(e, constants.TAB_SPECTRAL, self._plots_layout)
             pn.state.notifications.error(f"Spectral clustering failed: {str(e)}", duration=5000) #type: ignore
         finally:
             self._enable_all_clustering_buttons()
@@ -424,6 +427,72 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             data_cube = np.asarray(self._electron_count_data.fillna(0.0)) # type: ignore
         
         return data_cube
+
+    def _get_picker_for_algorithm(self, algorithm_name):
+        """Return the color picker widget associated with an algorithm tab key."""
+        constants = self._model.constants
+        if algorithm_name == constants.TAB_KMEANS:
+            return self._view.right_sidebar.kmeans_color_picker
+        if algorithm_name == constants.TAB_AGGLOMERATIVE:
+            return self._view.right_sidebar.agglomerative_color_picker
+        if algorithm_name == constants.TAB_SPECTRAL:
+            return self._view.right_sidebar.spectral_color_picker
+        return None
+
+    def _should_init_picker_after_apply(self, algorithm_name: str) -> bool:
+        """Check whether the given algorithm picker should be initialized after apply."""
+        constants = self._model.constants
+        if algorithm_name == constants.TAB_KMEANS:
+            return self._init_kmeans_picker_after_apply
+        if algorithm_name == constants.TAB_AGGLOMERATIVE:
+            return self._init_agglomerative_picker_after_apply
+        if algorithm_name == constants.TAB_SPECTRAL:
+            return self._init_spectral_picker_after_apply
+        return False
+
+    def _set_init_picker_after_apply_flag(self, algorithm_name: str, value: bool):
+        """Set algorithm-specific post-apply picker initialization flag."""
+        constants = self._model.constants
+        if algorithm_name == constants.TAB_KMEANS:
+            self._init_kmeans_picker_after_apply = value
+        elif algorithm_name == constants.TAB_AGGLOMERATIVE:
+            self._init_agglomerative_picker_after_apply = value
+        elif algorithm_name == constants.TAB_SPECTRAL:
+            self._init_spectral_picker_after_apply = value
+
+    def _set_picker_from_cluster(self, algorithm_name, cluster_label: int, i: int, j: int, color: str):
+        """Update active label state and sync the corresponding algorithm color picker."""
+        if algorithm_name in self._active_cluster_labels:
+            self._active_cluster_labels[algorithm_name] = cluster_label
+
+        picker = self._get_picker_for_algorithm(algorithm_name)
+        if picker is None:
+            return
+
+        self._suppress_color_picker_callbacks = True
+        try:
+            picker.name = f"{algorithm_name} Cluster {cluster_label} Color (x: {j}, y: {i})"
+            picker.value = color
+            picker.disabled = False
+        finally:
+            self._suppress_color_picker_callbacks = False
+
+    def _init_picker_from_default_pixel(self, algorithm_name: str, labels):
+        """Initialize picker state from the default pixel (0, 0) after clustering."""
+        if not self._should_init_picker_after_apply(algorithm_name):
+            return
+
+        try:
+            default_i, default_j = 0, 0
+            cluster_label = int(labels[default_i, default_j])
+            color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
+            self._set_picker_from_cluster(algorithm_name, cluster_label, default_i, default_j, color)
+            self._frozen_pixel = (default_i, default_j)
+            self._update_paneB(self._plot_pixel_spectrum(default_i, default_j, title_prefix="Click (Frozen)"))
+        except Exception:
+            pass
+        finally:
+            self._set_init_picker_after_apply_flag(algorithm_name, False)
     
     def _update_clustering_plots(self, labels, centres, norm, n_clusters, algorithm_name):
         """Update visualization after clustering."""
@@ -459,57 +528,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Initialize algorithm-specific picker state from the default pixel (0, 0)
         # before any explicit click interaction.
-        if algorithm_name == "KMeans" and self._init_kmeans_picker_after_apply:
-            try:
-                default_i, default_j = 0, 0
-                cluster_label = int(labels[default_i, default_j])
-                color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
-                self._active_cluster_labels[self._model.constants.TAB_KMEANS] = cluster_label
-                picker = self._view.right_sidebar.kmeans_color_picker
-                if picker is not None:
-                    self._suppress_color_picker_callbacks = True
-                    picker.name = f"K-Means Cluster {cluster_label} Color ({default_i}, {default_j})"
-                    picker.value = color
-                    picker.disabled = False
-            except Exception:
-                pass
-            finally:
-                self._suppress_color_picker_callbacks = False
-                self._init_kmeans_picker_after_apply = False
-        elif algorithm_name == "Agglomerative" and self._init_agglomerative_picker_after_apply:
-            try:
-                default_i, default_j = 0, 0
-                cluster_label = int(labels[default_i, default_j])
-                color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
-                self._active_cluster_labels[self._model.constants.TAB_AGGLOMERATIVE] = cluster_label
-                picker = self._view.right_sidebar.agglomerative_color_picker
-                if picker is not None:
-                    self._suppress_color_picker_callbacks = True
-                    picker.name = f"Agglomerative Cluster {cluster_label} Color ({default_i}, {default_j})"
-                    picker.value = color
-                    picker.disabled = False
-            except Exception:
-                pass
-            finally:
-                self._suppress_color_picker_callbacks = False
-                self._init_agglomerative_picker_after_apply = False
-        elif algorithm_name == "Spectral" and self._init_spectral_picker_after_apply:
-            try:
-                default_i, default_j = 0, 0
-                cluster_label = int(labels[default_i, default_j])
-                color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
-                self._active_cluster_labels[self._model.constants.TAB_SPECTRAL] = cluster_label
-                picker = self._view.right_sidebar.spectral_color_picker
-                if picker is not None:
-                    self._suppress_color_picker_callbacks = True
-                    picker.name = f"Spectral Cluster {cluster_label} Color ({default_i}, {default_j})"
-                    picker.value = color
-                    picker.disabled = False
-            except Exception:
-                pass
-            finally:
-                self._suppress_color_picker_callbacks = False
-                self._init_spectral_picker_after_apply = False
+        self._init_picker_from_default_pixel(algorithm_name, labels)
 
     def _refresh_cluster_visuals(self):
         """Rebuild the clustering heatmap and spectrum panes using the current color palette."""
@@ -916,32 +935,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
                     # Update the picker matching the active clustering type.
                     clustering_type = self._model.last_clustering_result.get('clustering', {}).get('type', None)
-                    if clustering_type in self._active_cluster_labels:
-                        self._active_cluster_labels[clustering_type] = cluster_label
-                    if clustering_type == self._model.constants.TAB_KMEANS:
-                        picker = self._view.right_sidebar.kmeans_color_picker
-                        if picker is not None:
-                            self._suppress_color_picker_callbacks = True
-                            picker.name = f"Cluster {cluster_label} Color (x: {j}, y: {i})"
-                            picker.value = color
-                            picker.disabled = False
-                            self._suppress_color_picker_callbacks = False
-                    elif clustering_type == self._model.constants.TAB_AGGLOMERATIVE:
-                        picker = self._view.right_sidebar.agglomerative_color_picker
-                        if picker is not None:
-                            self._suppress_color_picker_callbacks = True
-                            picker.name = f"Cluster {cluster_label} Color (x: {j}, y: {i})"
-                            picker.value = color
-                            picker.disabled = False
-                            self._suppress_color_picker_callbacks = False
-                    elif clustering_type == self._model.constants.TAB_SPECTRAL:
-                        picker = self._view.right_sidebar.spectral_color_picker
-                        if picker is not None:
-                            self._suppress_color_picker_callbacks = True
-                            picker.name = f"Cluster {cluster_label} Color (x: {j}, y: {i})"
-                            picker.value = color
-                            picker.disabled = False
-                            self._suppress_color_picker_callbacks = False
+                    self._set_picker_from_cluster(clustering_type, cluster_label, i, j, color)
 
                 fig = self._plot_pixel_spectrum(i, j, title_prefix="Click (Frozen)")
                 self._update_paneB(fig)
@@ -950,6 +944,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         except Exception as e:
             print(f"Error handling click: {e}")
             traceback.print_exc()
+            
+    
 
     # --- Lifecycle ---
 
