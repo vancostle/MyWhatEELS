@@ -125,6 +125,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         # HDBSCAN parameters
         self._hdbscan_selected_umap = pn.widgets.Select()
+        self._hdbscan_active_button_icon = pn.widgets.ButtonIcon()
         self._hdbscan_active_button = pn.widgets.Button()
         self._hdbscan_min_samples = pn.widgets.IntInput()
         self._hdbscan_min_cluster_size = pn.widgets.IntInput()
@@ -210,6 +211,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_min_samples.disabled = False
         self._hdbscan_min_cluster_size.disabled = False
         self._hdbscan_active_button.disabled = False
+        self._hdbscan_active_button_icon.disabled = False
         
         self._compute_hdbscan_on_umap_button.disabled = False
         
@@ -219,6 +221,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_min_samples.disabled = True
         self._hdbscan_min_cluster_size.disabled = True
         self._hdbscan_active_button.disabled = True
+        self._hdbscan_active_button_icon.disabled = True
         
         self._compute_hdbscan_on_umap_button.disabled = True
         
@@ -312,7 +315,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             initial_state=True,
             states={
                 "on": {
-                    "label": "Compute UMAP Embedding",
+                    "label": "Compute UMAP Embedding(s)",
                     "on_click": lambda : print("UMAP computation started"),
                     "button_type": "success",
                 },
@@ -411,7 +414,20 @@ class Clustering2RightSidebarLayout(pn.Column):
             name="Evaluate",
             button_type="warning",
             sizing_mode=self._STRETCH_WIDTH,
-            margin=(6, 10, 10, 10)
+            margin=(6, 0, 10, 10)
+        )
+
+        self._hdbscan_active_button_icon = pn.widgets.ButtonIcon(
+            icon=self._SVG,
+            active_icon=self._ACTIVE_SVG,
+            size='2em',
+            margin=(0, 0, 0, 10),
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px"
+            },
         )
         
         def update_hdbscan_min_samples(event):
@@ -464,7 +480,18 @@ class Clustering2RightSidebarLayout(pn.Column):
             
         compute_hdbscan_embedding_content = pn.Column(
             self._hdbscan_selected_umap,
-            self._hdbscan_active_button,
+            pn.Row(
+                pn.Column(
+                    self._hdbscan_active_button_icon,
+                    margin=(11, 0, 0, 0),
+                    height=55,
+                ),
+                self._hdbscan_active_button,
+                sizing_mode=self._STRETCH_WIDTH,
+                height=55,
+                margin=(10, 0, 0, 0),
+                styles={"display": "flex"}
+            ),
             self._hdbscan_min_samples,
             self._hdbscan_min_cluster_size,
             pn.Column(
