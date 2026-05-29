@@ -133,6 +133,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def create_plots(self):
         left_column = pn.Column(
             self.paneA,
+            self._hover_gate_widget,
             align='center',
             margin=0,
         )
@@ -616,7 +617,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = self._get_display_numpy()[i, j, :]
         except Exception:
             spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
-        return self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
+        return self._build_spectrum_curve(spec, f"Pixel (x={j}, y={i})")
 
     @override
     def _figB_region(self, pairs):
@@ -802,7 +803,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 fig = self._figB_region(region_pairs)
         elif point is not None:
             i, j = round(point['y']), round(point['x'])
-            title = f"Hover (x={j}, y={i})"
+            title = f"Pixel (x={j}, y={i})"
             # Use cached numpy array — avoids xarray conversion and eliminates the
             # previous double-extraction (spec was computed then discarded for _figB_hover).
             try:
@@ -854,7 +855,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if apply_preprocessors:
                 spec = get_pixel_spectrum(self._get_display_data(), point)
                 if spec is not None:
-                    fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
+                    fig = self._build_spectrum_curve(spec, f"Pixel (x={j}, y={i})")
                     if self._should_apply_visual_fitting():
                         energy_axis = self._get_display_energy_axis()
                         try:
@@ -873,7 +874,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if apply_preprocessors:
             spec = get_pixel_spectrum(self._get_display_data(), default_point)
             if spec is not None:
-                fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
+                fig = self._build_spectrum_curve(spec, f"Pixel (x=0, y=0)")
                 if self._should_apply_visual_fitting():
                     energy_axis = self._get_display_energy_axis()
                     try:
@@ -1955,33 +1956,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     # --- Pane A event handlers (hover / click / selected) ---
     def _on_paneA_hover(self, x=None, y=None):
         # HoloViews PointerXY delivers x, y directly as kwargs
-        if self._hover_blocked:
-            return
         if x is None or y is None:
             return
+        self._queue_hover(x, y)
 
-        current_pixel = (round(y), round(x))
-        point = {"x": x, "y": y}
-        self._last_hover_point = point
-
-        # Pixel deduplication: if the mouse is still over the same integer pixel
-        # and there is no active region selection, there is nothing new to render.
-        if not self._region_pairs and self._last_rendered_pixel == current_pixel:
+    def _handle_hover_render(self, point):
+        if self._hover_blocked:
             return
-
-        # Debounce: skip render if the last one was too recent.
-        # _last_hover_point is always updated above so the next render
-        # uses the most recent position.
-        now = self._now_ms()
         if (
-            self._last_hover_render_ts is not None
-            and (now - self._last_hover_render_ts) < self._HOVER_DEBOUNCE_MS
+            not self._region_pairs
+            and not self._preprocessors_applied
+            and not self._fitting_active
+            and self._try_fast_hover_update(point)
         ):
-            if self._region_pairs:
-                self._last_hover_ts = now
-                start_pc(self._pc)
+            stop_pc(self._pc)
+            self._last_hover_ts = None
             return
-
+        current_pixel = (round(point["y"]), round(point["x"]))
+        now = self._now_ms()
         self._last_hover_render_ts = now
         self._last_rendered_pixel = current_pixel
 

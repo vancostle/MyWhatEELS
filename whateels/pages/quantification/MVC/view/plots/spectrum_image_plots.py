@@ -171,13 +171,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     @override
     def _on_paneA_hover(self, x=None, y=None):
+        if x is None or y is None:
+            return
+        self._queue_hover(x, y)
+
+    def _handle_hover_render(self, point):
         # Hover is blocked after a lasso selection — double-click on paneA to reset.
         if self._hover_blocked:
             return
-        if x is None or y is None:
+        if not self._region_pairs and self._try_fast_hover_update(point):
             return
-        point = {"x": x, "y": y}
-        self._last_hover_point = point
         if self._region_pairs:
             # Temporarily show pixel spectrum; inactivity timer will revert to ROI
             self._update_paneB(self._figB_hover(point))
@@ -191,6 +194,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_paneA_click(self, x=None, y=None):
         if x is None or y is None:
             return
+        self._last_hover_pixel = (round(y), round(x))
         # Ignore while a selection is being drawn or processed — Tap fires at mouse-up
         # which is the same moment Selection1D finishes, causing interference.
         if self._pending_selection_ts is not None or self._hover_blocked:

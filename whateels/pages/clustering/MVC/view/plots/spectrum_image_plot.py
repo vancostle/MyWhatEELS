@@ -905,13 +905,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         if x is None or y is None:
             return
-        self._last_hover_point = {"x": x, "y": y}
+        self._queue_hover(x, y)
+
+    def _handle_hover_render(self, point):
+        self._last_hover_point = point
         if self._hover_blocked or self._frozen_pixel is not None or self._hover_disabled:
             return
         if not self._clustering_active:
-            super()._on_paneA_hover(x, y)
+            super()._handle_hover_render(point)
             return
-        i, j = int(y), int(x)
+        i, j = int(point["y"]), int(point["x"])
         fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
         self._update_paneB(fig)
     
@@ -923,6 +926,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         if x is None or y is None:
             return
+        self._last_hover_pixel = (round(y), round(x))
         try:
             if self._clustering_active:
                 i, j = int(y), int(x)
