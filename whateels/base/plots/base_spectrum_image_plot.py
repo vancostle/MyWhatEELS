@@ -18,6 +18,9 @@ import holoviews as hv
 from holoviews import streams as hv_streams
 from bokeh.events import MouseLeave, MouseMove
 from bokeh.models import CustomJS
+import logging
+
+_logger = logging.getLogger(__name__)
 
 from whateels.helpers import SpectrumExtractor
 from whateels.interfaces import IPlot
@@ -325,6 +328,16 @@ class BaseSpectrumImagePlot(IPlot):
         self._debounce_pc = pn.state.add_periodic_callback(
             self._check_selection_debounce, period=250, start=False
         )
+        # Periodic callback to flush the hover queue (started on first hover)
+        try:
+            hover_period = max(10, int(self._get_hover_period_ms()))
+        except Exception:
+            hover_period = 33
+        try:
+            self._hover_pc = pn.state.add_periodic_callback(self._flush_hover_queue, period=hover_period, start=False)
+            _logger.debug("Created hover periodic callback with period=%sms", hover_period)
+        except Exception:
+            _logger.exception("Failed to create hover periodic callback")
         # DoubleTap stream to reset lasso selection
         if self._selectors is not None:
             self._double_tap_stream = hv_streams.DoubleTap(source=self._selectors)
@@ -354,7 +367,7 @@ class BaseSpectrumImagePlot(IPlot):
             color='black',
             line_width=1.5,
             alpha=0.7,
-            title=f"Pixel (x={j}, y={i})",
+            title=f"Hover (x={j}, y={i})",
             xlabel=self._X_AXIS_SPECTRUM_TITLE,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
@@ -431,13 +444,17 @@ class BaseSpectrumImagePlot(IPlot):
         if self._paneB_pipe is not None:
             if fig is not None and not isinstance(fig, hv.Overlay):
                 fig = hv.Overlay([fig])
+            _logger.debug("_update_paneB sending fig=%s", type(fig).__name__ if fig is not None else None)
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
 
     def _client_hover_gate_hook(self, plot, element):
         """Install a browser-side mousemove gate that only syncs true pixel changes."""
         try:
             fig = getattr(plot, 'state', None)
-            if fig is None or getattr(plot, '_whatEELS_hover_gate_attached', False):
+            fig_id = getattr(fig, 'id', None)
+            if fig is None or fig_id is None:
+                return
+            if getattr(plot, '_whatEELS_hover_gate_attached_fig_id', None) == fig_id:
                 return
 
             gate_model = None
@@ -476,12 +493,14 @@ class BaseSpectrumImagePlot(IPlot):
 
             fig.js_on_event(MouseMove, CustomJS(args={'gate': gate_model}, code=move_code))
             fig.js_on_event(MouseLeave, CustomJS(args={'gate': gate_model}, code=leave_code))
-            plot._whatEELS_hover_gate_attached = True
+            plot._whatEELS_hover_gate_attached_fig_id = fig_id
         except Exception:
+            _logger.exception("_client_hover_gate_hook failed")
             pass
 
     def _on_hover_gate_value_changed(self, event):
         value = getattr(event, 'new', '') or ''
+        _logger.debug("_on_hover_gate_value_changed: %r", value)
         if not value:
             self._hover_pending_point = None
             self._hover_last_event_ts = None
@@ -514,6 +533,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._hover_last_event_ts = self._now_ms()
         self._hover_last_render_ts = self._hover_last_event_ts
         self._handle_hover_render(point)
+        _logger.debug("_on_hover_gate_value_changed -> _handle_hover_render called for point=%r", point)
 
     def _show_spectrum(self, *, point=None, region_pairs=None):
         """
@@ -530,6 +550,7 @@ class BaseSpectrumImagePlot(IPlot):
         elif point is not None:
             fig = self._figB_hover(point)
         self._update_paneB(fig)
+        _logger.debug("_show_spectrum called: point=%r region_pairs=%r", point, bool(region_pairs))
 
     # --- Pane A event handlers ---
 
@@ -749,8 +770,10 @@ class BaseSpectrumImagePlot(IPlot):
 
     def _try_fast_hover_update(self, point) -> bool:
         """Update the live paneB line data in-place for hover when possible."""
+        _logger.debug("_try_fast_hover_update called with point=%r", point)
         bokeh_plot = self._get_live_paneB_bokeh_plot()
         if bokeh_plot is None:
+            _logger.debug("_try_fast_hover_update: no live bokeh plot")
             return False
 
         try:
@@ -762,6 +785,7 @@ class BaseSpectrumImagePlot(IPlot):
                         renderer = candidate
                         break
             if renderer is None:
+                _logger.debug("_try_fast_hover_update: no suitable renderer found")
                 return False
 
             i, j = round(point['y']), round(point['x'])
@@ -775,12 +799,15 @@ class BaseSpectrumImagePlot(IPlot):
                     return False
 
             source = renderer.data_source
+            _logger.debug("_try_fast_hover_update: updating renderer=%r source=%r", type(renderer).__name__, type(source).__name__)
             source.data = {
                 'x': self._energy,
                 'y': spec,
             }
+            _logger.debug("_try_fast_hover_update success for pixel=(%s,%s)", i, j)
             return True
         except Exception:
+            _logger.exception("_try_fast_hover_update failed")
             return False
 
     def _get_hover_period_ms(self) -> int:
@@ -813,6 +840,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._hover_last_event_ts = self._now_ms()
         if self._hover_pc is not None and not self._hover_pc.running:
             self._hover_pc.start()
+        _logger.debug("_queue_hover enqueued point=%r", point)
 
     def _flush_hover_queue(self):
         if self._hover_pending_point is None:
@@ -856,6 +884,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._last_hover_pixel = current_pixel
         self._hover_last_render_ts = now
         self._handle_hover_render(point)
+        _logger.debug("_flush_hover_queue -> _handle_hover_render executed for point=%r", point)
         # Only render once per queued hover; require a new event to render again.
         self._hover_pending_point = None
 

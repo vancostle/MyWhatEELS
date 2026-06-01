@@ -617,7 +617,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = self._get_display_numpy()[i, j, :]
         except Exception:
             spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
-        return self._build_spectrum_curve(spec, f"Pixel (x={j}, y={i})")
+        return self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
 
     @override
     def _figB_region(self, pairs):
@@ -803,7 +803,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 fig = self._figB_region(region_pairs)
         elif point is not None:
             i, j = round(point['y']), round(point['x'])
-            title = f"Pixel (x={j}, y={i})"
+            title = f"Hover (x={j}, y={i})"
             # Use cached numpy array — avoids xarray conversion and eliminates the
             # previous double-extraction (spec was computed then discarded for _figB_hover).
             try:
@@ -855,7 +855,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if apply_preprocessors:
                 spec = get_pixel_spectrum(self._get_display_data(), point)
                 if spec is not None:
-                    fig = self._build_spectrum_curve(spec, f"Pixel (x={j}, y={i})")
+                    fig = self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
                     if self._should_apply_visual_fitting():
                         energy_axis = self._get_display_energy_axis()
                         try:
@@ -874,7 +874,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if apply_preprocessors:
             spec = get_pixel_spectrum(self._get_display_data(), default_point)
             if spec is not None:
-                fig = self._build_spectrum_curve(spec, f"Pixel (x=0, y=0)")
+                fig = self._build_spectrum_curve(spec, "Hover (x=0, y=0)")
                 if self._should_apply_visual_fitting():
                     energy_axis = self._get_display_energy_axis()
                     try:

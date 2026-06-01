@@ -24,6 +24,10 @@ if sys.platform == 'win32':
 
 import traceback, logging
 
+# Enable DEBUG logging to the console for debugging hover/plot flow.
+# Keep format compact and include module name for easier tracing.
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 _ANSI_RED_BG_BOLD_WHITE = "\033[41;1;97m"
 _ANSI_RESET             = "\033[0m"
 

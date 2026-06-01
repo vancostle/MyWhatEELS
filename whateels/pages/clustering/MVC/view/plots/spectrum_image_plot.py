@@ -16,9 +16,13 @@ Note: All lasso/box/region selection logic has been removed. No region selection
 import panel as pn
 import numpy as np
 import holoviews as hv
+from holoviews import streams as hv_streams
 import time
 import threading
 import traceback
+import logging
+
+_logger = logging.getLogger(__name__)
 
 from whateels.helpers import SpectrumExtractor
 from whateels.base.plots import BaseSpectrumImagePlot
@@ -70,6 +74,22 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Call parent constructor to setup base visualization
         super().__init__(dataset, eloss_name, ['hover'])
+
+        try:
+            if self._hover_pc is not None:
+                try:
+                    if self._hover_pc.running:
+                        self._hover_pc.stop()
+                except Exception:
+                    pass
+            self._HOVER_FPS = 30
+            self._hover_pc = pn.state.add_periodic_callback(
+                self._flush_hover_queue,
+                period=max(10, int(1000 / float(self._HOVER_FPS))),
+                start=False,
+            )
+        except Exception:
+            pass
         
         # Store original plots layout to restore after clustering
         self._plots_layout = None
@@ -78,6 +98,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._frozen_pixel = None  # Store frozen pixel (i, j) from single click
         self._hover_disabled = False  # Disable hover after showing all clusters
         self._last_hover_point = None  # Store last hover position for re-enabling
+        self._suppress_click_until_ms = 0  # Ignore Tap events that follow a DoubleTap
+        self._paneB_hover_flush_pending = False
+        self._pending_paneB_hover_fig = None
+        self._last_paneB_send_ts = None
+        self._HOVER_PIPE_THROTTLE_MS = 33
+        self._CLUSTER_HOVER_DEADZONE_PX = 0.9
+        self._cluster_hover_install_sent = False
+        self._cluster_hover_live_ready = False
+        self._cluster_hover_raw_renderer = None
+        self._cluster_hover_centroid_renderer = None
+        self._cluster_hover_last_label = None
+        self._cluster_hover_processing = False
+        self._cluster_hover_latest_point = None
         self._init_kmeans_picker_after_apply = False
         self._init_agglomerative_picker_after_apply = False
         self._init_spectral_picker_after_apply = False
@@ -143,6 +176,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             lambda e: self._on_preprocessing_switch_changed(), 'value'
         )
 
+        self._cluster_hover_idle_pc = None
+
         # Remove region selection state (lasso/box selection)
 
     # --- paneA setup / callbacks: handled by base ---
@@ -207,6 +242,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._current_x_range = None
         self._current_y_range = None
         point = self._last_hover_point if self._last_hover_point is not None else {"x": 0, "y": 0}
+        if self._try_fast_hover_update(point):
+            return
         self._update_paneB(self._figB_hover(point))
 
     # --- Clustering Application Methods ---
@@ -272,6 +309,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             pn.state.notifications.error(f"K-Means clustering failed: {str(e)}", duration=5000) #type: ignore
         finally:
             self._enable_all_clustering_buttons()
+
 
     def _apply_agglomerative_clustering(self, n_clusters, linkage, affinity, available_norm):
         """Apply Agglomerative clustering and update visualization."""
@@ -487,8 +525,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             cluster_label = int(labels[default_i, default_j])
             color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
             self._set_picker_from_cluster(algorithm_name, cluster_label, default_i, default_j, color)
-            self._frozen_pixel = (default_i, default_j)
-            self._update_paneB(self._plot_pixel_spectrum(default_i, default_j, title_prefix="Click (Frozen)"))
+            self._last_hover_point = {"x": default_j, "y": default_i}
+            self._update_paneB(self._plot_pixel_spectrum(default_i, default_j, title_prefix="Hover"))
         except Exception:
             pass
         finally:
@@ -515,12 +553,32 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         
         # Update heatmap pane — re-overlay with selectors to preserve interaction streams
         if self.paneA is not None and self._selectors is not None:
+            try:
+                setattr(self.paneA, '_whatEELS_hover_gate_attached', False)
+            except Exception:
+                pass
             self._paneA_base_overlay = cluster_img * self._selectors  # type: ignore
             self._update_selection_overlay([])  # reset any stale red dots
-        
+            try:
+                if getattr(self, '_hover_stream', None) is not None:
+                    try:
+                        self._hover_stream.remove_subscriber(self._on_paneA_hover)
+                    except Exception:
+                        pass
+                self._hover_source = cluster_img
+                self._hover_stream = hv_streams.PointerXY(source=cluster_img)
+                self._hover_stream.add_subscriber(self._on_paneA_hover)
+            except Exception:
+                _logger.exception("Failed to reattach clustering hover stream")
+
         # Update spectrum pane to show cluster centers via base class pipe
         centers_fig = self._visualizer.plot_centers(centres, self._energy)
         self._update_paneB(centers_fig)
+        self._cluster_hover_install_sent = False
+        self._cluster_hover_live_ready = False
+        self._cluster_hover_raw_renderer = None
+        self._cluster_hover_centroid_renderer = None
+        self._cluster_hover_last_label = None
         
         self._clustering_active = True
         self._frozen_pixel = None  # Reset frozen state
@@ -545,8 +603,23 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
 
         if self.paneA is not None and self._selectors is not None:
+            try:
+                setattr(self.paneA, '_whatEELS_hover_gate_attached', False)
+            except Exception:
+                pass
             self._paneA_base_overlay = cluster_img * self._selectors  # type: ignore
             self._update_selection_overlay([])
+            try:
+                if getattr(self, '_hover_stream', None) is not None:
+                    try:
+                        self._hover_stream.remove_subscriber(self._on_paneA_hover)
+                    except Exception:
+                        pass
+                self._hover_source = cluster_img
+                self._hover_stream = hv_streams.PointerXY(source=cluster_img)
+                self._hover_stream.add_subscriber(self._on_paneA_hover)
+            except Exception:
+                _logger.exception("Failed to reattach clustering hover stream during refresh")
 
         if self._hover_disabled:
             self._update_paneB(self._visualizer.plot_centers(centres, self._energy))
@@ -557,7 +630,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
             self._update_paneB(self._plot_pixel_spectrum(i, j, title_prefix="Hover"))
         else:
-            self._update_paneB(self._visualizer.plot_centers(centres, self._energy))
+            return
+        return
 
     def _on_color_picker_changed(self, algorithm_name, event):
         """Apply a picked color to the active cluster and refresh the plots."""
@@ -794,7 +868,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         overlays = []
         display_data = self._get_display_data()
-        spec = SpectrumExtractor.get_spectrum_from_pixel(display_data, i, j)
+        try:
+            spec = self._get_display_numpy()[i, j, :]
+        except Exception:
+            spec = SpectrumExtractor.get_spectrum_from_pixel(display_data, i, j)
         if spec is None:
             return hv.Overlay([])
 
@@ -870,17 +947,107 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         return hv.Overlay(overlays)
 
+    def _build_cluster_hover_overlay(self, point, title_prefix="Hover"):
+        """Build a cheap hover overlay that still keeps the raw background and centroid visible."""
+        i, j = int(point["y"]), int(point["x"])
+        overlays = []
+
+        try:
+            spec = self._get_display_numpy()[i, j, :]
+        except Exception:
+            spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+
+        if spec is not None:
+            overlays.append(
+                hv.Curve((self._energy, spec), kdims=['x'], vdims=['y']).opts(
+                    color='black',
+                    line_width=1.5,
+                    alpha=0.2,
+                    responsive=True,
+                    shared_axes=False,
+                    framewise=True,
+                )
+            )
+
+        if self._clustering_active and self._clustering_results is not None:
+            try:
+                labels, centres = self._clustering_results
+                cluster_label = int(labels[i, j])
+                cluster_center = centres[cluster_label]
+                color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
+                overlays.append(
+                    hv.Curve((self._energy, cluster_center), kdims=['x'], vdims=['y']).opts(
+                        color=color,
+                        line_width=3,
+                        alpha=0.95,
+                        responsive=True,
+                        shared_axes=False,
+                        framewise=True,
+                    )
+                )
+            except Exception:
+                _logger.exception("Error building cluster hover overlay")
+
+        return hv.Overlay(overlays).opts(
+            hv.opts.Overlay(
+                responsive=True,
+                shared_axes=False,
+                framewise=True,
+                tools=[],
+                hooks=[self._cache_cluster_hover_renderers],
+            )
+        )
+
+    def _cache_cluster_hover_renderers(self, plot, element):
+        """Cache the two line renderers from the compact hover overlay once it is rendered."""
+        try:
+            figure = getattr(plot, 'state', None) or plot
+            renderers = [renderer for renderer in getattr(figure, 'renderers', []) or [] if hasattr(renderer, 'data_source')]
+            line_renderers = []
+            for renderer in renderers:
+                glyph = getattr(renderer, 'glyph', None)
+                if glyph is None or type(glyph).__name__.lower() != 'line':
+                    continue
+                line_renderers.append(renderer)
+            if len(line_renderers) < 2:
+                return
+            self._cluster_hover_raw_renderer = line_renderers[0]
+            self._cluster_hover_centroid_renderer = line_renderers[1]
+            self._cluster_hover_live_ready = True
+            _logger.debug(
+                "clustering cached compact hover renderers raw=%s centroid=%s",
+                type(line_renderers[0]).__name__,
+                type(line_renderers[1]).__name__,
+            )
+        except Exception:
+            _logger.exception("clustering _cache_cluster_hover_renderers failed")
+
     @override
     def _on_paneA_double_tap(self, x=None, y=None):
         """Toggle between hover mode and all-cluster-centers display."""
         was_hover_blocked = self._hover_blocked
         super()._on_paneA_double_tap(x, y)  # clears _hover_blocked, _region_pairs, selection overlay
         self._frozen_pixel = None
+        # DoubleTap emits two Tap-like events; keep a wider suppression window
+        # so the trailing Tap does not immediately re-freeze the pane.
+        self._suppress_click_until_ms = self._now_ms() + 900
+
+        def _send_paneB(fig):
+            try:
+                self._update_paneB(fig)
+            except Exception:
+                _logger.exception("clustering _on_paneA_double_tap deferred paneB update failed")
+
         if self._hover_disabled or was_hover_blocked:
             self._hover_disabled = False
             if self._last_hover_point is not None and self._clustering_active:
                 i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                self._update_paneB(self._plot_pixel_spectrum(i, j, title_prefix="Hover"))
+                fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
+                doc = pn.state.curdoc
+                if doc is not None:
+                    doc.add_next_tick_callback(lambda: _send_paneB(fig))
+                else:
+                    _send_paneB(fig)
         else:
             if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
                 self._hover_disabled = True
@@ -890,7 +1057,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     self._energy,
                     title="All Cluster Centers (Double Click again to re-enable hover)"
                 )
-                self._update_paneB(fig)
+                doc = pn.state.curdoc
+                if doc is not None:
+                    doc.add_next_tick_callback(lambda: _send_paneB(fig))
+                else:
+                    _send_paneB(fig)
 
     @override
     def _on_paneA_selected(self, index=None):
@@ -907,16 +1078,173 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
         self._queue_hover(x, y)
 
+    def _queue_hover(self, x, y):
+        """Queue clustering hover only when the pointer has moved enough to matter."""
+        if self._hover_blocked:
+            return
+
+        current_xy = (float(x), float(y))
+        last_xy = self._hover_last_event_xy
+        if last_xy is not None:
+            dx = abs(current_xy[0] - last_xy[0])
+            dy = abs(current_xy[1] - last_xy[1])
+            if max(dx, dy) < self._CLUSTER_HOVER_DEADZONE_PX:
+                return
+
+        current_pixel = (round(y), round(x))
+        if self._hover_last_event_pixel == current_pixel:
+            return
+
+        self._hover_last_event_xy = current_xy
+        self._hover_last_event_pixel = current_pixel
+        point = {"x": x, "y": y}
+        self._last_hover_point = point
+        self._hover_pending_point = point
+        self._hover_last_event_ts = self._now_ms()
+        if self._hover_pc is not None and not self._hover_pc.running:
+            self._hover_pc.start()
+
+    def _show_spectrum(self, *, point=None, region_pairs=None, is_hover_event: bool = False):
+        """Build the clustering spectrum view and update paneB with hover throttling."""
+        fig = None
+        if region_pairs is not None:
+            if not region_pairs:
+                if self._last_hover_point is not None:
+                    self._show_spectrum(point=self._last_hover_point, is_hover_event=is_hover_event)
+                return
+            fig = self._plot_pixel_spectrum(int(point["y"]), int(point["x"]), title_prefix="Click (Frozen)") if point is not None else self._plot_pixel_spectrum(0, 0, title_prefix="Click (Frozen)")
+        elif point is not None:
+            i, j = int(point["y"]), int(point["x"])
+            if is_hover_event:
+                fig = self._build_cluster_hover_overlay(point, title_prefix=f"Hover (x={j}, y={i})")
+            else:
+                fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
+        self._update_paneB(fig, from_hover=is_hover_event)
+
+    def _try_fast_hover_update(self, point) -> bool:
+        """Update the live clustering hover view in-place when the Bokeh model already exists."""
+        if self._hover_blocked or self._hover_disabled:
+            return False
+        if not self._clustering_active:
+            return super()._try_fast_hover_update(point)
+
+        try:
+            bokeh_plot = self._get_live_paneB_bokeh_plot()
+            if bokeh_plot is None:
+                _logger.debug("clustering _try_fast_hover_update: no live bokeh plot")
+                return False
+
+            if not self._cluster_hover_install_sent:
+                _logger.debug("clustering _try_fast_hover_update: installing compact hover overlay")
+                self._cluster_hover_install_sent = True
+                self._update_paneB(self._build_cluster_hover_overlay(point), from_hover=False)
+                return True
+
+            if not self._cluster_hover_live_ready or self._cluster_hover_raw_renderer is None:
+                _logger.debug("clustering _try_fast_hover_update: compact hover renderers not cached yet")
+                self._cache_cluster_hover_renderers(bokeh_plot, None)
+                if not self._cluster_hover_live_ready or self._cluster_hover_raw_renderer is None:
+                    return False
+
+            raw_renderer = self._cluster_hover_raw_renderer
+            centroid_renderer = self._cluster_hover_centroid_renderer
+
+            labels, centres = self._clustering_results if self._clustering_results is not None else (None, None)
+            if labels is None:
+                return False
+
+            i_max = int(labels.shape[0]) - 1
+            j_max = int(labels.shape[1]) - 1
+            i = int(np.clip(round(point['y']), 0, i_max))
+            j = int(np.clip(round(point['x']), 0, j_max))
+            try:
+                spec = self._get_display_numpy()[i, j, :]
+            except Exception:
+                spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+            if spec is None:
+                return False
+
+            if raw_renderer is None:
+                _logger.debug("clustering _try_fast_hover_update: no raw spectrum renderer found")
+                return False
+
+            try:
+                raw_renderer.data_source.patch({'y': [(slice(None), np.asarray(spec))]})
+            except Exception:
+                raw_renderer.data_source.data = {
+                    'x': self._energy,
+                    'y': spec,
+                }
+
+            if centres is not None and centroid_renderer is not None:
+                cluster_label = int(labels[i, j])
+                cluster_center = centres[cluster_label]
+                if self._cluster_hover_last_label != cluster_label:
+                    color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
+                    try:
+                        centroid_renderer.data_source.patch({'y': [(slice(None), np.asarray(cluster_center))]})
+                    except Exception:
+                        centroid_renderer.data_source.data = {
+                            'x': self._energy,
+                            'y': cluster_center,
+                        }
+                    try:
+                        centroid_renderer.glyph.line_color = color
+                    except Exception:
+                        pass
+                    self._cluster_hover_last_label = cluster_label
+
+            if self._cluster_hover_last_label is None and self._clustering_results is not None:
+                try:
+                    labels, _ = self._clustering_results
+                    self._cluster_hover_last_label = int(labels[i, j])
+                except Exception:
+                    pass
+
+            return True
+        except Exception:
+            _logger.exception("clustering _try_fast_hover_update failed")
+            return False
+
+    def _flush_pending_hover_send(self):
+        self._paneB_hover_flush_pending = False
+        fig = self._pending_paneB_hover_fig
+        self._pending_paneB_hover_fig = None
+        if fig is None:
+            return
+        self._update_paneB(fig, from_hover=True)
+
+    def _update_paneB(self, fig, from_hover: bool = False):
+        if self._paneB_pipe is None:
+            return
+
+        if fig is not None and not isinstance(fig, hv.Overlay):
+            fig = hv.Overlay([fig])
+
+        if not from_hover:
+            self._pending_paneB_hover_fig = None
+            _logger.debug("clustering _update_paneB immediate send fig=%s", type(fig).__name__ if fig is not None else None)
+            self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+            self._last_paneB_send_ts = self._now_ms()
+            return
+
+        self._pending_paneB_hover_fig = None
+        _logger.debug("clustering _update_paneB hover immediate send fig=%s", type(fig).__name__ if fig is not None else None)
+        self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+        self._last_paneB_send_ts = self._now_ms()
+
     def _handle_hover_render(self, point):
         self._last_hover_point = point
-        if self._hover_blocked or self._frozen_pixel is not None or self._hover_disabled:
+        if self._hover_blocked or self._hover_disabled:
             return
         if not self._clustering_active:
             super()._handle_hover_render(point)
             return
-        i, j = int(point["y"]), int(point["x"])
-        fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
-        self._update_paneB(fig)
+        if self._frozen_pixel is not None:
+            self._frozen_pixel = None
+        if self._try_fast_hover_update(point):
+            return
+        self._show_spectrum(point=point, is_hover_event=True)
     
     @override
     def _on_paneA_click(self, x=None, y=None):
@@ -925,6 +1253,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         Double-click is handled by the base DoubleTap stream via _on_paneA_double_tap.
         """
         if x is None or y is None:
+            return
+        if self._now_ms() < self._suppress_click_until_ms:
+            _logger.debug("clustering _on_paneA_click ignored due to recent DoubleTap")
             return
         self._last_hover_pixel = (round(y), round(x))
         try:
