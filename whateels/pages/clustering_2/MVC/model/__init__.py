@@ -19,6 +19,8 @@ class Clustering2PageModel:
         self._svm_settings_key: str = "Configure SVM settings"
         self._svm_train_settings_key: str = "Configure Train SVM settings"
         self._loaded_umap_data = None
+        self._svm_model = None
+        self._svm_last_result: dict = {}
         
     @property
     def app_state(self) -> "AppState":
@@ -53,6 +55,12 @@ class Clustering2PageModel:
     @property
     def loaded_umap_data(self):
         return self._loaded_umap_data
+    @property
+    def svm_model(self):
+        return self._svm_model
+    @property
+    def svm_last_result(self) -> dict:
+        return self._svm_last_result
 
     def is_preprocessed_data_available(self) -> bool:
         """Return True when Home has published preprocessed ElectronCount data."""
@@ -87,3 +95,11 @@ class Clustering2PageModel:
     @loaded_umap_data.setter
     def loaded_umap_data(self, data):
         self._loaded_umap_data = data
+
+    @svm_model.setter
+    def svm_model(self, model):
+        self._svm_model = model
+
+    @svm_last_result.setter
+    def svm_last_result(self, result: dict):
+        self._svm_last_result = result

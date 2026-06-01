@@ -4,6 +4,7 @@ import numpy as np
 from .umap_service import UMAPService
 from .hdbscan_service import HDBSCANService
 from .plot_service import PlotService
+from .svm_service import SVMService
 
 from typing import TYPE_CHECKING, Optional, Any
 if TYPE_CHECKING:
@@ -14,6 +15,7 @@ class UMAP_HDBSCAN:
     def __init__(self, electron_count_data : "DataArray"):
         self._umap_service = UMAPService(electron_count_data)
         self._hdbscan_service = HDBSCANService()
+        self._svm_service = SVMService(self._umap_service.data)
         self._plot_service = PlotService(
             self._umap_service.electron_count_data,
             self._umap_service.eloss,
@@ -106,3 +108,47 @@ class UMAP_HDBSCAN:
 
     def plot_cluster_heatmap(self, data, cmap='rainbow'):
         return self._plot_service.plot_cluster_heatmap(data, cmap)
+
+    def train_svm_from_hdbscan_labels(
+        self,
+        hdbscan_labels,
+        kernel,
+        c_value=1.0,
+        gamma=None,
+        coef0=None,
+        degree=3,
+        test_size=0.25,
+        cv=10,
+        probability=False,
+        min_size=400,
+        random_state=42,
+    ) -> dict:
+        """Train SVM/SGD from HDBSCAN labels with class-balanced sampling."""
+        return self._svm_service.train_svm_from_hdbscan_labels(
+            hdbscan_labels=hdbscan_labels,
+            kernel=kernel,
+            c_value=c_value,
+            gamma=gamma,
+            coef0=coef0,
+            degree=degree,
+            test_size=test_size,
+            cv=cv,
+            probability=probability,
+            min_size=min_size,
+            random_state=random_state,
+        )
+
+    def reassign_outliers_with_svm(
+        self,
+        hdbscan_labels,
+        model,
+        class_map,
+        outlier_label=-1,
+    ) -> tuple[np.ndarray, int]:
+        """Predict and reassign outliers in HDBSCAN labels using trained SVM/SGD."""
+        return self._svm_service.reassign_outliers(
+            hdbscan_labels=hdbscan_labels,
+            model=model,
+            class_map=class_map,
+            outlier_label=outlier_label,
+        )

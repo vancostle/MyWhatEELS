@@ -1,5 +1,8 @@
 from whateels.helpers import SafeConverter, URLUtils
 import itertools, panel as pn, threading
+import numpy as np
+
+from types import SimpleNamespace
 from ..view.plots import Clustering2SpectrumImagePlot
 
 from typing import TYPE_CHECKING
@@ -53,6 +56,16 @@ class Clustering2PageController:
             eloss_name='Eloss',
         )
         self._spectrum_plot_layout = self._spectrum_plot.create_plots()
+        self._svm_spectrum_plot = Clustering2SpectrumImagePlot(
+            self._model.selected_dataset,
+            eloss_name='Eloss',
+        )
+        self._svm_spectrum_plot_layout = self._svm_spectrum_plot.create_plots()
+        self._last_hdbscan_results = None
+        self._last_selected_embedding = None
+        self._last_available_norm = 'none'
+        self._last_hdbscan_min_samples = None
+        self._last_hdbscan_min_cluster_size = None
 
         view.right_sidebar.use_preprocessed_data_switch.param.watch(
             self._on_use_preprocessed_data_switch_changed,
@@ -65,6 +78,7 @@ class Clustering2PageController:
         view.right_sidebar.compute_umap_embedding_run_button.on_click_by_state(False, self._on_umap_cancel_button_click)
         
         view.right_sidebar.compute_hdbscan_embedding_run_button.on_click(self._compute_hdbscan_on_umap_event)
+        view.right_sidebar.svm_train_button.on_click(self._train_svm_on_umap_event)
         
     def is_valid_tab_and_dataset(self) -> bool:
         """Returns True if the controller was initialized with a valid tab and dataset, else False."""
@@ -118,6 +132,13 @@ class Clustering2PageController:
         """Clear previous results because they belong to a different input data source."""
         self._model.umap_data_dict = dict()
         self._model.completed_umap_count = 0
+        self._model.svm_model = None
+        self._model.svm_last_result = {}
+        self._last_hdbscan_results = None
+        self._last_selected_embedding = None
+        self._last_available_norm = 'none'
+        self._last_hdbscan_min_samples = None
+        self._last_hdbscan_min_cluster_size = None
         
         self._view.main.clear() # Clear all results and placeholders from the main layout
 
@@ -293,6 +314,11 @@ class Clustering2PageController:
         min_samples = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_samples, default=4)
         min_cluster_size = SafeConverter.to_int(self._view.right_sidebar.params.hdbscan_min_cluster_size, default=100)
         hdbscan_results = self._hdbscan.compute_hdbscan_on_umap(embedding, min_samples, min_cluster_size)
+        self._last_hdbscan_results = hdbscan_results
+        self._last_selected_embedding = embedding
+        self._last_available_norm = available_norm
+        self._last_hdbscan_min_samples = min_samples
+        self._last_hdbscan_min_cluster_size = min_cluster_size
         cmap_obj = self._hdbscan.get_nclusters_cmap(hdbscan_results, n_clusters=len(set(hdbscan_results.labels_)))
         
         hdbscan_umap_embedding_width_labels_plot = self._hdbscan.plot_umap_embedding_with_labels(
@@ -314,6 +340,120 @@ class Clustering2PageController:
         self._view.main.umap_embedding_wrapper.clear() # Clear UMAP embedding results from the main layout to emphasize HDBSCAN results
         self._view.main.umap_embedding_wrapper.append(hdbscan_umap_embedding_width_labels_plot) # Show UMAP embedding with HDBSCAN labels in the UMAP embedding wrapper for reference
         self._view.main.append_once(self._view.main.umap_embedding_wrapper) # Re-append the UMAP embedding wrapper to ensure it is visible after clearing
+
+    def _parse_svm_gamma(self, gamma_value):
+        """Normalize gamma value coming from modal/sidebar."""
+        if gamma_value is None:
+            return "scale"
+
+        if isinstance(gamma_value, (int, float)):
+            return float(gamma_value)
+
+        gamma_text = str(gamma_value).strip().lower()
+        if gamma_text in {"", "none", "default", "scale"}:
+            return "scale"
+        if gamma_text == "auto":
+            return "auto"
+        return float(gamma_text)
+
+    def _train_svm_on_umap_event(self, event):
+        """Train SVM from the latest plotted HDBSCAN labels and reassign outliers."""
+        if self._last_hdbscan_results is None or self._last_selected_embedding is None:
+            pn.state.notifications.warning(
+                "Compute HDBSCAN first. Train SVM uses the latest HDBSCAN result currently plotted.",
+                duration=6000,
+            ) # type: ignore
+            return
+
+        hdbscan_results = self._last_hdbscan_results
+        embedding = self._last_selected_embedding
+        available_norm = self._last_available_norm
+        min_samples = SafeConverter.to_int(self._last_hdbscan_min_samples, default=4)
+        min_cluster_size = SafeConverter.to_int(self._last_hdbscan_min_cluster_size, default=100)
+
+        try:
+            kernel = str(self._view.right_sidebar.svm_kernel.value).lower().strip()
+            c_value = float(self._view.right_sidebar.svm_C.value)
+            cv = SafeConverter.to_int(self._view.right_sidebar.svm_cv.value, default=10)
+            test_size = float(self._view.right_sidebar.params.svm_test_size)
+            probability = bool(self._view.right_sidebar.params.svm_probability)
+            gamma = self._parse_svm_gamma(self._view.right_sidebar.params.svm_gamma)
+            coef0 = float(self._view.right_sidebar.params.svm_coef0)
+            degree = SafeConverter.to_int(self._view.right_sidebar.params.svm_degree, default=3)
+
+            svm_train = self._hdbscan.train_svm_from_hdbscan_labels(
+                hdbscan_labels=hdbscan_results.labels_,
+                kernel=kernel,
+                c_value=c_value,
+                gamma=gamma,
+                coef0=coef0,
+                degree=degree,
+                test_size=test_size,
+                cv=cv,
+                probability=probability,
+                min_size=400,
+                random_state=42,
+            )
+
+            cluster_assigned_flat, predicted_outliers = self._hdbscan.reassign_outliers_with_svm(
+                hdbscan_labels=hdbscan_results.labels_,
+                model=svm_train["model"],
+                class_map=svm_train["class_map"],
+                outlier_label=-1,
+            )
+
+            reassigned_results = SimpleNamespace(labels_=cluster_assigned_flat)
+            cmap_obj = self._hdbscan.get_nclusters_cmap(
+                reassigned_results,
+                n_clusters=len(set(cluster_assigned_flat)),
+            )
+
+            self._svm_spectrum_plot.update_hdbscan_results(
+                reassigned_results,
+                cmap_obj,
+                electron_count_data=self._hdbscan.get_electron_count_data_for_norm(available_norm),
+                available_norm=available_norm,
+            )
+            self._view.main.svm_wrapper.clear()
+            self._view.main.svm_wrapper.append(self._svm_spectrum_plot_layout)
+            self._view.main.append_once(self._view.main.svm_wrapper)
+
+            umap_plot = self._hdbscan.plot_umap_embedding_with_labels(
+                embedding,
+                cluster_assigned_flat,
+                cmap_obj,
+                min_samples,
+                min_cluster_size,
+            )
+            self._view.main.svm_umap_embedding_wrapper.clear()
+            self._view.main.svm_umap_embedding_wrapper.append(umap_plot)
+            self._view.main.append_once(self._view.main.svm_umap_embedding_wrapper)
+
+            self._model.svm_model = svm_train["model"]
+            self._model.svm_last_result = {
+                "kernel": kernel,
+                "cv_scores": np.asarray(svm_train["cv_scores"]).tolist(),
+                "cv_mean": svm_train["cv_mean"],
+                "test_accuracy": svm_train["test_accuracy"],
+                "predicted_outliers": int(predicted_outliers),
+                "class_map": svm_train["class_map"],
+                "class_counts": svm_train["class_counts"],
+            }
+
+            cv_mean = svm_train["cv_mean"]
+            test_accuracy = svm_train["test_accuracy"]
+            metrics_msg = (
+                f"SVM trained (kernel={kernel}). "
+                f"Test accuracy={test_accuracy:.3f}. "
+                f"CV mean={cv_mean:.3f}. "
+                f"Outliers reassigned={predicted_outliers}."
+                if cv_mean is not None
+                else f"SVM trained (kernel={kernel}). Test accuracy={test_accuracy:.3f}. Outliers reassigned={predicted_outliers}."
+            )
+            pn.state.notifications.success(metrics_msg, duration=7000) # type: ignore
+
+        except Exception as e:
+            pn.state.notifications.error(f"SVM training failed: {e}", duration=7000) # type: ignore
     
     def _on_umap_cancel_button_click(self) -> None:
         """Event handler for UMAP cancel button click."""

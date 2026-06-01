@@ -102,6 +102,27 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="Probability",
         doc="Whether to enable probability estimates in SVM.",
     )
+    svm_kernel = param.ObjectSelector(
+        default="rbf",
+        objects=("linear", "rbf", "poly", "sigmoid", "cosine", "sgd"),
+        label="kernel",
+        doc="Kernel used for SVM/SGD training.",
+    )
+    svm_gamma = param.String(
+        default="scale",
+        label="gamma",
+        doc="Kernel coefficient for rbf/poly/sigmoid kernels.",
+    )
+    svm_coef0 = param.Number(
+        default=0.0,
+        label="coef0",
+        doc="Independent term for poly/sigmoid kernels.",
+    )
+    svm_degree = param.Integer(
+        default=3,
+        label="degree",
+        doc="Degree for poly kernel.",
+    )
 
 class Clustering2RightSidebarLayout(pn.Column):
     
@@ -176,6 +197,25 @@ class Clustering2RightSidebarLayout(pn.Column):
         def on_svm_train_settings_modal_close(params):
             self._params.svm_test_size = params.get("test_size", self._params.svm_test_size)
             self._params.svm_probability = params.get("probability", self._params.svm_probability)
+            self._params.svm_gamma = params.get("gamma", self._params.svm_gamma)
+            self._params.svm_coef0 = params.get("coef0", self._params.svm_coef0)
+            self._params.svm_degree = params.get("degree", self._params.svm_degree)
+
+        self._svm_train_settings_modal = SVMTrainSettingsModal(
+            custom_page=custom_page,
+            title=model.svm_train_settings_key,
+            on_close=on_svm_train_settings_modal_close,
+            initial_values={
+                "kernel": self._params.svm_kernel,
+                "test_size": self._params.svm_test_size,
+                "probability": self._params.svm_probability,
+                "gamma": self._params.svm_gamma,
+                "coef0": self._params.svm_coef0,
+                "degree": self._params.svm_degree,
+            },
+            width=400,
+            styles={"padding": "16px"},
+        )
         
         self._modal_manager.register_modal(
             'Extra UMAP Parameters',
@@ -220,17 +260,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         )
         self._modal_manager.register_modal(
             model.svm_train_settings_key,
-            SVMTrainSettingsModal(
-                custom_page=custom_page,
-                title=model.svm_train_settings_key,
-                on_close=on_svm_train_settings_modal_close,
-                initial_values={
-                    "test_size": self._params.svm_test_size,
-                    "probability": self._params.svm_probability,
-                },
-                width=400,
-                styles={"padding": "16px"},
-            )
+            self._svm_train_settings_modal,
         )
         
         # Data source controls
@@ -312,6 +342,21 @@ class Clustering2RightSidebarLayout(pn.Column):
     @property
     def svm_selected_umap(self) -> pn.widgets.Select:
         return self._svm_selected_umap
+    @property
+    def svm_activate_button(self) -> pn.widgets.Button:
+        return self._svm_active_button
+    @property
+    def svm_train_button(self) -> pn.widgets.Button:
+        return self._svm_train_button
+    @property
+    def svm_kernel(self) -> pn.widgets.Select:
+        return self._svm_kernel
+    @property
+    def svm_C(self) -> pn.widgets.FloatInput:
+        return self._svm_C
+    @property
+    def svm_cv(self) -> pn.widgets.IntInput:
+        return self._svm_cv
     
     def disable_controls(self):
         """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
@@ -707,10 +752,20 @@ class Clustering2RightSidebarLayout(pn.Column):
 
         self._svm_kernel = pn.widgets.Select(
             name="kernel",
-            options=["linear", "rbf", "poly", "sigmoid"],
-            value="rbf",
+            options=list(type(self._params).param.svm_kernel.objects),
+            value=str(self._params.svm_kernel),
             sizing_mode=self._STRETCH_WIDTH,
         )
+
+        def on_svm_kernel_change(event):
+            kernel = str(event.new).lower().strip()
+            if kernel not in type(self._params).param.svm_kernel.objects:
+                self._svm_kernel.value = event.old
+                return
+            self._params.svm_kernel = kernel
+            self._svm_train_settings_modal.set_selected_kernel(kernel)
+
+        self._svm_kernel.param.watch(on_svm_kernel_change, "value")
 
         self._svm_C = pn.widgets.FloatInput(
             name="C",
@@ -741,7 +796,10 @@ class Clustering2RightSidebarLayout(pn.Column):
             },
         )
         self._svm_settings_button.on_click(
-            lambda _: self._modal_manager.open_modal(self._model.svm_train_settings_key)
+            lambda _: (
+                self._svm_train_settings_modal.set_selected_kernel(self._svm_kernel.value),
+                self._modal_manager.open_modal(self._model.svm_train_settings_key),
+            )
         )
 
         self._svm_train_button = pn.widgets.Button(
