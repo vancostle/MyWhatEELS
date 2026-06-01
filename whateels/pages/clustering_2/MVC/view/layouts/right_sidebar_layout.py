@@ -2,7 +2,7 @@ import panel as pn, param, pickle, io, zipfile
 
 from whateels.components import SimpleDetails, ToggleButton
 from whateels.helpers import InMemoryFile, SafeConverter
-from ..layouts.modals import ExtraUmapParamsModal
+from ..layouts.modals import ExtraUmapParamsModal, HDBSCANGridParamsModal
 
 from bokeh.models import Tooltip
 
@@ -56,6 +56,31 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="min_cluster_size",
         doc="Minimum cluster size for HDBSCAN."
     )
+    hdbscan_grid_min_cluster_size = param.Integer(
+        default=100,
+        label="min min_cluster_size",
+        doc="Minimum min_cluster_size for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_max_cluster_size = param.Integer(
+        default=900,
+        label="max min_cluster_size",
+        doc="Maximum min_cluster_size for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_min_samples = param.Integer(
+        default=1,
+        label="min min_samples",
+        doc="Minimum min_samples for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_max_samples = param.Integer(
+        default=8,
+        label="max min_samples",
+        doc="Maximum min_samples for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_step = param.Integer(
+        default=100,
+        label="step",
+        doc="Step used to sweep min_cluster_size in HDBSCAN grid evaluation."
+    )
 
 class Clustering2RightSidebarLayout(pn.Column):
     
@@ -100,6 +125,28 @@ class Clustering2RightSidebarLayout(pn.Column):
             self._params.n_components = params.get("n_components", self._params.n_components)
             self._params.metric = params.get("metric", self._params.metric)
             self._params.random_state = params.get("random_state", self._params.random_state)
+
+        def on_hdbscan_grid_modal_close(params):
+            self._params.hdbscan_grid_min_cluster_size = params.get(
+                "min_cluster_size_min",
+                self._params.hdbscan_grid_min_cluster_size,
+            )
+            self._params.hdbscan_grid_max_cluster_size = params.get(
+                "min_cluster_size_max",
+                self._params.hdbscan_grid_max_cluster_size,
+            )
+            self._params.hdbscan_grid_min_samples = params.get(
+                "min_samples_min",
+                self._params.hdbscan_grid_min_samples,
+            )
+            self._params.hdbscan_grid_max_samples = params.get(
+                "min_samples_max",
+                self._params.hdbscan_grid_max_samples,
+            )
+            self._params.hdbscan_grid_step = params.get(
+                "step",
+                self._params.hdbscan_grid_step,
+            )
         
         self._modal_manager.register_modal(
             'Extra UMAP Parameters',
@@ -109,6 +156,23 @@ class Clustering2RightSidebarLayout(pn.Column):
                 on_close=on_modal_close,
                 width=400,
                 styles={"padding": "16px"}
+            )
+        )
+        self._modal_manager.register_modal(
+            model.hdbscan_grid_params_key,
+            HDBSCANGridParamsModal(
+                custom_page=custom_page,
+                title=model.hdbscan_grid_params_key,
+                on_close=on_hdbscan_grid_modal_close,
+                initial_values={
+                    "min_cluster_size_min": self._params.hdbscan_grid_min_cluster_size,
+                    "min_cluster_size_max": self._params.hdbscan_grid_max_cluster_size,
+                    "min_samples_min": self._params.hdbscan_grid_min_samples,
+                    "min_samples_max": self._params.hdbscan_grid_max_samples,
+                    "step": self._params.hdbscan_grid_step,
+                },
+                width=400,
+                styles={"padding": "16px"},
             )
         )
         
@@ -428,6 +492,9 @@ class Clustering2RightSidebarLayout(pn.Column):
                 "place-items": "center",
                 "border-radius": "6px"
             },
+        )
+        self._hdbscan_active_button_icon.on_click(
+            lambda _: self._modal_manager.open_modal(self._model.hdbscan_grid_params_key)
         )
         
         def update_hdbscan_min_samples(event):

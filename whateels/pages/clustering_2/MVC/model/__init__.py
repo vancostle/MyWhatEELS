@@ -15,6 +15,7 @@ class Clustering2PageModel:
         self._umap_data_dict = dict()
         self._completed_umap_count: int = 0
         self._extra_umap_params_key: str = "Extra UMAP Parameters"
+        self._hdbscan_grid_params_key: str = "Configure grid for evaluation"
         self._loaded_umap_data = None
         
     @property
@@ -38,6 +39,9 @@ class Clustering2PageModel:
     @property
     def extra_umap_params_key(self) -> str:
         return self._extra_umap_params_key
+    @property
+    def hdbscan_grid_params_key(self) -> str:
+        return self._hdbscan_grid_params_key
     @property
     def loaded_umap_data(self):
         return self._loaded_umap_data

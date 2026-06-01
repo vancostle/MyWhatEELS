@@ -356,8 +356,36 @@ class Clustering2PageController:
         
         embedding_obj = selected_umap_dict
         embedding = getattr(embedding_obj, 'embedding_', embedding_obj)
+
+        min_samples_min = SafeConverter.to_int(
+            self._view.right_sidebar.params.hdbscan_grid_min_samples,
+            default=1,
+        )
+        min_samples_max = SafeConverter.to_int(
+            self._view.right_sidebar.params.hdbscan_grid_max_samples,
+            default=8,
+        )
+        min_cluster_size_min = SafeConverter.to_int(
+            self._view.right_sidebar.params.hdbscan_grid_min_cluster_size,
+            default=100,
+        )
+        min_cluster_size_max = SafeConverter.to_int(
+            self._view.right_sidebar.params.hdbscan_grid_max_cluster_size,
+            default=900,
+        )
+        step = SafeConverter.to_int(
+            self._view.right_sidebar.params.hdbscan_grid_step,
+            default=100,
+        )
         
-        data : list[tuple[int, int, int, int, float]] = self._hdbscan.evaluate_umap(embedding)
+        data : list[tuple[int, int, int, int, float]] = self._hdbscan.evaluate_hdbscan(
+            embedding,
+            min_samples_min=min_samples_min,
+            min_samples_max=min_samples_max,
+            min_cluster_size_min=min_cluster_size_min,
+            min_cluster_size_max=min_cluster_size_max,
+            step=step,
+        )
         heatmap_overlay = self._hdbscan.plot_cluster_heatmap(data)
         
         

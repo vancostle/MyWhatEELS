@@ -1,1 +1,2 @@
 from .extra_umap_params_modal import ExtraUmapParamsModal
+from .hdbscan_grid_params_modal import HDBSCANGridParamsModal

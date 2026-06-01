@@ -130,18 +130,30 @@ class UMAP_HDBSCAN:
 
         return {"colors": hex_colors}
     
-    def evaluate_umap(self, embedding) -> list[tuple[int, int, int, int, float]]:
-        """ Evaluate UMAP embedding with HDBSCAN for a range of min_samples and min_cluster_size parameters, returning a list of results. """
-        MIN_SAMPLE_START = 1
-        MIN_SAMPLE_END = 8  
-        MIN_CLUSTER_START = 100
-        MIN_CLUSTER_END = 900
-        MIN_CLUSTER_STEP = 100     
+    def evaluate_hdbscan(
+        self,
+        embedding,
+        min_samples_min: int = 1,
+        min_samples_max: int = 8,
+        min_cluster_size_min: int = 100,
+        min_cluster_size_max: int = 900,
+        step: int = 100,
+    ) -> list[tuple[int, int, int, int, float]]:
+        """Evaluate UMAP embedding with HDBSCAN for a configurable grid of parameters."""
+        min_sample_start = max(1, int(min_samples_min))
+        min_sample_end = max(min_sample_start, int(min_samples_max))
+        min_cluster_start = max(1, int(min_cluster_size_min))
+        min_cluster_end = max(min_cluster_start, int(min_cluster_size_max))
+        min_cluster_step = max(1, int(step))
 
         data = []
 
-        for i in range(MIN_SAMPLE_START, MIN_SAMPLE_END):
-            for j in range(MIN_CLUSTER_START, MIN_CLUSTER_END + 1, MIN_CLUSTER_STEP):
+        min_sample_values = list(range(min_sample_start, min_sample_end + 1))
+
+        min_cluster_values = list(range(min_cluster_start, min_cluster_end + 1, min_cluster_step))
+
+        for i in min_sample_values:
+            for j in min_cluster_values:
                 hdbscan_results = hdbscan.HDBSCAN(min_cluster_size=j, min_samples=i)
                 hdbscan_results.fit(embedding)
                 outliers = np.count_nonzero(hdbscan_results.labels_ == -1)
