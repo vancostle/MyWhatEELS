@@ -1014,11 +1014,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._cluster_hover_raw_renderer = line_renderers[0]
             self._cluster_hover_centroid_renderer = line_renderers[1]
             self._cluster_hover_live_ready = True
-            _logger.debug(
-                "clustering cached compact hover renderers raw=%s centroid=%s",
-                type(line_renderers[0]).__name__,
-                type(line_renderers[1]).__name__,
-            )
         except Exception:
             _logger.exception("clustering _cache_cluster_hover_renderers failed")
 
@@ -1131,17 +1126,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         try:
             bokeh_plot = self._get_live_paneB_bokeh_plot()
             if bokeh_plot is None:
-                _logger.debug("clustering _try_fast_hover_update: no live bokeh plot")
                 return False
 
             if not self._cluster_hover_install_sent:
-                _logger.debug("clustering _try_fast_hover_update: installing compact hover overlay")
                 self._cluster_hover_install_sent = True
                 self._update_paneB(self._build_cluster_hover_overlay(point), from_hover=False)
                 return True
 
             if not self._cluster_hover_live_ready or self._cluster_hover_raw_renderer is None:
-                _logger.debug("clustering _try_fast_hover_update: compact hover renderers not cached yet")
                 self._cache_cluster_hover_renderers(bokeh_plot, None)
                 if not self._cluster_hover_live_ready or self._cluster_hover_raw_renderer is None:
                     return False
@@ -1165,7 +1157,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 return False
 
             if raw_renderer is None:
-                _logger.debug("clustering _try_fast_hover_update: no raw spectrum renderer found")
                 return False
 
             try:
@@ -1223,13 +1214,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         if not from_hover:
             self._pending_paneB_hover_fig = None
-            _logger.debug("clustering _update_paneB immediate send fig=%s", type(fig).__name__ if fig is not None else None)
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
             self._last_paneB_send_ts = self._now_ms()
             return
 
         self._pending_paneB_hover_fig = None
-        _logger.debug("clustering _update_paneB hover immediate send fig=%s", type(fig).__name__ if fig is not None else None)
         self._paneB_pipe.send(self._set_ranges_and_convert(fig))
         self._last_paneB_send_ts = self._now_ms()
 
@@ -1255,7 +1244,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if x is None or y is None:
             return
         if self._now_ms() < self._suppress_click_until_ms:
-            _logger.debug("clustering _on_paneA_click ignored due to recent DoubleTap")
             return
         self._last_hover_pixel = (round(y), round(x))
         try:
