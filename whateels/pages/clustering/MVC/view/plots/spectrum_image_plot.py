@@ -1241,7 +1241,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             super()._handle_hover_render(point)
             return
         if self._frozen_pixel is not None:
-            self._frozen_pixel = None
+            # Keep paneB frozen after click until explicit unfreeze (double-click).
+            return
         if self._try_fast_hover_update(point):
             return
         self._show_spectrum(point=point, is_hover_event=True)
@@ -1262,6 +1263,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if self._clustering_active:
                 i, j = int(y), int(x)
                 self._frozen_pixel = (i, j)
+                self._hover_blocked = True
+                self._hover_pending_point = None
 
                 if self._clustering_results is not None:
                     labels, _ = self._clustering_results
