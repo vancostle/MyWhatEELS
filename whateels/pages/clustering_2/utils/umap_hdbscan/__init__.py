@@ -335,6 +335,21 @@ class UMAP_HDBSCAN:
         # Add text labels overlay
         labels_data = [(d[1], d[0], str(int(d[2]))) for d in data]
         labels = hv.Labels(labels_data, kdims=['min_cluster_size', 'min_samples'], vdims=['text'])
+
+        def _integer_axis_ticks_hook(plot, element):
+            fig = getattr(plot, 'state', None)
+            if fig is None:
+                return
+            try:
+                from bokeh.models import FixedTicker, NumeralTickFormatter
+
+                min_samples_ticks = sorted({int(d[0]) for d in data})
+                if min_samples_ticks and getattr(fig, 'yaxis', None):
+                    axis = fig.yaxis[0]
+                    axis.ticker = FixedTicker(ticks=min_samples_ticks)
+                    axis.formatter = NumeralTickFormatter(format='0')
+            except Exception:
+                return
         
         # Combine heatmap with labels
         overlay = (heatmap * labels).opts(
@@ -349,6 +364,7 @@ class UMAP_HDBSCAN:
                 tools=['hover'],
                 clabel='Number of Clusters',
                 responsive=True,
+                hooks=[_integer_axis_ticks_hook],
             ),
             hv.opts.Labels(
                 text_color='black',
