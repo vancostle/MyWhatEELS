@@ -334,13 +334,14 @@ class Clustering2PageController:
             electron_count_data=self._hdbscan.get_electron_count_data_for_norm(available_norm),
             available_norm=available_norm,
         )
-        self._view.main.hdbscan_wrapper.append(self._spectrum_plot_layout)
-        
-        self._view.main.append_once(self._view.main.hdbscan_wrapper) # Re-append the HDBSCAN wrapper to ensure it is visible after clearing
-        
         self._view.main.umap_embedding_wrapper.clear() # Clear UMAP embedding results from the main layout to emphasize HDBSCAN results
         self._view.main.umap_embedding_wrapper.append(hdbscan_umap_embedding_width_labels_plot) # Show UMAP embedding with HDBSCAN labels in the UMAP embedding wrapper for reference
-        self._view.main.append_once(self._view.main.umap_embedding_wrapper) # Re-append the UMAP embedding wrapper to ensure it is visible after clearing
+
+        self._view.main.hdbscan_wrapper.append(self._spectrum_plot_layout)
+
+        # Keep spectrum image above the embedding/histogram block.
+        self._view.main.move_to_top(self._view.main.umap_embedding_wrapper)
+        self._view.main.move_to_top(self._view.main.hdbscan_wrapper)
 
     def _parse_svm_gamma(self, gamma_value):
         """Normalize gamma value coming from modal/sidebar."""
@@ -394,11 +395,11 @@ class Clustering2PageController:
 
         self._view.main.svm_wrapper.clear()
         self._view.main.svm_wrapper.append(svm_loading)
-        self._view.main.append_once(self._view.main.svm_wrapper)
+        self._view.main.move_to_top(self._view.main.svm_wrapper)
 
         self._view.main.svm_umap_embedding_wrapper.clear()
         self._view.main.svm_umap_embedding_wrapper.append(svm_umap_loading)
-        self._view.main.append_once(self._view.main.svm_umap_embedding_wrapper)
+        self._view.main.move_to_top(self._view.main.svm_umap_embedding_wrapper)
 
         result_payload = {}
         error_message = None
@@ -464,7 +465,7 @@ class Clustering2PageController:
             )
             self._view.main.svm_wrapper.clear()
             self._view.main.svm_wrapper.append(self._svm_spectrum_plot_layout)
-            self._view.main.append_once(self._view.main.svm_wrapper)
+            self._view.main.move_to_top(self._view.main.svm_wrapper)
 
             umap_plot = self._hdbscan.plot_umap_embedding_with_labels(
                 embedding,
@@ -475,7 +476,7 @@ class Clustering2PageController:
             )
             self._view.main.svm_umap_embedding_wrapper.clear()
             self._view.main.svm_umap_embedding_wrapper.append(umap_plot)
-            self._view.main.append_once(self._view.main.svm_umap_embedding_wrapper)
+            self._view.main.move_to_top(self._view.main.svm_umap_embedding_wrapper)
 
             self._model.svm_model = svm_train["model"]
             self._model.svm_last_result = {
@@ -584,4 +585,4 @@ class Clustering2PageController:
         self._view.main.heatmap_wrapper.clear() # Clear previous heatmap from the main layout
         self._view.main.heatmap_wrapper.append(heatmap_overlay)
         
-        self._view.main.append_once(self._view.main.heatmap_wrapper) # Re-append the heatmap wrapper to ensure it is visible after clearing
+        self._view.main.move_to_top(self._view.main.heatmap_wrapper) # Put latest computed block on top

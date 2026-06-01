@@ -112,7 +112,6 @@ class PlotService:
             title=f'UMAP embedding min_samples={min_samp}, min_cluster_size={min_clust}',
             tools=['lasso_select', 'box_select'],
             responsive=True,
-            frame_height=400,
         )
         return points
 

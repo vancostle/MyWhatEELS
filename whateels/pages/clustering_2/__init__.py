@@ -15,7 +15,8 @@ class Clustering2Page(GeneralPageTemplate):
                 sidebar=[view.left_sidebar],
                 right_sidebar=[view.right_sidebar],
                 modal=view.modals,
-                sidebar_width=275
+                sidebar_width=275,
+                collapsed_sidebar=True,
             )
             return
         
@@ -24,6 +25,7 @@ class Clustering2Page(GeneralPageTemplate):
             main=[view.main],
             sidebar=[view.left_sidebar],
             modal=view.modals,
-            sidebar_width=275
+            sidebar_width=275,
+            collapsed_sidebar=True,
         )
         
