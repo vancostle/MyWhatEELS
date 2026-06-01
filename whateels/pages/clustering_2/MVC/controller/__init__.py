@@ -4,6 +4,7 @@ import numpy as np
 
 from types import SimpleNamespace
 from ..view.plots import Clustering2SpectrumImagePlot
+from ..view.layouts.placeholders import SVMTrainingPlaceholder
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -371,36 +372,83 @@ class Clustering2PageController:
         min_samples = SafeConverter.to_int(self._last_hdbscan_min_samples, default=4)
         min_cluster_size = SafeConverter.to_int(self._last_hdbscan_min_cluster_size, default=100)
 
-        try:
-            kernel = str(self._view.right_sidebar.svm_kernel.value).lower().strip()
-            c_value = float(self._view.right_sidebar.svm_C.value)
-            cv = SafeConverter.to_int(self._view.right_sidebar.svm_cv.value, default=10)
-            test_size = float(self._view.right_sidebar.params.svm_test_size)
-            probability = bool(self._view.right_sidebar.params.svm_probability)
-            gamma = self._parse_svm_gamma(self._view.right_sidebar.params.svm_gamma)
-            coef0 = float(self._view.right_sidebar.params.svm_coef0)
-            degree = SafeConverter.to_int(self._view.right_sidebar.params.svm_degree, default=3)
+        kernel = str(self._view.right_sidebar.svm_kernel.value).lower().strip()
+        c_value = float(self._view.right_sidebar.svm_C.value)
+        cv = SafeConverter.to_int(self._view.right_sidebar.svm_cv.value, default=10)
+        test_size = float(self._view.right_sidebar.params.svm_test_size)
+        probability = bool(self._view.right_sidebar.params.svm_probability)
+        gamma = self._parse_svm_gamma(self._view.right_sidebar.params.svm_gamma)
+        coef0 = float(self._view.right_sidebar.params.svm_coef0)
+        degree = SafeConverter.to_int(self._view.right_sidebar.params.svm_degree, default=3)
 
-            svm_train = self._hdbscan.train_svm_from_hdbscan_labels(
-                hdbscan_labels=hdbscan_results.labels_,
-                kernel=kernel,
-                c_value=c_value,
-                gamma=gamma,
-                coef0=coef0,
-                degree=degree,
-                test_size=test_size,
-                cv=cv,
-                probability=probability,
-                min_size=400,
-                random_state=42,
-            )
+        self._view.right_sidebar.svm_train_button.disabled = True
 
-            cluster_assigned_flat, predicted_outliers = self._hdbscan.reassign_outliers_with_svm(
-                hdbscan_labels=hdbscan_results.labels_,
-                model=svm_train["model"],
-                class_map=svm_train["class_map"],
-                outlier_label=-1,
-            )
+        svm_loading = SVMTrainingPlaceholder(
+            message="Training SVM model...",
+            details=f"kernel={kernel}, C={c_value}, cv={cv}",
+        )
+        svm_umap_loading = SVMTrainingPlaceholder(
+            message="Preparing SVM UMAP visualization...",
+            details="Reassigning outliers with trained model",
+        )
+
+        self._view.main.svm_wrapper.clear()
+        self._view.main.svm_wrapper.append(svm_loading)
+        self._view.main.append_once(self._view.main.svm_wrapper)
+
+        self._view.main.svm_umap_embedding_wrapper.clear()
+        self._view.main.svm_umap_embedding_wrapper.append(svm_umap_loading)
+        self._view.main.append_once(self._view.main.svm_umap_embedding_wrapper)
+
+        result_payload = {}
+        error_message = None
+
+        def compute_and_callback():
+            nonlocal result_payload, error_message
+            try:
+                svm_train = self._hdbscan.train_svm_from_hdbscan_labels(
+                    hdbscan_labels=hdbscan_results.labels_,
+                    kernel=kernel,
+                    c_value=c_value,
+                    gamma=gamma,
+                    coef0=coef0,
+                    degree=degree,
+                    test_size=test_size,
+                    cv=cv,
+                    probability=probability,
+                    min_size=400,
+                    random_state=42,
+                )
+
+                cluster_assigned_flat, predicted_outliers = self._hdbscan.reassign_outliers_with_svm(
+                    hdbscan_labels=hdbscan_results.labels_,
+                    model=svm_train["model"],
+                    class_map=svm_train["class_map"],
+                    outlier_label=-1,
+                )
+
+                result_payload = {
+                    "svm_train": svm_train,
+                    "cluster_assigned_flat": cluster_assigned_flat,
+                    "predicted_outliers": int(predicted_outliers),
+                }
+            except Exception as e:
+                error_message = str(e)
+            finally:
+                pn.state.execute(on_complete)
+
+        def on_complete():
+            self._view.right_sidebar.svm_train_button.disabled = False
+
+            if error_message is not None:
+                pn.state.notifications.error(f"SVM training failed: {error_message}", duration=7000) # type: ignore
+                self._view.main.svm_wrapper.clear()
+                self._view.main.svm_umap_embedding_wrapper.clear()
+                return
+
+            svm_train = result_payload["svm_train"]
+            cluster_assigned_flat = result_payload["cluster_assigned_flat"]
+            predicted_outliers = result_payload["predicted_outliers"]
 
             reassigned_results = SimpleNamespace(labels_=cluster_assigned_flat)
             cmap_obj = self._hdbscan.get_nclusters_cmap(
@@ -452,8 +500,7 @@ class Clustering2PageController:
             )
             pn.state.notifications.success(metrics_msg, duration=7000) # type: ignore
 
-        except Exception as e:
-            pn.state.notifications.error(f"SVM training failed: {e}", duration=7000) # type: ignore
+        threading.Thread(target=compute_and_callback).start()
     
     def _on_umap_cancel_button_click(self) -> None:
         """Event handler for UMAP cancel button click."""
