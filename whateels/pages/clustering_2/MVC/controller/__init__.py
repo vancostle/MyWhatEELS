@@ -123,6 +123,7 @@ class Clustering2PageController:
 
         self._view.right_sidebar.download_results_button.disabled = True
         self._view.right_sidebar.hdbscan_selected_umap.options = {}
+        self._view.right_sidebar.svm_selected_umap.options = {}
         self._view.right_sidebar.disable_hdbscan_controls()
 
     def _on_use_preprocessed_data_switch_changed(self, event) -> None:
@@ -202,10 +203,12 @@ class Clustering2PageController:
                     self._view.right_sidebar.download_results_button.disabled = False
                     self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls if at least one computation completed
                     self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
+                    self._view.right_sidebar.svm_selected_umap.options = self._model.umap_data_dict
                     
                     return
                 
                 self._view.right_sidebar.hdbscan_selected_umap.options = [] # Clear HDBSCAN UMAP selection options when cancelled
+                self._view.right_sidebar.svm_selected_umap.options = []
                 return
             
             # Check if all combinations have been processed
@@ -221,6 +224,7 @@ class Clustering2PageController:
                 if self._model.completed_umap_count > 0:
                     self._view.right_sidebar.download_results_button.disabled = False
                     self._view.right_sidebar.hdbscan_selected_umap.options = self._model.umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
+                    self._view.right_sidebar.svm_selected_umap.options = self._model.umap_data_dict
                 return
             
             # Set current placeholder to loading state
@@ -327,6 +331,7 @@ class Clustering2PageController:
         """Event handler for when UMAP data is loaded from file."""
         
         self._view.right_sidebar.hdbscan_selected_umap.options = umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
+        self._view.right_sidebar.svm_selected_umap.options = umap_data_dict
         self._view.right_sidebar.disable_controls()
         self._view.right_sidebar.enable_hdbscan_controls() # Enable HDBSCAN controls when UMAP data is loaded from file
         

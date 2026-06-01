@@ -16,6 +16,8 @@ class Clustering2PageModel:
         self._completed_umap_count: int = 0
         self._extra_umap_params_key: str = "Extra UMAP Parameters"
         self._hdbscan_grid_params_key: str = "Configure grid for evaluation"
+        self._svm_settings_key: str = "Configure SVM settings"
+        self._svm_train_settings_key: str = "Configure Train SVM settings"
         self._loaded_umap_data = None
         
     @property
@@ -42,6 +44,12 @@ class Clustering2PageModel:
     @property
     def hdbscan_grid_params_key(self) -> str:
         return self._hdbscan_grid_params_key
+    @property
+    def svm_settings_key(self) -> str:
+        return self._svm_settings_key
+    @property
+    def svm_train_settings_key(self) -> str:
+        return self._svm_train_settings_key
     @property
     def loaded_umap_data(self):
         return self._loaded_umap_data
