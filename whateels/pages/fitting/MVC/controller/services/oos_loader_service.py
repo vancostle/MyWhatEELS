@@ -32,6 +32,18 @@ e = 1.602176487 * 1E-19    # Electron charge in C
 m0 = 9.10938215 * 1E-31    # Electron rest mass in kg
 a0 = 5.2917720859 * 1E-11  # Bohr radius in m
 c = 299792458              # Speed of light in m/s
+KEV_TO_EV = 1E3
+EV_VALUE_THRESHOLD = 1E4
+
+
+def _beam_energy_to_ev(beam_energy):
+    """Return beam energy in eV, accepting WhatEELS keV values and manual eV values."""
+    beam_energy = float(beam_energy)
+    if beam_energy <= 0:
+        raise ZeroDivisionError(
+            'Beam energy (V) cannot be zero, check your data and provide an appropriate voltage.'
+        )
+    return beam_energy if beam_energy > EV_VALUE_THRESHOLD else beam_energy * KEV_TO_EV
 
 class Loader_OOS():
     """
@@ -173,7 +185,7 @@ class Loader_OOS():
         Parameters:
             z_number: Atomic number of the element.
             subshell: String representing the subshell transition.
-            V: Beam energy in eV (optional if si is provided).
+            V: Beam energy in keV, or eV for large manual values (optional if si is provided).
             b: Collection angle in mrad (optional if si is provided).
             si: Hyperspy object containing metadata (optional).
 
@@ -188,18 +200,23 @@ class Loader_OOS():
             # Extract beam energy and collection angle from metadata
             V = si.metadata.Acquisition_instrument.TEM.beam_energy
             b = si.metadata.Acquisition_instrument.TEM.Detector.EELS.collection_angle
-        elif si is None and (V, b) == (None, None):
+        elif si is None and (V is None or b is None):
             raise ValueError("Beam energy or/and collection angle missing, please provide them manually.")
 
         _, oos, eloss = self.oos_reader(z_number, subshell)
-        v = 2 * e * V / m0  # Electron velocity based on the applied potential
-        T = m0 * v**2 / 2   # Kinetic energy of the electron
+        beam_energy_ev = _beam_energy_to_ev(V)
+        T = beam_energy_ev
+        kinetic_energy_j = e * beam_energy_ev
+        v = np.sqrt(2 * kinetic_energy_j / m0)  # Corrected classical electron velocity.
         gamma = (1 - (v / c)**2)**(-1/2)  # Relativistic factor
 
-        try:
-            Oe = eloss / (2 * gamma * T)  # Characteristic energy
-        except ZeroDivisionError:
-            raise ZeroDivisionError('Beam energy (V) cannot be zero, check your data and provide an appropriate voltage.')
+        if not np.isfinite(gamma):
+            raise ValueError(
+                f"Relativistic factor is not finite for beam energy {V}. "
+                "Check that the value is a positive beam energy in keV/eV."
+            )
+
+        Oe = eloss / (2 * gamma * T)  # Characteristic energy
 
         # Calculate the differential cross-section
         return 4 * np.pi * (a0 * R)**2 * 1 / (eloss * T) * oos * np.log(1 + (b / Oe)**2)
@@ -211,7 +228,7 @@ class Loader_OOS():
         Parameters:
             z_number: Atomic number of the element.
             subshell: String representing the subshell transition.
-            V: Beam energy in eV (optional if si is provided).
+            V: Beam energy in keV, or eV for large manual values (optional if si is provided).
             b: Collection angle in mrad (optional if si is provided).
             si: Hyperspy object containing metadata (optional).
 

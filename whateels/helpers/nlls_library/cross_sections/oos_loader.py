@@ -15,6 +15,18 @@ e = 1.602176487*1E-19      # electron charge in C
 m0 = 9.10938215*1E-31      # electron rest mass in kg
 a0 = 5.2917720859*1E-11    # Bohr radius in m
 c = 299792458              # Light's speed velocity in m/s
+KEV_TO_EV = 1E3
+EV_VALUE_THRESHOLD = 1E4
+
+
+def _beam_energy_to_ev(beam_energy):
+    """Return beam energy in eV, accepting WhatEELS keV values and manual eV values."""
+    beam_energy = float(beam_energy)
+    if beam_energy <= 0:
+        raise ZeroDivisionError(
+            'Beam energy (V) cannot be zero, check your data and provide an appropriate voltage.'
+        )
+    return beam_energy if beam_energy > EV_VALUE_THRESHOLD else beam_energy * KEV_TO_EV
 
 def oos_reader(z_number:int, subshell:str, directory = 'Hartree_Xsections_FSalvat'):
     """
@@ -81,9 +93,16 @@ def df_cross_section(z_number:int, subshell:str):
     b = Fileinput._callback_loadfile.collection_angle
 
     _, oos, eloss = oos_reader(z_number, subshell)
-    v = 2*e*V / m0 # electrons' velocity in terms of the appplied potencial
-    T = m0 * v**2 / 2
+    beam_energy_ev = _beam_energy_to_ev(V)
+    T = beam_energy_ev
+    kinetic_energy_j = e * beam_energy_ev
+    v = np.sqrt(2 * kinetic_energy_j / m0) # electrons' velocity in terms of the appplied potencial
     gamma = (1 - (v/c)**2)**(-1/2)
+    if not np.isfinite(gamma):
+        raise ValueError(
+            f"Relativistic factor is not finite for beam energy {V}. "
+            "Check that the value is a positive beam energy in keV/eV."
+        )
     Oe = eloss / (2* gamma * T)
 
     return 4*np.pi*(a0*R)**2 * 1/(eloss*T) * oos * np.log(1+(b/Oe)**2)
