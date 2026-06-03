@@ -6,18 +6,19 @@ import panel as pn
 class SimpleDetails(pn.Column):
 
     _STRETCH_WIDTH = "stretch_width"
+    _HEADER_HEIGHT = 38
     _EXPANDED_PREFIX = "\u25b2 "
     _COLLAPSED_PREFIX = "\u25bc "
 
-    _BUTTON_TYPES = {
-        "default",
-        "primary",
-        "success",
-        "warning",
-        "danger",
-        "info",
-        "light",
-        "dark",
+    _BUTTON_TYPE_COLORS = {
+        "default": "#ffffff",
+        "primary": "var(--bs-primary, #0d6efd)",
+        "success": "var(--bs-success, #198754)",
+        "warning": "var(--bs-warning, #ffc107)",
+        "danger": "var(--bs-danger, #dc3545)",
+        "info": "var(--bs-info, #0dcaf0)",
+        "light": "var(--bs-light, #f8f9fa)",
+        "dark": "var(--bs-dark, #212529)",
     }
 
     def __init__(
@@ -34,11 +35,13 @@ class SimpleDetails(pn.Column):
     ) -> None:
 
         self._title = title
-        self._button_type_on_expand, self._color_on_expand = self._resolve_button_style(
-            button_type_on_expand, color_on_expand
+        self._color_on_expand = self._resolve_color(
+            color_on_expand,
+            button_type_on_expand,
         )
-        self._button_type_on_collapse, self._color_on_collapse = self._resolve_button_style(
-            button_type_on_collapse, color_on_collapse
+        self._color_on_collapse = self._resolve_color(
+            color_on_collapse,
+            button_type_on_collapse,
         )
         self._text_color = text_color
 
@@ -61,7 +64,7 @@ class SimpleDetails(pn.Column):
             on_click=lambda _: self.toggle(),
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
-            height=38,
+            height=self._HEADER_HEIGHT,
             styles={
                 "position": "absolute",
                 "inset": "0",
@@ -69,19 +72,19 @@ class SimpleDetails(pn.Column):
                 "cursor": "pointer",
                 "z-index": "2",
                 "width": "100%",
-                "height": "38px",
+                "height": f"{self._HEADER_HEIGHT}px",
             },
-            stylesheets=["""
+            stylesheets=[f"""
             :host button,
             :host .bk-btn,
             button,
-            .bk-btn {
+            .bk-btn {{
                 cursor: pointer !important;
-                height: 38px !important;
-                min-height: 38px !important;
+                height: {self._HEADER_HEIGHT}px !important;
+                min-height: {self._HEADER_HEIGHT}px !important;
                 opacity: 0 !important;
                 width: 100% !important;
-            }
+            }}
             """],
         )
 
@@ -89,12 +92,12 @@ class SimpleDetails(pn.Column):
             self._header_pane,
             self._button_header,
             sizing_mode=self._STRETCH_WIDTH,
-            height=38,
+            height=self._HEADER_HEIGHT,
             margin=0,
             styles={
                 "cursor": "pointer",
-                "height": "38px",
-                "min-height": "38px",
+                "height": f"{self._HEADER_HEIGHT}px",
+                "min-height": f"{self._HEADER_HEIGHT}px",
                 "overflow": "hidden",
                 "position": "relative",
                 "width": "100%",
@@ -139,17 +142,14 @@ class SimpleDetails(pn.Column):
             styles=styles,
         )
 
-    def _resolve_button_style(
+    def _resolve_color(
         self,
-        button_type: str | None,
         color: str,
-    ) -> tuple[str, str | None]:
-        color_or_button_type = button_type or color
+        legacy_button_type: str | None = None,
+    ) -> str:
+        color_or_button_type = legacy_button_type or color
 
-        if color_or_button_type in self._BUTTON_TYPES:
-            return color_or_button_type, None
-
-        return "default", color_or_button_type
+        return self._BUTTON_TYPE_COLORS.get(color_or_button_type, color_or_button_type)
 
     def _apply_auto_height(self, content) -> None:
         if not isinstance(content, pn.Column):
@@ -164,68 +164,14 @@ class SimpleDetails(pn.Column):
         for child in content.objects:
             self._apply_auto_height(child)
 
-    def _button_styles(self, background_color: str | None):
-        if background_color is None:
-            return []
-
-        return [f"""
-        :host .bk-btn,
-        :host .bk-btn-default,
-        :host .bk-btn.bk-btn-default,
-        :host button,
-        .bk-btn,
-        .bk-btn-default,
-        .bk-btn.bk-btn-default,
-        button {{
-            background-color: {background_color} !important;
-            border-color: {background_color} !important;
-            color: {self._text_color} !important;
-            width: 100%;
-        }}
-
-        :host .bk-btn:hover,
-        :host .bk-btn-default:hover,
-        :host .bk-btn.bk-btn-default:hover,
-        :host button:hover,
-        .bk-btn:hover,
-        .bk-btn-default:hover,
-        .bk-btn.bk-btn-default:hover,
-        button:hover {{
-            filter: brightness(0.92);
-        }}
-
-        :host .bk-btn:active,
-        :host .bk-btn-default:active,
-        :host .bk-btn.bk-btn-default:active,
-        :host button:active,
-        .bk-btn:active,
-        .bk-btn-default:active,
-        .bk-btn.bk-btn-default:active,
-        button:active {{
-            filter: brightness(0.85);
-        }}
-        """]
-
-    def _button_inline_styles(self, background_color: str | None):
-        if background_color is None:
-            return {}
-
-        return {
-            "background-color": background_color,
-            "border-color": background_color,
-            "color": self._text_color,
-            "width": "100%",
-        }
-
-    def _header_html(self, expanded: bool, background_color: str | None) -> str:
+    def _header_html(self, expanded: bool, background_color: str) -> str:
         prefix = self._EXPANDED_PREFIX if expanded else self._COLLAPSED_PREFIX
-        color = background_color or "transparent"
 
         return f"""
         <div style="
             align-items: center;
-            background-color: {color};
-            border: 1px solid {color};
+            background-color: {background_color};
+            border: 1px solid {background_color};
             border-radius: 4px;
             box-sizing: border-box;
             color: {self._text_color};
@@ -233,9 +179,9 @@ class SimpleDetails(pn.Column):
             display: flex;
             font-family: inherit;
             font-size: 14px;
-            height: 38px;
+            height: {self._HEADER_HEIGHT}px;
             justify-content: center;
-            line-height: 38px;
+            line-height: {self._HEADER_HEIGHT}px;
             overflow: hidden;
             padding: 0 12px;
             text-align: center;
