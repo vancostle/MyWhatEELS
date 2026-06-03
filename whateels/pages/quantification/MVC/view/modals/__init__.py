@@ -1,1 +1,2 @@
 from .periodic_table_of_elements_modal import PeriodicTableOfElementsModal
+from .atom_modal import AtomModal
