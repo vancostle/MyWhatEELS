@@ -216,34 +216,39 @@ class QuantificationView:
         </svg>
         """
         ATOM_SVG = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" opacity="0.9" stroke-width="1.5">
-  <!-- Fondo redondeado blanco -->
-  <rect x="2" y="2" width="20" height="20" rx="2" fill="white" stroke="black"/>
-  
-  <!-- Órbita superior (elipse inclinada) -->
-  <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(-30 12 10.5)"/>
-  
-  <!-- Órbita inferior -->
-  <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(30 12 10.5)"/>
-  
-  <!-- Órbita horizontal -->
-  <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(90 12 10.5)"/>
-  
-  <!-- Núcleo (círculo central) -->
-  <circle cx="12" cy="10.5" r="2.2" fill="black" stroke="none"/>
-  
-  <!-- Electrón en órbita superior izquierda -->
-  <circle cx="6.5" cy="7" r="1" fill="black" stroke="none" opacity="0.85"/>
-  
-  <!-- Electrón en órbita inferior -->
-  <circle cx="13" cy="17" r="1" fill="black" stroke="none" opacity="0.85"/>
-  
-  <!-- Electrón en órbita superior derecha -->
-  <circle cx="17" cy="6.5" r="1" fill="black" stroke="none" opacity="0.85"/>
-  
-  <!-- Texto -->
-  <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="black" stroke="none">Model</text>
-</svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" opacity="0.9" stroke-width="1.5">
+        <!-- Fondo redondeado blanco -->
+        <rect x="2" y="2" width="20" height="20" rx="2" fill="white" stroke="black"/>
+        <!-- Órbita superior (elipse inclinada) -->
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(-30 12 10.5)"/>
+        <!-- Órbita inferior -->
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(30 12 10.5)"/>
+        <!-- Órbita horizontal -->
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(90 12 10.5)"/>
+        <!-- Núcleo (círculo central) -->
+        <circle cx="12" cy="10.5" r="2.2" fill="black" stroke="none"/>
+        <!-- Electrón en órbita superior izquierda -->
+        <circle cx="6.5" cy="7" r="1" fill="black" stroke="none" opacity="0.85"/>
+        <!-- Electrón en órbita inferior -->
+        <circle cx="13" cy="17" r="1" fill="black" stroke="none" opacity="0.85"/>
+        <!-- Electrón en órbita superior derecha -->
+        <circle cx="17" cy="6.5" r="1" fill="black" stroke="none" opacity="0.85"/>
+        <!-- Texto -->
+        <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="black" stroke="none">Model</text>
+        </svg>
+        """
+        ATOM_ACTIVE_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black" stroke="black" opacity="0.9" stroke-width="1.5">
+        <rect x="2" y="2" width="20" height="20" rx="2" fill="black" stroke="black"/>
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="white" stroke-width="0.8" stroke-opacity="0.95" transform="rotate(-30 12 10.5)"/>
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="white" stroke-width="0.8" stroke-opacity="0.95" transform="rotate(30 12 10.5)"/>
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="white" stroke-width="0.8" stroke-opacity="0.95" transform="rotate(90 12 10.5)"/>
+        <circle cx="12" cy="10.5" r="2.2" fill="white" stroke="none"/>
+        <circle cx="6.5" cy="7" r="1" fill="white" stroke="none" opacity="0.95"/>
+        <circle cx="13" cy="17" r="1" fill="white" stroke="none" opacity="0.95"/>
+        <circle cx="17" cy="6.5" r="1" fill="white" stroke="none" opacity="0.95"/>
+        <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="white" stroke="none">Model</text>
+        </svg>
         """
         
         periodic_table_button = pn.widgets.ButtonIcon(
@@ -319,6 +324,7 @@ class QuantificationView:
 
         atom_button = pn.widgets.ButtonIcon(
             icon=ATOM_SVG,
+            active_icon=ATOM_ACTIVE_SVG,
             size='3em',
             margin=(11,2,0,8),
         )
