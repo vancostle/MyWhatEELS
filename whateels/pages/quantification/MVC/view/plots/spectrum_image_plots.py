@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from xarray import Dataset
 
 colors = palettes.Category10[10]
+NORMALIZATION_ANCHOR_WINDOW_EV = 10.0
 
 WHITE_LINE_SHELL_PAIRS = (
     ("L2", "L3"),
@@ -100,15 +101,30 @@ def _normalization_anchor(eaxis, selected_slice, y_extrapolated, quant_range_val
             if indices.size == 0:
                 raise ValueError("No finite experimental points available for normalization.")
             idx = indices[np.argmin(np.abs(axis[indices] - hi))]
-            return float(axis[idx]), float(net[idx])
+            anchor_energy = float(axis[idx])
+            anchor_window = (anchor_energy - NORMALIZATION_ANCHOR_WINDOW_EV, anchor_energy)
+            target_value = _constant_fit_to_window(axis, net, anchor_window)
+            if not np.isfinite(target_value):
+                target_value = float(net[idx])
+            return anchor_energy, target_value, anchor_window
         idx = indices[-1]
-        return float(axis[idx]), float(net[idx])
+        anchor_energy = float(axis[idx])
+        anchor_window = (max(lo, anchor_energy - NORMALIZATION_ANCHOR_WINDOW_EV), anchor_energy)
+        target_value = _constant_fit_to_window(axis, net, anchor_window)
+        if not np.isfinite(target_value):
+            target_value = float(net[idx])
+        return anchor_energy, target_value, anchor_window
 
     indices = np.flatnonzero(finite_mask)
     if indices.size == 0:
         raise ValueError("No finite experimental points available for normalization.")
     idx = indices[-1]
-    return float(axis[idx]), float(net[idx])
+    anchor_energy = float(axis[idx])
+    anchor_window = (anchor_energy - NORMALIZATION_ANCHOR_WINDOW_EV, anchor_energy)
+    target_value = _constant_fit_to_window(axis, net, anchor_window)
+    if not np.isfinite(target_value):
+        target_value = float(net[idx])
+    return anchor_energy, target_value, anchor_window
 
 
 def _prepare_curve_for_interpolation(xaxis, yaxis):
@@ -135,8 +151,36 @@ def _interp_at_energy(xaxis, yaxis, energy):
     return float(np.interp(energy, x, y))
 
 
-def _scale_to_anchor(xaxis, yaxis, anchor_energy, target_value):
-    simulated_value = _interp_at_energy(xaxis, yaxis, anchor_energy)
+def _constant_fit_to_window(xaxis, yaxis, energy_window):
+    if energy_window is None or len(energy_window) < 2:
+        return np.nan
+
+    x, y = _prepare_curve_for_interpolation(xaxis, yaxis)
+    if x.size == 0:
+        return np.nan
+
+    lo, hi = sorted((float(energy_window[0]), float(energy_window[1])))
+    lo = max(lo, float(x[0]))
+    hi = min(hi, float(x[-1]))
+    if hi < lo:
+        return np.nan
+
+    window_mask = (x >= lo) & (x <= hi)
+    if np.any(window_mask):
+        return float(np.mean(y[window_mask]))
+
+    if hi == lo:
+        return _interp_at_energy(x, y, hi)
+
+    sample_x = np.linspace(lo, hi, 32)
+    sample_y = np.interp(sample_x, x, y)
+    return float(np.mean(sample_y))
+
+
+def _scale_to_anchor(xaxis, yaxis, anchor_energy, target_value, anchor_window=None):
+    simulated_value = _constant_fit_to_window(xaxis, yaxis, anchor_window)
+    if not np.isfinite(simulated_value):
+        simulated_value = _interp_at_energy(xaxis, yaxis, anchor_energy)
     if not np.isfinite(target_value) or not np.isfinite(simulated_value):
         return 1.0, simulated_value
     if abs(simulated_value) <= np.finfo(float).tiny:
@@ -662,7 +706,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             shell_curves,
             chemical_shift=element_item.chemical_shift,
         )
-        anchor_energy, target_value = _normalization_anchor(
+        anchor_energy, target_value, anchor_window = _normalization_anchor(
             quant_eaxis,
             selected_slice,
             y_extrapolated,
@@ -673,6 +717,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             total_cross_section,
             anchor_energy,
             target_value,
+            anchor_window,
         )
         yaxis = (total_cross_section * scale_factor).real
 
@@ -967,10 +1012,9 @@ class add_cs:
         if len(eaxis) != len(selected_slice) and len(eaxis_cs) != len(cross_section):
             raise ValueError("eaxis, selected_slice, and cross_section must have the same length.")
 
-        # Match the simulated curve to the net experimental intensity at the
-        # right edge of the quantification window.
+        # Match the simulated curve to a constant fit over the final energy window.
         self.xaxis = np.asarray(self.eaxis_cs, dtype=float) - self.chemical_shift
-        self.anchor_energy, self.norm_exp = _normalization_anchor(
+        self.anchor_energy, self.norm_exp, self.anchor_window = _normalization_anchor(
             self.eaxis,
             selected_slice,
             y_extrapolated,
@@ -981,6 +1025,7 @@ class add_cs:
             self.cross_section,
             self.anchor_energy,
             self.norm_exp,
+            self.anchor_window,
         )
         self.yaxis = _as_real_float_array(self.cross_section) * self.scale_factor
 

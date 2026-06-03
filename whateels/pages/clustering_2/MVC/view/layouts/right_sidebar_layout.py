@@ -127,6 +127,8 @@ class _Clustering2RightSidebarParams(param.Parameterized):
 class Clustering2RightSidebarLayout(pn.Column):
     
     _STRETCH_WIDTH = "stretch_width"
+    _DETAIL_EXPANDED_COLOR = "#ca4bc8"
+    _DETAIL_COLLAPSED_COLOR = "#7373da"
     
     _SVG = """
         <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -600,6 +602,8 @@ class Clustering2RightSidebarLayout(pn.Column):
             title="UMAP",
             content=compute_umap_embedding_content,
             expanded=True,
+            color_on_expand=self._DETAIL_EXPANDED_COLOR,
+            color_on_collapse=self._DETAIL_COLLAPSED_COLOR,
             margin=(0, 0, 10, 0),
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -713,6 +717,8 @@ class Clustering2RightSidebarLayout(pn.Column):
             title="HDBSCAN",
             content=compute_hdbscan_embedding_content,
             expanded=False,
+            color_on_expand=self._DETAIL_EXPANDED_COLOR,
+            color_on_collapse=self._DETAIL_COLLAPSED_COLOR,
             margin=(0, 0, 10, 0),
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -870,6 +876,8 @@ class Clustering2RightSidebarLayout(pn.Column):
             title="SVM",
             content=svm_content,
             expanded=False,
+            color_on_expand=self._DETAIL_EXPANDED_COLOR,
+            color_on_collapse=self._DETAIL_COLLAPSED_COLOR,
             margin=(0, 0, 10, 0),
             sizing_mode=self._STRETCH_WIDTH,
         )

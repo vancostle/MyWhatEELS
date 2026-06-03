@@ -231,8 +231,6 @@ class FittingView:
                 sizing_mode=self._STRETCH_WIDTH
             ),
             expanded=True,
-            button_type_on_collapse='primary',
-            button_type_on_expand='success',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0,0,10,0)
         )
