@@ -99,6 +99,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._hover_disabled = False  # Disable hover after showing all clusters
         self._last_hover_point = None  # Store last hover position for re-enabling
         self._suppress_click_until_ms = 0  # Ignore Tap events that follow a DoubleTap
+        self._suppress_double_tap_until_ms = 0
+        self._last_paneA_click_ts = None
+        self._last_paneA_click_pixel = None
+        self._DOUBLE_CLICK_MS = 450
+        self._DOUBLE_CLICK_PIXEL_TOLERANCE = 2
         self._paneB_hover_flush_pending = False
         self._pending_paneB_hover_fig = None
         self._last_paneB_send_ts = None
@@ -1022,46 +1027,99 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         except Exception:
             _logger.exception("clustering _cache_cluster_hover_renderers failed")
 
-    @override
-    def _on_paneA_double_tap(self, x=None, y=None):
-        """Toggle between hover mode and all-cluster-centers display."""
-        was_hover_blocked = self._hover_blocked
-        super()._on_paneA_double_tap(x, y)  # clears _hover_blocked, _region_pairs, selection overlay
-        self._frozen_pixel = None
-        # DoubleTap emits two Tap-like events; keep a wider suppression window
-        # so the trailing Tap does not immediately re-freeze the pane.
-        self._suppress_click_until_ms = self._now_ms() + 900
+    def _reset_cluster_hover_live_state(self):
+        self._cluster_hover_install_sent = False
+        self._cluster_hover_live_ready = False
+        self._cluster_hover_raw_renderer = None
+        self._cluster_hover_centroid_renderer = None
+        self._cluster_hover_last_label = None
 
-        def _send_paneB(fig):
+    def _is_manual_double_click(self, now_ms: int, pixel: tuple[int, int]) -> bool:
+        if self._last_paneA_click_ts is None or self._last_paneA_click_pixel is None:
+            return False
+        if now_ms - self._last_paneA_click_ts > self._DOUBLE_CLICK_MS:
+            return False
+        prev_y, prev_x = self._last_paneA_click_pixel
+        y, x = pixel
+        return max(abs(y - prev_y), abs(x - prev_x)) <= self._DOUBLE_CLICK_PIXEL_TOLERANCE
+
+    def _show_all_cluster_centers(self):
+        self._frozen_pixel = None
+        self._hover_disabled = True
+        self._hover_blocked = False
+        self._hover_pending_point = None
+        self._last_paneA_click_ts = None
+        self._last_paneA_click_pixel = None
+        self._suppress_click_until_ms = self._now_ms() + 350
+        self._reset_cluster_hover_live_state()
+
+        if not (self._clustering_active and self._clustering_results is not None and self._visualizer is not None):
+            return
+
+        _, centres = self._clustering_results
+        fig = self._visualizer.plot_centers(
+            centres,
+            self._energy,
+            title="All Cluster Centers (Double Click again to re-enable hover)"
+        )
+
+        def _send_paneB():
             try:
                 self._update_paneB(fig)
             except Exception:
-                _logger.exception("clustering _on_paneA_double_tap deferred paneB update failed")
+                _logger.exception("clustering _show_all_cluster_centers deferred paneB update failed")
 
-        if self._hover_disabled or was_hover_blocked:
-            self._hover_disabled = False
-            if self._last_hover_point is not None and self._clustering_active:
-                i, j = int(self._last_hover_point["y"]), int(self._last_hover_point["x"])
-                fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
-                doc = pn.state.curdoc
-                if doc is not None:
-                    doc.add_next_tick_callback(lambda: _send_paneB(fig))
-                else:
-                    _send_paneB(fig)
+        doc = pn.state.curdoc
+        if doc is not None:
+            doc.add_next_tick_callback(_send_paneB)
         else:
-            if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
-                self._hover_disabled = True
-                _, centres = self._clustering_results
-                fig = self._visualizer.plot_centers(
-                    centres,
-                    self._energy,
-                    title="All Cluster Centers (Double Click again to re-enable hover)"
-                )
-                doc = pn.state.curdoc
-                if doc is not None:
-                    doc.add_next_tick_callback(lambda: _send_paneB(fig))
-                else:
-                    _send_paneB(fig)
+            _send_paneB()
+
+    def _enable_hover_mode(self, x=None, y=None):
+        self._hover_disabled = False
+        self._frozen_pixel = None
+        self._hover_blocked = False
+        self._hover_pending_point = None
+        self._last_paneA_click_ts = None
+        self._last_paneA_click_pixel = None
+        self._suppress_click_until_ms = self._now_ms() + 350
+        self._reset_cluster_hover_live_state()
+
+        if x is not None and y is not None:
+            point = {"x": x, "y": y}
+        elif self._last_hover_point is not None:
+            point = self._last_hover_point
+        else:
+            point = {"x": 0, "y": 0}
+        self._last_hover_point = point
+
+        if self._clustering_active:
+            fig = self._build_cluster_hover_overlay(point)
+        else:
+            fig = self._figB_hover(point)
+
+        def _send_paneB():
+            try:
+                self._update_paneB(fig)
+            except Exception:
+                _logger.exception("clustering _enable_hover_mode deferred paneB update failed")
+
+        doc = pn.state.curdoc
+        if doc is not None:
+            doc.add_next_tick_callback(_send_paneB)
+        else:
+            _send_paneB()
+
+    @override
+    def _on_paneA_double_tap(self, x=None, y=None):
+        """Toggle between hover mode and all-cluster-centers display."""
+        if self._now_ms() < self._suppress_double_tap_until_ms:
+            return
+        super()._on_paneA_double_tap(x, y)  # clears _hover_blocked, _region_pairs, selection overlay
+        if self._hover_disabled:
+            self._enable_hover_mode(x, y)
+        else:
+            self._show_all_cluster_centers()
 
     @override
     def _on_paneA_selected(self, index=None):
@@ -1255,10 +1313,28 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """
         if x is None or y is None:
             return
-        if self._now_ms() < self._suppress_click_until_ms:
+        now = self._now_ms()
+        if now < self._suppress_click_until_ms:
             _logger.debug("clustering _on_paneA_click ignored due to recent DoubleTap")
             return
-        self._last_hover_pixel = (round(y), round(x))
+        current_pixel = (round(y), round(x))
+        if self._is_manual_double_click(now, current_pixel):
+            self._suppress_double_tap_until_ms = now + 350
+            super()._on_paneA_double_tap(x, y)
+            if self._hover_disabled:
+                self._enable_hover_mode(x, y)
+            else:
+                self._show_all_cluster_centers()
+            return
+
+        if self._hover_disabled:
+            self._last_paneA_click_ts = now
+            self._last_paneA_click_pixel = current_pixel
+            return
+
+        self._last_paneA_click_ts = now
+        self._last_paneA_click_pixel = current_pixel
+        self._last_hover_pixel = current_pixel
         try:
             if self._clustering_active:
                 i, j = int(y), int(x)
@@ -1340,6 +1416,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spectral_color_picker_watcher = None
         self._preprocessing_switch_ref = None
         self._preprocessing_switch_watcher = None
+        self._hover_disabled = False
+        self._frozen_pixel = None
+        self._last_paneA_click_ts = None
+        self._last_paneA_click_pixel = None
+        self._suppress_click_until_ms = 0
+        self._suppress_double_tap_until_ms = 0
+        self._reset_cluster_hover_live_state()
 
         # Release model/view refs
         self._model = None  # type: ignore[assignment]
