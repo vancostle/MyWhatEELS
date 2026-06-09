@@ -111,6 +111,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._cluster_hover_last_label = None
         self._cluster_hover_processing = False
         self._cluster_hover_latest_point = None
+        self._suppress_default_hover_once = False
         self._init_kmeans_picker_after_apply = False
         self._init_agglomerative_picker_after_apply = False
         self._init_spectral_picker_after_apply = False
@@ -238,9 +239,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._update_selection_overlay([])
 
     def _refresh_paneB(self):
-        """Refresh paneB using the last hover point or default pixel (0, 0)."""
+        """Refresh paneB using cluster centers when clustering is active."""
         self._current_x_range = None
         self._current_y_range = None
+        if self._clustering_results is not None and self._visualizer is not None:
+            _, centres = self._clustering_results
+            self._update_paneB(self._visualizer.plot_centers(centres, self._energy))
+            return
         point = self._last_hover_point if self._last_hover_point is not None else {"x": 0, "y": 0}
         if self._try_fast_hover_update(point):
             return
@@ -302,6 +307,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             
             # Finalize
             self._orchestrator.finalize_clustering(n_clusters, "K-Means", self._plots_layout)
+            self._restore_centers_after_clustering(centres)
             pn.state.notifications.success("K-Means clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
@@ -365,6 +371,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             
             # Finalize
             self._orchestrator.finalize_clustering(n_clusters, constants.TAB_AGGLOMERATIVE, self._plots_layout)
+            self._restore_centers_after_clustering(centres)
             pn.state.notifications.success("Agglomerative clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
@@ -433,6 +440,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             # Finalize
             constants = self._model.constants
             self._orchestrator.finalize_clustering(n_clusters, constants.TAB_SPECTRAL, self._plots_layout)
+            self._restore_centers_after_clustering(centres)
             pn.state.notifications.success("Spectral clustering completed successfully!", duration=5000) #type: ignore
             
         except Exception as e:
@@ -515,7 +523,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         finally:
             self._suppress_color_picker_callbacks = False
 
-    def _init_picker_from_default_pixel(self, algorithm_name: str, labels):
+    def _init_picker_from_default_pixel(self, algorithm_name: str, labels, update_paneB: bool = True):
         """Initialize picker state from the default pixel (0, 0) after clustering."""
         if not self._should_init_picker_after_apply(algorithm_name):
             return
@@ -526,12 +534,38 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
             self._set_picker_from_cluster(algorithm_name, cluster_label, default_i, default_j, color)
             self._last_hover_point = {"x": default_j, "y": default_i}
-            self._update_paneB(self._plot_pixel_spectrum(default_i, default_j, title_prefix="Hover"))
+            if update_paneB:
+                self._update_paneB(self._plot_pixel_spectrum(default_i, default_j, title_prefix="Hover"))
         except Exception:
             pass
         finally:
             self._set_init_picker_after_apply_flag(algorithm_name, False)
-    
+
+    def _show_cluster_centers(self, centres, title: str = "Cluster Centers", defer: bool = False):
+        """Send all cluster centers to paneB, optionally after the layout restore tick."""
+        if self._visualizer is None:
+            return
+
+        def _send():
+            try:
+                self._current_x_range = None
+                self._current_y_range = None
+                self._update_paneB(self._visualizer.plot_centers(centres, self._energy, title=title))
+            except Exception:
+                _logger.exception("Failed to show clustering centers")
+
+        if defer:
+            doc = pn.state.curdoc
+            if doc is not None:
+                doc.add_next_tick_callback(_send)
+            else:
+                _send()
+        else:
+            _send()
+
+    def _restore_centers_after_clustering(self, centres):
+        self._show_cluster_centers(centres, defer=True)
+
     def _update_clustering_plots(self, labels, centres, norm, n_clusters, algorithm_name):
         """Update visualization after clustering."""
         self._clustering_results = (labels, centres)
@@ -586,7 +620,17 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Initialize algorithm-specific picker state from the default pixel (0, 0)
         # before any explicit click interaction.
-        self._init_picker_from_default_pixel(algorithm_name, labels)
+        self._init_picker_from_default_pixel(
+            algorithm_name,
+            labels,
+            update_paneB=False,
+        )
+
+        self._last_hover_point = None
+        self._hover_pending_point = None
+        self._hover_last_event_pixel = None
+        self._hover_last_event_xy = None
+        self._suppress_default_hover_once = True
 
     def _refresh_cluster_visuals(self):
         """Rebuild the clustering heatmap and spectrum panes using the current color palette."""
@@ -988,8 +1032,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             overlays.append(
                 hv.Curve((self._energy, spec), kdims=['x'], vdims=['y']).opts(
                     color='orange' if normalized_spec is not None else 'black',
-                    line_width=2 if normalized_spec is not None else 1.5,
-                    alpha=0.7 if normalized_spec is not None else 0.2,
+                    line_width=1.5,
+                    alpha=0.2,
                     responsive=True,
                     shared_axes=False,
                     framewise=True,
@@ -1106,6 +1150,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
 
         current_xy = (float(x), float(y))
+        current_pixel = (round(y), round(x))
+        if self._suppress_default_hover_once:
+            self._suppress_default_hover_once = False
+            if current_pixel == (0, 0):
+                self._hover_last_event_xy = current_xy
+                self._hover_last_event_pixel = current_pixel
+                return
+
         last_xy = self._hover_last_event_xy
         if last_xy is not None:
             dx = abs(current_xy[0] - last_xy[0])
@@ -1113,7 +1165,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if max(dx, dy) < self._CLUSTER_HOVER_DEADZONE_PX:
                 return
 
-        current_pixel = (round(y), round(x))
         if self._hover_last_event_pixel == current_pixel:
             return
 
@@ -1134,7 +1185,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 if self._last_hover_point is not None:
                     self._show_spectrum(point=self._last_hover_point, is_hover_event=is_hover_event)
                 return
-            fig = self._plot_pixel_spectrum(int(point["y"]), int(point["x"]), title_prefix="Click (Frozen)") if point is not None else self._plot_pixel_spectrum(0, 0, title_prefix="Click (Frozen)")
+            if point is not None:
+                fig = self._plot_pixel_spectrum(int(point["y"]), int(point["x"]), title_prefix="Click (Frozen)")
+            elif self._clustering_results is not None and self._visualizer is not None:
+                _, centres = self._clustering_results
+                fig = self._visualizer.plot_centers(centres, self._energy)
+            else:
+                fig = self._plot_pixel_spectrum(0, 0, title_prefix="Click (Frozen)")
         elif point is not None:
             i, j = int(point["y"]), int(point["x"])
             if is_hover_event:
