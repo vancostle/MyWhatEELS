@@ -109,6 +109,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._cluster_hover_raw_renderer = None
         self._cluster_hover_centroid_renderer = None
         self._cluster_hover_last_label = None
+        self._cluster_hover_overlay_active = False
         self._cluster_hover_processing = False
         self._cluster_hover_latest_point = None
         self._suppress_default_hover_once = False
@@ -130,6 +131,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # Store normalized data for visualization
         self._last_clustering_matrix = None
         self._last_clustering_input = None
+        self._cluster_centers_x_range = None
+        self._cluster_centers_y_range = None
 
         # Clustering widgets
         self._kmeans_run_button: pn.widgets.Button = self._view.right_sidebar.kmeans_run_button
@@ -244,7 +247,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._current_y_range = None
         if self._clustering_results is not None and self._visualizer is not None:
             _, centres = self._clustering_results
-            self._update_paneB(self._visualizer.plot_centers(centres, self._energy))
+            self._show_cluster_centers(centres)
             return
         point = self._last_hover_point if self._last_hover_point is not None else {"x": 0, "y": 0}
         if self._try_fast_hover_update(point):
@@ -548,8 +551,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         def _send():
             try:
-                self._current_x_range = None
-                self._current_y_range = None
+                self._remember_cluster_center_ranges(centres)
+                self._current_x_range = self._cluster_centers_x_range
+                self._current_y_range = self._cluster_centers_y_range
+                self._cluster_hover_install_sent = False
+                self._cluster_hover_live_ready = False
+                self._cluster_hover_raw_renderer = None
+                self._cluster_hover_centroid_renderer = None
+                self._cluster_hover_last_label = None
+                self._cluster_hover_overlay_active = False
                 self._update_paneB(self._visualizer.plot_centers(centres, self._energy, title=title))
             except Exception:
                 _logger.exception("Failed to show clustering centers")
@@ -565,6 +575,65 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _restore_centers_after_clustering(self, centres):
         self._show_cluster_centers(centres, defer=True)
+
+    def _remember_cluster_center_ranges(self, centres):
+        """Store the axes used by the all-cluster-centers plot."""
+        self._cluster_centers_x_range = None
+        self._cluster_centers_y_range = None
+
+        try:
+            energy = np.asarray(self._energy, dtype=float).reshape(-1)
+            finite_energy = energy[np.isfinite(energy)]
+            if finite_energy.size:
+                x_min = float(np.nanmin(finite_energy))
+                x_max = float(np.nanmax(finite_energy))
+                if x_min == x_max:
+                    x_min -= 0.5
+                    x_max += 0.5
+                self._cluster_centers_x_range = (x_min, x_max)
+        except Exception:
+            pass
+
+        try:
+            center_values = np.asarray(centres, dtype=float)
+            finite_values = center_values[np.isfinite(center_values)]
+            if finite_values.size:
+                y_min = float(np.nanmin(finite_values))
+                y_max = float(np.nanmax(finite_values))
+                pad = (y_max - y_min) * 0.05
+                if not np.isfinite(pad) or pad <= 0:
+                    pad = max(abs(y_min) * 0.05, 1e-9)
+                self._cluster_centers_y_range = (y_min - pad, y_max + pad)
+        except Exception:
+            pass
+
+    def _apply_normalized_cluster_center_axes(self, fig):
+        """Keep normalized hover/click spectra on the all-cluster-centers axes."""
+        if not self._has_active_normalization():
+            return fig
+
+        if (
+            (self._cluster_centers_x_range is None or self._cluster_centers_y_range is None)
+            and self._clustering_results is not None
+        ):
+            _, centres = self._clustering_results
+            self._remember_cluster_center_ranges(centres)
+
+        opts = {}
+        if self._cluster_centers_x_range is not None:
+            opts['xlim'] = self._cluster_centers_x_range
+            self._current_x_range = self._cluster_centers_x_range
+        if self._cluster_centers_y_range is not None:
+            opts['ylim'] = self._cluster_centers_y_range
+            self._current_y_range = self._cluster_centers_y_range
+
+        if not opts:
+            return fig
+
+        try:
+            return fig.opts(**opts)
+        except Exception:
+            return fig
 
     def _update_clustering_plots(self, labels, centres, norm, n_clusters, algorithm_name):
         """Update visualization after clustering."""
@@ -606,13 +675,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 _logger.exception("Failed to reattach clustering hover stream")
 
         # Update spectrum pane to show cluster centers via base class pipe
-        centers_fig = self._visualizer.plot_centers(centres, self._energy)
-        self._update_paneB(centers_fig)
+        self._show_cluster_centers(centres)
         self._cluster_hover_install_sent = False
         self._cluster_hover_live_ready = False
         self._cluster_hover_raw_renderer = None
         self._cluster_hover_centroid_renderer = None
         self._cluster_hover_last_label = None
+        self._cluster_hover_overlay_active = False
         
         self._clustering_active = True
         self._frozen_pixel = None  # Reset frozen state
@@ -666,7 +735,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 _logger.exception("Failed to reattach clustering hover stream during refresh")
 
         if self._hover_disabled:
-            self._update_paneB(self._visualizer.plot_centers(centres, self._energy))
+            self._show_cluster_centers(centres)
         elif self._frozen_pixel is not None:
             i, j = self._frozen_pixel
             self._update_paneB(self._plot_pixel_spectrum(i, j, title_prefix="Click (Frozen)"))
@@ -1013,7 +1082,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             except Exception as e:
                 print(f"Error plotting cluster center: {e}")
 
-        return hv.Overlay(overlays)
+        return self._apply_normalized_cluster_center_axes(hv.Overlay(overlays))
 
     def _build_cluster_hover_overlay(self, point, title_prefix="Hover"):
         """Build a cheap hover overlay that keeps the pixel spectrum and centroid visible."""
@@ -1059,7 +1128,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             except Exception:
                 _logger.exception("Error building cluster hover overlay")
 
-        return hv.Overlay(overlays).opts(
+        overlay = hv.Overlay(overlays).opts(
             hv.opts.Overlay(
                 responsive=True,
                 shared_axes=False,
@@ -1068,9 +1137,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 hooks=[self._cache_cluster_hover_renderers],
             )
         )
+        return self._apply_normalized_cluster_center_axes(overlay)
 
     def _cache_cluster_hover_renderers(self, plot, element):
         """Cache the two line renderers from the compact hover overlay once it is rendered."""
+        if not self._cluster_hover_overlay_active:
+            return
         try:
             figure = getattr(plot, 'state', None) or plot
             renderers = [renderer for renderer in getattr(figure, 'renderers', []) or [] if hasattr(renderer, 'data_source')]
@@ -1118,16 +1190,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if self._clustering_active and self._clustering_results is not None and self._visualizer is not None:
                 self._hover_disabled = True
                 _, centres = self._clustering_results
-                fig = self._visualizer.plot_centers(
+                self._show_cluster_centers(
                     centres,
-                    self._energy,
-                    title="All Cluster Centers (Double Click again to re-enable hover)"
+                    title="All Cluster Centers (Double Click again to re-enable hover)",
+                    defer=True,
                 )
-                doc = pn.state.curdoc
-                if doc is not None:
-                    doc.add_next_tick_callback(lambda: _send_paneB(fig))
-                else:
-                    _send_paneB(fig)
 
     @override
     def _on_paneA_selected(self, index=None):
@@ -1189,12 +1256,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 fig = self._plot_pixel_spectrum(int(point["y"]), int(point["x"]), title_prefix="Click (Frozen)")
             elif self._clustering_results is not None and self._visualizer is not None:
                 _, centres = self._clustering_results
-                fig = self._visualizer.plot_centers(centres, self._energy)
+                self._show_cluster_centers(centres)
+                return
             else:
                 fig = self._plot_pixel_spectrum(0, 0, title_prefix="Click (Frozen)")
         elif point is not None:
             i, j = int(point["y"]), int(point["x"])
             if is_hover_event:
+                self._cluster_hover_install_sent = True
+                self._cluster_hover_overlay_active = True
+                self._cluster_hover_live_ready = False
+                self._cluster_hover_raw_renderer = None
+                self._cluster_hover_centroid_renderer = None
+                self._cluster_hover_last_label = None
                 fig = self._build_cluster_hover_overlay(point, title_prefix=f"Hover (x={j}, y={i})")
             else:
                 fig = self._plot_pixel_spectrum(i, j, title_prefix="Hover")
@@ -1206,83 +1280,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return False
         if not self._clustering_active:
             return super()._try_fast_hover_update(point)
-
-        try:
-            bokeh_plot = self._get_live_paneB_bokeh_plot()
-            if bokeh_plot is None:
-                return False
-
-            if not self._cluster_hover_install_sent:
-                self._cluster_hover_install_sent = True
-                self._update_paneB(self._build_cluster_hover_overlay(point), from_hover=False)
-                return True
-
-            if not self._cluster_hover_live_ready or self._cluster_hover_raw_renderer is None:
-                self._cache_cluster_hover_renderers(bokeh_plot, None)
-                if not self._cluster_hover_live_ready or self._cluster_hover_raw_renderer is None:
-                    return False
-
-            raw_renderer = self._cluster_hover_raw_renderer
-            centroid_renderer = self._cluster_hover_centroid_renderer
-
-            labels, centres = self._clustering_results if self._clustering_results is not None else (None, None)
-            if labels is None:
-                return False
-
-            i_max = int(labels.shape[0]) - 1
-            j_max = int(labels.shape[1]) - 1
-            i = int(np.clip(round(point['y']), 0, i_max))
-            j = int(np.clip(round(point['x']), 0, j_max))
-            try:
-                spec = self._get_display_numpy()[i, j, :]
-            except Exception:
-                spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
-            normalized_spec = self._get_normalized_pixel_spectrum(i, j)
-            if normalized_spec is not None:
-                spec = normalized_spec
-            if spec is None:
-                return False
-
-            if raw_renderer is None:
-                return False
-
-            try:
-                raw_renderer.data_source.patch({'y': [(slice(None), np.asarray(spec))]})
-            except Exception:
-                raw_renderer.data_source.data = {
-                    'x': self._energy,
-                    'y': spec,
-                }
-
-            if centres is not None and centroid_renderer is not None:
-                cluster_label = int(labels[i, j])
-                cluster_center = centres[cluster_label]
-                if self._cluster_hover_last_label != cluster_label:
-                    color = self.cluster_colors[cluster_label % len(self.cluster_colors)] if self.cluster_colors else 'blue'
-                    try:
-                        centroid_renderer.data_source.patch({'y': [(slice(None), np.asarray(cluster_center))]})
-                    except Exception:
-                        centroid_renderer.data_source.data = {
-                            'x': self._energy,
-                            'y': cluster_center,
-                        }
-                    try:
-                        centroid_renderer.glyph.line_color = color
-                    except Exception:
-                        pass
-                    self._cluster_hover_last_label = cluster_label
-
-            if self._cluster_hover_last_label is None and self._clustering_results is not None:
-                try:
-                    labels, _ = self._clustering_results
-                    self._cluster_hover_last_label = int(labels[i, j])
-                except Exception:
-                    pass
-
-            return True
-        except Exception:
-            _logger.exception("clustering _try_fast_hover_update failed")
-            return False
+        # The clustering paneB can start in "all centers" mode; rebuilding the
+        # hover overlay keeps the centroid tied to the current pixel label.
+        return False
 
     def _flush_pending_hover_send(self):
         self._paneB_hover_flush_pending = False
@@ -1396,6 +1396,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._original_heatmap_ref = []
         self._last_clustering_matrix = None
         self._last_clustering_input = None
+        self._cluster_centers_x_range = None
+        self._cluster_centers_y_range = None
 
         # Release OOP helper objects (orchestrator holds a closure over self via data_getter_fn)
         self._orchestrator = None  # type: ignore[assignment]
