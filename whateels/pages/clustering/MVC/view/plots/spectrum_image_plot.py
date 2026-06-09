@@ -861,6 +861,49 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     
     # create_plots inherited from base class
     # create_dataset_info inherited from base class
+
+    def _has_active_normalization(self):
+        norm = getattr(self, '_current_norm', None)
+        return (
+            isinstance(norm, str)
+            and norm.strip().lower() != 'none'
+            and getattr(self, '_last_clustering_input', None) is not None
+        )
+
+    def _get_normalized_pixel_spectrum(self, i, j):
+        """Return the normalized spectrum used for clustering for a pixel, if available."""
+        if not self._has_active_normalization():
+            return None
+
+        try:
+            normalized_input = np.asarray(self._last_clustering_input)
+            if normalized_input.ndim != 2:
+                return None
+
+            nx = None
+            if self._clustering_results is not None:
+                labels, _ = self._clustering_results
+                if hasattr(labels, 'shape') and len(labels.shape) >= 2:
+                    if i < 0 or j < 0 or i >= int(labels.shape[0]) or j >= int(labels.shape[1]):
+                        return None
+                    nx = int(labels.shape[1])
+
+            if nx is None:
+                data_shape = self._get_display_numpy().shape
+                if i < 0 or j < 0 or i >= int(data_shape[0]) or j >= int(data_shape[1]):
+                    return None
+                nx = int(data_shape[1])
+
+            linear_idx = int(i) * nx + int(j)
+            if linear_idx < 0 or linear_idx >= normalized_input.shape[0]:
+                return None
+
+            spectrum = np.asarray(normalized_input[linear_idx])
+            if spectrum.ndim != 1:
+                return None
+            return spectrum
+        except Exception:
+            return None
     
     def _plot_pixel_spectrum(self, i, j, title_prefix="Hover"):
         """
@@ -872,56 +915,37 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = self._get_display_numpy()[i, j, :]
         except Exception:
             spec = SpectrumExtractor.get_spectrum_from_pixel(display_data, i, j)
-        if spec is None:
+        normalized_spec = self._get_normalized_pixel_spectrum(i, j)
+        pixel_spec = normalized_spec if normalized_spec is not None else spec
+        if pixel_spec is None:
             return hv.Overlay([])
 
-        should_plot_original = True
-        if hasattr(self, '_current_norm') and isinstance(self._current_norm, str) and self._current_norm.lower() != 'none':
-            should_plot_original = False
+        pixel_color = 'orange' if normalized_spec is not None else 'black'
+        pixel_title = (
+            f"{title_prefix} Normalized ({self._current_norm}) (i={i}, j={j})"
+            if normalized_spec is not None
+            else f"{title_prefix} (i={i}, j={j})"
+        )
+        pixel_ylabel = (
+            f"Normalized Intensity ({self._current_norm})"
+            if normalized_spec is not None
+            else "Intensity (AU)"
+        )
 
-        if should_plot_original:
-            overlays.append(
-                hv.Curve(
-                    (self._energy, spec),
-                    kdims=['x'],
-                    vdims=['y']
-                ).opts(
-                    color='black',
-                    line_width=1.5,
-                    alpha=0.2,
-                    title=f"{title_prefix} (i={i}, j={j})",
-                    xlabel="Energy Loss (eV)",
-                    ylabel="Intensity (AU)"
-                )
+        overlays.append(
+            hv.Curve(
+                (self._energy, pixel_spec),
+                kdims=['x'],
+                vdims=['y']
+            ).opts(
+                color=pixel_color,
+                line_width=1.5,
+                alpha=0.2,
+                title=pixel_title,
+                xlabel="Energy Loss (eV)",
+                ylabel=pixel_ylabel
             )
-
-        if (hasattr(self, '_current_norm') and 
-            isinstance(self._current_norm, str) and 
-            self._current_norm.lower() != 'none' and
-            hasattr(self, '_last_clustering_input') and
-            self._last_clustering_input is not None):
-            try:
-                data_cube = np.asarray(display_data.fillna(0.0)) # type: ignore
-                ny, nx = data_cube.shape[0], data_cube.shape[1]
-                linear_idx = i * nx + j
-                if linear_idx < len(self._last_clustering_input):
-                    normalized_spec = self._last_clustering_input[linear_idx]
-                    overlays.append(
-                        hv.Curve(
-                            (self._energy, normalized_spec),
-                            kdims=['x'],
-                            vdims=['y']
-                        ).opts(
-                            color='orange',
-                            line_width=2,
-                            alpha=0.2,
-                            title=f"Normalized ({self._current_norm})",
-                            xlabel="Energy Loss (eV)",
-                            ylabel="Intensity (AU)"
-                        )
-                    )
-            except Exception as e:
-                print(f"Error plotting normalized spectrum: {e}")
+        )
 
         if self._clustering_active and self._clustering_results is not None:
             try:
@@ -948,7 +972,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         return hv.Overlay(overlays)
 
     def _build_cluster_hover_overlay(self, point, title_prefix="Hover"):
-        """Build a cheap hover overlay that still keeps the raw background and centroid visible."""
+        """Build a cheap hover overlay that keeps the pixel spectrum and centroid visible."""
         i, j = int(point["y"]), int(point["x"])
         overlays = []
 
@@ -956,13 +980,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = self._get_display_numpy()[i, j, :]
         except Exception:
             spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+        normalized_spec = self._get_normalized_pixel_spectrum(i, j)
+        if normalized_spec is not None:
+            spec = normalized_spec
 
         if spec is not None:
             overlays.append(
                 hv.Curve((self._energy, spec), kdims=['x'], vdims=['y']).opts(
-                    color='black',
-                    line_width=1.5,
-                    alpha=0.2,
+                    color='orange' if normalized_spec is not None else 'black',
+                    line_width=2 if normalized_spec is not None else 1.5,
+                    alpha=0.7 if normalized_spec is not None else 0.2,
                     responsive=True,
                     shared_axes=False,
                     framewise=True,
@@ -1153,6 +1180,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 spec = self._get_display_numpy()[i, j, :]
             except Exception:
                 spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+            normalized_spec = self._get_normalized_pixel_spectrum(i, j)
+            if normalized_spec is not None:
+                spec = normalized_spec
             if spec is None:
                 return False
 
