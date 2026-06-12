@@ -1,3 +1,4 @@
 from .umap_embedding_placeholder import UmapEmbeddingPlaceholder
+from .svm_training_placeholder import SVMTrainingPlaceholder
 from .dm_file_uploaded_placeholder import DMFileUploadedPlaceholder
 from .none_dm_file_uploaded_placeholder import NoneDMFileUploadedPlaceholder

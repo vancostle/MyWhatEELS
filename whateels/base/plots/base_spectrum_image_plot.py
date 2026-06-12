@@ -335,7 +335,6 @@ class BaseSpectrumImagePlot(IPlot):
             hover_period = 33
         try:
             self._hover_pc = pn.state.add_periodic_callback(self._flush_hover_queue, period=hover_period, start=False)
-            _logger.debug("Created hover periodic callback with period=%sms", hover_period)
         except Exception:
             _logger.exception("Failed to create hover periodic callback")
         # DoubleTap stream to reset lasso selection
@@ -444,7 +443,6 @@ class BaseSpectrumImagePlot(IPlot):
         if self._paneB_pipe is not None:
             if fig is not None and not isinstance(fig, hv.Overlay):
                 fig = hv.Overlay([fig])
-            _logger.debug("_update_paneB sending fig=%s", type(fig).__name__ if fig is not None else None)
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
 
     def _client_hover_gate_hook(self, plot, element):
@@ -500,7 +498,6 @@ class BaseSpectrumImagePlot(IPlot):
 
     def _on_hover_gate_value_changed(self, event):
         value = getattr(event, 'new', '') or ''
-        _logger.debug("_on_hover_gate_value_changed: %r", value)
         if not value:
             self._hover_pending_point = None
             self._hover_last_event_ts = None
@@ -533,7 +530,6 @@ class BaseSpectrumImagePlot(IPlot):
         self._hover_last_event_ts = self._now_ms()
         self._hover_last_render_ts = self._hover_last_event_ts
         self._handle_hover_render(point)
-        _logger.debug("_on_hover_gate_value_changed -> _handle_hover_render called for point=%r", point)
 
     def _show_spectrum(self, *, point=None, region_pairs=None):
         """
@@ -550,7 +546,6 @@ class BaseSpectrumImagePlot(IPlot):
         elif point is not None:
             fig = self._figB_hover(point)
         self._update_paneB(fig)
-        _logger.debug("_show_spectrum called: point=%r region_pairs=%r", point, bool(region_pairs))
 
     # --- Pane A event handlers ---
 
@@ -770,10 +765,8 @@ class BaseSpectrumImagePlot(IPlot):
 
     def _try_fast_hover_update(self, point) -> bool:
         """Update the live paneB line data in-place for hover when possible."""
-        _logger.debug("_try_fast_hover_update called with point=%r", point)
         bokeh_plot = self._get_live_paneB_bokeh_plot()
         if bokeh_plot is None:
-            _logger.debug("_try_fast_hover_update: no live bokeh plot")
             return False
 
         try:
@@ -785,7 +778,6 @@ class BaseSpectrumImagePlot(IPlot):
                         renderer = candidate
                         break
             if renderer is None:
-                _logger.debug("_try_fast_hover_update: no suitable renderer found")
                 return False
 
             i, j = round(point['y']), round(point['x'])
@@ -799,12 +791,10 @@ class BaseSpectrumImagePlot(IPlot):
                     return False
 
             source = renderer.data_source
-            _logger.debug("_try_fast_hover_update: updating renderer=%r source=%r", type(renderer).__name__, type(source).__name__)
             source.data = {
                 'x': self._energy,
                 'y': spec,
             }
-            _logger.debug("_try_fast_hover_update success for pixel=(%s,%s)", i, j)
             return True
         except Exception:
             _logger.exception("_try_fast_hover_update failed")
@@ -840,7 +830,6 @@ class BaseSpectrumImagePlot(IPlot):
         self._hover_last_event_ts = self._now_ms()
         if self._hover_pc is not None and not self._hover_pc.running:
             self._hover_pc.start()
-        _logger.debug("_queue_hover enqueued point=%r", point)
 
     def _flush_hover_queue(self):
         if self._hover_pending_point is None:
@@ -884,7 +873,6 @@ class BaseSpectrumImagePlot(IPlot):
         self._last_hover_pixel = current_pixel
         self._hover_last_render_ts = now
         self._handle_hover_render(point)
-        _logger.debug("_flush_hover_queue -> _handle_hover_render executed for point=%r", point)
         # Only render once per queued hover; require a new event to render again.
         self._hover_pending_point = None
 

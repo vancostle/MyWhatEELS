@@ -30,6 +30,19 @@ class ToggleButton(Button):
     _NAME = 'label'
     _ON_CLICK = 'on_click'
     _BUTTON_TYPE = 'button_type'
+    _COLOR = 'color'
+    _TEXT_COLOR = 'text_color'
+
+    _BUTTON_TYPES = {
+        "default",
+        "primary",
+        "success",
+        "warning",
+        "danger",
+        "info",
+        "light",
+        "dark",
+    }
     
     def __init__(
         self, 
@@ -45,10 +58,17 @@ class ToggleButton(Button):
             }
         # Set initial state
         name = states[self._ON][self._NAME] if initial_state else states[self._OFF][self._NAME]
-        button_type = states[self._ON][self._BUTTON_TYPE] if initial_state else states[self._OFF][self._BUTTON_TYPE]
+        button_type, color, text_color = self._resolve_state_style(
+            states[self._ON] if initial_state else states[self._OFF]
+        )
 
         # Initialize the Button with the appropriate label and button type
-        super().__init__(name=name, button_type=button_type, **kwargs)
+        super().__init__(
+            name=name,
+            button_type=button_type,
+            stylesheets=self._button_styles(color, text_color),
+            **kwargs
+        )
         
         # Store state and configuration
         self._state: bool = initial_state
@@ -71,7 +91,7 @@ class ToggleButton(Button):
         self.toggle()
         new_state_key = self._ON if self._state else self._OFF
         self.name = self._states[new_state_key][self._NAME]
-        self.button_type = self._states[new_state_key][self._BUTTON_TYPE]
+        self._apply_state_style(self._states[new_state_key])
 
     def toggle(self):
         """
@@ -80,7 +100,7 @@ class ToggleButton(Button):
         self._state = not self._state
         new_state_key = self._ON if self._state else self._OFF
         self.name = self._states[new_state_key][self._NAME]
-        self.button_type = self._states[new_state_key][self._BUTTON_TYPE]
+        self._apply_state_style(self._states[new_state_key])
 
     def is_on(self):
         """
@@ -105,3 +125,43 @@ class ToggleButton(Button):
         Update the button's state dictionary.
         """
         self._states = states
+
+    def _resolve_state_style(self, state: dict) -> tuple[str, str | None, str]:
+        color = state.get(self._COLOR)
+        button_type = state.get(self._BUTTON_TYPE, "default")
+        text_color = state.get(self._TEXT_COLOR, "#ffffff")
+
+        if color is not None:
+            fallback_type = button_type if button_type in self._BUTTON_TYPES else "default"
+            return fallback_type, color, text_color
+
+        if button_type in self._BUTTON_TYPES:
+            return button_type, None, text_color
+
+        return "default", button_type, text_color
+
+    def _apply_state_style(self, state: dict) -> None:
+        button_type, color, text_color = self._resolve_state_style(state)
+        self.button_type = button_type
+        self.stylesheets = self._button_styles(color, text_color)
+
+    def _button_styles(self, background_color: str | None, text_color: str):
+        if background_color is None:
+            return []
+
+        return [f"""
+        button, .bk-btn {{
+            background-color: {background_color} !important;
+            border-color: {background_color} !important;
+            color: {text_color} !important;
+            width: 100%;
+        }}
+
+        button:hover, .bk-btn:hover {{
+            filter: brightness(0.92);
+        }}
+
+        button:active, .bk-btn:active {{
+            filter: brightness(0.85);
+        }}
+        """]

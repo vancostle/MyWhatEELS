@@ -24,6 +24,218 @@ if TYPE_CHECKING:
     from xarray import Dataset
 
 colors = palettes.Category10[10]
+NORMALIZATION_ANCHOR_WINDOW_EV = 10.0
+
+WHITE_LINE_SHELL_PAIRS = (
+    ("L2", "L3"),
+    ("M2", "M3"),
+    ("M4", "M5"),
+    ("N2", "N3"),
+)
+
+WHITE_LINE_SHELL_GROUPS = tuple(frozenset(shells) for shells in WHITE_LINE_SHELL_PAIRS)
+
+WHITE_LINE_SHELL_ALIASES = {
+    "L23": ("L2", "L3"),
+    "L32": ("L2", "L3"),
+    "M23": ("M2", "M3"),
+    "M32": ("M2", "M3"),
+    "M45": ("M4", "M5"),
+    "M54": ("M4", "M5"),
+    "N23": ("N2", "N3"),
+    "N32": ("N2", "N3"),
+}
+
+
+def _normalize_shell_label(shell):
+    return str(shell).upper().replace(" ", "")
+
+
+def _is_white_line_shell_group(shells) -> bool:
+    if not shells:
+        return False
+    shell_labels = [_normalize_shell_label(shell) for shell in shells]
+    if len(shell_labels) == 1 and shell_labels[0] in WHITE_LINE_SHELL_ALIASES:
+        return True
+    return frozenset(shell_labels) in WHITE_LINE_SHELL_GROUPS
+
+
+def _expanded_white_line_shells(shells):
+    shell_labels = [_normalize_shell_label(shell) for shell in shells]
+    if len(shell_labels) == 1 and shell_labels[0] in WHITE_LINE_SHELL_ALIASES:
+        return WHITE_LINE_SHELL_ALIASES[shell_labels[0]]
+    for shell_pair in WHITE_LINE_SHELL_PAIRS:
+        if frozenset(shell_labels) == frozenset(shell_pair):
+            return shell_pair
+    return tuple(shell_labels)
+
+
+def _as_real_float_array(values):
+    return np.asarray(values).real.astype(float, copy=False)
+
+
+def _net_spectrum(selected_slice, y_extrapolated):
+    selected = _as_real_float_array(selected_slice)
+    if y_extrapolated is None:
+        background = np.zeros_like(selected)
+    else:
+        background = _as_real_float_array(y_extrapolated)
+    if selected.shape != background.shape:
+        raise ValueError("selected_slice and y_extrapolated must have the same length.")
+    return selected - background
+
+
+def _normalization_anchor(eaxis, selected_slice, y_extrapolated, quant_range_values):
+    axis = np.asarray(eaxis, dtype=float)
+    net = _net_spectrum(selected_slice, y_extrapolated)
+    if axis.shape[0] != net.shape[0]:
+        raise ValueError("eaxis and selected_slice must have the same length.")
+
+    finite_mask = np.isfinite(axis) & np.isfinite(net)
+    if quant_range_values is not None and len(quant_range_values) >= 2:
+        lo, hi = sorted((float(quant_range_values[0]), float(quant_range_values[1])))
+        range_mask = finite_mask & (axis >= lo) & (axis <= hi)
+        indices = np.flatnonzero(range_mask)
+        if indices.size == 0:
+            indices = np.flatnonzero(finite_mask)
+            if indices.size == 0:
+                raise ValueError("No finite experimental points available for normalization.")
+            idx = indices[np.argmin(np.abs(axis[indices] - hi))]
+            anchor_energy = float(axis[idx])
+            anchor_window = (anchor_energy - NORMALIZATION_ANCHOR_WINDOW_EV, anchor_energy)
+            target_value = _constant_fit_to_window(axis, net, anchor_window)
+            if not np.isfinite(target_value):
+                target_value = float(net[idx])
+            return anchor_energy, target_value, anchor_window
+        idx = indices[-1]
+        anchor_energy = float(axis[idx])
+        anchor_window = (max(lo, anchor_energy - NORMALIZATION_ANCHOR_WINDOW_EV), anchor_energy)
+        target_value = _constant_fit_to_window(axis, net, anchor_window)
+        if not np.isfinite(target_value):
+            target_value = float(net[idx])
+        return anchor_energy, target_value, anchor_window
+
+    indices = np.flatnonzero(finite_mask)
+    if indices.size == 0:
+        raise ValueError("No finite experimental points available for normalization.")
+    idx = indices[-1]
+    anchor_energy = float(axis[idx])
+    anchor_window = (anchor_energy - NORMALIZATION_ANCHOR_WINDOW_EV, anchor_energy)
+    target_value = _constant_fit_to_window(axis, net, anchor_window)
+    if not np.isfinite(target_value):
+        target_value = float(net[idx])
+    return anchor_energy, target_value, anchor_window
+
+
+def _prepare_curve_for_interpolation(xaxis, yaxis):
+    x = np.asarray(xaxis, dtype=float)
+    y = _as_real_float_array(yaxis)
+    mask = np.isfinite(x) & np.isfinite(y)
+    x = x[mask]
+    y = y[mask]
+    if x.size == 0:
+        return x, y
+    order = np.argsort(x)
+    x = x[order]
+    y = y[order]
+    unique_x, unique_idx = np.unique(x, return_index=True)
+    return unique_x, y[unique_idx]
+
+
+def _interp_at_energy(xaxis, yaxis, energy):
+    x, y = _prepare_curve_for_interpolation(xaxis, yaxis)
+    if x.size == 0:
+        return np.nan
+    if energy < x[0] or energy > x[-1]:
+        return np.nan
+    return float(np.interp(energy, x, y))
+
+
+def _constant_fit_to_window(xaxis, yaxis, energy_window):
+    if energy_window is None or len(energy_window) < 2:
+        return np.nan
+
+    x, y = _prepare_curve_for_interpolation(xaxis, yaxis)
+    if x.size == 0:
+        return np.nan
+
+    lo, hi = sorted((float(energy_window[0]), float(energy_window[1])))
+    lo = max(lo, float(x[0]))
+    hi = min(hi, float(x[-1]))
+    if hi < lo:
+        return np.nan
+
+    window_mask = (x >= lo) & (x <= hi)
+    if np.any(window_mask):
+        return float(np.mean(y[window_mask]))
+
+    if hi == lo:
+        return _interp_at_energy(x, y, hi)
+
+    sample_x = np.linspace(lo, hi, 32)
+    sample_y = np.interp(sample_x, x, y)
+    return float(np.mean(sample_y))
+
+
+def _scale_to_anchor(xaxis, yaxis, anchor_energy, target_value, anchor_window=None):
+    simulated_value = _constant_fit_to_window(xaxis, yaxis, anchor_window)
+    if not np.isfinite(simulated_value):
+        simulated_value = _interp_at_energy(xaxis, yaxis, anchor_energy)
+    if not np.isfinite(target_value) or not np.isfinite(simulated_value):
+        return 1.0, simulated_value
+    if abs(simulated_value) <= np.finfo(float).tiny:
+        return 1.0, simulated_value
+    return float(target_value / simulated_value), simulated_value
+
+
+def _integrate_xy(yaxis, xaxis):
+    try:
+        return float(np.trapezoid(yaxis, xaxis))
+    except Exception:
+        return float(np.trapz(yaxis, xaxis))
+
+
+def _curve_segment_for_range(xaxis, yaxis, delta):
+    x, y = _prepare_curve_for_interpolation(xaxis, yaxis)
+    if x.size == 0 or delta is None or len(delta) < 2:
+        return np.array([], dtype=float), np.array([], dtype=float)
+
+    lo, hi = sorted((float(delta[0]), float(delta[1])))
+    lo = max(lo, float(x[0]))
+    hi = min(hi, float(x[-1]))
+    if hi <= lo:
+        return np.array([], dtype=float), np.array([], dtype=float)
+
+    inside = (x > lo) & (x < hi)
+    segment_x = np.concatenate(([lo], x[inside], [hi]))
+    segment_y = np.interp(segment_x, x, y)
+    return segment_x, segment_y
+
+
+def _integrate_curve_range(xaxis, yaxis, delta):
+    segment_x, segment_y = _curve_segment_for_range(xaxis, yaxis, delta)
+    if segment_x.size < 2:
+        return 0.0
+    return _integrate_xy(segment_y, segment_x)
+
+
+def _sum_cross_sections_on_common_axis(shell_curves, chemical_shift=0.0):
+    prepared_curves = []
+    for eaxis_cs, cross_section in shell_curves:
+        x = np.asarray(eaxis_cs, dtype=float) - float(chemical_shift)
+        y = _as_real_float_array(cross_section)
+        x, y = _prepare_curve_for_interpolation(x, y)
+        if x.size:
+            prepared_curves.append((x, y))
+
+    if not prepared_curves:
+        return np.array([], dtype=float), np.array([], dtype=float)
+
+    x_common = np.unique(np.concatenate([x for x, _ in prepared_curves]))
+    y_total = np.zeros_like(x_common, dtype=float)
+    for x, y in prepared_curves:
+        y_total += np.interp(x_common, x, y, left=0.0, right=0.0)
+    return x_common, y_total
 
 
 class SpectrumImagePlot(BaseSpectrumImagePlot):
@@ -345,21 +557,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                         line_alpha=0.6,
                         show_legend=True,
                     ))
-            for ishell in element_item.shells:
-                eaxis_cs = element_item.cross_sections[ishell][0]
-                counts = element_item.cross_sections[ishell][1]
-                onset = element_item.cross_sections[ishell][2]
-                cross_section = element_item.cross_sections[ishell][3]
-                cs_instance = add_cs(
-                    element=element_item.element, ishell=ishell,
-                    selected_slice=self.selected_slice,
-                    y_extrapolated=y_fit if y_fit is not None else np.zeros_like(self.selected_slice),
-                    chemical_shift=element_item.chemical_shift,
-                    quant_range_values=element_item.quant_range,
-                    eaxis=quant_eaxis, eaxis_cs=eaxis_cs,
-                    counts=counts, onset=onset, cross_section=cross_section,
+            if _is_white_line_shell_group(element_item.shells):
+                xaxis, yaxis = self.calculate_white_line_shell_data(
+                    self.selected_slice,
+                    element_item,
+                    y_fit if y_fit is not None else np.zeros_like(self.selected_slice),
                 )
-                xaxis, yaxis = cs_instance.get_data()
                 xaxis = np.asarray(xaxis, dtype=float)
                 yaxis = np.asarray(yaxis, dtype=float)
                 cs_mask = (
@@ -369,11 +572,41 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                     & (xaxis <= plot_max)
                 )
                 if np.count_nonzero(cs_mask) < 2:
-                    continue
+                    return curves
                 curves.append(hv.Curve(
                     (xaxis[cs_mask], yaxis[cs_mask]), kdims=['x'], vdims=['y'],
-                    label=f'{element_item.element} {ishell} OOS',
+                    label=f'{element_item.element} {" + ".join(element_item.shells)} OOS',
                 ).opts(line_width=1.5))
+            else:
+                for ishell in element_item.shells:
+                    eaxis_cs = element_item.cross_sections[ishell][0]
+                    counts = element_item.cross_sections[ishell][1]
+                    onset = element_item.cross_sections[ishell][2]
+                    cross_section = element_item.cross_sections[ishell][3]
+                    cs_instance = add_cs(
+                        element=element_item.element, ishell=ishell,
+                        selected_slice=self.selected_slice,
+                        y_extrapolated=y_fit if y_fit is not None else np.zeros_like(self.selected_slice),
+                        chemical_shift=element_item.chemical_shift,
+                        quant_range_values=element_item.quant_range,
+                        eaxis=quant_eaxis, eaxis_cs=eaxis_cs,
+                        counts=counts, onset=onset, cross_section=cross_section,
+                    )
+                    xaxis, yaxis = cs_instance.get_data()
+                    xaxis = np.asarray(xaxis, dtype=float)
+                    yaxis = np.asarray(yaxis, dtype=float)
+                    cs_mask = (
+                        np.isfinite(xaxis)
+                        & np.isfinite(yaxis)
+                        & (xaxis >= plot_min)
+                        & (xaxis <= plot_max)
+                    )
+                    if np.count_nonzero(cs_mask) < 2:
+                        continue
+                    curves.append(hv.Curve(
+                        (xaxis[cs_mask], yaxis[cs_mask]), kdims=['x'], vdims=['y'],
+                        label=f'{element_item.element} {ishell} OOS',
+                    ).opts(line_width=1.5))
         except Exception:
             pass
         return curves
@@ -454,6 +687,93 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         return cs_instance.get_data()
 
+    def calculate_white_line_shell_data(self, selected_slice, element_item, y_extrapolated):
+        shell_curves = []
+        white_line_shells = _expanded_white_line_shells(element_item.shells)
+        missing_shells = [shell for shell in white_line_shells if shell not in element_item.cross_sections]
+        if missing_shells:
+            raise ValueError(
+                f"Missing sub-shell cross-sections for White Line {element_item.shells}: "
+                f"{missing_shells}."
+            )
+        for ishell in white_line_shells:
+            eaxis = element_item.cross_sections[ishell][0]
+            cross_section = element_item.cross_sections[ishell][3]
+            shell_curves.append((eaxis, cross_section))
+
+        quant_eaxis = self._get_quantification_eaxis(selected_slice)
+        xaxis, total_cross_section = _sum_cross_sections_on_common_axis(
+            shell_curves,
+            chemical_shift=element_item.chemical_shift,
+        )
+        anchor_energy, target_value, anchor_window = _normalization_anchor(
+            quant_eaxis,
+            selected_slice,
+            y_extrapolated,
+            element_item.quant_range,
+        )
+        scale_factor, _simulated_value = _scale_to_anchor(
+            xaxis,
+            total_cross_section,
+            anchor_energy,
+            target_value,
+            anchor_window,
+        )
+        yaxis = (total_cross_section * scale_factor).real
+
+        max_eaxis = np.asarray(quant_eaxis, dtype=float)[-1]
+        mask = xaxis <= max_eaxis
+        return xaxis[mask], yaxis[mask]
+
+    def calculate_shell_theoretical_data(self, selected_slice, element_item, ishell):
+        eaxis = element_item.cross_sections[ishell][0]
+        cross_section = element_item.cross_sections[ishell][3]
+        quant_eaxis = self._get_quantification_eaxis(selected_slice)
+        xaxis, yaxis = _prepare_curve_for_interpolation(
+            np.asarray(eaxis, dtype=float) - element_item.chemical_shift,
+            cross_section,
+        )
+        max_eaxis = np.asarray(quant_eaxis, dtype=float)[-1]
+        mask = xaxis <= max_eaxis
+        return xaxis[mask], yaxis[mask]
+
+    def calculate_white_line_theoretical_data(self, selected_slice, element_item):
+        shell_curves = []
+        white_line_shells = _expanded_white_line_shells(element_item.shells)
+        missing_shells = [shell for shell in white_line_shells if shell not in element_item.cross_sections]
+        if missing_shells:
+            raise ValueError(
+                f"Missing sub-shell cross-sections for White Line {element_item.shells}: "
+                f"{missing_shells}."
+            )
+        for ishell in white_line_shells:
+            eaxis = element_item.cross_sections[ishell][0]
+            cross_section = element_item.cross_sections[ishell][3]
+            shell_curves.append((eaxis, cross_section))
+
+        quant_eaxis = self._get_quantification_eaxis(selected_slice)
+        xaxis, yaxis = _sum_cross_sections_on_common_axis(
+            shell_curves,
+            chemical_shift=element_item.chemical_shift,
+        )
+        max_eaxis = np.asarray(quant_eaxis, dtype=float)[-1]
+        mask = xaxis <= max_eaxis
+        return xaxis[mask], yaxis[mask]
+
+    def calculate_element_theoretical_data(self, selected_slice, element_item):
+        if _is_white_line_shell_group(element_item.shells):
+            return self.calculate_white_line_theoretical_data(selected_slice, element_item)
+        if len(element_item.shells) == 1:
+            return self.calculate_shell_theoretical_data(
+                selected_slice,
+                element_item,
+                element_item.shells[0],
+            )
+        raise ValueError(
+            f"Unsupported shell combination for quantification: {element_item.shells}. "
+            "Use one edge or a supported White Line pair."
+        )
+
     def _ensure_selected_slice_for_quantification(self):
         """Try to recover selected_slice from pending/active ROI before quantification."""
         if self.selected_slice is not None:
@@ -490,27 +810,36 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         element_data = []
         if element_items is None or len(element_items) == 0:
             raise ValueError("No elements provided for quantification.")
+        quant_eaxis = self._get_quantification_eaxis(self.selected_slice)
         for element_item in element_items:
             try:
-                shells_data = []
                 y_fit = SpectrumFitting.fit_powerlaw_curve(
                     self._energy, self.selected_slice, range_values=element_item.fit_range
                 )
-                for ishell in element_item.shells:
-                    shell_data = self.calculate_shell_data(
-                        self.selected_slice, element_item, y_fit, ishell
+                y_extrapolated = y_fit if y_fit is not None else np.zeros_like(self.selected_slice)
+                net_signal = _net_spectrum(self.selected_slice, y_extrapolated)
+                pure_cs_x, pure_cs_y = self.calculate_element_theoretical_data(
+                    self.selected_slice,
+                    element_item,
+                )
+                intensity = _integrate_curve_range(quant_eaxis, net_signal, element_item.quant_range)
+                sigma = _integrate_curve_range(pure_cs_x, pure_cs_y, element_item.quant_range)
+                if not np.isfinite(intensity) or intensity <= 0:
+                    raise ValueError(
+                        f"Invalid net intensity ({intensity}) for {element_item.element}. "
+                        "Check background fit and quantification range."
                     )
-                    shells_data.append((ishell, shell_data))
-                if len(shells_data) == 2:
-                    element_data.append([
-                        element_item, y_fit,
-                        get_envelope(
-                            shells_data[0][1][0], shells_data[0][1][1],
-                            shells_data[1][1][0], shells_data[1][1][1],
-                        )
-                    ])
-                else:
-                    element_data.append([element_item, y_fit, shells_data[0][1]])
+                if not np.isfinite(sigma) or sigma <= 0:
+                    raise ValueError(
+                        f"Invalid theoretical cross-section integral ({sigma}) for "
+                        f"{element_item.element}. Check beam metadata and selected shell."
+                    )
+                element_data.append({
+                    'element': str(element_item.element),
+                    'intensity': float(intensity),
+                    'sigma': float(sigma),
+                    'relative_amount': float(intensity / sigma),
+                })
             except Exception as e:
                 raise e
         try:
@@ -518,30 +847,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 str(element_item.element): colors[i % len(colors)]
                 for i, element_item in enumerate(element_items)
             }
-            q_list = []
-            i = 0
-            while i < len(element_data) - 1:
-                element_item0, y_extrapolated0, element_data0 = element_data[i]
-                element_item1, y_extrapolated1, element_data1 = element_data[i + 1]
-                q_aux = quanti(
-                    element_item0.quant_range, element_item1.quant_range,
-                    element_data0, element_data1,
-                    y_extrapolated0, y_extrapolated1,
-                    self._energy,
-                ).get_quanti()
-                if not np.isfinite(float(q_aux)) or q_aux < 0:
-                    raise ValueError(
-                        f"Invalid quantification result ({q_aux}) for "
-                        f"{element_item0.element} / {element_item1.element}. "
-                        f"Check fit and quantification ranges."
-                    )
-                q_list.append((element_item0.element, element_item1.element, q_aux))
-                i += 1
-            self._update_paneB(self._build_quant_pie(q_list, element_color_map))
+            if len(element_data) < 2:
+                raise ValueError("At least two valid elements are required for quantification.")
+            self._update_paneB(self._build_quant_pie(element_data, element_color_map))
         except Exception as e:
             raise RuntimeError(f"Error in quantification calculation: {e}")
 
-    def _build_quant_pie(self, q_list, element_color_map):
+    def _build_quant_pie(self, element_data, element_color_map):
         """Build a pure HoloViews pie chart using polygon wedges."""
         _QUANT_COLORS = ['#636EFA', '#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
         _RADIUS = 1.0
@@ -549,28 +861,23 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         _N_POINTS_PER_SLICE = 90
         _PIE_SIZE = self._QUANT_PIE_SIZE
 
-        abc_list = [1.0]
-        for i in range(len(q_list)):
-            abc_list.append(abc_list[i] / q_list[i][2])
-
-        total = float(sum(abc_list))
+        total = float(sum(item['relative_amount'] for item in element_data))
         if total <= 0:
             raise ValueError("Quantification proportions must sum to a positive value.")
-
-        labels = [str(q_list[i][0]) for i in range(len(abc_list) - 1)] + [str(q_list[-1][1])]
-        proportions = [float(v) / total for v in abc_list]
 
         polygons = []
         label_data = []
         start_angle = np.pi / 2.0
 
-        for i, (label, prop) in enumerate(zip(labels, proportions)):
+        for i, item in enumerate(element_data):
+            label = item['element']
+            prop = float(item['relative_amount']) / total
             end_angle = start_angle - (2.0 * np.pi * prop)
             theta = np.linspace(end_angle, start_angle, _N_POINTS_PER_SLICE)
 
             xs = np.concatenate(([0.0], _RADIUS * np.cos(theta), [0.0]))
             ys = np.concatenate(([0.0], _RADIUS * np.sin(theta), [0.0]))
-            color = element_color_map.get(str(label), _QUANT_COLORS[i % len(_QUANT_COLORS)])
+            color = element_color_map.get(label, _QUANT_COLORS[i % len(_QUANT_COLORS)])
             pct = prop * 100.0
 
             polygons.append({
@@ -578,6 +885,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 'ys': ys,
                 'Element': label,
                 'ProportionPct': pct,
+                'NetIntensity': item['intensity'],
+                'Sigma': item['sigma'],
+                'RelativeAmount': item['relative_amount'],
                 'Color': color,
             })
 
@@ -591,7 +901,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         pie = hv.Polygons(
             polygons,
             kdims=['xs', 'ys'],
-            vdims=['Element', 'ProportionPct', 'Color'],
+            vdims=['Element', 'ProportionPct', 'NetIntensity', 'Sigma', 'RelativeAmount', 'Color'],
         ).opts(
             title='Quantification Proportions in ROI',
             color='Color',
@@ -602,6 +912,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             hover_tooltips=[
                 ('Element', '@{Element}'),
                 ('Proportion', '@{ProportionPct}{0.2f}%'),
+                ('I(Delta)', '@{NetIntensity}{0.4g}'),
+                ('sigma(Delta)', '@{Sigma}{0.4g}'),
+                ('I/sigma', '@{RelativeAmount}{0.4g}'),
             ],
             xaxis=None,
             yaxis=None,
@@ -699,23 +1012,22 @@ class add_cs:
         if len(eaxis) != len(selected_slice) and len(eaxis_cs) != len(cross_section):
             raise ValueError("eaxis, selected_slice, and cross_section must have the same length.")
 
-        # Normalize the experimental and simulated data within the quantification range
-        if self.quant_range_values:
-            mask = (self.eaxis >= self.quant_range_values[0]) & (self.eaxis <= self.quant_range_values[1])
-            mask_ = (self.eaxis_cs >= self.quant_range_values[0]) & (self.eaxis_cs <= self.quant_range_values[1])
-            x_filtered = self.eaxis[mask]
-            y_filtered = selected_slice[mask] - y_extrapolated[mask]
-            x_filtered_ = self.eaxis_cs[mask_]
-            y_filtered_ = self.cross_section[mask_]
-            self.norm_exp = np.trapz(y_filtered, x_filtered).real  # Experimental normalization
-            self.norm_sim = np.trapz(y_filtered_, x_filtered_).real  # Simulated normalization
-        else:
-            self.norm_sim = np.trapz(self.cross_section, self.eaxis).real
-            self.norm_exp = np.trapz(selected_slice - y_extrapolated, self.eaxis).real
-
-        # Apply the chemical shift and calculate the normalized cross-section
-        self.xaxis = self.eaxis_cs - self.chemical_shift
-        self.yaxis = (self.cross_section / self.norm_sim * self.norm_exp).real
+        # Match the simulated curve to a constant fit over the final energy window.
+        self.xaxis = np.asarray(self.eaxis_cs, dtype=float) - self.chemical_shift
+        self.anchor_energy, self.norm_exp, self.anchor_window = _normalization_anchor(
+            self.eaxis,
+            selected_slice,
+            y_extrapolated,
+            self.quant_range_values,
+        )
+        self.scale_factor, self.norm_sim = _scale_to_anchor(
+            self.xaxis,
+            self.cross_section,
+            self.anchor_energy,
+            self.norm_exp,
+            self.anchor_window,
+        )
+        self.yaxis = _as_real_float_array(self.cross_section) * self.scale_factor
 
         max_eaxis = self.eaxis[-1]
         mask = self.xaxis <= max_eaxis
@@ -748,77 +1060,3 @@ def sum_slice(matrix, vertexs):
         for j in range(vertexs[2], vertexs[3]):
             suma += matrix[j][i]
     return suma
-
-class quanti:
-    """
-    Class to calculate quantification between two regions.
-    """
-    def __init__(self, d_a, d_b, cs_a, cs_b, y1, y2, eaxis):
-        """
-        Initializes the quanti object.
-
-        Parameters:
-            d_a, d_b: Energy ranges for the two regions.
-            cs_a, cs_b: Cross-section data for the two regions.
-            y1, y2: Experimental data for the two regions.
-            eaxis: The energy axis.
-        """
-        self.y1 = y1
-        self.y2 = y2
-        self.d_a = d_a
-        self.d_b = d_b
-        self.cs_b_x, self.cs_b_y = cs_b
-        self.cs_a_x, self.cs_a_y = cs_a
-        self.eaxis = eaxis
-
-    def get_part_delta(self, y, axis, delta):
-        """
-        Calculates the integral of a portion of the data within a specified range.
-
-        Parameters:
-            y: The data to integrate.
-            axis: The corresponding axis.
-            delta: The range for integration.
-
-        Returns:
-            The integral value.
-        """
-        mask = (axis >= delta[0]) & (axis <= delta[1])
-        return np.trapz(y[mask], axis[mask]).real
-
-    def get_quanti(self):
-        """
-        Calculates the quantification ratio between two regions.
-
-        Returns:
-            The quantification ratio (q_ab).
-        """
-        i_a = self.get_part_delta(self.y1, self.eaxis, self.d_a)
-        i_b = self.get_part_delta(self.y2, self.eaxis, self.d_b)
-        cs_a = self.get_part_delta(self.cs_a_y, self.cs_a_x, self.d_a)
-        cs_b = self.get_part_delta(self.cs_b_y, self.cs_b_x, self.d_b)
-        self.q_ab = i_a / i_b * cs_b / cs_a
-        return self.q_ab
-
-def get_envelope(x1, y1, x2, y2):
-    """
-    Calculates the envelope of two curves.
-
-    Parameters:
-        x1, y1: The x and y values of the first curve.
-        x2, y2: The x and y values of the second curve.
-
-    Returns:
-        x_common: The common x values.
-        y_envelope: The envelope (maximum y values at each x).
-    """
-    # Find the common x range
-    x_common = np.union1d(x1, x2)
-
-    # Interpolate y values for the common x points
-    y1_interp = np.interp(x_common, x1, y1)
-    y2_interp = np.interp(x_common, x2, y2)
-
-    # Calculate the envelope by taking the maximum at each point
-    y_envelope = np.maximum(y1_interp, y2_interp)
-    return x_common, y_envelope
