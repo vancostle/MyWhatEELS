@@ -6,6 +6,23 @@ import zipfile
 import platform
 import psutil
 import time
+import unicodedata
+
+
+_builtin_print = print
+
+
+def _console_text(value):
+    """Keep build output readable in Windows consoles that do not decode UTF-8."""
+    return unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
+
+
+def print(*args, **kwargs):
+    _builtin_print(*(_console_text(arg) for arg in args), **kwargs)
+
+
+def console_input(prompt):
+    return input(_console_text(prompt))
 
 
 # Color codes for console output
@@ -19,16 +36,16 @@ class Colors:
     BOLD = '\033[1m'
 
 def print_info(msg):
-    print(f"{Colors.CYAN}ℹ {msg}{Colors.RESET}")
+    print(f"{Colors.CYAN}[INFO] {msg}{Colors.RESET}")
 
 def print_success(msg):
-    print(f"{Colors.GREEN}✓ {msg}{Colors.RESET}")
+    print(f"{Colors.GREEN}[OK] {msg}{Colors.RESET}")
 
 def print_error(msg):
-    print(f"{Colors.RED}✗ {msg}{Colors.RESET}")
+    print(f"{Colors.RED}[ERROR] {msg}{Colors.RESET}")
 
 def print_warning(msg):
-    print(f"{Colors.YELLOW}⚠ {msg}{Colors.RESET}")
+    print(f"{Colors.YELLOW}[WARN] {msg}{Colors.RESET}")
 
 
 # Configuración
@@ -42,13 +59,13 @@ TEMP_VENV_PY  = os.path.join(TEMP_VENV, "Scripts", "python.exe") if IS_WINDOWS e
 if IS_WINDOWS:
     COMMAND = {
         "create_venv": f'"{sys.executable}" -m venv {TEMP_VENV}',
-        "install_deps": f'"{TEMP_VENV_PY}" -m pip install -r requirements.txt',
+        "install_deps": f'"{TEMP_VENV_PY}" -m pip install --progress-bar off -r requirements.txt',
         "build_exe": f'"{TEMP_VENV_PY}" -m PyInstaller --clean mywhateels.spec',    
     }
 else:
     COMMAND = {
         "create_venv": f'"{sys.executable}" -m venv {TEMP_VENV}',
-        "install_deps": f'"{TEMP_VENV_PY}" -m pip install -r requirements.txt',
+        "install_deps": f'"{TEMP_VENV_PY}" -m pip install --progress-bar off -r requirements.txt',
         "build_exe": f'"{TEMP_VENV_PY}" -m PyInstaller mywhateels_linux.spec',
     }
 
@@ -106,7 +123,7 @@ def check_antivirus_exclusion():
     print(f"  4. Selecciona: {dist_path}")
     print("="*60 + "\n")
     
-    input("Presiona ENTER cuando hayas configurado las exclusiones (o Ctrl+C para cancelar)...")
+    console_input("Presiona ENTER cuando hayas configurado las exclusiones (o Ctrl+C para cancelar)...")
 
 check_file_exists("requirements.txt")
 check_file_exists("mywhateels.spec")
@@ -215,7 +232,7 @@ else:
                 arcname = os.path.relpath(filepath, start=DIST_DIR)
                 zipf.write(filepath, arcname=arcname)
 
-print_success(f"Carpeta '{DIST_DIR}' comprimida como '{ZIP_NAME}'.")
+print_success(f"Archivo '{ZIP_NAME}' listo para distribuir.")
 
 # Show antivirus exclusion recommendation after build
 check_antivirus_exclusion()
@@ -230,7 +247,7 @@ print(f"\nArchivos que se conservarán:")
 print(f"  - {ZIP_NAME} (ejecutable comprimido)")
 print("="*60)
 
-cleanup = input("\n¿Deseas eliminar el entorno virtual temporal? (s/n): ").strip().lower()
+cleanup = console_input("\n¿Deseas eliminar el entorno virtual temporal? (s/n): ").strip().lower()
 
 if cleanup == 's' or cleanup == 'y' or cleanup == 'yes' or cleanup == 'si':
     print_info("\nEliminando entorno virtual temporal...")
@@ -287,5 +304,5 @@ if os.path.exists(BUILD_DIR):
 #     except Exception as e:
 #         print_error(f"No se pudo eliminar '{DIST_DIR}': {e}")
 
-print(f"\n{Colors.GREEN}{Colors.BOLD}¡Listo! Distribuye el archivo Whateels_dist.zip.{Colors.RESET}")
-print_info("El usuario debe descomprimirlo y ejecutar el .exe dentro de la carpeta dist/.")
+print(f"\n{Colors.GREEN}{Colors.BOLD}¡Listo! Distribuye el archivo {ZIP_NAME}.{Colors.RESET}")
+print_info("El usuario debe descomprimirlo y ejecutar WhatEELS.exe desde la carpeta extraida.")

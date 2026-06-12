@@ -1,48 +1,47 @@
 # Quick Build & Distribution Guide
 
-## 🚀 Building the Executable
+## Building The Executable
 
 ### Prerequisites
-- Python 3.13.4 (recommended)
+
+- Python 3.13.4 recommended
 - All dependencies from `requirements.txt`
-- PyInstaller installed
+- PyInstaller installed, or let `build_compressed_exe.py` install it in the temporary venv
 
 ### Build Command
+
 ```powershell
 python build_compressed_exe.py
 ```
 
 ### What Happens
-1. Creates temporary virtual environment
-2. Installs dependencies
-3. Runs PyInstaller with `mywhateels.spec`
-4. Compresses to `Whateels_dist.zip`
-5. Cleans up temporary files
 
----
+1. Creates `temporal_venv`.
+2. Installs dependencies from `requirements.txt`.
+3. Runs PyInstaller with `mywhateels.spec`.
+4. Builds the app folder at `dist/WhatEELS`.
+5. Compresses that app folder to `WhatEELS.zip`.
+6. Optionally removes temporary build files.
 
-## 📦 Distribution
+## Distribution
 
 ### Package Contents
-```
-Whateels_dist.zip
-└── dist/
-    └── WhatEELS.exe  (all-in-one executable)
+
+```text
+WhatEELS.zip
+|-- WhatEELS.exe
+`-- _internal/
 ```
 
 ### User Instructions
-1. Extract `Whateels_dist.zip`
-2. Navigate to `dist/` folder
-3. Run `WhatEELS.exe`
-4. Upload DM3/DM4 files via the web interface
 
----
+1. Extract `WhatEELS.zip`.
+2. Run `WhatEELS.exe` from the extracted folder.
+3. Upload DM3/DM4 files via the web interface.
 
-## ✅ Pre-Release Checklist
+## Pre-Release Checklist
 
-Before distributing, verify:
-
-- [ ] Built on clean virtual environment
+- [ ] Built on a clean virtual environment
 - [ ] Tested on Windows 10/11 without Python installed
 - [ ] No SSL/DLL errors
 - [ ] File upload works
@@ -50,61 +49,43 @@ Before distributing, verify:
 - [ ] Clustering features work
 - [ ] Multifitting runs successfully
 - [ ] No antivirus false positives
-- [ ] Executable size is reasonable (<500MB)
+- [ ] Executable size is reasonable
 
----
+## Common Issues & Quick Fixes
 
-## 🐛 Common Issues & Quick Fixes
+### SSL Or DLL Import Error
 
-### Issue: SSL Import Error
-**Solution:** Already fixed in `mywhateels.spec` with SSL DLL bundling
+The active Windows spec collects common conda runtime DLLs from `Library/bin`.
+If warnings persist, check that the parent conda environment contains the
+reported DLLs.
 
-### Issue: Missing Panel Assets
-**Solution:** Verify CSS/HTML/JS files are in `datas` section of spec
+### Missing Panel Assets
 
-### Issue: Slow Startup
-**Solution:** Consider one-folder mode instead of one-file
+Verify CSS, HTML, JS, and image files are present in the `datas` section of
+`mywhateels.spec`.
 
-### Issue: Antivirus False Positive
-**Solution:** Set `upx=False` in spec, sign the executable
+### Slow Startup
 
----
+Use one-folder mode, which is what the current spec builds.
 
-## 📊 Build Statistics
+### Antivirus False Positive
 
-Typical build results:
-- **Build Time:** 5-10 minutes
-- **Executable Size:** 200-400 MB
-- **Startup Time:** 3-8 seconds
-- **Memory Usage:** 150-300 MB
+Keep `upx=False` in the spec and consider signing the executable.
 
----
-
-## 🔄 Rebuilding After Code Changes
+## Rebuilding After Code Changes
 
 ```powershell
-# Quick rebuild (if spec unchanged)
+# Quick rebuild if the spec did not change
 pyinstaller mywhateels.spec
 
-# Full rebuild with compression
+# Full rebuild with packaging
 python build_compressed_exe.py
 ```
 
----
+## Distribution Best Practices
 
-## 🎯 Distribution Best Practices
-
-1. **Version naming:** `WhatEELS_v1.0.0.zip`
-2. **Include README.txt** with basic instructions
-3. **Test on target OS** before distributing
-4. **Document system requirements** (Windows 10+, 4GB RAM, etc.)
-5. **Provide sample data files** for testing
-
----
-
-## 📝 Notes
-
-- The executable is portable (no installation required)
-- First run may trigger Windows Defender SmartScreen
-- Users should extract to a folder with write permissions
-- Log files are created in the execution directory
+1. Use versioned zip names for releases, for example `WhatEELS_v1.0.0.zip`.
+2. Include a short README with basic instructions.
+3. Test on the target OS before distributing.
+4. Document system requirements, such as Windows 10+ and available RAM.
+5. Provide sample data files for testing.
