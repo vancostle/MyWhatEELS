@@ -449,51 +449,91 @@ class BaseSpectrumImagePlot(IPlot):
         """Install a browser-side mousemove gate that only syncs true pixel changes."""
         try:
             fig = getattr(plot, 'state', None)
-            fig_id = getattr(fig, 'id', None)
-            if fig is None or fig_id is None:
+            if fig is None or getattr(fig, 'id', None) is None:
                 return
-            if getattr(plot, '_whatEELS_hover_gate_attached_fig_id', None) == fig_id:
-                return
-
-            gate_model = None
-            models = getattr(self._hover_gate_widget, '_models', {}) if self._hover_gate_widget is not None else {}
-            if models:
-                gate_model = next(iter(models.values()), None)
-                if gate_model:
-                    gate_model = gate_model[0]
-            if gate_model is None:
-                return
-
-            move_code = """
-                if (!window.__whatEELS_hoverGate) {
-                    window.__whatEELS_hoverGate = {x: null, y: null};
-                }
-                const x = Math.round(cb_obj.x);
-                const y = Math.round(cb_obj.y);
-                if (!Number.isFinite(x) || !Number.isFinite(y)) {
-                    return;
-                }
-                const state = window.__whatEELS_hoverGate;
-                if (state.x === x && state.y === y) {
-                    return;
-                }
-                state.x = x;
-                state.y = y;
-                gate.value = JSON.stringify({x: x, y: y, t: Date.now()});
-            """
-            leave_code = """
-                gate.value = '';
-                if (window.__whatEELS_hoverGate) {
-                    window.__whatEELS_hoverGate.x = null;
-                    window.__whatEELS_hoverGate.y = null;
-                }
-            """
-
-            fig.js_on_event(MouseMove, CustomJS(args={'gate': gate_model}, code=move_code))
-            fig.js_on_event(MouseLeave, CustomJS(args={'gate': gate_model}, code=leave_code))
-            plot._whatEELS_hover_gate_attached_fig_id = fig_id
+            self._attach_hover_gate_to_fig(fig)
         except Exception:
             _logger.exception("_client_hover_gate_hook failed")
+
+    def _resolve_hover_gate_model(self, fig):
+        """Return the gate TextInput bokeh model living in the same document as fig."""
+        widget = self._hover_gate_widget
+        models = getattr(widget, '_models', {}) if widget is not None else {}
+        candidates = []
+        for value in models.values():
+            try:
+                model = value[0]
+            except Exception:
+                model = None
+            if model is not None:
+                candidates.append(model)
+        if not candidates:
+            return None, False
+        fig_doc = getattr(fig, 'document', None)
+        if fig_doc is not None:
+            for model in candidates:
+                if getattr(model, 'document', None) is fig_doc:
+                    return model, True
+        # No document-level match (yet) — most recent render as last resort.
+        return candidates[-1], False
+
+    def _attach_hover_gate_to_fig(self, fig, retries: int = 5):
+        """Wire the MouseMove/MouseLeave gate JS on a paneA figure.
+
+        paneA can render before the (hidden) gate widget — both at initial page
+        load and when an outer layout is swapped back in (e.g. clustering
+        restoring the plots after showing its progress display). In that case
+        the gate widget has no bokeh model yet (or only a stale one from the
+        destroyed layout), so attaching is retried on the next server tick
+        until a gate model in the figure's own document exists.
+        """
+        if self._hover_gate_widget is None or getattr(fig, '_whatEELS_hover_gate_attached', False):
+            return
+
+        gate_model, doc_matched = self._resolve_hover_gate_model(fig)
+        if not doc_matched and retries > 0:
+            try:
+                doc = pn.state.curdoc
+            except Exception:
+                doc = None
+            if doc is not None:
+                doc.add_next_tick_callback(
+                    lambda: self._attach_hover_gate_to_fig(fig, retries=retries - 1)
+                )
+                return
+        if gate_model is None:
+            return
+
+        move_code = """
+            if (!window.__whatEELS_hoverGate) {
+                window.__whatEELS_hoverGate = {x: null, y: null};
+            }
+            const x = Math.round(cb_obj.x);
+            const y = Math.round(cb_obj.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) {
+                return;
+            }
+            const state = window.__whatEELS_hoverGate;
+            if (state.x === x && state.y === y) {
+                return;
+            }
+            state.x = x;
+            state.y = y;
+            gate.value = JSON.stringify({x: x, y: y, t: Date.now()});
+        """
+        leave_code = """
+            gate.value = '';
+            if (window.__whatEELS_hoverGate) {
+                window.__whatEELS_hoverGate.x = null;
+                window.__whatEELS_hoverGate.y = null;
+            }
+        """
+
+        fig.js_on_event(MouseMove, CustomJS(args={'gate': gate_model}, code=move_code))
+        fig.js_on_event(MouseLeave, CustomJS(args={'gate': gate_model}, code=leave_code))
+        try:
+            fig._whatEELS_hover_gate_attached = True
+        except Exception:
             pass
 
     def _on_hover_gate_value_changed(self, event):
