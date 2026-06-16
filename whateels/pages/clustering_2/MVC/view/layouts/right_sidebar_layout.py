@@ -849,7 +849,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             name="Train SVM",
             button_type="success",
             height=55,
-            margin=(10, 0, 0, 0),
+            margin=(15, 0, 0, 0),
             sizing_mode=self._STRETCH_WIDTH,
         )
 
@@ -904,7 +904,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             pn.Row(
                 pn.Column(
                     self._svm_settings_button,
-                    margin=0,
+                    margin=(15, 0, 0, 0),
                     height=55,
                     styles={
                         "display": "flex",
@@ -915,8 +915,8 @@ class Clustering2RightSidebarLayout(pn.Column):
                 self._svm_train_button,
                 self._svm_color_picker,
                 sizing_mode=self._STRETCH_WIDTH,
-                margin=(10, 0, 0, 0),
-                styles={"display": "flex", "justify-content": "center", "align-items": "center", "gap": "10px"}
+                margin=0,
+                styles={"display": "flex", "gap": "10px"}
             ),
             self._download_svm_results_button,
             self._download_svm_model_button,
