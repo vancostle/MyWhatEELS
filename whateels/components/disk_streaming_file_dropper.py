@@ -121,31 +121,32 @@ class DiskStreamingFileDropper(pn.widgets.FileDropper):
         if temp_path is not None:
             expected = self._bytes_written.pop(name, None)
             on_disk = os.path.getsize(temp_path)
-            _log.warning(
+            _log.info(
                 "[DiskStreamer] %s → temp=%s  bytes_written=%s  on_disk=%s  match=%s",
                 name, temp_path, expected, on_disk,
                 (expected is None or expected == on_disk),
             )
             # DM header sanity log (bytes 4-11 = file_length = total_size - 16)
-            try:
-                with open(temp_path, "rb") as fh:
-                    raw = fh.read(12)
-                if len(raw) >= 12:
-                    dm_version = struct.unpack(">I", raw[0:4])[0]
-                    if dm_version == 3:
-                        dm_body = struct.unpack(">I", raw[4:8])[0]
-                    elif dm_version == 4:
-                        dm_body = struct.unpack(">Q", raw[4:12])[0]
-                    else:
-                        dm_body = None
-                    if dm_body is not None:
-                        dm_total = dm_body + 16  # header field excludes first 16 bytes
-                        _log.warning(
-                            "[DiskStreamer] DM%d header: body_field=%d  total_expected=%d  on_disk=%d  delta=%d",
-                            dm_version, dm_body, dm_total, on_disk, on_disk - dm_total,
-                        )
-            except Exception as exc:
-                _log.warning("[DiskStreamer] header check failed: %s", exc)
+            if os.path.splitext(name)[1].lower() in {".dm3", ".dm4"}:
+                try:
+                    with open(temp_path, "rb") as fh:
+                        raw = fh.read(12)
+                    if len(raw) >= 12:
+                        dm_version = struct.unpack(">I", raw[0:4])[0]
+                        if dm_version == 3:
+                            dm_body = struct.unpack(">I", raw[4:8])[0]
+                        elif dm_version == 4:
+                            dm_body = struct.unpack(">Q", raw[4:12])[0]
+                        else:
+                            dm_body = None
+                        if dm_body is not None:
+                            dm_total = dm_body + 16  # header field excludes first 16 bytes
+                            _log.info(
+                                "[DiskStreamer] DM%d header: body_field=%d  total_expected=%d  on_disk=%d  delta=%d",
+                                dm_version, dm_body, dm_total, on_disk, on_disk - dm_total,
+                            )
+                except Exception as exc:
+                    _log.warning("[DiskStreamer] header check failed: %s", exc)
 
             val = self.value   # type: ignore[assignment]
             val[name] = temp_path  # str path, not bytes

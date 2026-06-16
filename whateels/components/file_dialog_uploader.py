@@ -12,6 +12,7 @@ class FileDialogUploader(JSComponent):
     opening_dialog_message = param.String("Opening dialog...", doc="Message shown while the file dialog is open.")
     # When non-empty the component renders already in success state (back-navigation).
     initial_filepath = param.String("", doc="Full path of a pre-loaded file. Shows success state on initial render.")
+    disabled = param.Boolean(False, doc="Whether file selection is disabled.")
 
     def __init__(self, *args, on_file_uploaded_callback=None, on_file_removed_callback=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -165,6 +166,29 @@ class FileDialogUploader(JSComponent):
                         text-decoration: underline;
                     }
                 }
+            }
+
+            #file-zone.disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+
+                & > h2 {
+                    color: #6b7280;
+                    text-decoration: none;
+                }
+
+                &:hover {
+                    cursor: not-allowed;
+
+                    & h2 {
+                        color: #6b7280;
+                        text-decoration: none;
+                    }
+                }
+            }
+
+            .path-option-wrapper.disabled {
+                opacity: 0.7;
             }
 
             section.state {
@@ -497,6 +521,9 @@ class FileDialogUploader(JSComponent):
                 if (msg?.type === 'file_selected' && msg?.path) {
                     activateSuccessState(msg.filename, msg.path);
                 }
+                if (msg?.type === 'set_disabled') {
+                    setDisabledState(!!msg.disabled);
+                }
             });
 
             removeSuccessBtn.addEventListener('click', _ => {
@@ -510,6 +537,9 @@ class FileDialogUploader(JSComponent):
             });
 
             fileZone.addEventListener('click', _ => {
+                if (uploaderDisabled) {
+                    return;
+                }
                 activateOpeningDialogState();
                 model.send_event('file_selected_clicked', {});
             });
@@ -534,8 +564,32 @@ class FileDialogUploader(JSComponent):
             inputSubmit.ariaLabel = 'Submit file path';
             inputSubmit.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" aria-hidden="true"><path d="M416 160L480 160C497.7 160 512 174.3 512 192L512 448C512 465.7 497.7 480 480 480L416 480C398.3 480 384 494.3 384 512C384 529.7 398.3 544 416 544L480 544C533 544 576 501 576 448L576 192C576 139 533 96 480 96L416 96C398.3 96 384 110.3 384 128C384 145.7 398.3 160 416 160zM406.6 342.6C419.1 330.1 419.1 309.8 406.6 297.3L278.6 169.3C266.1 156.8 245.8 156.8 233.3 169.3C220.8 181.8 220.8 202.1 233.3 214.6L306.7 288L96 288C78.3 288 64 302.3 64 320C64 337.7 78.3 352 96 352L306.7 352L233.3 425.4C220.8 437.9 220.8 458.2 233.3 470.7C245.8 483.2 266.1 483.2 278.6 470.7L406.6 342.7z"/></svg>';
 
+            let uploaderDisabled = !!model.disabled;
+
             const syncSubmitState = () => {
-                inputSubmit.disabled = !inputText.value.trim();
+                inputSubmit.disabled = uploaderDisabled || !inputText.value.trim();
+            };
+
+            const setDisabledState = disabled => {
+                uploaderDisabled = !!disabled;
+                fileZone.classList.toggle('disabled', uploaderDisabled);
+                pathOptionWrapper.classList.toggle('disabled', uploaderDisabled);
+
+                if (uploaderDisabled) {
+                    inputText.disabled = true;
+                    inputSubmit.disabled = true;
+                    return;
+                }
+
+                const lockedState =
+                    openingSection.classList.contains('actived-opening-dialog-state') ||
+                    loadingSection.classList.contains('actived-reading-file-state') ||
+                    successSection.classList.contains('actived-success-state');
+
+                if (!lockedState) {
+                    inputText.disabled = false;
+                }
+                syncSubmitState();
             };
 
             inputText.addEventListener('input', syncSubmitState);
@@ -543,6 +597,9 @@ class FileDialogUploader(JSComponent):
 
             form.addEventListener('submit', event => {
                 event.preventDefault();
+                if (uploaderDisabled) {
+                    return;
+                }
 
                 const filePath = inputText.value.trim();
                 if (!filePath) {
@@ -566,7 +623,7 @@ class FileDialogUploader(JSComponent):
                 loadingSection.classList.remove('actived-reading-file-state');
                 successSection.classList.remove('actived-success-state');
                 failedSection.classList.remove('actived-failed-state');
-                inputText.disabled = false;
+                inputText.disabled = uploaderDisabled;
                 syncSubmitState();
             };
 
@@ -580,6 +637,7 @@ class FileDialogUploader(JSComponent):
                 const fname = fp.split(/[\\/]/).pop();
                 activateSuccessState(fname, fp);
             }
+            setDisabledState(uploaderDisabled);
 
             return componentWrapper;
         };
@@ -620,6 +678,9 @@ class FileDialogUploader(JSComponent):
         return os.path.splitext(path)[1].lower() in set(extensions)
 
     def _handle_file_selected_clicked(self, event):
+        if self.disabled:
+            return
+
         path = open_native_file_dialog(self._accepted_extensions())
         if path and self._is_allowed_file(path):
             filename = os.path.basename(path)
@@ -635,6 +696,9 @@ class FileDialogUploader(JSComponent):
 
     def _handle_msg(self, msg): # type: ignore
         if isinstance(msg, dict) and msg.get("type") == "file_path_submitted":
+            if self.disabled:
+                return
+
             raw_path = msg.get("path")
             path = str(raw_path).strip() if raw_path is not None else ""
             if path and self._is_allowed_file(path):
@@ -652,4 +716,14 @@ class FileDialogUploader(JSComponent):
             self._current_selected_path = None
             if removed_path and callable(self.on_file_removed_callback):
                 self.on_file_removed_callback(os.path.basename(removed_path))
+
+    def disable(self):
+        """Disable file selection controls."""
+        self.disabled = True
+        self._send_msg({'type': 'set_disabled', 'disabled': True})
+
+    def enable(self):
+        """Enable file selection controls."""
+        self.disabled = False
+        self._send_msg({'type': 'set_disabled', 'disabled': False})
                 

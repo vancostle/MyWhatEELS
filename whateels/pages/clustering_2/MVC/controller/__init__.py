@@ -194,6 +194,7 @@ class Clustering2PageController:
         n_neighbors_list = self._view.right_sidebar.params.n_neighbors
         n_components = SafeConverter.to_int(self._view.right_sidebar.params.n_components, default=2)
         metric = str(self._view.right_sidebar.params.metric)
+        random_state = SafeConverter.to_int(self._view.right_sidebar.params.random_state, default=1)
         
         # Ensure both are lists or iterables
         if not isinstance(min_dist_list, (list, tuple)) or not isinstance(n_neighbors_list, (list, tuple)):
@@ -207,7 +208,14 @@ class Clustering2PageController:
         
         # Wait a moment for UI to render before starting calculations
         pn.state.add_periodic_callback(
-            lambda: self._start_compute_umap_embedding(combinations, result_panels, n_components, metric, available_norm),
+            lambda: self._start_compute_umap_embedding(
+                combinations,
+                result_panels,
+                n_components,
+                metric,
+                available_norm,
+                random_state,
+            ),
             period=1000,  # 1000ms delay to let UI render
             count=1
         )
@@ -219,6 +227,7 @@ class Clustering2PageController:
         n_components : int, 
         metric : str,
         available_norm : str,
+        random_state : int,
     ) -> None:
         """Start UMAP calculation sequentially for each combination."""
         
@@ -269,7 +278,14 @@ class Clustering2PageController:
             def compute_and_callback():
                 # This runs in a separate thread to avoid blocking UI
                 nonlocal n_components, metric
-                umap_data = self._compute_umap_embedding_event(min_dist, n_neighbors, n_components, metric, available_norm)
+                umap_data = self._compute_umap_embedding_event(
+                    min_dist,
+                    n_neighbors,
+                    n_components,
+                    metric,
+                    available_norm,
+                    random_state,
+                )
                 self._model.umap_data_dict.update(umap_data) # Get UMAP data
                 # Execute callback on main thread (thread-safe method for Panel)
                 pn.state.execute(on_complete)
@@ -296,7 +312,15 @@ class Clustering2PageController:
         # Start with the first placeholder
         process_next(index=0)
         
-    def _compute_umap_embedding_event(self, min_dist: float, n_neighbors: int, n_components: int, metric: str, available_norm: str) -> dict:
+    def _compute_umap_embedding_event(
+        self,
+        min_dist: float,
+        n_neighbors: int,
+        n_components: int,
+        metric: str,
+        available_norm: str,
+        random_state: int,
+    ) -> dict:
         """Event handler for computing UMAP embedding when the button is clicked."""
 
         umap_data_dicts = dict()
@@ -307,6 +331,7 @@ class Clustering2PageController:
             n_components,
             metric,
             available_norm,
+            random_state,
         )
         
         umap_data_dicts.update(umap_data_dict)

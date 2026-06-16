@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import numpy as np
 import umap
@@ -54,7 +55,14 @@ class UMAPService:
             random_state=random_state,
             metric=metric,
         )
-        embedding = mapper.fit_transform(data_2d)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"n_jobs value .* overridden to 1 by setting random_state\. Use no seed for parallelism\.",
+                category=UserWarning,
+                module=r"umap\.umap_",
+            )
+            embedding = mapper.fit_transform(data_2d)
         mapper.whateels_norm = available_norm
 
         umap_data_dict = {
