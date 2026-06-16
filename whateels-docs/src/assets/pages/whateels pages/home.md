@@ -15,7 +15,7 @@ The Home page is the starting point of WhatEELS. Its primary function is file lo
     - Or click the remove button to clear the file.
 - After a successful upload, the file's datasets are parsed and become available as tabs for exploration.
 
-![File Upload Widget](./gifs/how-to-use-file-uploader.gif)
+![File Upload Widget](gifs/how-to-use-file-uploader.gif)
 
 ---
 
