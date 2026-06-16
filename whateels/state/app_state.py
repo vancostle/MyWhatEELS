@@ -70,7 +70,8 @@ class AppState(param.Parameterized):
 
     preprocessed_plot_dataset = param.Parameter(default=None, doc="""
         Copy of plot_dataset with its ElectronCount replaced by the fully
-        preprocessed DataArray (spike removal, background subtraction, cut range).
+        preprocessed DataArray (spike removal, Savitzky-Golay smoothing,
+        background subtraction, cut range).
         Set when the user applies preprocessors on the home page.
         None when no preprocessing has been applied or after reverting to raw.
         Consumers access the ElectronCount via preprocessed_plot_dataset["ElectronCount"].

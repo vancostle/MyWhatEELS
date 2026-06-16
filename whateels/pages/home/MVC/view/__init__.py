@@ -156,6 +156,7 @@ class HomePageView:
         self._right_sidebar.preprocessed_settings.clear()
         if isinstance(self._all_plots[selected_tab_index], SpectrumImagePlot):
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_cut_range_details())
+            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_savgol_details())
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_remove_spikes_details())
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_fitting_details())
     
