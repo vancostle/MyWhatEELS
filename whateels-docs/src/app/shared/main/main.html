@@ -1,0 +1,23 @@
+<div>
+    <main>
+        <div class="markdown-shell">
+            @if (isMarkdownLoading()) {
+                <div class="markdown-loader" aria-live="polite" aria-label="Loading page">
+                    <span class="spinner"></span>
+                </div>
+            }
+            <h1 class="page-title">
+                {{ pageTitle() }}
+            </h1>
+            <markdown
+                class="markdown-content"
+                [data]="markdownContent()"
+                (ready)="onMarkdownReady()"
+                (error)="onMarkdownError()"
+            ></markdown>
+        </div>
+    </main>
+    <app-divider></app-divider>
+    <app-footer></app-footer>
+</div>
+<app-right-sidebar></app-right-sidebar>

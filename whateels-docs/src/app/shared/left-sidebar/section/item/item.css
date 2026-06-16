@@ -1,0 +1,50 @@
+:host {
+    display: flex;
+    align-items: center;
+    flex: 1;
+
+    font-size: .8em;
+
+    & a {
+        flex: 1;
+        color: var(--ui-accent-light);
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-left: 1px solid var(--ui-accent-light);
+        position: relative;
+        text-transform: capitalize;
+
+        &:not(.active):hover {
+            color: var(--ui-accent-normal);
+
+            &:before {
+                background-color: var(--ui-accent-light);
+                opacity: 1;
+            }
+        }
+
+
+        &:before {
+            --size: 6px;
+            content: "";
+            display: flex;
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translate(calc(var(--size) / 2 * -1), -50%);
+            height: var(--size);
+            width: var(--size);
+            background-color: var(--ui-brand-secondary);
+            border-radius: 50%;
+            opacity: 0;
+        }
+    }
+
+    & a.active {
+        color: var(--ui-brand-secondary);
+    
+        &::before {
+            opacity: 1;
+        }
+    }
+}

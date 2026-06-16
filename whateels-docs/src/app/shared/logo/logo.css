@@ -1,0 +1,10 @@
+:host {
+	display: inline-block;
+    --logo-width: 70px;
+    --logo-height: 70px;
+}
+
+img {
+	width: var(--logo-width, 70px);
+	height: var(--logo-height, 70px);
+}

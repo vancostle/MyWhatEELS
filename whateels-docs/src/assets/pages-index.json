@@ -1,0 +1,19 @@
+{
+  "categories": [
+    {
+      "name": "about",
+      "order": 999,
+      "pages": []
+    },
+    {
+      "name": "introduction",
+      "order": 999,
+      "pages": []
+    },
+    {
+      "name": "whateels pages",
+      "order": 999,
+      "pages": []
+    }
+  ]
+}
