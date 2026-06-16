@@ -25,6 +25,8 @@ body {
   font-family: "Lexend", sans-serif;
   font-optical-sizing: auto;
   font-weight: 400;
+
+  background-color: red !important;
 }
 
 html, body, div, span, applet, object, iframe,
