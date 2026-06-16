@@ -15,7 +15,7 @@ from holoviews import streams as hv_streams
 import bokeh.palettes as palettes
 
 from whateels.base.plots import BaseSpectrumImagePlot
-from whateels.helpers import SpectrumExtractor, SpectrumFitting
+from whateels.helpers import SpectrumFitting
 from whateels.state import CacheManager
 from typing import override, TYPE_CHECKING
 
@@ -797,9 +797,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Fallback: recover from already committed region.
         if self._region_pairs:
-            res = SpectrumExtractor.get_spectrum_from_indices(
-                self._electron_count_data, self._region_pairs
-            )
+            res = self._get_spectrum_from_indices_fast(self._region_pairs)
             if res is not None:
                 self.selected_slice, _ = res
 

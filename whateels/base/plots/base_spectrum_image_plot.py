@@ -45,6 +45,7 @@ class BaseSpectrumImagePlot(IPlot):
     # Default axis titles — subclasses may override
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+    _ROI_CHUNK_PIXELS = 4096
 
     def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss', paneA_select_tools=['lasso_select', 'box_select']):
         """
@@ -212,10 +213,7 @@ class BaseSpectrumImagePlot(IPlot):
         """Return a cached numpy array for fast pixel/ROI access."""
         data = self._get_display_data()
         if self._display_numpy_cache_source is not data:
-            try:
-                self._display_numpy_cache = data.values
-            except Exception:
-                self._display_numpy_cache = np.asarray(data)
+            self._display_numpy_cache = SpectrumExtractor._as_row_col_energy(data)
             self._display_numpy_cache_source = data
         return self._display_numpy_cache
 
@@ -396,9 +394,93 @@ class BaseSpectrumImagePlot(IPlot):
             framewise=True,
         )
 
+    @staticmethod
+    def _roi_sum_dtype(data_values):
+        """Use a wide accumulator to avoid integer overflow during large ROI sums."""
+        return np.complex128 if np.iscomplexobj(data_values) else np.float64
+
+    @staticmethod
+    def _rectangular_roi_bounds(rows, cols):
+        """Return rectangular ROI bounds when rows/cols cover a complete rectangle."""
+        if rows.size == 0 or cols.size == 0 or rows.size != cols.size:
+            return None
+
+        row_min = int(rows.min())
+        row_max = int(rows.max())
+        col_min = int(cols.min())
+        col_max = int(cols.max())
+        row_count = row_max - row_min + 1
+        col_count = col_max - col_min + 1
+        if row_count <= 0 or col_count <= 0:
+            return None
+
+        rect_size = row_count * col_count
+        if rect_size != int(rows.size):
+            return None
+
+        flat = (
+            (rows.astype(np.int64, copy=False) - row_min) * col_count
+            + (cols.astype(np.int64, copy=False) - col_min)
+        )
+        if np.unique(flat).size != rows.size:
+            return None
+
+        return row_min, row_max, col_min, col_max
+
+    def _sum_rectangular_roi(self, data_values, rows, cols):
+        """Sum a complete rectangular ROI via slicing, avoiding advanced-index copies."""
+        bounds = self._rectangular_roi_bounds(rows, cols)
+        if bounds is None or data_values.ndim != 3:
+            return None
+
+        row_min, row_max, col_min, col_max = bounds
+        if (
+            row_min < 0
+            or col_min < 0
+            or row_max >= data_values.shape[0]
+            or col_max >= data_values.shape[1]
+        ):
+            return None
+
+        block = data_values[row_min:row_max + 1, col_min:col_max + 1, :]
+        spec = np.sum(block, axis=(0, 1), dtype=self._roi_sum_dtype(data_values))
+        return spec, int(rows.size)
+
+    def _sum_indexed_roi_chunked(self, data_values, rows, cols):
+        """Sum an arbitrary ROI in bounded chunks to keep lasso memory use stable."""
+        if data_values.ndim != 3 or rows.size == 0 or cols.size == 0 or rows.size != cols.size:
+            return None
+
+        if (
+            int(rows.min()) < 0
+            or int(cols.min()) < 0
+            or int(rows.max()) >= data_values.shape[0]
+            or int(cols.max()) >= data_values.shape[1]
+        ):
+            return None
+
+        dtype = self._roi_sum_dtype(data_values)
+        acc = np.zeros(data_values.shape[-1], dtype=dtype)
+        n_points = int(rows.size)
+        chunk_size = max(1, int(self._ROI_CHUNK_PIXELS))
+        for start in range(0, n_points, chunk_size):
+            stop = min(start + chunk_size, n_points)
+            acc += np.sum(
+                data_values[rows[start:stop], cols[start:stop], :],
+                axis=0,
+                dtype=dtype,
+            )
+        return acc, n_points
+
     def _get_spectrum_from_indices_fast(self, pairs):
         """Fast ROI spectrum extraction using cached row/col arrays when available."""
-        if not pairs:
+        if pairs is None:
+            return None
+        try:
+            n_pairs = len(pairs)
+        except TypeError:
+            return None
+        if n_pairs == 0:
             return None
 
         data_values = self._get_display_numpy()
@@ -406,7 +488,7 @@ class BaseSpectrumImagePlot(IPlot):
         use_cached = (
             pairs is self._region_pairs
             and self._region_rows.size > 0
-            and self._region_rows.size == len(pairs)
+            and self._region_rows.size == n_pairs
         )
 
         if use_cached:
@@ -426,13 +508,25 @@ class BaseSpectrumImagePlot(IPlot):
                 return None
 
         try:
-            block = data_values[ii, jj, :]
-            return block.sum(axis=0), len(pairs)
+            rect_result = self._sum_rectangular_roi(data_values, ii, jj)
+            if rect_result is not None:
+                return rect_result
+
+            chunked_result = self._sum_indexed_roi_chunked(data_values, ii, jj)
+            if chunked_result is not None:
+                return chunked_result
+            raise IndexError("ROI indices do not match display data shape.")
         except Exception:
             # Fallback for data cubes using (x, y, E) order.
             try:
-                block = data_values[jj, ii, :]
-                return block.sum(axis=0), len(pairs)
+                rect_result = self._sum_rectangular_roi(data_values, jj, ii)
+                if rect_result is not None:
+                    return rect_result
+
+                chunked_result = self._sum_indexed_roi_chunked(data_values, jj, ii)
+                if chunked_result is not None:
+                    return chunked_result
+                raise IndexError("Swapped ROI indices do not match display data shape.")
             except Exception:
                 return SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), pairs)
 

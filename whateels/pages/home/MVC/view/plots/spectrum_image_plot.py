@@ -994,7 +994,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 if self._last_hover_point is not None:
                     self._show_spectrum(point=self._last_hover_point, is_hover_event=is_hover_event)
                 return
-            res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), region_pairs)
+            res = self._get_spectrum_from_indices_fast(region_pairs)
             if res is not None:
                 spec, n_points = res
                 title = f"ROI — sum (points={n_points})"
@@ -1038,7 +1038,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = None
             n_points = 0
             if apply_preprocessors:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), self._region_pairs)
+                res = self._get_spectrum_from_indices_fast(self._region_pairs)
                 if res is not None:
                     spec, n_points = res
                 if spec is not None:

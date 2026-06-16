@@ -14,7 +14,6 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
-from whateels.helpers import SpectrumExtractor
 from whateels.components import SplitJs
 from whateels.state import CacheManager
 
@@ -111,8 +110,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     @override
     def _figB_region(self, pairs):
         """Return an hv.Curve for a region using the currently selected data source."""
-        display_data = self._get_display_data()
-        res = SpectrumExtractor.get_spectrum_from_indices(display_data, pairs)
+        res = self._get_spectrum_from_indices_fast(pairs)
         if res is None:
             return self._figB_hover({"x": 0, "y": 0})
         spec, n_points = res
