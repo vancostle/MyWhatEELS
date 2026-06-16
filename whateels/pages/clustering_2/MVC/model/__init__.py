@@ -1,6 +1,6 @@
 from whateels.state import CacheManager
 
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from xarray import Dataset
     from whateels.state import AppState
@@ -10,6 +10,7 @@ class Clustering2PageModel:
     def __init__(self):
         self._app_state = CacheManager.get_cached_app_state()
         self._selected_dataset : "Dataset"
+        self._current_image_name: Optional[str] = None
         self._is_umap_computing = False
         self._was_umap_computing_canceled = False
         self._umap_data_dict = dict()
@@ -19,6 +20,7 @@ class Clustering2PageModel:
         self._svm_settings_key: str = "Configure SVM settings"
         self._svm_train_settings_key: str = "Configure Train SVM settings"
         self._loaded_umap_data = None
+        self._hdbscan_last_result: dict = {}
         self._svm_model = None
         self._svm_last_result: dict = {}
         
@@ -28,6 +30,9 @@ class Clustering2PageModel:
     @property
     def selected_dataset(self) -> "Dataset":
         return self._selected_dataset
+    @property
+    def current_image_name(self) -> Optional[str]:
+        return self._current_image_name
     @property
     def is_umap_computing(self) -> bool:
         return self._is_umap_computing
@@ -56,6 +61,9 @@ class Clustering2PageModel:
     def loaded_umap_data(self):
         return self._loaded_umap_data
     @property
+    def hdbscan_last_result(self) -> dict:
+        return self._hdbscan_last_result
+    @property
     def svm_model(self):
         return self._svm_model
     @property
@@ -75,6 +83,10 @@ class Clustering2PageModel:
     @selected_dataset.setter
     def selected_dataset(self, dataset: "Dataset"):
         self._selected_dataset = dataset
+
+    @current_image_name.setter
+    def current_image_name(self, name: Optional[str]):
+        self._current_image_name = name
         
     @is_umap_computing.setter
     def is_umap_computing(self, is_computing: bool):
@@ -95,6 +107,10 @@ class Clustering2PageModel:
     @loaded_umap_data.setter
     def loaded_umap_data(self, data):
         self._loaded_umap_data = data
+
+    @hdbscan_last_result.setter
+    def hdbscan_last_result(self, result: dict):
+        self._hdbscan_last_result = result
 
     @svm_model.setter
     def svm_model(self, model):

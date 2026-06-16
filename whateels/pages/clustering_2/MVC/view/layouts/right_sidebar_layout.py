@@ -1,4 +1,4 @@
-import panel as pn, param, pickle, io, zipfile
+import panel as pn, param, pickle, io, zipfile, json
 
 from whateels.components import SimpleDetails, ToggleButton
 from whateels.helpers import InMemoryFile, SafeConverter
@@ -282,6 +282,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_min_cluster_size = pn.widgets.IntInput()
         self._hdbscan_color_picker = pn.widgets.ColorPicker()
         self._compute_hdbscan_on_umap_button = pn.widgets.Button()
+        self._download_hdbscan_results_button = pn.widgets.FileDownload()
 
         # SVM parameters
         self._svm_selected_umap = pn.widgets.Select()
@@ -292,8 +293,8 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._svm_cv = pn.widgets.IntInput()
         self._svm_settings_button = pn.widgets.ButtonIcon()
         self._svm_train_button = pn.widgets.Button()
-        self._download_svm_model_button = pn.widgets.Button()
-        self._download_svm_results_button = pn.widgets.Button()
+        self._download_svm_model_button = pn.widgets.FileDownload()
+        self._download_svm_results_button = pn.widgets.FileDownload()
         
         # Initialize the layout with the created controls and details
         input_data_controls = self._create_data_source_controls()
@@ -334,6 +335,9 @@ class Clustering2RightSidebarLayout(pn.Column):
     def compute_hdbscan_embedding_run_button(self) -> pn.widgets.Button:
         return self._compute_hdbscan_on_umap_button
     @property
+    def download_hdbscan_results_button(self) -> pn.widgets.FileDownload:
+        return self._download_hdbscan_results_button
+    @property
     def hdbscan_selected_umap(self) -> pn.widgets.Select:
         return self._hdbscan_selected_umap
     @property
@@ -357,6 +361,12 @@ class Clustering2RightSidebarLayout(pn.Column):
     @property
     def svm_cv(self) -> pn.widgets.IntInput:
         return self._svm_cv
+    @property
+    def download_svm_model_button(self) -> pn.widgets.FileDownload:
+        return self._download_svm_model_button
+    @property
+    def download_svm_results_button(self) -> pn.widgets.FileDownload:
+        return self._download_svm_results_button
     
     def disable_controls(self):
         """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
@@ -397,6 +407,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_active_button_icon.disabled = False
         
         self._compute_hdbscan_on_umap_button.disabled = False
+        self.refresh_hdbscan_download_button()
 
         self._svm_selected_umap.disabled = False
         self._svm_active_button_icon.disabled = False
@@ -406,8 +417,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._svm_cv.disabled = False
         self._svm_settings_button.disabled = False
         self._svm_train_button.disabled = False
-        self._download_svm_model_button.disabled = False
-        self._download_svm_results_button.disabled = False
+        self.refresh_svm_download_buttons()
         
     def disable_hdbscan_controls(self):
         """ Disable only HDBSCAN controls, typically called when HDBSCAN computation is in progress or when HDBSCAN data is loaded from file. """
@@ -418,6 +428,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_active_button_icon.disabled = True
         
         self._compute_hdbscan_on_umap_button.disabled = True
+        self._download_hdbscan_results_button.disabled = True
 
         self._svm_selected_umap.disabled = True
         self._svm_active_button_icon.disabled = True
@@ -429,6 +440,15 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._svm_train_button.disabled = True
         self._download_svm_model_button.disabled = True
         self._download_svm_results_button.disabled = True
+
+    def refresh_svm_download_buttons(self) -> None:
+        """Enable SVM downloads only after an SVM model/result exists."""
+        self._download_svm_model_button.disabled = self._model.svm_model is None
+        self._download_svm_results_button.disabled = not bool(self._model.svm_last_result)
+
+    def refresh_hdbscan_download_button(self) -> None:
+        """Enable HDBSCAN download only after HDBSCAN results exist."""
+        self._download_hdbscan_results_button.disabled = not bool(self._model.hdbscan_last_result)
         
     def _create_data_source_controls(self) -> pn.Row:
         is_preprocessed_available = self._model.is_preprocessed_data_available()
@@ -685,6 +705,17 @@ class Clustering2RightSidebarLayout(pn.Column):
             margin=(10, 0, 0, 0),
             sizing_mode=self._STRETCH_WIDTH
         )
+
+        self._download_hdbscan_results_button = pn.widgets.FileDownload(
+            label="Download Results",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
+        )
+        self._download_hdbscan_results_button.disabled = True
+        self._download_hdbscan_results_button.callback = pn.bind(self._create_hdbscan_results_file)
             
         compute_hdbscan_embedding_content = pn.Column(
             self._hdbscan_selected_umap,
@@ -707,6 +738,7 @@ class Clustering2RightSidebarLayout(pn.Column):
                 self._compute_hdbscan_on_umap_button,
                 sizing_mode=self._STRETCH_WIDTH,
             ),
+            self._download_hdbscan_results_button,
         )
         
         return SimpleDetails(
@@ -810,8 +842,8 @@ class Clustering2RightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
         )
 
-        self._download_svm_model_button = pn.widgets.Button(
-            name="Download SVM model",
+        self._download_svm_model_button = pn.widgets.FileDownload(
+            label="Download SVM model",
             button_type="primary",
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10, 0, 0, 0),
@@ -819,14 +851,19 @@ class Clustering2RightSidebarLayout(pn.Column):
             icon_size="20px",
         )
 
-        self._download_svm_results_button = pn.widgets.Button(
-            name="Download Results",
+        self._download_svm_model_button.disabled = True
+        self._download_svm_model_button.callback = pn.bind(self._create_svm_model_file)
+
+        self._download_svm_results_button = pn.widgets.FileDownload(
+            label="Download Results",
             button_type="primary",
             sizing_mode=self._STRETCH_WIDTH,
             margin=(10, 0, 0, 0),
             icon="download",
             icon_size="20px",
         )
+        self._download_svm_results_button.disabled = True
+        self._download_svm_results_button.callback = pn.bind(self._create_svm_results_file)
 
         svm_content = pn.Column(
             self._svm_kernel,
@@ -924,4 +961,108 @@ class Clustering2RightSidebarLayout(pn.Column):
         return InMemoryFile(
             zip_buffer.read(), 
             name=filename, 
+        )
+
+    @classmethod
+    def _to_serializable(cls, obj):
+        if hasattr(obj, "tolist"):
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {str(key): cls._to_serializable(value) for key, value in obj.items()}
+        if isinstance(obj, (list, tuple, set)):
+            return [cls._to_serializable(value) for value in obj]
+        return obj
+
+    @staticmethod
+    def _safe_filename_part(value) -> str:
+        text = str(value) if value is not None else "unknown"
+        for char in ('/', '\\', ':', '*', '?', '"', '<', '>', '|', ' '):
+            text = text.replace(char, "_")
+        return text
+
+    def _build_svm_download_filename(self, prefix: str, extension: str) -> str:
+        result = self._model.svm_last_result or {}
+        clustering = result.get("clustering", {})
+        inputs = clustering.get("inputs", {})
+        kernel = self._safe_filename_part(inputs.get("kernel", "unknown"))
+        c_value = self._safe_filename_part(inputs.get("C", "unknown"))
+        return f"{prefix}_{kernel}_C_{c_value}.{extension}"
+
+    def _build_hdbscan_download_filename(self) -> str:
+        result = self._model.hdbscan_last_result or {}
+        clustering = result.get("clustering", {})
+        inputs = clustering.get("inputs", {})
+        norm = self._safe_filename_part(inputs.get("available_norms", "unknown"))
+        min_samples = self._safe_filename_part(inputs.get("min_samples", "unknown"))
+        min_cluster_size = self._safe_filename_part(inputs.get("min_cluster_size", "unknown"))
+        return f"hdbscan_clustering_results_{norm}_min_samples_{min_samples}_min_cluster_size_{min_cluster_size}.json"
+
+    def _create_hdbscan_results_file(self):
+        hdbscan_result = self._model.hdbscan_last_result
+        if not hdbscan_result:
+            pn.state.notifications.warning("Compute HDBSCAN before downloading the results.", duration=5000) #type: ignore
+            return b""
+
+        data_to_store_clean = self._to_serializable(hdbscan_result)
+        json_str = json.dumps(data_to_store_clean)
+        filename = self._build_hdbscan_download_filename()
+
+        if self._download_hdbscan_results_button is not None:
+            self._download_hdbscan_results_button.filename = filename
+
+        pn.state.notifications.success(f"HDBSCAN clustering results saved as {filename}", duration=5000) #type: ignore
+
+        return InMemoryFile(
+            json_str.encode("utf-8"),
+            name=filename,
+        )
+
+    def _create_svm_model_file(self):
+        svm_model = self._model.svm_model
+        if svm_model is None:
+            pn.state.notifications.warning("Train SVM before downloading the model.", duration=5000) #type: ignore
+            return b""
+
+        result = self._model.svm_last_result or {}
+        clustering = result.get("clustering", {})
+        payload = {
+            "model": svm_model,
+            "metadata": {
+                "file": clustering.get("file"),
+                "spectrum_image": clustering.get("spectrum_image"),
+                "type": clustering.get("type"),
+                "inputs": clustering.get("inputs", {}),
+                "metrics": clustering.get("metrics", {}),
+            },
+        }
+        filename = self._build_svm_download_filename("svm_model", "pkl")
+
+        if self._download_svm_model_button is not None:
+            self._download_svm_model_button.filename = filename
+
+        pn.state.notifications.success(f"SVM model saved as {filename}", duration=5000) #type: ignore
+
+        return InMemoryFile(
+            pickle.dumps(payload),
+            name=filename,
+        )
+
+    def _create_svm_results_file(self):
+        svm_result = self._model.svm_last_result
+        if not svm_result:
+            pn.state.notifications.warning("Train SVM before downloading the results.", duration=5000) #type: ignore
+            return b""
+
+        data_to_store_clean = self._to_serializable(svm_result)
+        json_str = json.dumps(data_to_store_clean)
+        filename = self._build_svm_download_filename("svm_clustering_results", "json")
+
+        if self._download_svm_results_button is not None:
+            self._download_svm_results_button.filename = filename
+
+        pn.state.notifications.success(f"SVM clustering results saved as {filename}", duration=5000) #type: ignore
+
+        return InMemoryFile(
+            json_str.encode("utf-8"),
+            name=filename,
         )

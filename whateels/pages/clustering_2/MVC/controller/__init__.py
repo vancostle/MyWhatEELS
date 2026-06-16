@@ -45,6 +45,7 @@ class Clustering2PageController:
 
         # Set selected dataset in the model
         self._model.selected_dataset = all_datasets[tab_param]
+        self._model.current_image_name = self._model.selected_dataset.attrs.get('image_name', None)
 
         # Build UMAP/HDBSCAN backend from the active data source (raw or Home-preprocessed).
         self._hdbscan = UMAP_HDBSCAN(electron_count_data=self._resolve_electron_count_data())
@@ -84,6 +85,23 @@ class Clustering2PageController:
     def is_valid_tab_and_dataset(self) -> bool:
         """Returns True if the controller was initialized with a valid tab and dataset, else False."""
         return self._is_valid_tab_and_dataset
+
+    def _clear_svm_state(self) -> None:
+        """Clear trained SVM state because its source data or HDBSCAN labels changed."""
+        self._model.svm_model = None
+        self._model.svm_last_result = {}
+        self._view.right_sidebar.refresh_svm_download_buttons()
+
+    def _clear_hdbscan_state(self) -> None:
+        """Clear HDBSCAN export state because its source UMAP/data changed."""
+        self._model.hdbscan_last_result = {}
+        self._last_hdbscan_results = None
+        self._last_selected_embedding = None
+        self._last_available_norm = 'none'
+        self._last_hdbscan_min_samples = None
+        self._last_hdbscan_min_cluster_size = None
+        self._view.right_sidebar.refresh_hdbscan_download_button()
+        self._clear_svm_state()
 
     def _has_valid_preprocessed_data(self, notify: bool = False) -> bool:
         """Validate that Home-preprocessed data exists and is compatible with current dataset shape."""
@@ -133,13 +151,7 @@ class Clustering2PageController:
         """Clear previous results because they belong to a different input data source."""
         self._model.umap_data_dict = dict()
         self._model.completed_umap_count = 0
-        self._model.svm_model = None
-        self._model.svm_last_result = {}
-        self._last_hdbscan_results = None
-        self._last_selected_embedding = None
-        self._last_available_norm = 'none'
-        self._last_hdbscan_min_samples = None
-        self._last_hdbscan_min_cluster_size = None
+        self._clear_hdbscan_state()
         
         self._view.main.clear() # Clear all results and placeholders from the main layout
 
@@ -172,6 +184,7 @@ class Clustering2PageController:
         self._model.was_umap_computing_canceled = False # Reset cancellation flag
         self._model.completed_umap_count = 0 # Reset completed count
         self._model.umap_data_dict = dict()  # Reset UMAP data dict for all computations
+        self._clear_hdbscan_state()
         self._view.right_sidebar.download_results_button.disabled = True # Disable download button during computation
         self._view.left_sidebar.disable_controls()  # Disable controls in the left sidebar during computation
         self._view.right_sidebar.disable_hdbscan_controls()  # Disable hdbscan controls in the right sidebar during computation
@@ -304,8 +317,17 @@ class Clustering2PageController:
         """Event handler for computing HDBSCAN on UMAP embedding when the button is clicked."""
 
         self._view.main.hdbscan_wrapper.clear() # Clear previous HDBSCAN results from the main layout
+        self._clear_hdbscan_state()
 
         selected_umap_dict = self._view.right_sidebar.hdbscan_selected_umap.value
+        selected_umap_name = next(
+            (
+                key
+                for key, value in self._model.umap_data_dict.items()
+                if value is selected_umap_dict
+            ),
+            None,
+        )
         
         embedding_obj = selected_umap_dict
         # If embedding_obj is a dict or has 'embedding_' attribute, extract the array
@@ -327,17 +349,58 @@ class Clustering2PageController:
             hdbscan_results.labels_, 
             cmap_obj, min_samples, min_cluster_size
         )
+
+        electron_count_data = self._hdbscan.get_electron_count_data_for_norm(available_norm)
         
         self._spectrum_plot.update_hdbscan_results(
             hdbscan_results,
             cmap_obj,
-            electron_count_data=self._hdbscan.get_electron_count_data_for_norm(available_norm),
+            electron_count_data=electron_count_data,
             available_norm=available_norm,
         )
         self._view.main.umap_embedding_wrapper.clear() # Clear UMAP embedding results from the main layout to emphasize HDBSCAN results
         self._view.main.umap_embedding_wrapper.append(hdbscan_umap_embedding_width_labels_plot) # Show UMAP embedding with HDBSCAN labels in the UMAP embedding wrapper for reference
 
         self._view.main.hdbscan_wrapper.append(self._spectrum_plot_layout)
+
+        data_np = np.asarray(electron_count_data.fillna(0.0))
+        labels_array = np.asarray(hdbscan_results.labels_, dtype=int)
+        spatial_shape = tuple(int(size) for size in data_np.shape[:2]) if data_np.ndim >= 3 else (int(labels_array.size),)
+        labels_2d = labels_array.reshape(spatial_shape)
+        flat_data = data_np.reshape(-1, data_np.shape[-1])
+        centres = {
+            int(label): flat_data[labels_array == label].mean(axis=0)
+            for label in np.unique(labels_array)
+        }
+        unique_labels = np.unique(labels_array)
+        outliers = int(np.count_nonzero(labels_array == -1))
+        total_points = int(labels_array.size)
+
+        self._model.hdbscan_last_result = {
+            "clustering": {
+                "file": str(getattr(self._model.app_state, "filename", None) or "No file uploaded"),
+                "spectrum_image": self._model.current_image_name,
+                "type": "HDBSCAN",
+                "inputs": {
+                    "selected_umap": selected_umap_name,
+                    "available_norms": available_norm,
+                    "min_samples": min_samples,
+                    "min_cluster_size": min_cluster_size,
+                },
+                "outputs": {
+                    "labels": labels_array,
+                    "labels_2d": labels_2d,
+                    "centres": centres,
+                },
+                "metrics": {
+                    "n_labels": int(unique_labels.size),
+                    "n_clusters": int(np.count_nonzero(unique_labels != -1)),
+                    "outliers": outliers,
+                    "outlier_percentage": float((outliers / total_points) * 100) if total_points else 0.0,
+                },
+            }
+        }
+        self._view.right_sidebar.refresh_hdbscan_download_button()
 
         # Keep spectrum image above the embedding/histogram block.
         self._view.main.move_to_top(self._view.main.umap_embedding_wrapper)
@@ -382,6 +445,7 @@ class Clustering2PageController:
         coef0 = float(self._view.right_sidebar.params.svm_coef0)
         degree = SafeConverter.to_int(self._view.right_sidebar.params.svm_degree, default=3)
 
+        self._clear_svm_state()
         self._view.right_sidebar.svm_train_button.disabled = True
 
         svm_loading = SVMTrainingPlaceholder(
@@ -445,6 +509,7 @@ class Clustering2PageController:
                 pn.state.notifications.error(f"SVM training failed: {error_message}", duration=7000) # type: ignore
                 self._view.main.svm_wrapper.clear()
                 self._view.main.svm_umap_embedding_wrapper.clear()
+                self._view.right_sidebar.refresh_svm_download_buttons()
                 return
 
             svm_train = result_payload["svm_train"]
@@ -478,16 +543,54 @@ class Clustering2PageController:
             self._view.main.svm_umap_embedding_wrapper.append(umap_plot)
             self._view.main.move_to_top(self._view.main.svm_umap_embedding_wrapper)
 
+            electron_count_data = self._hdbscan.get_electron_count_data_for_norm(available_norm)
+            data_np = np.asarray(electron_count_data.fillna(0.0))
+            labels_array = np.asarray(cluster_assigned_flat, dtype=int)
+            spatial_shape = tuple(int(size) for size in data_np.shape[:2]) if data_np.ndim >= 3 else (int(labels_array.size),)
+            labels_2d = labels_array.reshape(spatial_shape)
+            flat_data = data_np.reshape(-1, data_np.shape[-1])
+            centres = {
+                int(label): flat_data[labels_array == label].mean(axis=0)
+                for label in np.unique(labels_array)
+            }
+
             self._model.svm_model = svm_train["model"]
             self._model.svm_last_result = {
-                "kernel": kernel,
-                "cv_scores": np.asarray(svm_train["cv_scores"]).tolist(),
-                "cv_mean": svm_train["cv_mean"],
-                "test_accuracy": svm_train["test_accuracy"],
-                "predicted_outliers": int(predicted_outliers),
-                "class_map": svm_train["class_map"],
-                "class_counts": svm_train["class_counts"],
+                "clustering": {
+                    "file": str(getattr(self._model.app_state, "filename", None) or "No file uploaded"),
+                    "spectrum_image": self._model.current_image_name,
+                    "type": "SVM",
+                    "inputs": {
+                        "available_norms": available_norm,
+                        "hdbscan_min_samples": min_samples,
+                        "hdbscan_min_cluster_size": min_cluster_size,
+                        "kernel": kernel,
+                        "C": c_value,
+                        "cv": cv,
+                        "test_size": test_size,
+                        "probability": probability,
+                        "gamma": gamma,
+                        "coef0": coef0,
+                        "degree": degree,
+                    },
+                    "outputs": {
+                        "labels": labels_array,
+                        "labels_2d": labels_2d,
+                        "source_hdbscan_labels": np.asarray(hdbscan_results.labels_, dtype=int),
+                        "centres": centres,
+                    },
+                    "metrics": {
+                        "n_clusters": int(np.unique(labels_array).size),
+                        "cv_scores": np.asarray(svm_train["cv_scores"]).tolist(),
+                        "cv_mean": svm_train["cv_mean"],
+                        "test_accuracy": svm_train["test_accuracy"],
+                        "predicted_outliers": int(predicted_outliers),
+                        "class_map": svm_train["class_map"],
+                        "class_counts": svm_train["class_counts"],
+                    },
+                }
             }
+            self._view.right_sidebar.refresh_svm_download_buttons()
 
             cv_mean = svm_train["cv_mean"]
             test_accuracy = svm_train["test_accuracy"]
@@ -518,6 +621,7 @@ class Clustering2PageController:
     def _on_umap_loaded_from_file(self, min_dist: float, n_neighbors: int, umap_data_dict: dict, filename: str) -> None:
         """Event handler for when UMAP data is loaded from file."""
         
+        self._clear_hdbscan_state()
         self._view.right_sidebar.hdbscan_selected_umap.options = umap_data_dict # Update HDBSCAN UMAP selection options based on available UMAP embeddings in the model
         self._view.right_sidebar.svm_selected_umap.options = umap_data_dict
         self._view.right_sidebar.disable_controls()
@@ -540,6 +644,7 @@ class Clustering2PageController:
 
         self._view.main.clear()  # Show default placeholder when file is removed
         self._view.main.append_once(main_placeholder)  # Re-append the main placeholder after clearing
+        self._clear_hdbscan_state()
         self._view.right_sidebar.enable_controls()  # Re-enable controls in the right sidebar
         self._view.right_sidebar.disable_hdbscan_controls()  # Disable HDBSCAN controls when file is removed
         
