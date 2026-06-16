@@ -19,8 +19,8 @@ python build_compressed_exe.py
 1. Creates `temporal_venv`.
 2. Installs dependencies from `requirements.txt`.
 3. Runs PyInstaller with `mywhateels.spec`.
-4. Builds the app folder at `dist/WhatEELS`.
-5. Compresses that app folder to `WhatEELS.zip`.
+4. Builds the single executable at `dist/WhatEELS.exe`.
+5. Compresses that executable to `WhatEELS.zip`.
 6. Optionally removes temporary build files.
 
 ## Distribution
@@ -29,14 +29,13 @@ python build_compressed_exe.py
 
 ```text
 WhatEELS.zip
-|-- WhatEELS.exe
-`-- _internal/
+`-- WhatEELS.exe
 ```
 
 ### User Instructions
 
 1. Extract `WhatEELS.zip`.
-2. Run `WhatEELS.exe` from the extracted folder.
+2. Run `WhatEELS.exe`.
 3. Upload DM3/DM4 files via the web interface.
 
 ## Pre-Release Checklist
@@ -66,7 +65,8 @@ Verify CSS, HTML, JS, and image files are present in the `datas` section of
 
 ### Slow Startup
 
-Use one-folder mode, which is what the current spec builds.
+The current spec builds one single executable. First startup can take longer
+because PyInstaller extracts bundled files to a temporary runtime directory.
 
 ### Antivirus False Positive
 

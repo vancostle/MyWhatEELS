@@ -173,7 +173,7 @@ else:
 # Check if dependencies are already installed
 try:
     result = subprocess.run(
-        f'"{TEMP_VENV_PY}" -c "import panel; import psutil; import pyinstaller"',
+        f'"{TEMP_VENV_PY}" -c "import panel; import psutil; import PyInstaller"',
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
@@ -203,7 +203,7 @@ if IS_WINDOWS:
     except:
         print_warning("No se pudo actualizar la caché de iconos. Presiona F5 en el explorador para ver el nuevo icono.")
 
-# 3. Comprimir la carpeta dist/
+# 3. Comprimir el ejecutable final
 if os.path.exists(ZIP_NAME):
     print_info("Eliminando archivo zip previo...")
     os.remove(ZIP_NAME)
@@ -211,10 +211,15 @@ if os.path.exists(ZIP_NAME):
 
 print_info("Comprimiendo ejecutable...")
 
-# Comprimir solo la carpeta WhatEELS (la que nos interesa)
+exe_path = os.path.join(DIST_DIR, "WhatEELS.exe")
 app_folder = os.path.join(DIST_DIR, "WhatEELS")
 
-if os.path.exists(app_folder):
+if os.path.exists(exe_path):
+    with zipfile.ZipFile(ZIP_NAME, "w", zipfile.ZIP_DEFLATED) as zipf:
+        zipf.write(exe_path, arcname=os.path.basename(exe_path))
+    print_success(f"Ejecutable 'WhatEELS.exe' comprimido correctamente como '{ZIP_NAME}'.")
+elif os.path.exists(app_folder):
+    print_warning("Se encontro una carpeta WhatEELS. Comprimiendo salida onedir de compatibilidad...")
     with zipfile.ZipFile(ZIP_NAME, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(app_folder):
             for file in files:
@@ -224,7 +229,7 @@ if os.path.exists(app_folder):
     print_success(f"Carpeta 'WhatEELS' comprimida correctamente como '{ZIP_NAME}'.")
 else:
     # Si no existe WhatEELS, comprimir lo que haya en dist
-    print_warning("No se encontró carpeta WhatEELS. Comprimiendo dist directamente...")
+    print_warning("No se encontro 'dist/WhatEELS.exe'. Comprimiendo dist directamente...")
     with zipfile.ZipFile(ZIP_NAME, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(DIST_DIR):
             for file in files:
@@ -305,4 +310,4 @@ if os.path.exists(BUILD_DIR):
 #         print_error(f"No se pudo eliminar '{DIST_DIR}': {e}")
 
 print(f"\n{Colors.GREEN}{Colors.BOLD}¡Listo! Distribuye el archivo {ZIP_NAME}.{Colors.RESET}")
-print_info("El usuario debe descomprimirlo y ejecutar WhatEELS.exe desde la carpeta extraida.")
+print_info("El usuario debe descomprimirlo y ejecutar WhatEELS.exe.")
