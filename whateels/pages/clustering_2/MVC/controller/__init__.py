@@ -63,11 +63,23 @@ class Clustering2PageController:
             eloss_name='Eloss',
         )
         self._svm_spectrum_plot_layout = self._svm_spectrum_plot.create_plots()
+        self._spectrum_plot.bind_color_picker(
+            view.right_sidebar.hdbscan_color_picker,
+            self._refresh_hdbscan_embedding_colors,
+        )
+        self._svm_spectrum_plot.bind_color_picker(
+            view.right_sidebar.svm_color_picker,
+            self._refresh_svm_embedding_colors,
+        )
         self._last_hdbscan_results = None
         self._last_selected_embedding = None
         self._last_available_norm = 'none'
         self._last_hdbscan_min_samples = None
         self._last_hdbscan_min_cluster_size = None
+        self._last_svm_labels = None
+        self._last_svm_embedding = None
+        self._last_svm_min_samples = None
+        self._last_svm_min_cluster_size = None
 
         view.right_sidebar.use_preprocessed_data_switch.param.watch(
             self._on_use_preprocessed_data_switch_changed,
@@ -90,6 +102,11 @@ class Clustering2PageController:
         """Clear trained SVM state because its source data or HDBSCAN labels changed."""
         self._model.svm_model = None
         self._model.svm_last_result = {}
+        self._last_svm_labels = None
+        self._last_svm_embedding = None
+        self._last_svm_min_samples = None
+        self._last_svm_min_cluster_size = None
+        self._view.right_sidebar.svm_color_picker.disabled = True
         self._view.right_sidebar.refresh_svm_download_buttons()
 
     def _clear_hdbscan_state(self) -> None:
@@ -100,8 +117,54 @@ class Clustering2PageController:
         self._last_available_norm = 'none'
         self._last_hdbscan_min_samples = None
         self._last_hdbscan_min_cluster_size = None
+        self._view.right_sidebar.hdbscan_color_picker.disabled = True
         self._view.right_sidebar.refresh_hdbscan_download_button()
         self._clear_svm_state()
+
+    @staticmethod
+    def _store_cluster_colors(result: dict, colors: list[str]) -> None:
+        clustering = result.get("clustering", {}) if isinstance(result, dict) else {}
+        outputs = clustering.get("outputs", {}) if isinstance(clustering, dict) else {}
+        if isinstance(outputs, dict):
+            outputs["cluster_colors"] = list(colors)
+
+    def _refresh_hdbscan_embedding_colors(self, colors: list[str]) -> None:
+        """Rebuild the HDBSCAN UMAP embedding with the edited cluster colors."""
+        if self._last_hdbscan_results is None or self._last_selected_embedding is None:
+            return
+
+        min_samples = SafeConverter.to_int(self._last_hdbscan_min_samples, default=4)
+        min_cluster_size = SafeConverter.to_int(self._last_hdbscan_min_cluster_size, default=100)
+        cmap_obj = {"colors": list(colors)}
+        umap_plot = self._hdbscan.plot_umap_embedding_with_labels(
+            self._last_selected_embedding,
+            self._last_hdbscan_results.labels_,
+            cmap_obj,
+            min_samples,
+            min_cluster_size,
+        )
+        self._view.main.umap_embedding_wrapper.clear()
+        self._view.main.umap_embedding_wrapper.append(umap_plot)
+        self._store_cluster_colors(self._model.hdbscan_last_result, colors)
+
+    def _refresh_svm_embedding_colors(self, colors: list[str]) -> None:
+        """Rebuild the SVM UMAP embedding with the edited cluster colors."""
+        if self._last_svm_labels is None or self._last_svm_embedding is None:
+            return
+
+        min_samples = SafeConverter.to_int(self._last_svm_min_samples, default=4)
+        min_cluster_size = SafeConverter.to_int(self._last_svm_min_cluster_size, default=100)
+        cmap_obj = {"colors": list(colors)}
+        umap_plot = self._hdbscan.plot_umap_embedding_with_labels(
+            self._last_svm_embedding,
+            self._last_svm_labels,
+            cmap_obj,
+            min_samples,
+            min_cluster_size,
+        )
+        self._view.main.svm_umap_embedding_wrapper.clear()
+        self._view.main.svm_umap_embedding_wrapper.append(umap_plot)
+        self._store_cluster_colors(self._model.svm_last_result, colors)
 
     def _has_valid_preprocessed_data(self, notify: bool = False) -> bool:
         """Validate that Home-preprocessed data exists and is compatible with current dataset shape."""
@@ -416,6 +479,7 @@ class Clustering2PageController:
                     "labels": labels_array,
                     "labels_2d": labels_2d,
                     "centres": centres,
+                    "cluster_colors": list(cmap_obj.get("colors", [])),
                 },
                 "metrics": {
                     "n_labels": int(unique_labels.size),
@@ -546,6 +610,10 @@ class Clustering2PageController:
                 reassigned_results,
                 n_clusters=len(set(cluster_assigned_flat)),
             )
+            self._last_svm_labels = np.asarray(cluster_assigned_flat, dtype=int)
+            self._last_svm_embedding = embedding
+            self._last_svm_min_samples = min_samples
+            self._last_svm_min_cluster_size = min_cluster_size
 
             self._svm_spectrum_plot.update_hdbscan_results(
                 reassigned_results,
@@ -603,6 +671,7 @@ class Clustering2PageController:
                         "labels_2d": labels_2d,
                         "source_hdbscan_labels": np.asarray(hdbscan_results.labels_, dtype=int),
                         "centres": centres,
+                        "cluster_colors": list(cmap_obj.get("colors", [])),
                     },
                     "metrics": {
                         "n_clusters": int(np.unique(labels_array).size),

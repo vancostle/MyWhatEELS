@@ -41,6 +41,8 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         self._cluster_labels_2d: np.ndarray | None = None   # (ny, nx) int labels
         self._cluster_centers: dict[int, np.ndarray] = {}   # label → mean spectrum (1-D)
         self._cmap_colors: list[str] = []                    # hex colour per unique label
+        self._cluster_label_order: list[int] = []
+        self._active_cluster_label: int | None = None
         self._current_norm: str = 'none'                     # normalization used for paneB spectra
         self._frozen_pixel: tuple[int, int] | None = None
         self._hover_disabled = False
@@ -48,6 +50,10 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         self._last_hover_cluster_label: int | None = None
         self._last_rendered_pixel: tuple[int, int] | None = None
         self._suppress_click_until_ms = 0
+        self._color_picker = None
+        self._color_picker_watcher = None
+        self._color_change_callback = None
+        self._suppress_color_picker_callbacks = False
 
         super().__init__(dataset, eloss_name, paneA_select_tools=[])
         self._paneB_structure: tuple | None = (('Curve', ''),)
@@ -56,6 +62,26 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
     # ------------------------------------------------------------------ #
     # Public API                                                           #
     # ------------------------------------------------------------------ #
+
+    def bind_color_picker(self, color_picker, on_colors_changed=None) -> None:
+        """Bind a sidebar color picker to the currently selected cluster."""
+        if self._color_picker is not None and self._color_picker_watcher is not None:
+            try:
+                self._color_picker.param.unwatch(self._color_picker_watcher)
+            except Exception:
+                pass
+
+        self._color_picker = color_picker
+        self._color_change_callback = on_colors_changed
+        self._color_picker_watcher = color_picker.param.watch(
+            self._on_color_picker_changed,
+            'value',
+        )
+
+    @property
+    def cmap_obj(self) -> dict:
+        """Return the current colors in the cmap object format used by UMAP plots."""
+        return {"colors": list(self._cmap_colors)}
 
     def update_hdbscan_results(self, hdbscan_results, cmap_obj: dict, electron_count_data=None, available_norm: str = 'none') -> None:
         """
@@ -86,30 +112,122 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         data_np = np.asarray(self._electron_count_data.fillna(0.0))
         ny, nx = data_np.shape[0], data_np.shape[1]
 
-        labels_flat = np.asarray(hdbscan_results.labels_)
+        labels_flat = np.asarray(hdbscan_results.labels_, dtype=int)
         labels_2d = labels_flat.reshape(ny, nx)
         self._cluster_labels_2d = labels_2d
         self._cmap_colors = list(cmap_obj.get('colors', []))
+        self._cluster_label_order = [int(label) for label in np.unique(labels_flat)]
+        self._ensure_color_count()
 
         # Pre-compute mean spectrum per unique cluster label
         flat_data = data_np.reshape(-1, data_np.shape[2])
         self._cluster_centers = {
             int(label): flat_data[labels_flat == label].mean(axis=0)
-            for label in np.unique(labels_flat)
+            for label in self._cluster_label_order
         }
         self._frozen_pixel = None
         self._hover_disabled = False
         self._hover_blocked = False
+        self._active_cluster_label = None
         self._last_rendered_pixel = None
         self._suppress_click_until_ms = 0
         self._clear_hover_queue()
 
         self._update_paneA_cluster_map(labels_2d, nx, ny)
         self._update_paneB_mean_spectra()
+        self._init_color_picker_from_default_pixel()
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
     # ------------------------------------------------------------------ #
+
+    def _ensure_color_count(self) -> None:
+        """Keep one color for each label in ``_cluster_label_order``."""
+        if not self._cluster_label_order:
+            self._cmap_colors = []
+            return
+
+        if not self._cmap_colors:
+            self._cmap_colors = ['steelblue'] * len(self._cluster_label_order)
+            return
+
+        if len(self._cmap_colors) < len(self._cluster_label_order):
+            self._cmap_colors.extend(
+                ['steelblue'] * (len(self._cluster_label_order) - len(self._cmap_colors))
+            )
+        elif len(self._cmap_colors) > len(self._cluster_label_order):
+            self._cmap_colors = self._cmap_colors[:len(self._cluster_label_order)]
+
+    def _label_to_color_index(self, label: int) -> int | None:
+        try:
+            return self._cluster_label_order.index(int(label))
+        except ValueError:
+            return None
+
+    def _set_color_picker_from_label(self, label: int) -> None:
+        idx = self._label_to_color_index(label)
+        if idx is None or idx >= len(self._cmap_colors):
+            return
+
+        self._active_cluster_label = int(label)
+        if self._color_picker is None:
+            return
+
+        self._suppress_color_picker_callbacks = True
+        try:
+            self._color_picker.name = f"Cluster {label}"
+            self._color_picker.value = self._cmap_colors[idx]
+            self._color_picker.disabled = False
+        finally:
+            self._suppress_color_picker_callbacks = False
+
+    def _init_color_picker_from_default_pixel(self) -> None:
+        if self._cluster_labels_2d is None:
+            return
+        try:
+            self._set_color_picker_from_label(int(self._cluster_labels_2d[0, 0]))
+        except Exception:
+            pass
+
+    def _refresh_cluster_visuals(self) -> None:
+        """Rebuild the cluster map and active spectrum view with current colors."""
+        if self._cluster_labels_2d is None or not self._cluster_centers:
+            return
+
+        ny, nx = self._cluster_labels_2d.shape
+        self._update_paneA_cluster_map(self._cluster_labels_2d, nx, ny)
+
+        if self._hover_disabled:
+            self._update_paneB_mean_spectra(
+                title='All cluster centers (Double Click again to re-enable hover)',
+            )
+        elif self._frozen_pixel is not None:
+            i, j = self._frozen_pixel
+            self._show_cluster_hover(
+                {"x": j, "y": i},
+                title_prefix='Click (Frozen)',
+                allow_fast=False,
+            )
+        elif self._last_hover_point is not None:
+            self._show_cluster_hover(self._last_hover_point, title_prefix='Hover', allow_fast=False)
+        else:
+            self._update_paneB_mean_spectra()
+
+    def _on_color_picker_changed(self, event) -> None:
+        """Apply the picked color to the selected cluster and refresh all local plots."""
+        if self._suppress_color_picker_callbacks:
+            return
+        if self._cluster_labels_2d is None or self._active_cluster_label is None:
+            return
+
+        idx = self._label_to_color_index(self._active_cluster_label)
+        if idx is None or idx >= len(self._cmap_colors):
+            return
+
+        self._cmap_colors[idx] = event.new
+        self._refresh_cluster_visuals()
+        if self._color_change_callback is not None:
+            self._color_change_callback(list(self._cmap_colors))
 
     def _update_paneA_cluster_map(self, labels_2d: np.ndarray, nx: int, ny: int) -> None:
         """Replace paneA content with an HDBSCAN cluster-label heatmap."""
@@ -166,19 +284,18 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
                 return
 
             curves = []
-            for idx, (label, center) in enumerate(self._cluster_centers.items()):
-                color = (
-                    self._cmap_colors[idx % len(self._cmap_colors)]
-                    if self._cmap_colors
-                    else 'steelblue'
-                )
+            label_order = self._cluster_label_order or list(self._cluster_centers.keys())
+            for label in label_order:
+                center = self._cluster_centers.get(label)
+                if center is None:
+                    continue
                 curves.append(hv.Curve(
                     (self._energy, center),
                     kdims=['x'],
                     vdims=['y'],
                     label=f'Cluster {label}',
                 ).opts(
-                    color=color,
+                    color=self._cluster_color_for_label(label),
                     line_width=2,
                     responsive=True,
                     shared_axes=False,
@@ -280,10 +397,8 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         """Return the colour assigned to a cluster label."""
         if not self._cmap_colors:
             return 'steelblue'
-        labels = list(self._cluster_centers.keys())
-        try:
-            idx = labels.index(int(label))
-        except ValueError:
+        idx = self._label_to_color_index(label)
+        if idx is None:
             idx = 0
         return self._cmap_colors[idx % len(self._cmap_colors)]
 
@@ -530,6 +645,10 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
 
         i, j = int(y), int(x)
         point = {"x": j, "y": i}
+        point_info = self._cluster_point_info(point)
+        if point_info is not None:
+            _, _, label = point_info
+            self._set_color_picker_from_label(label)
         self._frozen_pixel = (i, j)
         self._hover_blocked = True
         self._hover_pending_point = None
@@ -564,6 +683,8 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         self._cluster_labels_2d = None
         self._cluster_centers = {}
         self._cmap_colors = []
+        self._cluster_label_order = []
+        self._active_cluster_label = None
         self._current_norm = 'none'
         self._frozen_pixel = None
         self._hover_disabled = False
@@ -572,4 +693,12 @@ class Clustering2SpectrumImagePlot(BaseSpectrumImagePlot):
         self._last_rendered_pixel = None
         self._paneB_structure = None
         self._suppress_click_until_ms = 0
+        if self._color_picker is not None and self._color_picker_watcher is not None:
+            try:
+                self._color_picker.param.unwatch(self._color_picker_watcher)
+            except Exception:
+                pass
+        self._color_picker = None
+        self._color_picker_watcher = None
+        self._color_change_callback = None
         super().cleanup()

@@ -293,6 +293,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._svm_cv = pn.widgets.IntInput()
         self._svm_settings_button = pn.widgets.ButtonIcon()
         self._svm_train_button = pn.widgets.Button()
+        self._svm_color_picker = pn.widgets.ColorPicker()
         self._download_svm_model_button = pn.widgets.FileDownload()
         self._download_svm_results_button = pn.widgets.FileDownload()
         
@@ -331,6 +332,9 @@ class Clustering2RightSidebarLayout(pn.Column):
     @property
     def hdbscan_color_picker(self) -> pn.widgets.ColorPicker:
         return self._hdbscan_color_picker
+    @property
+    def svm_color_picker(self) -> pn.widgets.ColorPicker:
+        return self._svm_color_picker
     @property
     def compute_hdbscan_embedding_run_button(self) -> pn.widgets.Button:
         return self._compute_hdbscan_on_umap_button
@@ -407,6 +411,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_active_button_icon.disabled = False
         
         self._compute_hdbscan_on_umap_button.disabled = False
+        self._hdbscan_color_picker.disabled = not bool(self._model.hdbscan_last_result)
         self.refresh_hdbscan_download_button()
 
         self._svm_selected_umap.disabled = False
@@ -417,6 +422,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._svm_cv.disabled = False
         self._svm_settings_button.disabled = False
         self._svm_train_button.disabled = False
+        self._svm_color_picker.disabled = not bool(self._model.svm_last_result)
         self.refresh_svm_download_buttons()
         
     def disable_hdbscan_controls(self):
@@ -428,6 +434,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_active_button_icon.disabled = True
         
         self._compute_hdbscan_on_umap_button.disabled = True
+        self._hdbscan_color_picker.disabled = True
         self._download_hdbscan_results_button.disabled = True
 
         self._svm_selected_umap.disabled = True
@@ -438,6 +445,7 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._svm_cv.disabled = True
         self._svm_settings_button.disabled = True
         self._svm_train_button.disabled = True
+        self._svm_color_picker.disabled = True
         self._download_svm_model_button.disabled = True
         self._download_svm_results_button.disabled = True
 
@@ -691,18 +699,19 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_min_cluster_size.param.watch(update_hdbscan_min_cluster_size, 'value')
 
         self._hdbscan_color_picker = pn.widgets.ColorPicker(
-            name="HDBSCAN Cluster Color",
+            name="Color Picker",
             value="#ffffff",
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True, # Color picker is disabled by default, as it depends on HDBSCAN results, but HDBSCAN results are not available at the beginning.
+            margin=(10,0,0,0),
             styles={"padding" : "0"}
         )
 
         self._compute_hdbscan_on_umap_button = pn.widgets.Button(
-            name="Compute HDBSCAN on UMAP",
+            name="Run HDBSCAN",
             button_type="success",
             height=55,
-            margin=(10, 0, 0, 0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -733,10 +742,12 @@ class Clustering2RightSidebarLayout(pn.Column):
             ),
             self._hdbscan_min_samples,
             self._hdbscan_min_cluster_size,
-            pn.Column(
-                self._hdbscan_color_picker,
+            pn.Row(
                 self._compute_hdbscan_on_umap_button,
+                self._hdbscan_color_picker,
                 sizing_mode=self._STRETCH_WIDTH,
+                margin=0,
+                styles={"display": "flex", "gap": "10px"},
             ),
             self._download_hdbscan_results_button,
         )
@@ -838,8 +849,17 @@ class Clustering2RightSidebarLayout(pn.Column):
             name="Train SVM",
             button_type="success",
             height=55,
-            margin=0, 
+            margin=(10, 0, 0, 0),
             sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        self._svm_color_picker = pn.widgets.ColorPicker(
+            name="Color Picker",
+            value="#ffffff",
+            sizing_mode=self._STRETCH_WIDTH,
+            disabled=True,
+            margin=(10, 0, 0, 0),
+            styles={"padding": "0"},
         )
 
         self._download_svm_model_button = pn.widgets.FileDownload(
@@ -893,8 +913,8 @@ class Clustering2RightSidebarLayout(pn.Column):
                     }
                 ),
                 self._svm_train_button,
+                self._svm_color_picker,
                 sizing_mode=self._STRETCH_WIDTH,
-                height=55,
                 margin=(10, 0, 0, 0),
                 styles={"display": "flex", "justify-content": "center", "align-items": "center", "gap": "10px"}
             ),
