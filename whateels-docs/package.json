@@ -8,7 +8,7 @@
     "prebuild": "node scripts/generate-pages-index.mjs",
     "build": "ng build",
     "prebuild:ghpages": "node scripts/generate-pages-index.mjs",
-    "build:ghpages": "ng build --base-href /whateels-docs/ && node scripts/prepare-ghpages.mjs",
+    "build:ghpages": "ng build --base-href /MyWhatEELS/ && node scripts/prepare-ghpages.mjs",
     "deploy:ghpages": "npm run build:ghpages && npx angular-cli-ghpages --dir=dist/whateels-docs/browser",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",

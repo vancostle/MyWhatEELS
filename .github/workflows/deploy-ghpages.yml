@@ -40,4 +40,4 @@ jobs:
           branch: gh-pages
           folder: whateels-docs/dist/whateels-docs/browser
           clean: true
-          commit-message: "ci: deploy gh-pages from vanessa-way"
+          commit-message: "ci: deploy gh-pages from andrys-branch"
