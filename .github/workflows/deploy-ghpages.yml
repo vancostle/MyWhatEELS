@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - andrys-branch
+      - main
   workflow_dispatch: {}
 
 permissions:
@@ -40,4 +40,4 @@ jobs:
           branch: gh-pages
           folder: whateels-docs/dist/whateels-docs/browser
           clean: true
-          commit-message: "ci: deploy gh-pages from andrys-branch"
+          commit-message: "ci: deploy gh-pages from main"
