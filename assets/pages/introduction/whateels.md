@@ -87,6 +87,6 @@ WhatEELS is a practical, interactive EELS analysis workspace that helps users go
 ## Project Contributors
 The following people have participated in the WhatEELS project so far:
 
-- Vanessa Costa Ledesma
+- [Vanessa Costa Ledesma](https://es.linkedin.com/in/vanessa-costa-ledesma)
 - [Andry Alexis Reyes Cruz](https://es.linkedin.com/in/andryalexisreyescruz)
-
+- Josep Arnau Belmonte Juliachs
