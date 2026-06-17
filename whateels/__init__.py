@@ -45,8 +45,8 @@ class App:
         # visible. Heavy deps (numpy, scipy) are only pulled in at this point.
         
         from whateels.pages import HomePage, Metadata, Clustering, Clustering2Page, Quantification, Fitting
-        # from whateels.pages import HomePageTest, HomePage
 
+        # Return a loader function so each page is only instantiated when Panel opens it.
         def _lazy(page_cls):
             def _loader():
                 return page_cls()
@@ -54,7 +54,7 @@ class App:
 
         # Define the pages for the application
         pages = {
-            "/": _lazy(HomePage), # Use the Rosetta Stone version of the homepage
+            "/": _lazy(HomePage),
             "/metadata-details": _lazy(Metadata),
             "/clustering": _lazy(Clustering),
             "/clustering-2": _lazy(Clustering2Page),

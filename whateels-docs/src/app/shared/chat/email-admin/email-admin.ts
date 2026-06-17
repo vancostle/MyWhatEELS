@@ -24,9 +24,9 @@ export class EmailAdmin {
   private readonly emailStatusService = inject(EmailStatusService);
   private isSending = false;
 
-  private readonly serviceId = 'service_1g2l90b';
-  private readonly templateId = 'template_ns19wkj';
-  private readonly publicKey = 'JyiNTj9AATdJvPPB1';
+  private readonly serviceId = 'service_gxd62ow';
+  private readonly templateId = 'template_ylkmzps';
+  private readonly publicKey = 'dZiiRZZC7opL1Ge6m';
 
   closeChat(): void {
     this.chatService.close();
