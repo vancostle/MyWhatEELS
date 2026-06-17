@@ -15,6 +15,26 @@ e = 1.602176487*1E-19      # electron charge in C
 m0 = 9.10938215*1E-31      # electron rest mass in kg
 a0 = 5.2917720859*1E-11    # Bohr radius in m
 c = 299792458              # Light's speed velocity in m/s
+KEV_TO_EV = 1E3
+MRAD_TO_RAD = 1E-3
+ELECTRON_REST_ENERGY_EV = m0 * c**2 / e
+
+
+def _beam_energy_kev_to_ev(beam_energy_kev):
+    """Return beam energy in eV from the WhatEELS beam energy stored in keV."""
+    beam_energy_kev = float(beam_energy_kev)
+    if beam_energy_kev <= 0:
+        raise ZeroDivisionError(
+            'Beam energy (V) cannot be zero, check your data and provide an appropriate voltage.'
+        )
+    return beam_energy_kev * KEV_TO_EV
+
+
+def _collection_angle_mrad_to_rad(collection_angle_mrad):
+    collection_angle_mrad = float(collection_angle_mrad)
+    if collection_angle_mrad <= 0:
+        raise ValueError("Collection angle must be positive and provided in mrad.")
+    return collection_angle_mrad * MRAD_TO_RAD
 
 def oos_reader(z_number:int, subshell:str, directory = 'Hartree_Xsections_FSalvat'):
     """
@@ -81,12 +101,17 @@ def df_cross_section(z_number:int, subshell:str):
     b = Fileinput._callback_loadfile.collection_angle
 
     _, oos, eloss = oos_reader(z_number, subshell)
-    v = 2*e*V / m0 # electrons' velocity in terms of the appplied potencial
-    T = m0 * v**2 / 2
-    gamma = (1 - (v/c)**2)**(-1/2)
-    Oe = eloss / (2* gamma * T)
+    T_eV = _beam_energy_kev_to_ev(V)
+    beta_rad = _collection_angle_mrad_to_rad(b)
+    gamma = 1 + T_eV / ELECTRON_REST_ENERGY_EV
+    if not np.isfinite(gamma):
+        raise ValueError(
+            f"Relativistic factor is not finite for beam energy {V}. "
+            "Check that the value is a positive beam energy in keV."
+        )
+    theta_E = eloss / (2 * gamma * T_eV)
 
-    return 4*np.pi*(a0*R)**2 * 1/(eloss*T) * oos * np.log(1+(b/Oe)**2)
+    return 4*np.pi*(a0*R)**2 * 1/(eloss*T_eV) * oos * np.log(1+(beta_rad/theta_E)**2)
 
 def cross_section(z_number:int, subshell:str) -> float:
     """

@@ -14,7 +14,6 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
-from whateels.helpers import SpectrumExtractor
 from whateels.components import SplitJs
 from whateels.state import CacheManager
 
@@ -86,6 +85,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         """Build the two-pane split layout with image on the left and spectra on the right."""
         left_column = pn.Column(
             self.paneA,
+            self._hover_gate_widget,
             sizing_mode='stretch_both',
             margin=0,
         )
@@ -110,8 +110,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     @override
     def _figB_region(self, pairs):
         """Return an hv.Curve for a region using the currently selected data source."""
-        display_data = self._get_display_data()
-        res = SpectrumExtractor.get_spectrum_from_indices(display_data, pairs)
+        res = self._get_spectrum_from_indices_fast(pairs)
         if res is None:
             return self._figB_hover({"x": 0, "y": 0})
         spec, n_points = res
@@ -294,12 +293,15 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     @override
     def _on_paneA_hover(self, x=None, y=None):
-        if self._hover_blocked:
-            return
         if x is None or y is None:
             return
-        point = {"x": x, "y": y}
-        self._last_hover_point = point
+        self._queue_hover(x, y)
+
+    def _handle_hover_render(self, point):
+        if self._hover_blocked:
+            return
+        if not self._region_pairs and self._try_fast_hover_update(point):
+            return
         if self._region_pairs:
             self._update_paneB(self._figB_hover(point))
             self._last_hover_ts = self._now_ms()
@@ -312,6 +314,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     def _on_paneA_click(self, x=None, y=None):
         if x is None or y is None:
             return
+        self._last_hover_pixel = (round(y), round(x))
         if self._pending_selection_ts is not None or self._hover_blocked:
             return
         app_state = CacheManager.get_cached_app_state()

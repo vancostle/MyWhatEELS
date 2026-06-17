@@ -1,8 +1,8 @@
-import panel as pn, param, pickle, io, zipfile
+import panel as pn, param, pickle, io, zipfile, json
 
 from whateels.components import SimpleDetails, ToggleButton
 from whateels.helpers import InMemoryFile, SafeConverter
-from ..layouts.modals import ExtraUmapParamsModal
+from ..layouts.modals import ExtraUmapParamsModal, HDBSCANGridParamsModal, SVMSettingsModal, SVMTrainSettingsModal
 
 from bokeh.models import Tooltip
 
@@ -56,6 +56,73 @@ class _Clustering2RightSidebarParams(param.Parameterized):
         label="min_cluster_size",
         doc="Minimum cluster size for HDBSCAN."
     )
+    hdbscan_grid_min_cluster_size = param.Integer(
+        default=100,
+        label="min min_cluster_size",
+        doc="Minimum min_cluster_size for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_max_cluster_size = param.Integer(
+        default=900,
+        label="max min_cluster_size",
+        doc="Maximum min_cluster_size for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_min_samples = param.Integer(
+        default=1,
+        label="min min_samples",
+        doc="Minimum min_samples for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_max_samples = param.Integer(
+        default=8,
+        label="max min_samples",
+        doc="Maximum min_samples for HDBSCAN grid evaluation."
+    )
+    hdbscan_grid_step = param.Integer(
+        default=100,
+        label="step",
+        doc="Step used to sweep min_cluster_size in HDBSCAN grid evaluation."
+    )
+    svm_min_c = param.Number(
+        default=0.1,
+        label="min C",
+        doc="Minimum C used for SVM evaluation grid.",
+    )
+    svm_max_c = param.Number(
+        default=10.0,
+        label="max C",
+        doc="Maximum C used for SVM evaluation grid.",
+    )
+    svm_test_size = param.Number(
+        default=0.25,
+        label="test_size",
+        step=0.01,
+        doc="Fraction of dataset reserved for test split.",
+    )
+    svm_probability = param.Boolean(
+        default=False,
+        label="Probability",
+        doc="Whether to enable probability estimates in SVM.",
+    )
+    svm_kernel = param.ObjectSelector(
+        default="rbf",
+        objects=("linear", "rbf", "poly", "sigmoid", "cosine", "sgd"),
+        label="kernel",
+        doc="Kernel used for SVM/SGD training.",
+    )
+    svm_gamma = param.String(
+        default="scale",
+        label="gamma",
+        doc="Kernel coefficient for rbf/poly/sigmoid kernels.",
+    )
+    svm_coef0 = param.Number(
+        default=0.0,
+        label="coef0",
+        doc="Independent term for poly/sigmoid kernels.",
+    )
+    svm_degree = param.Integer(
+        default=3,
+        label="degree",
+        doc="Degree for poly kernel.",
+    )
 
 class Clustering2RightSidebarLayout(pn.Column):
     
@@ -100,6 +167,55 @@ class Clustering2RightSidebarLayout(pn.Column):
             self._params.n_components = params.get("n_components", self._params.n_components)
             self._params.metric = params.get("metric", self._params.metric)
             self._params.random_state = params.get("random_state", self._params.random_state)
+
+        def on_hdbscan_grid_modal_close(params):
+            self._params.hdbscan_grid_min_cluster_size = params.get(
+                "min_cluster_size_min",
+                self._params.hdbscan_grid_min_cluster_size,
+            )
+            self._params.hdbscan_grid_max_cluster_size = params.get(
+                "min_cluster_size_max",
+                self._params.hdbscan_grid_max_cluster_size,
+            )
+            self._params.hdbscan_grid_min_samples = params.get(
+                "min_samples_min",
+                self._params.hdbscan_grid_min_samples,
+            )
+            self._params.hdbscan_grid_max_samples = params.get(
+                "min_samples_max",
+                self._params.hdbscan_grid_max_samples,
+            )
+            self._params.hdbscan_grid_step = params.get(
+                "step",
+                self._params.hdbscan_grid_step,
+            )
+
+        def on_svm_settings_modal_close(params):
+            self._params.svm_min_c = params.get("min_c", self._params.svm_min_c)
+            self._params.svm_max_c = params.get("max_c", self._params.svm_max_c)
+
+        def on_svm_train_settings_modal_close(params):
+            self._params.svm_test_size = params.get("test_size", self._params.svm_test_size)
+            self._params.svm_probability = params.get("probability", self._params.svm_probability)
+            self._params.svm_gamma = params.get("gamma", self._params.svm_gamma)
+            self._params.svm_coef0 = params.get("coef0", self._params.svm_coef0)
+            self._params.svm_degree = params.get("degree", self._params.svm_degree)
+
+        self._svm_train_settings_modal = SVMTrainSettingsModal(
+            custom_page=custom_page,
+            title=model.svm_train_settings_key,
+            on_close=on_svm_train_settings_modal_close,
+            initial_values={
+                "kernel": self._params.svm_kernel,
+                "test_size": self._params.svm_test_size,
+                "probability": self._params.svm_probability,
+                "gamma": self._params.svm_gamma,
+                "coef0": self._params.svm_coef0,
+                "degree": self._params.svm_degree,
+            },
+            width=400,
+            styles={"padding": "16px"},
+        )
         
         self._modal_manager.register_modal(
             'Extra UMAP Parameters',
@@ -110,6 +226,41 @@ class Clustering2RightSidebarLayout(pn.Column):
                 width=400,
                 styles={"padding": "16px"}
             )
+        )
+        self._modal_manager.register_modal(
+            model.hdbscan_grid_params_key,
+            HDBSCANGridParamsModal(
+                custom_page=custom_page,
+                title=model.hdbscan_grid_params_key,
+                on_close=on_hdbscan_grid_modal_close,
+                initial_values={
+                    "min_cluster_size_min": self._params.hdbscan_grid_min_cluster_size,
+                    "min_cluster_size_max": self._params.hdbscan_grid_max_cluster_size,
+                    "min_samples_min": self._params.hdbscan_grid_min_samples,
+                    "min_samples_max": self._params.hdbscan_grid_max_samples,
+                    "step": self._params.hdbscan_grid_step,
+                },
+                width=400,
+                styles={"padding": "16px"},
+            )
+        )
+        self._modal_manager.register_modal(
+            model.svm_settings_key,
+            SVMSettingsModal(
+                custom_page=custom_page,
+                title=model.svm_settings_key,
+                on_close=on_svm_settings_modal_close,
+                initial_values={
+                    "min_c": self._params.svm_min_c,
+                    "max_c": self._params.svm_max_c,
+                },
+                width=400,
+                styles={"padding": "16px"},
+            )
+        )
+        self._modal_manager.register_modal(
+            model.svm_train_settings_key,
+            self._svm_train_settings_modal,
         )
         
         # Data source controls
@@ -125,16 +276,32 @@ class Clustering2RightSidebarLayout(pn.Column):
         
         # HDBSCAN parameters
         self._hdbscan_selected_umap = pn.widgets.Select()
+        self._hdbscan_active_button_icon = pn.widgets.ButtonIcon()
         self._hdbscan_active_button = pn.widgets.Button()
         self._hdbscan_min_samples = pn.widgets.IntInput()
         self._hdbscan_min_cluster_size = pn.widgets.IntInput()
         self._hdbscan_color_picker = pn.widgets.ColorPicker()
         self._compute_hdbscan_on_umap_button = pn.widgets.Button()
+        self._download_hdbscan_results_button = pn.widgets.FileDownload()
+
+        # SVM parameters
+        self._svm_selected_umap = pn.widgets.Select()
+        self._svm_active_button_icon = pn.widgets.ButtonIcon()
+        self._svm_active_button = pn.widgets.Button()
+        self._svm_kernel = pn.widgets.Select()
+        self._svm_C = pn.widgets.FloatInput()
+        self._svm_cv = pn.widgets.IntInput()
+        self._svm_settings_button = pn.widgets.ButtonIcon()
+        self._svm_train_button = pn.widgets.Button()
+        self._svm_color_picker = pn.widgets.ColorPicker()
+        self._download_svm_model_button = pn.widgets.FileDownload()
+        self._download_svm_results_button = pn.widgets.FileDownload()
         
         # Initialize the layout with the created controls and details
         input_data_controls = self._create_data_source_controls()
         compute_umap_embedding_details = self._create_umap_simple_details(modal_manager, model)
         compute_hdbscan_embedding_details = self._create_hdbscan_simple_details()
+        compute_svm_details = self._create_svm_simple_details()
         
         self.disable_hdbscan_controls() # HDBSCAN controls are disabled by default, as they depend on UMAP results, but UMAP results are not available at the beginning.
 
@@ -142,6 +309,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             input_data_controls,
             compute_umap_embedding_details,
             compute_hdbscan_embedding_details,
+            compute_svm_details,
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
         )
@@ -165,14 +333,44 @@ class Clustering2RightSidebarLayout(pn.Column):
     def hdbscan_color_picker(self) -> pn.widgets.ColorPicker:
         return self._hdbscan_color_picker
     @property
+    def svm_color_picker(self) -> pn.widgets.ColorPicker:
+        return self._svm_color_picker
+    @property
     def compute_hdbscan_embedding_run_button(self) -> pn.widgets.Button:
         return self._compute_hdbscan_on_umap_button
+    @property
+    def download_hdbscan_results_button(self) -> pn.widgets.FileDownload:
+        return self._download_hdbscan_results_button
     @property
     def hdbscan_selected_umap(self) -> pn.widgets.Select:
         return self._hdbscan_selected_umap
     @property
     def hdbscan_activate_button(self) -> pn.widgets.Button:
         return self._hdbscan_active_button
+    @property
+    def svm_selected_umap(self) -> pn.widgets.Select:
+        return self._svm_selected_umap
+    @property
+    def svm_activate_button(self) -> pn.widgets.Button:
+        return self._svm_active_button
+    @property
+    def svm_train_button(self) -> pn.widgets.Button:
+        return self._svm_train_button
+    @property
+    def svm_kernel(self) -> pn.widgets.Select:
+        return self._svm_kernel
+    @property
+    def svm_C(self) -> pn.widgets.FloatInput:
+        return self._svm_C
+    @property
+    def svm_cv(self) -> pn.widgets.IntInput:
+        return self._svm_cv
+    @property
+    def download_svm_model_button(self) -> pn.widgets.FileDownload:
+        return self._download_svm_model_button
+    @property
+    def download_svm_results_button(self) -> pn.widgets.FileDownload:
+        return self._download_svm_results_button
     
     def disable_controls(self):
         """ Disable controls in the right sidebar, typically called when UMAP computation is in progress or when UMAP data is loaded from file. Download button is not disabled here, as we want users to be able to download results even when UMAP is computed or loaded. """
@@ -210,8 +408,22 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_min_samples.disabled = False
         self._hdbscan_min_cluster_size.disabled = False
         self._hdbscan_active_button.disabled = False
+        self._hdbscan_active_button_icon.disabled = False
         
         self._compute_hdbscan_on_umap_button.disabled = False
+        self._hdbscan_color_picker.disabled = not bool(self._model.hdbscan_last_result)
+        self.refresh_hdbscan_download_button()
+
+        self._svm_selected_umap.disabled = False
+        self._svm_active_button_icon.disabled = False
+        self._svm_active_button.disabled = False
+        self._svm_kernel.disabled = False
+        self._svm_C.disabled = False
+        self._svm_cv.disabled = False
+        self._svm_settings_button.disabled = False
+        self._svm_train_button.disabled = False
+        self._svm_color_picker.disabled = not bool(self._model.svm_last_result)
+        self.refresh_svm_download_buttons()
         
     def disable_hdbscan_controls(self):
         """ Disable only HDBSCAN controls, typically called when HDBSCAN computation is in progress or when HDBSCAN data is loaded from file. """
@@ -219,8 +431,32 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_min_samples.disabled = True
         self._hdbscan_min_cluster_size.disabled = True
         self._hdbscan_active_button.disabled = True
+        self._hdbscan_active_button_icon.disabled = True
         
         self._compute_hdbscan_on_umap_button.disabled = True
+        self._hdbscan_color_picker.disabled = True
+        self._download_hdbscan_results_button.disabled = True
+
+        self._svm_selected_umap.disabled = True
+        self._svm_active_button_icon.disabled = True
+        self._svm_active_button.disabled = True
+        self._svm_kernel.disabled = True
+        self._svm_C.disabled = True
+        self._svm_cv.disabled = True
+        self._svm_settings_button.disabled = True
+        self._svm_train_button.disabled = True
+        self._svm_color_picker.disabled = True
+        self._download_svm_model_button.disabled = True
+        self._download_svm_results_button.disabled = True
+
+    def refresh_svm_download_buttons(self) -> None:
+        """Enable SVM downloads only after an SVM model/result exists."""
+        self._download_svm_model_button.disabled = self._model.svm_model is None
+        self._download_svm_results_button.disabled = not bool(self._model.svm_last_result)
+
+    def refresh_hdbscan_download_button(self) -> None:
+        """Enable HDBSCAN download only after HDBSCAN results exist."""
+        self._download_hdbscan_results_button.disabled = not bool(self._model.hdbscan_last_result)
         
     def _create_data_source_controls(self) -> pn.Row:
         is_preprocessed_available = self._model.is_preprocessed_data_available()
@@ -312,7 +548,7 @@ class Clustering2RightSidebarLayout(pn.Column):
             initial_state=True,
             states={
                 "on": {
-                    "label": "Compute UMAP Embedding",
+                    "label": "Compute UMAP Embedding(s)",
                     "on_click": lambda : print("UMAP computation started"),
                     "button_type": "success",
                 },
@@ -411,7 +647,23 @@ class Clustering2RightSidebarLayout(pn.Column):
             name="Evaluate",
             button_type="warning",
             sizing_mode=self._STRETCH_WIDTH,
-            margin=(6, 10, 10, 10)
+            margin=(6, 0, 10, 10)
+        )
+
+        self._hdbscan_active_button_icon = pn.widgets.ButtonIcon(
+            icon=self._SVG,
+            active_icon=self._ACTIVE_SVG,
+            size='2em',
+            margin=(0, 0, 0, 10),
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px"
+            },
+        )
+        self._hdbscan_active_button_icon.on_click(
+            lambda _: self._modal_manager.open_modal(self._model.hdbscan_grid_params_key)
         )
         
         def update_hdbscan_min_samples(event):
@@ -447,31 +699,57 @@ class Clustering2RightSidebarLayout(pn.Column):
         self._hdbscan_min_cluster_size.param.watch(update_hdbscan_min_cluster_size, 'value')
 
         self._hdbscan_color_picker = pn.widgets.ColorPicker(
-            name="HDBSCAN Cluster Color",
+            name="Color Picker",
             value="#ffffff",
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True, # Color picker is disabled by default, as it depends on HDBSCAN results, but HDBSCAN results are not available at the beginning.
+            margin=(10,0,0,0),
             styles={"padding" : "0"}
         )
 
         self._compute_hdbscan_on_umap_button = pn.widgets.Button(
-            name="Compute HDBSCAN on UMAP",
+            name="Run HDBSCAN",
             button_type="success",
             height=55,
-            margin=(10, 0, 0, 0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
+
+        self._download_hdbscan_results_button = pn.widgets.FileDownload(
+            label="Download Results",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
+        )
+        self._download_hdbscan_results_button.disabled = True
+        self._download_hdbscan_results_button.callback = pn.bind(self._create_hdbscan_results_file)
             
         compute_hdbscan_embedding_content = pn.Column(
             self._hdbscan_selected_umap,
-            self._hdbscan_active_button,
+            pn.Row(
+                pn.Column(
+                    self._hdbscan_active_button_icon,
+                    margin=(11, 0, 0, 0),
+                    height=55,
+                ),
+                self._hdbscan_active_button,
+                sizing_mode=self._STRETCH_WIDTH,
+                height=55,
+                margin=(10, 0, 0, 0),
+                styles={"display": "flex"}
+            ),
             self._hdbscan_min_samples,
             self._hdbscan_min_cluster_size,
-            pn.Column(
-                self._hdbscan_color_picker,
+            pn.Row(
                 self._compute_hdbscan_on_umap_button,
+                self._hdbscan_color_picker,
                 sizing_mode=self._STRETCH_WIDTH,
+                margin=0,
+                styles={"display": "flex", "gap": "10px"},
             ),
+            self._download_hdbscan_results_button,
         )
         
         return SimpleDetails(
@@ -480,6 +758,177 @@ class Clustering2RightSidebarLayout(pn.Column):
             expanded=False,
             margin=(0, 0, 10, 0),
             sizing_mode=self._STRETCH_WIDTH
+        )
+
+    def _create_svm_simple_details(self) -> SimpleDetails:
+        """Create the SVM simple details section with controls for training and exports."""
+        umap_data_dict_keys = list(self._model.umap_data_dict.keys()) if self._model.umap_data_dict is not None else []
+
+        self._svm_selected_umap = pn.widgets.Select(
+            name="Select UMAP embedding",
+            options=umap_data_dict_keys,
+            sizing_mode=self._STRETCH_WIDTH
+        )
+
+        self._svm_active_button = pn.widgets.Button(
+            name="Evaluate",
+            button_type="warning",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(6, 0, 10, 10)
+        )
+
+        self._svm_active_button_icon = pn.widgets.ButtonIcon(
+            icon=self._SVG,
+            active_icon=self._ACTIVE_SVG,
+            size='2em',
+            margin=(0, 0, 0, 10),
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px"
+            },
+        )
+        self._svm_active_button_icon.on_click(
+            lambda _: self._modal_manager.open_modal(self._model.svm_settings_key)
+        )
+
+        self._svm_kernel = pn.widgets.Select(
+            name="kernel",
+            options=list(type(self._params).param.svm_kernel.objects),
+            value=str(self._params.svm_kernel),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        def on_svm_kernel_change(event):
+            kernel = str(event.new).lower().strip()
+            if kernel not in type(self._params).param.svm_kernel.objects:
+                self._svm_kernel.value = event.old
+                return
+            self._params.svm_kernel = kernel
+            self._svm_train_settings_modal.set_selected_kernel(kernel)
+
+        self._svm_kernel.param.watch(on_svm_kernel_change, "value")
+
+        self._svm_C = pn.widgets.FloatInput(
+            name="C",
+            value=1.0,
+            step=0.1,
+            start=0.0001,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        self._svm_cv = pn.widgets.IntInput(
+            name="cv",
+            value=100,
+            step=1,
+            start=2,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        self._svm_settings_button = pn.widgets.ButtonIcon(
+            icon=self._SVG,
+            active_icon=self._ACTIVE_SVG,
+            size='2em',
+            margin=(0, 0, 0, 10),
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px"
+            },
+        )
+        self._svm_settings_button.on_click(
+            lambda _: (
+                self._svm_train_settings_modal.set_selected_kernel(self._svm_kernel.value),
+                self._modal_manager.open_modal(self._model.svm_train_settings_key),
+            )
+        )
+
+        self._svm_train_button = pn.widgets.Button(
+            name="Train SVM",
+            button_type="success",
+            height=55,
+            margin=(15, 0, 0, 0),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        self._svm_color_picker = pn.widgets.ColorPicker(
+            name="Color Picker",
+            value="#ffffff",
+            sizing_mode=self._STRETCH_WIDTH,
+            disabled=True,
+            margin=(10, 0, 0, 0),
+            styles={"padding": "0"},
+        )
+
+        self._download_svm_model_button = pn.widgets.FileDownload(
+            label="Download SVM model",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
+        )
+
+        self._download_svm_model_button.disabled = True
+        self._download_svm_model_button.callback = pn.bind(self._create_svm_model_file)
+
+        self._download_svm_results_button = pn.widgets.FileDownload(
+            label="Download Results",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0, 0, 0),
+            icon="download",
+            icon_size="20px",
+        )
+        self._download_svm_results_button.disabled = True
+        self._download_svm_results_button.callback = pn.bind(self._create_svm_results_file)
+
+        svm_content = pn.Column(
+            self._svm_kernel,
+            pn.Row(
+                pn.Column(
+                    self._svm_active_button_icon,
+                    margin=(11, 0, 0, 0),
+                    height=55,
+                ),
+                self._svm_active_button,
+                sizing_mode=self._STRETCH_WIDTH,
+                height=55,
+                margin=(10, 0, 0, 0),
+                styles={"display": "flex"}
+            ),
+            self._svm_C,
+            self._svm_cv,
+            pn.Row(
+                pn.Column(
+                    self._svm_settings_button,
+                    margin=(15, 0, 0, 0),
+                    height=55,
+                    styles={
+                        "display": "flex",
+                        "align-items": "center",
+                        "justify-content": "center",
+                    }
+                ),
+                self._svm_train_button,
+                self._svm_color_picker,
+                sizing_mode=self._STRETCH_WIDTH,
+                margin=0,
+                styles={"display": "flex", "gap": "10px"}
+            ),
+            self._download_svm_results_button,
+            self._download_svm_model_button,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        return SimpleDetails(
+            title="SVM",
+            content=svm_content,
+            expanded=False,
+            margin=(0, 0, 10, 0),
+            sizing_mode=self._STRETCH_WIDTH,
         )
         
     def _validate_n_neighbors(self, event):
@@ -532,4 +981,108 @@ class Clustering2RightSidebarLayout(pn.Column):
         return InMemoryFile(
             zip_buffer.read(), 
             name=filename, 
+        )
+
+    @classmethod
+    def _to_serializable(cls, obj):
+        if hasattr(obj, "tolist"):
+            return obj.tolist()
+        if isinstance(obj, dict):
+            return {str(key): cls._to_serializable(value) for key, value in obj.items()}
+        if isinstance(obj, (list, tuple, set)):
+            return [cls._to_serializable(value) for value in obj]
+        return obj
+
+    @staticmethod
+    def _safe_filename_part(value) -> str:
+        text = str(value) if value is not None else "unknown"
+        for char in ('/', '\\', ':', '*', '?', '"', '<', '>', '|', ' '):
+            text = text.replace(char, "_")
+        return text
+
+    def _build_svm_download_filename(self, prefix: str, extension: str) -> str:
+        result = self._model.svm_last_result or {}
+        clustering = result.get("clustering", {})
+        inputs = clustering.get("inputs", {})
+        kernel = self._safe_filename_part(inputs.get("kernel", "unknown"))
+        c_value = self._safe_filename_part(inputs.get("C", "unknown"))
+        return f"{prefix}_{kernel}_C_{c_value}.{extension}"
+
+    def _build_hdbscan_download_filename(self) -> str:
+        result = self._model.hdbscan_last_result or {}
+        clustering = result.get("clustering", {})
+        inputs = clustering.get("inputs", {})
+        norm = self._safe_filename_part(inputs.get("available_norms", "unknown"))
+        min_samples = self._safe_filename_part(inputs.get("min_samples", "unknown"))
+        min_cluster_size = self._safe_filename_part(inputs.get("min_cluster_size", "unknown"))
+        return f"hdbscan_clustering_results_{norm}_min_samples_{min_samples}_min_cluster_size_{min_cluster_size}.json"
+
+    def _create_hdbscan_results_file(self):
+        hdbscan_result = self._model.hdbscan_last_result
+        if not hdbscan_result:
+            pn.state.notifications.warning("Compute HDBSCAN before downloading the results.", duration=5000) #type: ignore
+            return b""
+
+        data_to_store_clean = self._to_serializable(hdbscan_result)
+        json_str = json.dumps(data_to_store_clean)
+        filename = self._build_hdbscan_download_filename()
+
+        if self._download_hdbscan_results_button is not None:
+            self._download_hdbscan_results_button.filename = filename
+
+        pn.state.notifications.success(f"HDBSCAN clustering results saved as {filename}", duration=5000) #type: ignore
+
+        return InMemoryFile(
+            json_str.encode("utf-8"),
+            name=filename,
+        )
+
+    def _create_svm_model_file(self):
+        svm_model = self._model.svm_model
+        if svm_model is None:
+            pn.state.notifications.warning("Train SVM before downloading the model.", duration=5000) #type: ignore
+            return b""
+
+        result = self._model.svm_last_result or {}
+        clustering = result.get("clustering", {})
+        payload = {
+            "model": svm_model,
+            "metadata": {
+                "file": clustering.get("file"),
+                "spectrum_image": clustering.get("spectrum_image"),
+                "type": clustering.get("type"),
+                "inputs": clustering.get("inputs", {}),
+                "metrics": clustering.get("metrics", {}),
+            },
+        }
+        filename = self._build_svm_download_filename("svm_model", "pkl")
+
+        if self._download_svm_model_button is not None:
+            self._download_svm_model_button.filename = filename
+
+        pn.state.notifications.success(f"SVM model saved as {filename}", duration=5000) #type: ignore
+
+        return InMemoryFile(
+            pickle.dumps(payload),
+            name=filename,
+        )
+
+    def _create_svm_results_file(self):
+        svm_result = self._model.svm_last_result
+        if not svm_result:
+            pn.state.notifications.warning("Train SVM before downloading the results.", duration=5000) #type: ignore
+            return b""
+
+        data_to_store_clean = self._to_serializable(svm_result)
+        json_str = json.dumps(data_to_store_clean)
+        filename = self._build_svm_download_filename("svm_clustering_results", "json")
+
+        if self._download_svm_results_button is not None:
+            self._download_svm_results_button.filename = filename
+
+        pn.state.notifications.success(f"SVM clustering results saved as {filename}", duration=5000) #type: ignore
+
+        return InMemoryFile(
+            json_str.encode("utf-8"),
+            name=filename,
         )

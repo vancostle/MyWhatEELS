@@ -105,8 +105,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_paneA_hover(self, x=None, y=None):
         if x is None or y is None:
             return
-        point = {"x": x, "y": y}
-        self._last_hover_point = point
+        self._queue_hover(x, y)
+
+    def _handle_hover_render(self, point):
+        if not self._region_pairs and self._try_fast_hover_update(point):
+            return
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
             self._last_hover_ts = self._now_ms()
@@ -122,6 +125,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def _on_paneA_click(self, x=None, y=None):
         if x is None or y is None:
             return
+        self._last_hover_pixel = (round(y), round(x))
         point = {"x": x, "y": y}
         self._last_hover_point = point
         if self._region_pairs:

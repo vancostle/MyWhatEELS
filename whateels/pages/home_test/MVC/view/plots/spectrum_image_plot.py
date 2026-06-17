@@ -129,6 +129,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def create_plots(self):
         left_column = pn.Column(
             self.paneA,
+            self._hover_gate_widget,
             align='center',
             margin=0,
         )
@@ -1906,33 +1907,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     # --- Pane A event handlers (hover / click / selected) ---
     def _on_paneA_hover(self, x=None, y=None):
         # HoloViews PointerXY delivers x, y directly as kwargs
-        if self._hover_blocked:
-            return
         if x is None or y is None:
             return
+        self._queue_hover(x, y)
 
-        current_pixel = (round(y), round(x))
-        point = {"x": x, "y": y}
-        self._last_hover_point = point
-
-        # Pixel deduplication: if the mouse is still over the same integer pixel
-        # and there is no active region selection, there is nothing new to render.
-        if not self._region_pairs and self._last_rendered_pixel == current_pixel:
+    def _handle_hover_render(self, point):
+        if self._hover_blocked:
             return
-
-        # Debounce: skip render if the last one was too recent.
-        # _last_hover_point is always updated above so the next render
-        # uses the most recent position.
-        now = self._now_ms()
         if (
-            self._last_hover_render_ts is not None
-            and (now - self._last_hover_render_ts) < self._HOVER_DEBOUNCE_MS
+            not self._region_pairs
+            and not self._preprocessors_applied
+            and not self._fitting_active
+            and self._try_fast_hover_update(point)
         ):
-            if self._region_pairs:
-                self._last_hover_ts = now
-                start_pc(self._pc)
+            stop_pc(self._pc)
+            self._last_hover_ts = None
             return
-
+        current_pixel = (round(point["y"]), round(point["x"]))
+        now = self._now_ms()
         self._last_hover_render_ts = now
         self._last_rendered_pixel = current_pixel
 

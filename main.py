@@ -24,6 +24,8 @@ if sys.platform == 'win32':
 
 import traceback, logging
 
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 _ANSI_RED_BG_BOLD_WHITE = "\033[41;1;97m"
 _ANSI_RESET             = "\033[0m"
 
@@ -41,6 +43,7 @@ _BANNER = r"""
 logging.getLogger('tornado.access').setLevel(logging.ERROR)
 logging.getLogger('tornado.application').setLevel(logging.WARNING)
 logging.getLogger('bokeh').setLevel(logging.WARNING)
+logging.getLogger('markdown_it').setLevel(logging.WARNING)
 
 APP_NAME = "WhatEELS"
 PORT = 5006

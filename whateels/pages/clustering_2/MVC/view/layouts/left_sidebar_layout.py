@@ -1,24 +1,35 @@
-import panel as pn, pickle
+import os
+import pickle
+
+import panel as pn
 from bokeh.models import Tooltip
 
-from whateels.components import FileUploader, InfoPanel
+from whateels.components import FileDialogUploader, InfoPanel
 
 from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from ...model import Clustering2PageModel
 
 class Clustering2LeftSidebarLayout(pn.Column):
+    _STRETCH_WIDTH = "stretch_width"
+
     def __init__(self, model: "Clustering2PageModel", **kwargs):
         self._model = model
         self._on_umap_loaded_callback: Callable = lambda *args, **kwargs: None  # Placeholder for the callback function
         self._on_file_removed_callback: Callable = lambda *args, **kwargs: None  # Placeholder for file removal callback
-        self._data_info_panel = pn.Column(margin=(10, 0, 0, 0))
+        self._data_info_panel = pn.Column(margin=(10, 0, 0, 0), sizing_mode=self._STRETCH_WIDTH)
         
-        self._file_uploader = FileUploader(
+        self._file_uploader = FileDialogUploader(
+            default_message="Click to select a .pkl file",
+            reading_message="Loading UMAP data...",
+            error_message="Select a valid .pkl file.",
+            accepted_file_types=[".pkl"],
             on_file_uploaded_callback=self._on_file_uploaded,
             on_file_removed_callback=self._on_file_removed,
-            valid_extensions=(".pkl",),
+            sizing_mode=self._STRETCH_WIDTH,
         )
+
+        kwargs.setdefault("sizing_mode", self._STRETCH_WIDTH)
 
         super().__init__(
             pn.Row(
@@ -32,7 +43,8 @@ class Clustering2LeftSidebarLayout(pn.Column):
                         content="Upload a .pkl file that you have previously downloaded from the 'Download Results' button after computing UMAP embeddings.", 
                         position="right"
                 )),
-                margin=0
+                margin=0,
+                sizing_mode=self._STRETCH_WIDTH,
             ),
             pn.Spacer(height=10),
             self._file_uploader,
@@ -41,10 +53,20 @@ class Clustering2LeftSidebarLayout(pn.Column):
             **kwargs
         )
     
-    def _on_file_uploaded(self, filename: str, content: bytes):
+    def _load_umap_pickle(self, content: bytes | str):
+        if isinstance(content, (str, os.PathLike)):
+            with open(content, "rb") as file:
+                return pickle.load(file)
+
+        if isinstance(content, (bytes, bytearray, memoryview)):
+            return pickle.loads(bytes(content))
+
+        raise TypeError("Unsupported upload payload. Expected a .pkl file path or bytes.")
+
+    def _on_file_uploaded(self, filename: str, content: bytes | str):
         """Handle .pkl file upload and display content."""
         try:
-            self._model.loaded_umap_data = pickle.loads(content)
+            self._model.loaded_umap_data = self._load_umap_pickle(content)
             
             if not hasattr(self._model.loaded_umap_data, 'embedding_'):
                 raise ValueError("The loaded data does not contain a valid UMAP embedding.")

@@ -6,6 +6,8 @@ if TYPE_CHECKING:
  
 class SpectrumExtractor:
 
+    _ROI_CHUNK_PIXELS = 4096
+
     @staticmethod
     def _as_row_col_energy(electron_count_data: "Dataset") -> np.ndarray:
         """Return a 3D array in (row, col, energy) order when possible.
@@ -64,6 +66,37 @@ class SpectrumExtractor:
                 return np.zeros(data.shape[-1] if data.ndim >= 1 else 0)
 
     @staticmethod
+    def _sum_dtype(data: np.ndarray):
+        return np.complex128 if np.iscomplexobj(data) else np.float64
+
+    @staticmethod
+    def _sum_indexed_chunked(data: np.ndarray, rows: np.ndarray, cols: np.ndarray) -> tuple[np.ndarray, int] | None:
+        """Sum arbitrary pixel indices in chunks to avoid large advanced-index copies."""
+        if data.ndim != 3 or rows.size == 0 or cols.size == 0 or rows.size != cols.size:
+            return None
+
+        if (
+            int(rows.min()) < 0
+            or int(cols.min()) < 0
+            or int(rows.max()) >= data.shape[0]
+            or int(cols.max()) >= data.shape[1]
+        ):
+            return None
+
+        dtype = SpectrumExtractor._sum_dtype(data)
+        n_points = int(rows.size)
+        acc = np.zeros(data.shape[-1], dtype=dtype)
+        chunk_size = max(1, int(SpectrumExtractor._ROI_CHUNK_PIXELS))
+        for start in range(0, n_points, chunk_size):
+            stop = min(start + chunk_size, n_points)
+            acc += np.sum(
+                data[rows[start:stop], cols[start:stop], :],
+                axis=0,
+                dtype=dtype,
+            )
+        return acc, n_points
+
+    @staticmethod
     def get_spectrum_from_indices(electron_count_data: "Dataset", pairs) -> tuple[np.ndarray, int] | None:
         """
         Extract the summed spectrum from a list of pixel indices in the electron_count_data cube.
@@ -80,19 +113,38 @@ class SpectrumExtractor:
 
         If the indexing order is not [y, x, energy], attempts [x, y, energy].
         """
-        if not pairs:
+        if pairs is None:
+            return None
+        try:
+            n_pairs = len(pairs)
+        except TypeError:
+            pairs = list(pairs)
+            n_pairs = len(pairs)
+        if n_pairs == 0:
             return None
         data = SpectrumExtractor._as_row_col_energy(electron_count_data)
         try:
             ii, jj = zip(*pairs)
-            block = data[np.asarray(ii), np.asarray(jj), :]  # (N, nE)
-            return block.sum(axis=0), len(pairs)
+            result = SpectrumExtractor._sum_indexed_chunked(
+                data,
+                np.asarray(ii, dtype=np.int64),
+                np.asarray(jj, dtype=np.int64),
+            )
+            if result is not None:
+                return result
+            raise IndexError("ROI indices do not match data shape.")
         except Exception:
             # attempt swap if indexing order different
             try:
                 ii, jj = zip(*pairs)
-                block = data[np.asarray(jj), np.asarray(ii), :]
-                return block.sum(axis=0), len(pairs)
+                result = SpectrumExtractor._sum_indexed_chunked(
+                    data,
+                    np.asarray(jj, dtype=np.int64),
+                    np.asarray(ii, dtype=np.int64),
+                )
+                if result is not None:
+                    return result
+                raise IndexError("Swapped ROI indices do not match data shape.")
             except Exception:
                 return None
 
