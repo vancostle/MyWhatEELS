@@ -2,11 +2,13 @@ import panel as pn
 import time
 import threading
 import os
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import holoviews as hv
 import lmfit
 import xarray as xr
 from scipy.ndimage import median_filter
+from scipy.signal import savgol_filter
 from bokeh.events import Reset
 from bokeh.models import Range1d
 
@@ -43,12 +45,22 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         # Homepage-specific state — must be set before super().__init__ triggers _setup_callbacks
         self._INACTIVITY_MS = 700
+        self._HOVER_DEBOUNCE_MS = 40  # Lower redraw pressure for smoother hover responsiveness.
+        self._HOVER_PIPE_THROTTLE_MS = 33  # Coalesce hover-driven paneB sends to ~30 FPS.
         self._fitting_active = False
         self._last_hover_ts = None
+        self._last_hover_render_ts = None  # tracks last time hover actually triggered a render
+        self._last_paneB_send_ts: int | None = None
+        self._pending_paneB_hover_fig = None
+        self._paneB_hover_flush_pending = False
+        self._last_rendered_pixel: tuple[int, int] | None = None  # pixel-level dedup: skip if same (i,j)
         self._pc = None
         self._paneB_reset_stream = None
         self._paneB_range_pc = None
         self._paneB_attached_model_id = None
+        self._paneB_reset_baseline_dirty = True  # sync reset baseline on first render and after axis changes
+        self._paneB_reset_baseline_pending = False  # True while a next_tick_callback is already queued
+        self._paneB_range_cb_pending = False  # True while ensure_paneB_range_callbacks is already queued
 
         # Widget placeholders (filled by _setup_widgets, called after super)
         self._range_slider = pn.widgets.EditableRangeSlider()
@@ -62,6 +74,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider = pn.widgets.IntSlider()
         self._spike_window_slider_watcher = None
         self._spike_window = 11
+
+        self._savgol_window_select = pn.widgets.Select()
+        self._savgol_polyorder_select = pn.widgets.Select()
+        self._savgol_window = 15
+        self._savgol_polyorder = 2
         
         self._multifitting_switch = pn.widgets.Switch()
         self._multifitting_switch_watcher = None
@@ -72,6 +89,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._apply_cut_range_button = ToggleButton()
         self._cut_range_active = False
         self._cut_range_preprocessed_electron_count = None
+        self._cut_range_previous_electron_count = None
+        self._cut_range_previous_source: str | None = None
         self._applied_cut_range: tuple[float, float] | None = None
 
         self._preprocessors_applied = False
@@ -79,13 +98,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._applied_spike_window: int | None = None
         self._preprocessed_source: str | None = None
         self._apply_remove_spikes_button = ToggleButton()
+        self._apply_savgol_button = ToggleButton()
         self._apply_multifitting_button = ToggleButton()
         self._preprocessed_electron_count = None
         self._multifit_previous_electron_count = None
         self._multifit_previous_source: str | None = None
         self._multifit_input_had_spikes = False
+        self._multifit_input_had_savgol = False
         self._despiked_cube = None
         self._despike_cache_signature = None
+        self._savgol_cube = None
+        self._savgol_cache_signature = None
+        self._applied_savgol_window: int | None = None
+        self._applied_savgol_polyorder: int | None = None
         self._multifit_cube = None
         self._multifit_cache_signature = None
         self._raw_paneA_base_overlay = None
@@ -98,6 +123,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._reset_in_progress = False  # Flag to prevent callback freeze during reset
         self._reset_finalize_attempts = 0
 
+        # Numpy cache for the fast hover path — avoids xarray _as_row_col_energy conversion
+        # on every mouse move. Invalidated automatically when _get_display_data() changes identity.
+        self._display_numpy_cache: np.ndarray | None = None
+        self._display_numpy_cache_source = None
 
         # super().__init__ calls _setup_plots() and _setup_callbacks() (base versions)
         super().__init__(dataset, eloss_name=self._model.constants.ELOSS)
@@ -119,6 +148,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     def create_plots(self):
         left_column = pn.Column(
             self.paneA,
+            self._hover_gate_widget,
             align='center',
             margin=0,
         )
@@ -182,6 +212,33 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             sizing_mode=self._STRETCH_WIDTH,
         )
         self._spike_window_slider_watcher = self._spike_window_slider.param.watch(self._on_spike_window_changed, 'value')
+
+        self._savgol_window_select = pn.widgets.Select(
+            name="Window Length",
+            options={
+                "5": 5,
+                "9": 9,
+                "15": 15,
+                "21": 21,
+                "31": 31,
+                "51": 51,
+                "75": 75,
+                "101": 101,
+            },
+            value=self._savgol_window,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        self._savgol_polyorder_select = pn.widgets.Select(
+            name="Polynomial Order",
+            options={
+                "1": 1,
+                "2": 2,
+                "3": 3,
+                "4": 4,
+            },
+            value=self._savgol_polyorder,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
         
         self._multifitting_switch = pn.widgets.Switch(
             name="Multifitting",
@@ -242,6 +299,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             margin=(8, 0, 0, 0),
         )
 
+        self._apply_savgol_button = ToggleButton(
+            initial_state=False,
+            states={
+                "on": {"label": 'Revert Savitzky-Golay', "on_click": self._on_revert_savgol, "button_type": 'warning'},
+                "off": {"label": 'Apply Savitzky-Golay', "on_click": self._on_apply_savgol, "button_type": 'success'},
+            },
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(8, 0, 0, 0),
+        )
+
         self._apply_multifitting_button = ToggleButton(
             initial_state=False,
             states={
@@ -268,7 +335,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._fitting_switch,
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-container"],
-            margin=(0, 0, 8, 0),
+            margin=(0, 0, 0, 0),
             styles={
                 'display': 'flex', 'align-items': 'center',
                 'justify-content': 'center', 'padding': '0px'
@@ -283,6 +350,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 sizing_mode=self._STRETCH_WIDTH,
             ),
             sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 0, 0, 0),
         )
 
     def create_cut_range_details(self) -> SimpleDetails:
@@ -297,6 +365,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 sizing_mode=self._STRETCH_WIDTH,
             ),
             sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 0, 8, 0),
         )
         
     def create_remove_spikes_details(self) -> SimpleDetails:
@@ -316,10 +385,22 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 window_slider_container,
                 self._apply_remove_spikes_button,
             ),
+            margin=(0, 0, 8, 0),
             sizing_mode=self._STRETCH_WIDTH,
         )
-        
 
+    def create_savgol_details(self) -> SimpleDetails:
+        """Build and return the Savitzky-Golay smoothing SimpleDetails block."""
+        return SimpleDetails(
+            title="Smooth Spectrum Settings",
+            content=pn.Column(
+                self._savgol_window_select,
+                self._savgol_polyorder_select,
+                self._apply_savgol_button,
+            ),
+            margin=(0, 0, 8, 0),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
 
     def set_view_refs(self, main, plots_tab) -> None:
         """Inject main layout and plots tab references so the plot can show progress and restore content."""
@@ -355,21 +436,60 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         return min_eloss, max_eloss
 
-    def _build_cut_range_preprocessed_data(self):
-        """Slice ElectronCount by the selected Eloss range and return (data, range)."""
+    def _get_eloss_dim(self, source_data):
+        """Return the dimension associated with the Eloss coordinate."""
+        try:
+            coord_dims = source_data.coords[self._eloss_name].dims
+            if coord_dims:
+                return coord_dims[0]
+        except Exception:
+            pass
+        return source_data.dims[-1]
+
+    def _build_cut_range_indexer(self, source_data):
+        """Return a fast integer slice for the selected Eloss range."""
         min_eloss, max_eloss = self._normalize_cut_range_values()
-        eloss_values = np.asarray(self._electron_count_data.coords[self._eloss_name].values)
+        eloss_values = np.asarray(source_data.coords[self._eloss_name].values)
         if eloss_values.size == 0:
             raise ValueError("Eloss axis is empty.")
 
+        n = int(eloss_values.size)
         ascending_eloss = bool(eloss_values[0] <= eloss_values[-1])
-        eloss_slice = slice(min_eloss, max_eloss) if ascending_eloss else slice(max_eloss, min_eloss)
-        cut_data = self._electron_count_data.sel({self._eloss_name: eloss_slice})
+        if ascending_eloss:
+            start = int(np.searchsorted(eloss_values, min_eloss, side='left'))
+            stop = int(np.searchsorted(eloss_values, max_eloss, side='right'))
+        else:
+            reversed_eloss = eloss_values[::-1]
+            rev_start = int(np.searchsorted(reversed_eloss, min_eloss, side='left'))
+            rev_stop = int(np.searchsorted(reversed_eloss, max_eloss, side='right'))
+            start = n - rev_stop
+            stop = n - rev_start
+
+        start = max(0, min(n, start))
+        stop = max(0, min(n, stop))
+        if stop <= start:
+            mask = np.isfinite(eloss_values) & (eloss_values >= min_eloss) & (eloss_values <= max_eloss)
+            indices = np.flatnonzero(mask)
+            if indices.size == 0:
+                raise ValueError("Selected cut range produced no Eloss samples.")
+            start = int(indices[0])
+            stop = int(indices[-1]) + 1
+
+        return slice(start, stop), (min_eloss, max_eloss)
+
+    def _build_cut_range_preprocessed_data(self, source_data=None):
+        """Slice ElectronCount-like data by the selected Eloss range and return (data, range)."""
+        if source_data is None:
+            source_data = self._electron_count_data
+
+        eloss_indexer, normalized_range = self._build_cut_range_indexer(source_data)
+        eloss_dim = self._get_eloss_dim(source_data)
+        cut_data = source_data.isel({eloss_dim: eloss_indexer})
 
         if cut_data.shape[-1] == 0:
             raise ValueError("Selected cut range produced no Eloss samples.")
 
-        return cut_data, (min_eloss, max_eloss)
+        return cut_data, normalized_range
 
     def _on_reset_cut_range(self, _=None):
         """Reset cut range widgets to the full available Eloss bounds."""
@@ -402,6 +522,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._range_slider.start = axis_min
         self._range_slider.end = axis_max
         self._range_slider.value = (new_min, new_max)
+        # Energy axis changed — reset baseline must be resynced on next render.
+        self._paneB_reset_baseline_dirty = True
 
     def _get_clipped_fit_range(self, energy_axis, update_slider: bool = False) -> tuple[float, float]:
         """Return fit range clipped to the provided energy axis bounds."""
@@ -431,69 +553,142 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Clear in-memory Cut Range state and optionally clear active preprocessed payload."""
         self._cut_range_active = False
         self._cut_range_preprocessed_electron_count = None
+        self._cut_range_previous_electron_count = None
+        self._cut_range_previous_source = None
         self._applied_cut_range = None
         if clear_preprocessed_payload and self._preprocessed_source == 'cut_range':
             self._preprocessed_electron_count = None
             self._preprocessed_source = None
             self._preprocessors_applied = False
 
+    def _restore_base_preprocessor_state(self):
+        """Restore the display source to raw data or the active Cut Range base."""
+        if self._cut_range_active and self._cut_range_preprocessed_electron_count is not None:
+            self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
+            self._preprocessed_source = 'cut_range'
+            self._preprocessors_applied = True
+            self._cut_range_previous_electron_count = None
+            self._cut_range_previous_source = None
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
+            self._sync_range_slider_to_energy_axis(
+                np.asarray(self._preprocessed_electron_count.coords[self._eloss_name].values),
+                reset_value=False,
+            )
+        else:
+            self._preprocessed_electron_count = None
+            self._preprocessed_source = None
+            self._preprocessors_applied = False
+            self._cut_range_previous_electron_count = None
+            self._cut_range_previous_source = None
+            CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
+            self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
+
     def _on_apply_cut_range(self):
-        """Apply cut range and refresh Home plots with the selected Eloss window."""
-        # Cut Range supersedes any currently applied preprocessor output.
-        if self._apply_multifitting_button.is_on():
-            self._apply_multifitting_button.toggle()
-        self._multifitting_switch.value = False
-        self._multifit_input_had_spikes = False
-        self._multifit_previous_electron_count = None
-        self._multifit_previous_source = None
+        """Apply cut range to the active display cube while preserving preprocessing."""
+        previous_electron_count = self._preprocessed_electron_count if self._preprocessors_applied else None
+        previous_source = self._preprocessed_source if self._preprocessors_applied else None
+        display_source = self._get_display_data()
 
-        if self._apply_remove_spikes_button.is_on():
-            self._apply_remove_spikes_button.toggle()
+        self._disable_sidebar_widgets()
 
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            tab = pn.Tabs(("Applying Cut Range...", self._progress_display))
+            self._main_ref.update(tab)
+
+        threading.Thread(
+            target=self._run_cut_range_thread,
+            args=(display_source, previous_electron_count, previous_source),
+            daemon=True,
+        ).start()
+
+    def _run_cut_range_thread(self, display_source, previous_electron_count, previous_source):
+        """Background thread: cut active and raw cubes in parallel."""
         try:
-            cut_data, normalized_range = self._build_cut_range_preprocessed_data()
-        except Exception as e:
-            pn.state.notifications.error(f"Failed to apply Cut Range: {e}", duration=5000) # type: ignore
-            # Keep button in OFF state after ToggleButton internal toggle executes.
-            self._apply_cut_range_button.toggle()
-            return
+            self._progress_display.reset()
+            self._progress_display.visible = True
+            self._progress_display.update(10, "Preparing Cut Range...", level='info')
 
-        self._cut_range_preprocessed_electron_count = cut_data
-        self._applied_cut_range = normalized_range
-        self._cut_range_active = True
-        self._preprocessed_electron_count = cut_data
-        self._preprocessed_source = 'cut_range'
-        self._preprocessors_applied = True
-        CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": cut_data})
-        self._sync_range_slider_to_energy_axis(np.asarray(cut_data.coords[self._eloss_name].values), reset_value=False)
-        self._current_y_range = None
-        self._current_y_autorange = True
-        self._apply_sidebar_apply_locks()
-        self._refresh_paneA()
-        self._refresh_paneB()
-        pn.state.notifications.success(
-            f"Cut Range applied: Eloss [{normalized_range[0]:.3f}, {normalized_range[1]:.3f}]",
-            duration=4000,
-        ) # type: ignore
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                active_future = executor.submit(self._build_cut_range_preprocessed_data, display_source)
+                raw_future = executor.submit(self._build_cut_range_preprocessed_data, self._electron_count_data)
+                cut_data, normalized_range = active_future.result()
+                cut_base_data, _ = raw_future.result()
+
+            self._progress_display.update(75, "Cuting Range...", level='info')
+
+            self._cut_range_preprocessed_electron_count = cut_base_data
+            self._cut_range_previous_electron_count = previous_electron_count
+            self._cut_range_previous_source = previous_source
+            self._applied_cut_range = normalized_range
+            self._cut_range_active = True
+            self._preprocessed_electron_count = cut_data
+            self._preprocessed_source = previous_source or 'cut_range'
+            self._preprocessors_applied = True
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": cut_data})
+            self._sync_range_slider_to_energy_axis(np.asarray(cut_data.coords[self._eloss_name].values), reset_value=False)
+            self._current_y_range = None
+            self._current_y_autorange = True
+            self._progress_display.completion("Cut Range applied successfully!")
+            time.sleep(1)
+            pn.state.notifications.success(
+                f"Cut Range applied: Eloss [{normalized_range[0]:.3f}, {normalized_range[1]:.3f}]",
+                duration=4000,
+            ) # type: ignore
+        except Exception as e:
+            self._progress_display.error(f"Cut Range failed: {str(e)}")
+            self._apply_cut_range_button.toggle()
+            time.sleep(2)
+        finally:
+            try:
+                pn.state.execute(self._restore_after_remove_spikes)
+            except Exception:
+                self._restore_after_remove_spikes()
 
     def _on_revert_cut_range(self):
-        """Revert cut range and restore Home plots to raw data."""
+        """Revert cut range and restore raw data or the pre-cut preprocessing state."""
+        previous_electron_count = self._cut_range_previous_electron_count
+        previous_source = self._cut_range_previous_source
+        active_source = self._preprocessed_source
+
         app_state = CacheManager.get_cached_app_state()
         if (
             app_state.preprocessed_plot_dataset is not None
-            and app_state.preprocessed_plot_dataset["ElectronCount"] is self._cut_range_preprocessed_electron_count
+            and app_state.preprocessed_plot_dataset["ElectronCount"] is self._preprocessed_electron_count
         ):
             app_state.clear_preprocessed_plot_dataset()
 
-        self._clear_cut_range_state(clear_preprocessed_payload=True)
-        self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
+        self._clear_cut_range_state(clear_preprocessed_payload=False)
+        if previous_electron_count is not None:
+            self._preprocessed_electron_count = previous_electron_count
+            self._preprocessed_source = previous_source
+            self._preprocessors_applied = True
+            app_state.preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": previous_electron_count})
+            self._sync_range_slider_to_energy_axis(
+                np.asarray(previous_electron_count.coords[self._eloss_name].values),
+                reset_value=False,
+            )
+        else:
+            if active_source == 'spikes' and self._apply_remove_spikes_button.is_on():
+                self._apply_remove_spikes_button.toggle()
+            if active_source == 'savgol' and self._apply_savgol_button.is_on():
+                self._apply_savgol_button.toggle()
+            if active_source == 'multifit' and self._apply_multifitting_button.is_on():
+                self._apply_multifitting_button.toggle()
+            self._multifitting_switch.value = False
+            self._preprocessed_electron_count = None
+            self._preprocessed_source = None
+            self._preprocessors_applied = False
+            app_state.clear_preprocessed_plot_dataset()
+            self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
+
         self._current_y_range = None
         self._current_y_autorange = True
         self._enable_sidebar_widgets()
         self._refresh_paneA()
         self._refresh_paneB()
+        active_label = "the previous preprocessed data" if previous_electron_count is not None else "raw data"
         pn.state.notifications.info(
-            "Cut Range reverted. Raw data is now active for downstream pages.",
+            f"Cut Range reverted. {active_label} is now active for downstream pages.",
             duration=3500,
         ) # type: ignore
 
@@ -565,6 +760,36 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return_mask=False,
         )
 
+    def _get_savgol_selection(self) -> tuple[int, int]:
+        """Return the selected Savitzky-Golay window length and polynomial order."""
+        try:
+            window = int(self._savgol_window_select.value)
+        except Exception:
+            window = self._savgol_window
+        try:
+            polyorder = int(self._savgol_polyorder_select.value)
+        except Exception:
+            polyorder = self._savgol_polyorder
+        return window, polyorder
+
+    def _normalize_savgol_params(self, window: int, polyorder: int, n_points: int) -> tuple[int, int]:
+        """Return valid Savitzky-Golay parameters for the active energy axis."""
+        if n_points < 3:
+            return 0, 0
+
+        w = max(3, int(window))
+        if w % 2 == 0:
+            w += 1
+        if w > n_points:
+            w = n_points if n_points % 2 == 1 else n_points - 1
+        if w < 3:
+            return 0, 0
+
+        p = max(0, int(polyorder))
+        if p >= w:
+            p = max(0, w - 1)
+        return w, p
+
     # Home keeps its own curve builder because the displayed Eloss axis can change
     # after preprocessors like Cut Range. BaseSpectrumImagePlot builds curves with
     # self._energy from the original dataset, which can mismatch the active spectrum
@@ -591,11 +816,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     @override
     def _figB_hover(self, point):
-        """Build hover spectrum using the active display energy axis."""
+        """Build hover spectrum using the cached numpy array."""
         if not point:
             point = {"x": 0, "y": 0}
         i, j = round(point["y"]), round(point["x"])
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+        try:
+            spec = self._get_display_numpy()[i, j, :]
+        except Exception:
+            spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
         return self._build_spectrum_curve(spec, f"Hover (x={j}, y={i})")
 
     @override
@@ -613,6 +841,19 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if self._preprocessors_applied and self._preprocessed_electron_count is not None:
             return self._preprocessed_electron_count
         return self._electron_count_data
+
+    def _get_display_numpy(self) -> np.ndarray:
+        """Return a cached (row, col, energy) numpy array for the current display data.
+
+        Avoids calling SpectrumExtractor._as_row_col_energy (which does xarray .values
+        + dim-order inspection) on every hover event. The cache is invalidated automatically
+        when the underlying data source changes (preprocessors applied/reverted).
+        """
+        display_data = self._get_display_data()
+        if self._display_numpy_cache is None or self._display_numpy_cache_source is not display_data:
+            self._display_numpy_cache = SpectrumExtractor._as_row_col_energy(display_data)
+            self._display_numpy_cache_source = display_data
+        return self._display_numpy_cache
 
     def _get_display_energy_axis(self) -> np.ndarray:
         """Return the Eloss axis associated with the currently displayed data cube."""
@@ -739,7 +980,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return False
         return True
 
-    def _show_spectrum(self, *, point=None, region_pairs=None):
+    def _show_spectrum(self, *, point=None, region_pairs=None, is_hover_event: bool = False):
         """
         Unified helper to extract spectrum (from point or region), apply fitting if needed, and update paneB.
         """
@@ -751,9 +992,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             if not region_pairs:
                 # No region selected, show message or hover
                 if self._last_hover_point is not None:
-                    self._show_spectrum(point=self._last_hover_point)
+                    self._show_spectrum(point=self._last_hover_point, is_hover_event=is_hover_event)
                 return
-            res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), region_pairs)
+            res = self._get_spectrum_from_indices_fast(region_pairs)
             if res is not None:
                 spec, n_points = res
                 title = f"ROI — sum (points={n_points})"
@@ -770,18 +1011,20 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         elif point is not None:
             i, j = round(point['y']), round(point['x'])
             title = f"Hover (x={j}, y={i})"
-            spec = get_pixel_spectrum(self._get_display_data(), point)
-            if (self._preprocessors_applied or self._fitting_active) and spec is not None:
-                fig = self._build_spectrum_curve(spec, title)
-                if self._should_apply_visual_fitting():
-                    energy_axis = self._get_display_energy_axis()
-                    try:
-                        fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
-                    except Exception:
-                        pass
-            else:
-                fig = self._figB_hover(point)
-        self._update_paneB(fig)
+            # Use cached numpy array — avoids xarray conversion and eliminates the
+            # previous double-extraction (spec was computed then discarded for _figB_hover).
+            try:
+                spec = self._get_display_numpy()[i, j, :]
+            except Exception:
+                spec = get_pixel_spectrum(self._get_display_data(), point)
+            fig = self._build_spectrum_curve(spec, title)
+            if (self._preprocessors_applied or self._fitting_active) and self._should_apply_visual_fitting():
+                energy_axis = self._get_display_energy_axis()
+                try:
+                    fig = apply_fitting(fig, energy_axis, spec, self._range_slider)
+                except Exception:
+                    pass
+        self._update_paneB(fig, from_hover=is_hover_event)
 
     # --- Helper methods now imported from utils/plot_helpers.py ---
     def _refresh_paneB(self):
@@ -795,7 +1038,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             spec = None
             n_points = 0
             if apply_preprocessors:
-                res = SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), self._region_pairs)
+                res = self._get_spectrum_from_indices_fast(self._region_pairs)
                 if res is not None:
                     spec, n_points = res
                 if spec is not None:
@@ -851,30 +1094,88 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             fig = self._figB_hover(default_point)
         self._update_paneB(fig)
         
-    def _update_paneB(self, fig):
-        if self._paneB_pipe is not None:
-            # Always send an hv.Overlay so the DynamicMap type stays consistent
-            # (mixing plain Curve and Overlay causes an AssertionError in the cache).
-            if fig is not None and not isinstance(fig, hv.Overlay):
-                fig = hv.Overlay([fig])
-            self._debug_paneB_state("update_paneB_before_send")
-            # Push the new element through the pipe — Bokeh updates data in-place
-            # without rebuilding the whole model tree, avoiding the stale-reference warning.
-            self._paneB_pipe.send(self._set_ranges_and_convert(fig))
-            # Keep the live Bokeh reset baseline pinned to the full spectrum on every update.
+    def _send_paneB_fig(self, fig):
+        if self._paneB_pipe is None:
+            return
+        # Always send an hv.Overlay so the DynamicMap type stays consistent
+        # (mixing plain Curve and Overlay causes an AssertionError in the cache).
+        if fig is not None and not isinstance(fig, hv.Overlay):
+            fig = hv.Overlay([fig])
+        self._debug_paneB_state("update_paneB_before_send")
+        # Push the new element through the pipe — Bokeh updates data in-place
+        # without rebuilding the whole model tree, avoiding the stale-reference warning.
+        self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+        self._last_paneB_send_ts = self._now_ms()
+
+        # Keep the live Bokeh reset baseline pinned to the full spectrum, but only
+        # schedule once — not on every hover frame.
+        if getattr(self, '_paneB_reset_baseline_dirty', True) and not getattr(self, '_paneB_reset_baseline_pending', False):
             try:
                 doc = pn.state.curdoc
                 if doc is not None:
-                    doc.add_next_tick_callback(self._sync_paneB_reset_baseline)
+                    self._paneB_reset_baseline_pending = True
+                    def _sync_and_clear():
+                        self._sync_paneB_reset_baseline()
+                        self._paneB_reset_baseline_dirty = False
+                        self._paneB_reset_baseline_pending = False
+                    doc.add_next_tick_callback(_sync_and_clear)
             except Exception:
                 pass
-            # Always re-check attachment because Panel/Bokeh may recreate the model.
+        # Only attach range callbacks when the model is new or was reset,
+        # and only schedule the callback once, not on every hover frame.
+        if self._paneB_attached_model_id is None and not getattr(self, '_paneB_range_cb_pending', False):
             try:
                 doc = pn.state.curdoc
                 if doc is not None:
-                    doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
+                    self._paneB_range_cb_pending = True
+                    def _ensure_and_clear():
+                        self._ensure_paneB_range_callbacks()
+                        self._paneB_range_cb_pending = False
+                    doc.add_next_tick_callback(_ensure_and_clear)
             except Exception:
                 pass
+
+    def _flush_pending_hover_send(self):
+        self._paneB_hover_flush_pending = False
+        fig = self._pending_paneB_hover_fig
+        self._pending_paneB_hover_fig = None
+        if fig is None:
+            return
+        self._send_paneB_fig(fig)
+
+    def _update_paneB(self, fig, from_hover: bool = False):
+        if self._paneB_pipe is None:
+            return
+
+        if not from_hover:
+            self._pending_paneB_hover_fig = None
+            self._send_paneB_fig(fig)
+            return
+
+        now = self._now_ms()
+        if self._last_paneB_send_ts is None:
+            self._send_paneB_fig(fig)
+            return
+
+        elapsed = now - int(self._last_paneB_send_ts)
+        remaining = int(self._HOVER_PIPE_THROTTLE_MS - elapsed)
+        if remaining <= 0:
+            self._send_paneB_fig(fig)
+            return
+
+        # Coalesce bursty hover frames and flush only the latest one.
+        self._pending_paneB_hover_fig = fig
+        if self._paneB_hover_flush_pending:
+            return
+
+        doc = pn.state.curdoc
+        if doc is None:
+            return
+        try:
+            self._paneB_hover_flush_pending = True
+            doc.add_timeout_callback(self._flush_pending_hover_send, remaining)
+        except Exception:
+            self._paneB_hover_flush_pending = False
 
     @override
     def _set_ranges_and_convert(self, fig):
@@ -1146,8 +1447,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             
     def _refresh_paneA(self):
         """Rebuild paneA (heatmap) using the current display data (raw or preprocessed)."""
-        m_image_da = self._get_display_data().sum(self._eloss_name)
-        m_image = np.asarray(m_image_da.fillna(0.0).where(np.isfinite(m_image_da), 0.0))
+        display_data = self._get_display_data()
+        # Sum over the energy axis. np.sum() on the values directly produces
+        # a small 2D result without creating a large intermediate copy.
+        # Then clean NaNs on the small result (not the full 3D array).
+        m_image = np.sum(display_data.values, axis=2)
+        m_image = np.nan_to_num(m_image, nan=0.0, posinf=0.0, neginf=0.0)
         if m_image.ndim != 2:
             raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
         ny, nx = m_image.shape
@@ -1196,6 +1501,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._paneB_pipe = hv_streams.Pipe(data=None)
         self._paneB_dmap = hv.DynamicMap(lambda data: data, streams=[self._paneB_pipe])
         self._paneB_attached_model_id = None
+        # Reset pending-guard flags so the new model gets its callbacks attached.
+        self._paneB_range_cb_pending = False
+        self._paneB_reset_baseline_pending = False
+        self._paneB_reset_baseline_dirty = True
 
         # Seed the pipe with a valid figure before assigning to paneB.object.
         # Panel calls initialize_dynamic() immediately on assignment, which calls
@@ -1221,7 +1530,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             try:
                 doc = pn.state.curdoc
                 if doc is not None:
-                    doc.add_next_tick_callback(self._ensure_paneB_range_callbacks)
+                    self._paneB_range_cb_pending = True
+                    def _ensure_and_clear_reset():
+                        self._ensure_paneB_range_callbacks()
+                        self._paneB_range_cb_pending = False
+                    doc.add_next_tick_callback(_ensure_and_clear_reset)
             except Exception:
                 pass
         if self._paneB_range_pc is not None:
@@ -1310,24 +1623,31 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._range_slider.disabled = True
         self._spike_threshold_slider.disabled = True
         self._spike_window_slider.disabled = True
+        self._savgol_window_select.disabled = True
+        self._savgol_polyorder_select.disabled = True
         self._multifitting_switch.disabled = True
         self._cut_range_min_input.disabled = True
         self._cut_range_max_input.disabled = True
         self._cut_range_reset_button.disabled = True
         self._apply_cut_range_button.disabled = True
         self._apply_remove_spikes_button.disabled = True
+        self._apply_savgol_button.disabled = True
         self._apply_multifitting_button.disabled = True
 
     def _apply_sidebar_apply_locks(self):
         """Lock only the controls of the currently applied preprocessor section."""
         spikes_applied = self._preprocessors_applied and self._preprocessed_source == 'spikes'
+        savgol_applied = self._preprocessors_applied and self._preprocessed_source == 'savgol'
         multifit_applied = self._preprocessors_applied and self._preprocessed_source == 'multifit'
         cut_range_applied = self._cut_range_active
         multifit_based_on_spikes = multifit_applied and self._multifit_input_had_spikes
+        multifit_based_on_savgol = multifit_applied and self._multifit_input_had_savgol
 
         # If Remove Spikes is currently applied, freeze only its own sliders.
         self._spike_threshold_slider.disabled = spikes_applied or multifit_based_on_spikes
         self._spike_window_slider.disabled = spikes_applied or multifit_based_on_spikes
+        self._savgol_window_select.disabled = savgol_applied or multifit_based_on_savgol
+        self._savgol_polyorder_select.disabled = savgol_applied or multifit_based_on_savgol
 
         # If Multifitting is currently applied, freeze only fitting controls.
         self._fitting_switch.disabled = multifit_applied
@@ -1345,12 +1665,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._range_slider.disabled = not self._fitting_active
         self._spike_threshold_slider.disabled = False
         self._spike_window_slider.disabled = False
+        self._savgol_window_select.disabled = False
+        self._savgol_polyorder_select.disabled = False
         self._multifitting_switch.disabled = False
         self._cut_range_min_input.disabled = False
         self._cut_range_max_input.disabled = False
         self._cut_range_reset_button.disabled = False
         self._apply_cut_range_button.disabled = False
         self._apply_remove_spikes_button.disabled = False
+        self._apply_savgol_button.disabled = False
         self._apply_multifitting_button.disabled = False
         self._apply_sidebar_apply_locks()
 
@@ -1359,8 +1682,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         # A new despike application supersedes a previously displayed multifit output.
         if self._apply_multifitting_button.is_on():
             self._apply_multifitting_button.toggle()
+            self._on_revert_multifitting()
+        if self._apply_savgol_button.is_on():
+            self._apply_savgol_button.toggle()
+            self._restore_base_preprocessor_state()
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
+        self._multifit_input_had_savgol = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -1388,6 +1716,61 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         threading.Thread(target=self._run_remove_spikes_thread, daemon=True).start()
 
+    def _on_apply_savgol(self):
+        """Apply Savitzky-Golay smoothing across the energy axis."""
+        if self._apply_multifitting_button.is_on():
+            self._apply_multifitting_button.toggle()
+            self._on_revert_multifitting()
+        if self._apply_remove_spikes_button.is_on():
+            self._apply_remove_spikes_button.toggle()
+            self._restore_base_preprocessor_state()
+        self._multifitting_switch.value = False
+        self._multifit_input_had_spikes = False
+        self._multifit_input_had_savgol = False
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source = None
+
+        input_da = self._get_display_data()
+        input_arr = np.asarray(input_da)
+        if input_arr.ndim != 3:
+            pn.state.notifications.error(
+                f"Failed to apply Savitzky-Golay: expected 3D spectrum image, got shape={input_arr.shape}",
+                duration=5000,
+            ) # type: ignore
+            self._apply_savgol_button.toggle()
+            return
+
+        n_energy = input_arr.shape[-1]
+        window, polyorder = self._normalize_savgol_params(*self._get_savgol_selection(), n_energy)
+        if window < 3:
+            pn.state.notifications.warning(
+                "Savitzky-Golay skipped: energy axis is too short.",
+                duration=4500,
+            ) # type: ignore
+            self._apply_savgol_button.toggle()
+            return
+
+        if (
+            self._preprocessed_electron_count is not None
+            and self._preprocessed_source == 'savgol'
+            and self._applied_savgol_window == window
+            and self._applied_savgol_polyorder == polyorder
+        ):
+            self._preprocessors_applied = True
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
+            self._current_y_range = None
+            self._current_y_autorange = True
+            self._finalize_remove_spikes_ui()
+            return
+
+        self._disable_sidebar_widgets()
+
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            tab = pn.Tabs(("Applying Savitzky-Golay...", self._progress_display))
+            self._main_ref.update(tab)
+
+        threading.Thread(target=self._run_savgol_thread, daemon=True).start()
+
     def _on_apply_multifitting(self):
         """Disable sidebar, show progress in main, then run multifitting in a background thread."""
         self._disable_sidebar_widgets()
@@ -1404,6 +1787,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         )
         self._multifit_input_had_spikes = (
             self._preprocessors_applied and self._preprocessed_source == 'spikes'
+        )
+        self._multifit_input_had_savgol = (
+            self._preprocessors_applied and self._preprocessed_source == 'savgol'
         )
 
         threading.Thread(target=self._run_multifitting_thread, daemon=True).start()
@@ -1426,6 +1812,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 'despiked',
                 round(float(self._spike_threshold), 6),
                 int(self._spike_window),
+            )
+        elif self._apply_savgol_button.is_on():
+            savgol_window, savgol_polyorder = self._normalize_savgol_params(
+                *self._get_savgol_selection(),
+                input_arr.shape[-1],
+            )
+            source_signature = (
+                'savgol',
+                int(savgol_window),
+                int(savgol_polyorder),
             )
         else:
             source_signature = ('raw',)
@@ -1540,6 +1936,40 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_revert_multifitting(self):
         """Revert multifitting and restore the previous display cube (raw or despiked)."""
+        if self._cut_range_active and self._cut_range_preprocessed_electron_count is not None:
+            if self._multifit_previous_electron_count is not None:
+                restored_data, _ = self._build_cut_range_preprocessed_data(self._multifit_previous_electron_count)
+                restored_source = self._multifit_previous_source or 'cut_range'
+                self._preprocessed_electron_count = restored_data
+                self._preprocessed_source = restored_source
+                self._preprocessors_applied = True
+                if self._multifit_previous_source is not None:
+                    self._cut_range_previous_electron_count = self._multifit_previous_electron_count
+                    self._cut_range_previous_source = self._multifit_previous_source
+                else:
+                    self._cut_range_previous_electron_count = None
+                    self._cut_range_previous_source = None
+                CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": restored_data})
+            else:
+                self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
+                self._preprocessed_source = 'cut_range'
+                self._preprocessors_applied = True
+                self._cut_range_previous_electron_count = None
+                self._cut_range_previous_source = None
+                CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
+
+            self._multifitting_switch.value = False
+            self._multifit_input_had_spikes = False
+            self._multifit_input_had_savgol = False
+            self._multifit_previous_electron_count = None
+            self._multifit_previous_source = None
+            self._current_y_range = None
+            self._current_y_autorange = True
+            self._refresh_paneA()
+            self._refresh_paneB()
+            self._enable_sidebar_widgets()
+            return
+
         if self._multifit_previous_electron_count is not None:
             self._preprocessed_electron_count = self._multifit_previous_electron_count
             self._preprocessed_source = self._multifit_previous_source
@@ -1553,6 +1983,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
+        self._multifit_input_had_savgol = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
         self._current_y_range = None
@@ -1761,6 +2192,108 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 # Fallback path for non-server contexts.
                 self._restore_after_remove_spikes()
 
+    def _run_savgol_thread(self):
+        """Background thread: apply Savitzky-Golay smoothing across every spectrum."""
+        try:
+            self._progress_display.reset()
+            self._progress_display.visible = True
+            self._progress_display.update(5, "Initializing Savitzky-Golay smoothing...", level='info')
+
+            input_da = self._get_display_data()
+            input_arr = np.asarray(input_da, dtype=float)
+            if input_arr.ndim != 3:
+                raise ValueError(f"Expected 3D spectrum image, got shape={input_arr.shape}")
+
+            n_energy = input_arr.shape[-1]
+            total_pixels = input_arr.shape[0] * input_arr.shape[1]
+            window, polyorder = self._normalize_savgol_params(*self._get_savgol_selection(), n_energy)
+            if window < 3:
+                raise ValueError("Energy axis is too short for Savitzky-Golay smoothing.")
+
+            source_signature = ('cut_range', self._applied_cut_range) if self._cut_range_active else ('raw',)
+            savgol_signature = (source_signature, int(window), int(polyorder), tuple(input_arr.shape))
+
+            if (
+                self._savgol_cube is not None
+                and self._savgol_cache_signature == savgol_signature
+                and self._savgol_cube.shape == input_arr.shape
+            ):
+                self._progress_display.update(55, "Using cached Savitzky-Golay result...", level='info')
+                working_arr = self._savgol_cube.copy()
+            else:
+                self._progress_display.update(
+                    25,
+                    f"Smoothing {total_pixels} spectra with window={window}, polyorder={polyorder}...",
+                    level='info',
+                )
+                working_arr = savgol_filter(
+                    input_arr,
+                    window_length=window,
+                    polyorder=polyorder,
+                    axis=-1,
+                    mode='nearest',
+                )
+
+                negative_count = 0
+                try:
+                    negative_mask = np.isfinite(working_arr) & (working_arr < 0.0)
+                    negative_count = int(np.count_nonzero(negative_mask))
+                    if negative_count:
+                        working_arr[negative_mask] = 0.0
+                except Exception:
+                    negative_count = 0
+
+                self._savgol_cube = np.asarray(working_arr).copy()
+                self._savgol_cache_signature = savgol_signature
+                if negative_count:
+                    self._progress_display.update(
+                        75,
+                        f"Smoothing complete; clipped {negative_count} negative samples to zero.",
+                        level='info',
+                    )
+                else:
+                    self._progress_display.update(75, "Smoothing complete.", level='info')
+
+            self._progress_display.update(90, "Finalizing...", level='info')
+            time.sleep(0.5)
+
+            preprocessed_da = xr.DataArray(
+                working_arr,
+                dims=input_da.dims,
+                coords=input_da.coords,
+            )
+            self._preprocessed_electron_count = preprocessed_da
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": preprocessed_da})
+            self._preprocessors_applied = True
+            self._preprocessed_source = 'savgol'
+            self._applied_savgol_window = window
+            self._applied_savgol_polyorder = polyorder
+            self._current_y_range = None
+            self._current_y_autorange = True
+            time.sleep(0.5)
+            self._progress_display.completion("Savitzky-Golay smoothing applied successfully!")
+            time.sleep(2)
+
+        except Exception as e:
+            self._progress_display.error(f"Savitzky-Golay failed: {str(e)}")
+            if self._cut_range_active and self._cut_range_preprocessed_electron_count is not None:
+                self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
+                self._preprocessed_source = 'cut_range'
+                self._preprocessors_applied = True
+                CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
+            else:
+                self._preprocessors_applied = False
+                self._preprocessed_electron_count = None
+                self._preprocessed_source = None
+                CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
+            self._apply_savgol_button.toggle()
+            time.sleep(2)
+        finally:
+            try:
+                pn.state.execute(self._restore_after_remove_spikes)
+            except Exception:
+                self._restore_after_remove_spikes()
+
     def _on_revert_remove_spikes(self):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
         had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
@@ -1769,6 +2302,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._apply_multifitting_button.toggle()
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
+        self._multifit_input_had_savgol = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -1777,6 +2311,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
             self._preprocessed_source = 'cut_range'
             self._preprocessors_applied = True
+            self._cut_range_previous_electron_count = None
+            self._cut_range_previous_source = None
             CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
             self._sync_range_slider_to_energy_axis(
                 np.asarray(self._preprocessed_electron_count.coords[self._eloss_name].values),
@@ -1787,6 +2323,49 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             self._preprocessed_source = None
             # Keep _preprocessed_electron_count and _applied_spike_threshold/_applied_spike_window in memory
             # so re-clicking Apply with the same values skips recomputation.
+            CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
+            self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
+        self._current_y_range = None
+        self._current_y_autorange = True
+
+        if restoring_cut_range:
+            self._refresh_paneA()
+        elif had_preprocessed and self._raw_paneA_base_overlay is not None and self.paneA is not None:
+            self._paneA_base_overlay = self._raw_paneA_base_overlay
+            self._update_selection_overlay(self._region_pairs)
+        else:
+            self._refresh_paneA()
+
+        self._refresh_paneB()
+        self._enable_sidebar_widgets()
+
+    def _on_revert_savgol(self):
+        """Stop applying Savitzky-Golay smoothing and restore raw or Cut Range data."""
+        had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
+
+        if self._apply_multifitting_button.is_on():
+            self._apply_multifitting_button.toggle()
+        self._multifitting_switch.value = False
+        self._multifit_input_had_spikes = False
+        self._multifit_input_had_savgol = False
+        self._multifit_previous_electron_count = None
+        self._multifit_previous_source = None
+
+        restoring_cut_range = self._cut_range_active and self._cut_range_preprocessed_electron_count is not None
+        if restoring_cut_range:
+            self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
+            self._preprocessed_source = 'cut_range'
+            self._preprocessors_applied = True
+            self._cut_range_previous_electron_count = None
+            self._cut_range_previous_source = None
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
+            self._sync_range_slider_to_energy_axis(
+                np.asarray(self._preprocessed_electron_count.coords[self._eloss_name].values),
+                reset_value=False,
+            )
+        else:
+            self._preprocessors_applied = False
+            self._preprocessed_source = None
             CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
             self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
         self._current_y_range = None
@@ -1850,18 +2429,33 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     # --- Pane A event handlers (hover / click / selected) ---
     def _on_paneA_hover(self, x=None, y=None):
         # HoloViews PointerXY delivers x, y directly as kwargs
-        if self._hover_blocked:
-            return
         if x is None or y is None:
             return
-        point = {"x": x, "y": y}
-        self._last_hover_point = point
+        self._queue_hover(x, y)
+
+    def _handle_hover_render(self, point):
+        if self._hover_blocked:
+            return
+        if (
+            not self._region_pairs
+            and not self._preprocessors_applied
+            and not self._fitting_active
+            and self._try_fast_hover_update(point)
+        ):
+            stop_pc(self._pc)
+            self._last_hover_ts = None
+            return
+        current_pixel = (round(point["y"]), round(point["x"]))
+        now = self._now_ms()
+        self._last_hover_render_ts = now
+        self._last_rendered_pixel = current_pixel
+
         if self._region_pairs:
-            self._show_spectrum(point=point, region_pairs=self._region_pairs)
-            self._last_hover_ts = self._now_ms()
+            self._show_spectrum(point=point, region_pairs=self._region_pairs, is_hover_event=True)
+            self._last_hover_ts = now
             start_pc(self._pc)
         else:
-            self._show_spectrum(point=point)
+            self._show_spectrum(point=point, is_hover_event=True)
             stop_pc(self._pc)
             self._last_hover_ts = None
 
@@ -1871,6 +2465,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             return
         if x is None or y is None:
             return
+        # Force re-render on click even if same pixel (user intent is explicit).
+        self._last_rendered_pixel = None
         point = {"x": x, "y": y}
         self._last_hover_point = point
         if self._region_pairs:
@@ -1891,6 +2487,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         """Commit selection: reset y-range so paneB auto-scales to the new spectrum, then run base logic."""
         self._current_y_range = None
         self._current_y_autorange = True
+        self._last_rendered_pixel = None  # force re-render on next hover even at same pixel
         self._debug_paneB_state("process_selection_before_base")
         super()._process_selection(index)
         stop_pc(self._pc)
@@ -1904,6 +2501,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     @override
     def _on_paneA_double_tap(self, x=None, y=None):
         """Reset selection (base), stop inactivity timer, optionally show hover spectrum."""
+        self._last_rendered_pixel = None  # force re-render on next hover even at same pixel
         super()._on_paneA_double_tap(x, y)
         stop_pc(self._pc)
         self._last_hover_ts = None
@@ -1958,6 +2556,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._fitting_switch = pn.widgets.Switch()
         self._spike_threshold_slider = pn.widgets.FloatSlider()
         self._spike_window_slider = pn.widgets.IntSlider()
+        self._savgol_window_select = pn.widgets.Select()
+        self._savgol_polyorder_select = pn.widgets.Select()
         self._multifitting_switch = pn.widgets.Switch()
         self._cut_range_min_input = pn.widgets.FloatInput()
         self._cut_range_max_input = pn.widgets.FloatInput()
@@ -1965,8 +2565,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._apply_cut_range_button = ToggleButton()
         self._cut_range_active = False
         self._cut_range_preprocessed_electron_count = None
+        self._cut_range_previous_electron_count = None
+        self._cut_range_previous_source = None
         self._applied_cut_range = None
         self._apply_remove_spikes_button = ToggleButton()
+        self._apply_savgol_button = ToggleButton()
         self._apply_multifitting_button = ToggleButton()
         self._preprocessors_applied = False
         self._preprocessed_source = None
@@ -1974,8 +2577,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
         self._multifit_input_had_spikes = False
+        self._multifit_input_had_savgol = False
         self._despiked_cube = None
         self._despike_cache_signature = None
+        self._savgol_cube = None
+        self._savgol_cache_signature = None
+        self._applied_savgol_window = None
+        self._applied_savgol_polyorder = None
         self._multifit_cube = None
         self._multifit_cache_signature = None
         self._raw_paneA_base_overlay = None

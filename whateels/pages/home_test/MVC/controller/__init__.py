@@ -1,0 +1,100 @@
+import weakref
+import panel as pn
+import gc
+from .services import *
+from whateels.errors.dm.data import (
+    DMFileLoadingError,
+    DMFileUploadError,
+    DMShapeMismatchError,
+    DMFileRemovalError,
+)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..model import HomePageModel
+    from ..view import HomePageView
+    from xarray import Dataset
+
+class HomePageController:
+    """
+    Controller class for the home page of the WhatEELS application.
+
+    Responsibilities:
+    - Orchestrate file upload and removal events
+    - Coordinate between services (file processing, data processing, interaction handling)
+    - Manage workflow and UI state transitions by instructing the View
+    - Delegate business logic to specialized services
+    """
+
+    def __init__(self, model: "HomePageModel", view: "HomePageView"):
+        self._model = model
+        self._view = view
+
+        # Register view cleanup when this session ends.
+        # HomePageModel is created fresh each navigation (new Bokeh session each time),
+        # so this registers exactly once per session — no duplicate guard needed.
+        _view_ref = weakref.ref(view)
+        pn.state.on_session_destroyed(lambda _: (v := _view_ref()) and v.cleanup())
+
+        # Initialize file processing services
+        self._file_processor = FileProcessorService(model)
+        
+        # Set up callbacks for file uploader events
+        # self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
+        # self._view.left_sidebar.file_uploader.on_file_removed_callback = self._handle_file_removal
+        
+        if all_datasets := getattr(self._model.app_state, "all_datasets", None):
+            # Initial layout setup based on existing datasets
+            self._view.create_tab_and_dataset_info(all_datasets)
+            
+    def _handle_file_upload(self, filename: str, signals: list):
+        print(f"[home_rosetta] File: {filename}")
+        print(f"[home_rosetta] Signal count: {len(signals)}")
+        for i, sig in enumerate(signals):
+            data = sig.get("data")
+            print(f"  [{i}] shape={getattr(data, 'shape', None)}  dtype={getattr(data, 'dtype', None)}")
+            print(f"       axes={sig.get('axes')}")
+            print(f"       metadata keys={sorted(sig.get('metadata', {}).keys())}")
+
+        
+    def _handle_file_removal(self, filename: str) -> None:
+        """
+        Handle file removal: cleanup UI, clear datasets, reset application state.
+        
+        Args:
+            filename: Name of removed file
+            
+        Raises:
+            DMFileRemovalError: When cleanup operations fail
+        """
+        try:
+            # Stop streams and release dataset refs on all active plot instances
+            # before clearing the UI — this is what actually frees the numpy memory.
+            self._view.cleanup_plots()
+            self._file_processor.cleanup_active_temp_file()
+
+            # Clear UI components
+            self._view.left_sidebar.remove_dataset_info()
+            self._view.main.empty_placeholder()
+            self._view.right_sidebar.preprocessed_settings.clear()
+            
+            # Clear in-memory file to free resources (only exists for byte uploads)
+            if hasattr(self._model, 'in_memory_file'):
+                del self._model.in_memory_file
+            
+            # Clear global AppState data
+            self._model.app_state.clear_all()
+
+            # Clear homepage-specific AppState fields that other pages may also
+            # write to, but which must be released here to free the numpy data.
+            self._model.app_state.plot_dataset = None
+            self._model.app_state.multifit = None
+
+            # Force GC to reclaim numpy arrays and HoloViews objects immediately
+            gc.collect()
+
+        except Exception as e:
+            raise DMFileRemovalError(e)
+    
+    def cleanup(self):
+        """Clean up resources before page reload or session end."""
+        self._view.cleanup()

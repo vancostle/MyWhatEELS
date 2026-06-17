@@ -112,7 +112,7 @@ class ClusteringView:
             chosen_plot = plots_factory.choose_plot(str(dataset_type), dataset)
 
             if chosen_plot is None:
-                print(f"No plot found for dataset type: {dataset_type}")
+                # print(f"No plot found for dataset type: {dataset_type}")
                 return
 
             chosen_plot_created = chosen_plot.create_plots()

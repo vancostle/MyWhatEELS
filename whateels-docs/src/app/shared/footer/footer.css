@@ -1,0 +1,117 @@
+:host {
+    display: flex;
+    font-family: "Lexend", sans-serif;
+    padding: 0 2rem var(--margin-header-content) 2rem;
+
+    & footer {
+        flex: 1;
+        flex-direction: column;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+    }
+
+    & > nav {
+        display: flex;
+
+        & ul {
+            flex: 1;
+        }
+    }
+
+    & nav.ub-social-media {
+
+        & > ul {
+            display: flex;
+            justify-content: space-between;
+            gap: 2rem;
+
+            & li {
+                display: grid;
+                gap: .5rem;
+
+                &:first-of-type {
+                    display: grid;
+                    place-items: center;
+                }
+
+                & > ul {
+                    display: flex;
+                    gap: .5rem;
+
+                    & li {
+                        display: flex;
+                        gap: .5rem;
+                        align-items: center;
+
+                        & h5 {
+                            font-size: .8rem;
+                        }
+
+                        & a {
+                            text-decoration: none;
+                            color: var(--ui-accent-normal);
+                            font-size: .8rem;
+
+                            &:hover {
+                                color: var(--ui-accent-dark);
+                            }
+                        }
+
+                        & i {
+                            color: var(--ui-accent-light);
+                            font-size: 1.5rem;
+
+                            &:hover {
+                                color: var(--ui-brand-secondary);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    & nav.partner-affiliations {
+        display: flex;
+
+        & ul {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            gap: 2rem;
+
+            & li a:hover {
+                opacity: 0.8;
+            }
+
+            & img {
+                max-width: 90px;
+                width: 100%;
+                height: auto;
+
+            }
+        }
+    }
+}
+
+@media (width <= 1024px) {
+    :host {
+        padding: 0 .75rem calc(var(--margin-header-content) / 2) .75rem;
+    }
+}
+
+@media (width <= 768px) {
+    :host {
+        & nav.ub-social-media {
+            & h5 {
+                display: none;
+            }
+            & img {
+                max-width: 268px;
+                width: 100%;
+                height: auto;
+            }
+        }
+    }
+}

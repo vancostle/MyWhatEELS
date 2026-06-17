@@ -1,0 +1,33 @@
+<nav>
+    <ul>
+        <li>
+            <button class="menu-button" (click)="leftSidebarService.open()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </li>
+        <li>
+            <a href="./">
+                <app-logo [width]="40" [height]="40"></app-logo>
+            </a>
+        </li>
+        <li>
+            <app-search-button></app-search-button>
+        </li>
+        <li>
+            <ul class="extra-options">
+                <li>
+                    <a href="https://download-whateels-9k5k.onrender.com/" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-download"></i>
+                    </a>
+                </li>
+                <li>
+                    <div class="floating-menu-container">
+                        <a href="https://github.com/AndryAlexis/MyWhatEELS" target="_blank" rel="noopener noreferrer">
+                            <i class="fa-brands fa-github"></i>
+                        </a>
+                    </div>
+                </li>
+            </ul>
+        </li>
+    </ul>
+</nav>

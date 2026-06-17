@@ -7,6 +7,10 @@ if TYPE_CHECKING:
 
 class ElementItemView(pn.Column):
     _STRETCH_WIDTH = 'stretch_width'
+    _EXPANDED_COLOR = "#ca4bc8"
+    _COLLAPSED_COLOR = "#7373da"
+    _DELETE_COLOR = "#dc3545"
+    _BUTTON_TEXT_COLOR = "#ffffff"
 
     def __init__(self, controller, element_item: "ElementItem", model, energy, 
                 view : "QuantificationView", expandable: bool = True):
@@ -23,7 +27,14 @@ class ElementItemView(pn.Column):
 
         self.delete_button = pn.widgets.Button(
             name='Delete',
-            button_type='danger'
+            button_type='default',
+            stylesheets=[f"""
+            button, .bk-btn {{
+                background-color: {self._DELETE_COLOR} !important;
+                border-color: {self._DELETE_COLOR} !important;
+                color: {self._BUTTON_TEXT_COLOR} !important;
+            }}
+            """],
         )
 
         # State identifiers
@@ -34,10 +45,24 @@ class ElementItemView(pn.Column):
         _NAME = 'label'
         _ON_CLICK = 'on_click'
         _BUTTON_TYPE = 'button_type'
+        _COLOR = 'color'
+        _TEXT_COLOR = 'text_color'
 
         states = {
-            _ON: {_NAME: "\u25B2 " + element_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'success'},
-            _OFF: {_NAME: "\u25BC " + element_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'primary'}
+            _ON: {
+                _NAME: "\u25B2 " + element_item.__str__(),
+                _ON_CLICK: (),
+                _BUTTON_TYPE: 'default',
+                _COLOR: self._EXPANDED_COLOR,
+                _TEXT_COLOR: self._BUTTON_TEXT_COLOR,
+            },
+            _OFF: {
+                _NAME: "\u25BC " + element_item.__str__(),
+                _ON_CLICK: (),
+                _BUTTON_TYPE: 'default',
+                _COLOR: self._COLLAPSED_COLOR,
+                _TEXT_COLOR: self._BUTTON_TEXT_COLOR,
+            },
         }
 
         self.slider_button = ToggleButton(
@@ -70,7 +95,7 @@ class ElementItemView(pn.Column):
 
         self.quant_width_input = pn.widgets.FloatInput(
             name='Quantification Width',
-            value=50.,
+            value=element_item.quant_width,
             step=1e-1,
             styles={"margin": "0", "padding": "0 1rem 1rem 2rem"},
             visible=False
@@ -111,6 +136,7 @@ class ElementItemView(pn.Column):
     def _chemical_shift_watcher(self, event):
         self.element_item.chemical_shift = event.new
         self[2].end = self.energy[1] - self.element_item.chemical_shift
+        self.element_item._refresh_quant_range()
         self._controller.plot_elements()
 
     def _fit_range_watcher(self, event):

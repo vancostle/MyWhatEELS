@@ -1,0 +1,18 @@
+<aside>
+    <nav>
+        <ul>
+            <li>
+                <h4>
+                    On this page
+                </h4>
+            </li>
+            @for (section of sections(); track section.slug) {
+                <li>
+                    <a [routerLink]="[]" [fragment]="section.slug" [class.active]="isActive(section.slug)">
+                        {{ section.title }}
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+</aside>

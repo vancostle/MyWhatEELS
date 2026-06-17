@@ -46,13 +46,13 @@ class HomePageController:
             # Initial layout setup based on existing datasets
             self._view.create_tab_and_dataset_info(all_datasets)
             
-    def _handle_file_upload(self, filename: str, file_content: bytes):
+    def _handle_file_upload(self, filename: str, file_content: str):
         """
         Handle complete file upload workflow: process file → create visualizations → update UI.
         
         Args:
             filename: Uploaded file name
-            file_content: Binary file content
+            file_content: Full local path to the selected file on disk
             
         Returns:
             bool: True if successful, False if failed
@@ -62,6 +62,9 @@ class HomePageController:
         """
 
         try:
+            # Release previous plot resources before loading a new file.
+            self._view.cleanup_plots()
+
             # Clear any existing datasets and metadata
             app_state = self._model.app_state
             app_state.clear_all()
@@ -97,7 +100,7 @@ class HomePageController:
         except Exception as e:
             self._view.main.error_placeholder()
             raise DMFileUploadError(e)
-        
+
         
     def _handle_file_removal(self, filename: str) -> None:
         """
@@ -117,9 +120,7 @@ class HomePageController:
             # Clear UI components
             self._view.left_sidebar.remove_dataset_info()
             self._view.main.empty_placeholder()
-            
-            # Clear in-memory file to free resources
-            del self._model.in_memory_file
+            self._view.right_sidebar.preprocessed_settings.clear()
             
             # Clear global AppState data
             self._model.app_state.clear_all()

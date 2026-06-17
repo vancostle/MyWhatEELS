@@ -1,0 +1,34 @@
+{
+  "categories": [
+    {
+      "name": "introduction",
+      "order": 1,
+      "pages": [
+        "index",
+        "whateels"
+      ]
+    },
+    {
+      "name": "about",
+      "order": 2,
+      "pages": [
+        "lens group",
+        "index",
+        "university of barcelona"
+      ]
+    },
+    {
+      "name": "whateels pages",
+      "order": 3,
+      "pages": [
+        "home",
+        "metadata",
+        "fitting",
+        "index",
+        "clustering",
+        "advanced clustering",
+        "quantification"
+      ]
+    }
+  ]
+}

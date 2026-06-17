@@ -53,8 +53,30 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         # Store the watchers so we can unwatch on session destruction — otherwise
         # every page visit permanently adds callbacks to the app_state singleton,
         # each holding a strong ref to this template instance via the bound method.
-        self._metadata_watcher = app_state.param.watch(self._update_navigation_header, 'metadata')
-        self._tab_index_watcher = app_state.param.watch(self._update_navigation_header, 'selected_tab_index_dataset', onlychanged=False)
+        #
+        # IMPORTANT: `_update_navigation_header` must always run in THIS session's
+        # document context, not the caller's. When any page sets a shared app_state
+        # param (e.g. selected_tab_index_dataset), ALL session watchers fire —
+        # potentially with another session's curdoc active. That causes Panel to
+        # attach ImportedStyleSheet Bokeh models to the wrong document, triggering:
+        #   "Models must be owned by only a single document"
+        # Fix: capture this session's document and schedule via add_next_tick_callback
+        # so the update always executes inside the correct Bokeh document lock.
+        _own_doc = pn.state.curdoc
+
+        def _doc_safe_update_header(event):
+            if _own_doc is not None:
+                try:
+                    _own_doc.add_next_tick_callback(
+                        lambda: self._update_navigation_header(event)
+                    )
+                except Exception:
+                    pass  # session may have ended between the watch firing and the callback
+            else:
+                self._update_navigation_header(event)
+
+        self._metadata_watcher = app_state.param.watch(_doc_safe_update_header, 'metadata')
+        self._tab_index_watcher = app_state.param.watch(_doc_safe_update_header, 'selected_tab_index_dataset', onlychanged=False)
 
         # Unwatch when this session ends so the template can be garbage collected
         _self_ref = _weakref.ref(self)
@@ -137,9 +159,9 @@ class GeneralPageTemplate(pn.template.FastListTemplate):
         
         clustering_2_href = f'/clustering-2?tab={str(selected_tab_index)}' if is_eels_tab else '/clustering-2'
         # clustering_2_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS
-        clustering_2_a_element = f'<a href="{clustering_2_href}" class="{LINK_ENABLE_ANIMATION_CLASS}">Clustering 2</a>'
+        clustering_2_a_element = f'<a href="{clustering_2_href}" class="{LINK_ENABLE_ANIMATION_CLASS}">Adv. Clustering</a>'
         
-        navigation_links.append((clustering_2_a_element,"Clustering 2"))
+        navigation_links.append((clustering_2_a_element,"Adv. Clustering"))
         
         quantification_href = f'/quantification?tab={str(selected_tab_index)}' if is_eels_tab else '/#'
         quantification_class = LINK_ENABLE_ANIMATION_CLASS if is_eels_tab else LINK_DISABLE_CLASS

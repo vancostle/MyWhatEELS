@@ -1,0 +1,24 @@
+<aside>
+    <nav (click)="onNavigationClick($event)">
+        <ul class="mobile-menu-header">
+            <li>
+                <button class="close-button" (click)="leftSidebarService.close()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </li>
+            <li>
+                <a href="/">
+                    <app-logo [width]="40" [height]="40"></app-logo>
+                </a>
+            </li>
+        </ul>
+        <ul>
+            @for (section of sections(); track section.title) {
+                <li>
+                    <app-section [title]="section.title" [href]="section.href" [items]="section.items"></app-section>
+                </li>
+            }
+        </ul>
+    </nav>
+</aside>
+<div class="background" (click)="leftSidebarService.close()"></div>

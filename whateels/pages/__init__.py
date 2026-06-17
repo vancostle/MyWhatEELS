@@ -1,5 +1,5 @@
 from .home import HomePage
-from .fitting import Fitting
+from .home_test import HomePageTest
 from .login import Login
 from .metadata import Metadata
 from .clustering import Clustering
@@ -8,10 +8,11 @@ from .quantification import Quantification
 from .demo import DemoPage
 from .login import Login
 from .clustering_2 import Clustering2Page
+from .fitting import Fitting
 
 __all__ = [
-    "HomePage", 
-    "NLLS", 
+    "HomePage",
+    "HomePageTest",
     "Login", 
     "Metadata", 
     "Clustering", 
@@ -19,5 +20,6 @@ __all__ = [
     "Quantification", 
     "DemoPage",
     "Login",
-    "Clustering2Page"
+    "Clustering2Page",
+    "Fitting",
 ]

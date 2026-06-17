@@ -30,29 +30,50 @@ class ClusteringRightSidebarLayout(pn.Column):
         )
 
         self._kmeans_input = None  # Dictionary to hold K-Means input widgets
+        self._kmeans_color_picker = pn.widgets.ColorPicker(
+            name='Color Picker',
+            value='#ffffff',
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10,0,0,0),
+            disabled=True
+        )
         self._kmeans_run_button = pn.widgets.Button(
             name='Run K-Means',
             button_type='success',
             height=55,
-            margin=(20,0,0,0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
         self._agglomerative_input = None  # Dictionary to hold Agglomerative input widgets
+        self._agglomerative_color_picker = pn.widgets.ColorPicker(
+            name='Color Picker',
+            value='#ffffff',
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10,0,0,0),
+            disabled=True
+        )
         self._agglomerative_run_button = pn.widgets.Button(
             name='Run Agglomerative',
             button_type='success',
             height=55,
-            margin=(20,0,0,0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
         self._spectral_input = None  # Dictionary to hold Spectral input widgets
+        self._spectral_color_picker = pn.widgets.ColorPicker(
+            name='Color Picker',
+            value='#ffffff',
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10,0,0,0),
+            disabled=True,
+        )
         self._spectral_run_button = pn.widgets.Button(
             name='Run Spectral',
             button_type='success',
             height=55,
-            margin=(20,0,0,0),
+            margin=(15,0,0,0),
             sizing_mode=self._STRETCH_WIDTH
         )
 
@@ -92,7 +113,19 @@ class ClusteringRightSidebarLayout(pn.Column):
     @property
     def kmeans_input(self):
         """Access the K-Means clustering input widgets."""
-        return self._kmeans_input   
+        return self._kmeans_input
+    @property
+    def kmeans_color_picker(self):
+        """Access the K-Means color picker widget."""
+        return self._kmeans_color_picker
+    @property
+    def agglomerative_color_picker(self):
+        """Access the Agglomerative color picker widget."""
+        return self._agglomerative_color_picker
+    @property
+    def spectral_color_picker(self):
+        """Access the Spectral color picker widget."""
+        return self._spectral_color_picker
         
     def _create_layout(self):
         background_subtraction_label = pn.pane.Markdown(
@@ -238,7 +271,13 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["kmeans-input-container"]
             ),
-            self._kmeans_run_button,
+            pn.Row(
+                self._kmeans_run_button,
+                self._kmeans_color_picker,
+                margin=0,
+                sizing_mode=self._STRETCH_WIDTH,
+                styles={'display' : 'flex', 'gap' : '10px'}
+            ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["kmeans-tab"]
         )
@@ -298,7 +337,13 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["agglomerative-input-container"]
             ),
-            self._agglomerative_run_button,
+            pn.Row(
+                self._agglomerative_run_button,
+                self._agglomerative_color_picker,
+                margin=0,
+                styles={'display' : 'flex', 'gap' : '10px'},
+                sizing_mode=self._STRETCH_WIDTH,
+            ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["agglomerative-tab"]
         )
@@ -365,7 +410,13 @@ class ClusteringRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["spectral-input-container"]
             ),
-            self._spectral_run_button,
+            pn.Row(
+                self._spectral_run_button,
+                self._spectral_color_picker,
+                margin=0,
+                styles={'display' : 'flex', 'gap' : '10px'},
+                sizing_mode=self._STRETCH_WIDTH,
+            ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["spectral-tab"]
         )

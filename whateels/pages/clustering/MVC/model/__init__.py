@@ -129,7 +129,7 @@ class ClusteringModel:
             return np.asarray(preprocessed["ElectronCount"].fillna(0.0))
                 
         except Exception as e:
-            print(f"Error retrieving preprocessed data: {e}")
+            # print(f"Error retrieving preprocessed data: {e}")
             import traceback
             traceback.print_exc()
             return None

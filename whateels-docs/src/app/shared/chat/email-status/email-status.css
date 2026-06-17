@@ -1,0 +1,116 @@
+:host {
+    display: flex;
+    flex: 1;
+    font-family: "Lexend", sans-serif;
+    font-size: 1rem;
+
+    height: 500px;
+    width: 312.5px;
+
+    min-height: 500px;
+    min-width: 312.5px;
+
+    & .email-status {
+
+        background-color: white;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+
+        & > main {
+            flex: 1;
+        }
+    }
+
+    & .email-status-header {
+        background-color: var(--ui-brand-secondary);
+        color: white;
+        padding: 0.5rem;
+        font-weight: bold;
+        font-size: .9rem;
+        min-height: 2rem;
+        display: flex;
+        align-items: center;
+
+        & h6 {
+            opacity: 0.8;
+        }
+    }
+
+    & .email-status-body {
+        flex: 1;
+        padding: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+
+        & .loading-spinner {
+            width: 30px;
+            height: 30px;
+
+            border: 2px solid white;
+            border-radius: 50%;
+            border-top-color: var(--ui-brand-secondary);
+            animation: spin 0.8s linear infinite;
+        }
+
+        & > i {
+            font-size: 2rem;
+            
+            &.fa-circle-check {
+                color: #1d4ed8;
+            }
+            &.fa-circle-xmark {
+                color: #e53935;
+            }
+        }
+
+        & p {
+            text-align: center;
+            color: var(--ui-accent-dark);
+            line-height: 1.2;
+        }
+    }
+
+    & .suggestions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+
+        & > button, & > a {
+            padding: 0.25rem 0.5rem;
+            background-color: white;
+            color: var(--ui-accent-normal);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: .8rem;
+            font-family: inherit;
+            font-weight: 400;
+
+            border: 1px solid var(--ui-accent-normal);
+            flex: 1;
+
+            &:hover {
+                border: 1px solid var(--ui-brand-secondary);
+                color: var(--ui-brand-secondary);
+            }
+        }
+
+        & > a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

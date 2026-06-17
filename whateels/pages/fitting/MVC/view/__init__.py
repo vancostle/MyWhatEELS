@@ -224,15 +224,13 @@ class FittingView:
         )
         
         details = SimpleDetails(
-            title="Nlls Instructions",
+            title="NLLS Instructions",
             content=pn.Column(
                 *[widget for widget in self._component_model_input.values()],
                 self._fitting_add_compontent_button,
                 sizing_mode=self._STRETCH_WIDTH
             ),
             expanded=True,
-            button_type_on_collapse='primary',
-            button_type_on_expand='success',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0,0,10,0)
         )

@@ -1,0 +1,50 @@
+<div class="search-container">
+    <div class="search-input">
+        <i class="fas fa-search" aria-hidden="true"></i>
+        <input
+            [formControl]="searchQuery"
+            type="text"
+            placeholder="Find something..."
+            autocomplete="off"
+            role="combobox"
+            aria-label="Search documentation"
+            aria-haspopup="listbox"
+            aria-autocomplete="list"
+            aria-controls="search-results-list"
+        />
+    </div>
+    <div class="search-results">
+        <nav class="results">
+            @if (hasQuery()) {
+                <ul id="search-results-list" role="listbox" aria-label="Search results">
+                        @for (result of searchResults(); track trackByHref($index, result)) {
+                            <li
+                                class="result-item"
+                                role="option"
+                            >
+                                <a aria-selected="false" [routerLink]="result.href" (click)="searchModalService.close()">
+                                    {{ result.page }}
+                                    <p>
+                                        {{ result.category }}
+                                    </p>
+                                </a>
+                            </li>
+                        }
+                </ul>
+            }
+            @if (hasNoResults()) {
+                <ul id="empty-search-results-list" role="listbox" aria-label="Search results">
+                    <li
+                        class="result-item"
+                        role="option"
+                    >
+                        <p>
+                            No matching pages found.
+                        </p>
+                    </li>
+                </ul>
+            }
+        </nav>
+    </div>
+</div>
+<div class="background" (click)="searchModalService.close()" aria-hidden="true"></div>

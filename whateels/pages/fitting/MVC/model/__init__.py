@@ -307,7 +307,32 @@ class FittingModel(BaseModel):
         Fit the current reference spectrum using the composed model and parameters.
         Returns the fit results.
         """
-        self.ref_results = self._models.fit(self._spectra, params = self._pars, x = self._Eloss)
+        spectra = np.asarray(self._spectra, dtype=float)
+        eloss = np.asarray(self._Eloss, dtype=float)
+
+        if spectra.ndim != 1:
+            spectra = np.ravel(spectra)
+        if eloss.ndim != 1:
+            eloss = np.ravel(eloss)
+
+        # Align lengths in case of mismatch (e.g. preprocessed vs raw axis size)
+        min_len = min(len(spectra), len(eloss))
+        spectra = spectra[:min_len]
+        eloss = eloss[:min_len]
+
+        # Strip NaN/Inf — the preprocessed dataset has NaN where the energy axis was
+        # trimmed (cropped max Eloss on the Home page). lmfit cannot handle NaN values.
+        valid = np.isfinite(spectra) & np.isfinite(eloss)
+        if not np.any(valid):
+            raise ValueError(
+                "Fitting: no valid (non-NaN/Inf) data points in the selected ROI spectrum. "
+                "The energy window may be entirely within the cropped region."
+            )
+        spectra = spectra[valid]
+        eloss = eloss[valid]
+
+        self._fit_eloss = eloss  # valid x-axis used for this fit (NaN stripped)
+        self.ref_results = self._models.fit(spectra, params=self._pars, x=eloss)
         return self.ref_results
 
     def get_energy_map(self):

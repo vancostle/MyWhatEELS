@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            display: grid;
+            place-items: center;
+
+            height: 100vh;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+
+            padding: 10px;
+        }
+
+        h2, p {
+            font-size: .9rem;
+            font-weight: normal;
+        }
+
+        .component-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 275px;
+            height: auto;
+        }
+
+        .file-uploader-wrapper {
+            width: 100%;
+            height: 70px;
+
+            position: relative;
+            display: flex;
+
+            overflow: clip;
+            position: relative;
+
+            border-radius: 9px;
+
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .path-option-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+
+            padding: 0 .5rem 0 .5rem;
+            gap: .25rem;
+
+            width: 100%;
+
+            & > form {
+                padding: .5rem;
+                width: 100%;
+
+                display: flex;
+                flex-direction: row;
+                justify-content: center;
+                align-items: center;
+                background-color: #f8f8f8;
+                overflow: clip;
+                border-radius: 0 0 8px 8px;
+                box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
+                gap: .5rem;
+
+                & input {
+                    display: flex;
+                }
+
+                & input:not([type="submit"]) {
+                    flex: 1;
+                    border-radius: 4px;
+                    border: 1px solid #ccc;
+                    width: 100%;
+
+                    &:focus {
+                        outline: none;
+                        border-color: #3182ce;
+                    }
+                }
+
+                & button{
+                    width: 1.3rem;
+                    height: 1.3rem;
+                    background-color: transparent;
+                    color: white;
+                    border: none;
+                    padding: 0;
+                    cursor: pointer;
+                    border-radius: 4px;
+
+                    &:hover {
+                        fill: #b946b8;
+                    }
+                }
+            }
+        }
+
+        #file-zone {
+            flex: 1;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            padding: 0;
+            width: inherit;
+            height: inherit;
+            background-color: #f1f1f1;
+
+            & h2 {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                color: #35373b;
+
+                max-width: 100%;
+                padding: 0 12px;
+
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            &:hover {
+                cursor: pointer;
+
+                & h2 {
+                    color: rgb(43, 43, 43);
+                    text-decoration: underline;
+                }
+            }
+        }
+
+        section.state {
+            position: absolute;
+            z-index: 1;
+
+            transition: transform 0.7s cubic-bezier(.68,-0.55,.27,1.55);
+            
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+
+            width: 100%;
+            height: 100%;
+            padding: 7px;
+            
+            z-index: 1;
+
+            & > div {
+                display: flex;
+                flex: 1;
+                width: inherit;
+                height: inherit;
+                align-items: center;
+                justify-content: space-between;
+                border-radius: 8px;
+                padding: .5rem 1rem;
+                gap: .5rem;
+
+                box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.2);
+                color: white;
+                width: inherit;
+
+                & > p {
+                    flex: 1;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    max-width: 100%;
+                    padding: 0;
+
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+            }
+        }
+
+        section.state.loading {
+            top: -50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+
+            & > div {
+                background-color: #3182ce;
+            }
+
+            & .spinner {
+                border: 4px solid rgba(255, 255, 255, 0.3);
+                border-top: 4px solid white;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                animation: spin 1s linear infinite;
+            }
+        }
+
+        section.state.opening {
+            top: 150%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+
+            & > div {
+                background-color: #a0aec0;
+            }
+
+            & .spinner {
+                border: 4px solid rgba(255, 255, 255, 0.3);
+                border-top: 4px solid white;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                animation: spin 1s linear infinite;
+            }
+        }
+
+        section.state.success {
+            top: 50%;
+            left: 100%;
+            transform: translate(0%, -50%);
+
+            & > div {
+                background-color: #38a170;
+            }
+
+            & .remove-file {
+                background-color: #1b650c;
+            }
+        }
+
+        section.state.failed {
+            top: 50%;
+            right: 100%;
+            transform: translate(0%, -50%);
+
+            & > div {
+                background-color: rgb(170, 19, 19);
+            }
+
+            & .remove-file {
+                background-color: rgb(80, 13, 13);
+            }
+        }
+
+        .remove-file {
+            width: 24.5px;
+            height: 24.5px;
+
+            min-width: 24.5px;
+            min-height: 24.5px;
+
+            border: 0;
+            border-radius: 50%;
+            box-shadow: none;
+
+            display: grid;
+            place-items: center;
+
+            position: relative;
+
+            rotate: 45deg;
+            transition: scale 0.2s ease-in-out, background-color 0.2s ease-in-out;
+
+            &::before, &::after {
+                content: '';
+                position: absolute;
+                width: 4px;
+                height: calc(100% - 8px);
+                background-color: white;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                border-radius: 2px;
+                transition: background-color 0.2s ease-in-out;
+            }
+
+            &::after {
+                /* Centered horizontally, vertical bar */
+                transform: translate(-50%, -50%) rotate(90deg);
+            }
+
+            &:hover {
+                cursor: pointer;
+                scale: 1.2;
+                background-color: white;
+            }
+        }
+
+        section.state.opening.actived-opening-dialog-state {
+            transform: translate(-50%, -150%);
+        }
+
+        section.state.loading.actived-reading-file-state {
+            transform: translate(-50%, 50%);
+        }
+
+        section.state.success.actived-success-state {
+            transform: translate(-100%, -50%);
+        }
+
+        section.state.failed.actived-failed-state {
+            transform: translate(100%, -50%);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="component-wrapper">
+        <div class="file-uploader-wrapper">
+            <section id="file-zone" title="Click to select a dm3 or dm4 file">
+                <h2>Click to select a dm3 or dm4 file</h2>
+            </section>
+            <section class="opening state">
+                <div>
+                    <p>
+                        Opening dialog...
+                    </p>
+                    <div class="spinner"></div>
+                </div>
+            </section>
+            <section class="loading state">
+                <div>
+                    <p>
+                        Reading file...
+                    </p>
+                    <div class="spinner"></div>
+                </div>
+            </section>
+            <section class="success state" title="PON AQUI RUTA">
+                <div>
+                    <p>
+                        STEM SI_HL.dm4 
+                    </p>
+                    <button class="remove-file success"></button>
+                </div>
+            </section>
+            <section class="failed state">
+                <div>
+                    <p>
+                        Failed to upload file!
+                    </p>
+                    <button class="remove-file failed"></button>
+                </div>
+            </section>
+        </div>
+        <div class="path-option-wrapper">
+            <form >
+                <input type="text" placeholder="Or paste the file path here">
+                <!-- <input type="submit" value="Ok"> -->
+                <button>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M416 160L480 160C497.7 160 512 174.3 512 192L512 448C512 465.7 497.7 480 480 480L416 480C398.3 480 384 494.3 384 512C384 529.7 398.3 544 416 544L480 544C533 544 576 501 576 448L576 192C576 139 533 96 480 96L416 96C398.3 96 384 110.3 384 128C384 145.7 398.3 160 416 160zM406.6 342.6C419.1 330.1 419.1 309.8 406.6 297.3L278.6 169.3C266.1 156.8 245.8 156.8 233.3 169.3C220.8 181.8 220.8 202.1 233.3 214.6L306.7 288L96 288C78.3 288 64 302.3 64 320C64 337.7 78.3 352 96 352L306.7 352L233.3 425.4C220.8 437.9 220.8 458.2 233.3 470.7C245.8 483.2 266.1 483.2 278.6 470.7L406.6 342.7z"/></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div>
+        <button class="active-open-dialog-button">
+            Activate open dialog
+        </button>
+        <button class="active-success-button">
+            Activate success
+        </button>
+        <button class="active-failed-button">
+            Activate failed
+        </button>
+        <button class="active-reading-file-button">
+            Activate reading file
+        </button>
+    </div>
+   
+</body>
+<!-- <script>
+    /* HEADER THE CODE TO CREATE THE WHOLE LAYOUT */
+    const createCustomFileUploader = _ => {
+        // Component wrapper
+        const componentWrapper = document.createElement('div');
+        componentWrapper.className = 'component-wrapper';
+
+        // File uploader wrapper
+        const fileUploaderWrapper = document.createElement('div');
+        fileUploaderWrapper.className = 'file-uploader-wrapper';
+
+        // File zone
+        const fileZone = document.createElement('section');
+        fileZone.id = 'file-zone';
+        fileZone.title = 'Click to select a dm3 or dm4 file';
+        const fileZoneH2 = document.createElement('h2');
+        fileZoneH2.textContent = 'Click to select a dm3 or dm4 file';
+        fileZone.appendChild(fileZoneH2);
+
+        // Opening state
+        const openingSection = document.createElement('section');
+        openingSection.className = 'opening state';
+        const openingDiv = document.createElement('div');
+        const openingP = document.createElement('p');
+        openingP.textContent = 'Opening dialog...';
+        const openingSpinner = document.createElement('div');
+        openingSpinner.className = 'spinner';
+        openingDiv.appendChild(openingP);
+        openingDiv.appendChild(openingSpinner);
+        openingSection.appendChild(openingDiv);
+
+        // Loading state
+        const loadingSection = document.createElement('section');
+        loadingSection.className = 'loading state';
+        const loadingDiv = document.createElement('div');
+        const loadingP = document.createElement('p');
+        loadingP.textContent = 'Reading file...';
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        loadingDiv.appendChild(loadingP);
+        loadingDiv.appendChild(spinner);
+        loadingSection.appendChild(loadingDiv);
+
+        // Success state
+        const successSection = document.createElement('section');
+        successSection.className = 'success state';
+        const successDiv = document.createElement('div');
+        const successP = document.createElement('p');
+        successP.textContent = 'STEM SI_HL.dm4';
+        const removeSuccessBtn = document.createElement('button');
+        removeSuccessBtn.className = 'remove-file success';
+        removeSuccessBtn.addEventListener('click', _ => {
+            openingSection.classList.remove('actived-opening-dialog-state');
+            successSection.classList.remove('actived-success-state');
+            loadingSection.classList.remove('actived-reading-file-state');
+            failedSection.classList.remove('actived-failed-state');
+        });
+        successDiv.appendChild(successP);
+        successDiv.appendChild(removeSuccessBtn);
+        successSection.appendChild(successDiv);
+
+        // Failed state
+        const failedSection = document.createElement('section');
+        failedSection.className = 'failed state';
+        const failedDiv = document.createElement('div');
+        const failedP = document.createElement('p');
+        failedP.textContent = 'Failed to upload file!';
+        const removeFailedBtn = document.createElement('button');
+        removeFailedBtn.className = 'remove-file failed';
+        removeFailedBtn.addEventListener('click', _ => {
+            openingSection.classList.remove('actived-opening-dialog-state');
+            failedSection.classList.remove('actived-failed-state');
+            loadingSection.classList.remove('actived-reading-file-state');
+            successSection.classList.remove('actived-success-state');
+        });
+        failedDiv.appendChild(failedP);
+        failedDiv.appendChild(removeFailedBtn);
+        failedSection.appendChild(failedDiv);
+
+        // Append all sections to fileUploaderWrapper
+        fileUploaderWrapper.appendChild(fileZone);
+        fileUploaderWrapper.appendChild(openingSection);
+        fileUploaderWrapper.appendChild(loadingSection);
+        fileUploaderWrapper.appendChild(successSection);
+        fileUploaderWrapper.appendChild(failedSection);
+
+        // Path option wrapper
+        const pathOptionWrapper = document.createElement('div');
+        pathOptionWrapper.className = 'path-option-wrapper';
+        const form = document.createElement('form');
+        const inputText = document.createElement('input');
+        inputText.type = 'text';
+        inputText.placeholder = 'Or paste the file path here';
+        const inputSubmit = document.createElement('input');
+        inputSubmit.type = 'submit';
+        inputSubmit.value = 'Ok';
+        form.appendChild(inputText);
+        form.appendChild(inputSubmit);
+        pathOptionWrapper.appendChild(form);
+
+        // Add wrappers to componentWrapper
+        componentWrapper.appendChild(fileUploaderWrapper);
+        componentWrapper.appendChild(pathOptionWrapper);
+
+        // Controls (outside componentWrapper)
+        const controlsDiv = document.createElement('div');
+        const btnOpenDialog = document.createElement('button');
+        btnOpenDialog.className = 'active-open-dialog-button';
+        btnOpenDialog.textContent = 'Activate open dialog';
+        const btnSuccess = document.createElement('button');
+        btnSuccess.className = 'active-success-button';
+        btnSuccess.textContent = 'Activate success';
+        const btnFailed = document.createElement('button');
+        btnFailed.className = 'active-failed-button';
+        btnFailed.textContent = 'Activate failed';
+        const btnLoading = document.createElement('button');
+        btnLoading.className = 'active-reading-file-button';
+        btnLoading.textContent = 'Activate reading file';
+        controlsDiv.appendChild(btnOpenDialog);
+        controlsDiv.appendChild(btnSuccess);
+        controlsDiv.appendChild(btnFailed);
+        controlsDiv.appendChild(btnLoading);
+
+        // Add to body
+        document.body.appendChild(componentWrapper);
+        document.body.appendChild(controlsDiv);
+    }
+
+    // Call the function after DOM is ready
+    createCustomFileUploader();
+</script> -->
+<script>
+    const fileZone = document.getElementById('file-zone');
+    const openingSection = document.querySelector('section.opening');
+    const loadingSection = document.querySelector('section.loading');
+    const successSection = document.querySelector('section.success');
+    const failedSection = document.querySelector('section.failed');
+
+    const openFileDialog = _ => {
+        openingSection.classList.add('actived-opening-dialog-state');
+        loadingSection.classList.remove('actived-reading-file-state');
+        successSection.classList.remove('actived-success-state');
+        failedSection.classList.remove('actived-failed-state');
+    }
+
+    const activateLoadingState = _ => {
+        loadingSection.classList.add('actived-reading-file-state');
+        openingSection.classList.remove('actived-opening-dialog-state');
+        successSection.classList.remove('actived-success-state');
+        failedSection.classList.remove('actived-failed-state');
+    }
+
+    const activateSuccessState = _ => {
+        successSection.classList.add('actived-success-state');
+        openingSection.classList.remove('actived-opening-dialog-state');
+        loadingSection.classList.remove('actived-reading-file-state');
+        failedSection.classList.remove('actived-failed-state');
+    }
+
+    const activateFailedState = _ => {
+        failedSection.classList.add('actived-failed-state');
+        openingSection.classList.remove('actived-opening-dialog-state');
+        loadingSection.classList.remove('actived-reading-file-state');
+        successSection.classList.remove('actived-success-state');
+    }
+
+    document.querySelector('.active-open-dialog-button').addEventListener('click', openFileDialog);
+    document.querySelector('.active-reading-file-button').addEventListener('click', activateLoadingState);
+    document.querySelector('.active-success-button').addEventListener('click', activateSuccessState);
+    document.querySelector('.active-failed-button').addEventListener('click', activateFailedState);
+
+</script>
+
+</html>

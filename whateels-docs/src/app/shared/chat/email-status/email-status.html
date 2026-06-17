@@ -1,0 +1,35 @@
+<article class="email-status">
+    @if (emailStatusService.state() === 'loading') {
+        <header class="email-status-header">
+            <h6>Sending Email...</h6>
+        </header>
+        <main class="email-status-body">
+            <div class="loading-spinner" aria-live="polite" aria-label="Sending email"></div>
+            <p class="email-status-message">Your email is being sent. Please wait...</p>
+        </main>
+    } @else if (emailStatusService.state() === 'success') {
+        <header class="email-status-header">
+            <h6>Email sent successfully</h6>
+        </header>
+        <main class="email-status-body">
+            <i class="fa-regular fa-circle-check"></i>
+            <p class="email-status-message">Your email has been sent successfully.</p>
+            <div class="suggestions">
+                <button (click)="sendAnotherEmail()">
+                    Send another email
+                </button>
+            </div>
+        </main>
+    } @else {
+        <header class="email-status-header">
+            <h6>Error Sending Email</h6>
+        </header>
+        <main class="email-status-body">
+            <i class="fa-regular fa-circle-xmark"></i>
+            <p class="email-status-message">There was an error sending your email.</p>
+            <div class="suggestions">
+                <a href="mailto:vcostale@ub.edu">Send email by your own</a>
+            </div>
+        </main>
+    }
+</article>

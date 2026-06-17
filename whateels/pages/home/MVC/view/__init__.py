@@ -19,8 +19,9 @@ class HomePageView:
     def __init__(self, model: "HomePageModel"):
         self._model = model
         
-        # Load any provided CSS files
-        pn.config.css_files.append('/assets/css/home.css') # type: ignore
+        # Load any provided CSS files (guard avoids duplicate ImportedStyleSheet models)
+        if '/assets/css/home.css' not in pn.config.css_files: # type: ignore
+            pn.config.css_files.append('/assets/css/home.css') # type: ignore
         
         # Layout components
         self._main = HomePageMainLayout(model)
@@ -115,15 +116,12 @@ class HomePageView:
                     raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
 
                 # Wire the plot's fitting SimpleDetails into the sidebar
-                if isinstance(chosen_plot, SpectrumImagePlot):
-                    self._right_sidebar.set_cut_range_details(chosen_plot.create_cut_range_details())
-                    self._right_sidebar.set_fitting_details(chosen_plot.create_fitting_details())
-                    self._right_sidebar.set_remove_spikes_details(chosen_plot.create_remove_spikes_details())
+                if isinstance(chosen_plot, SpectrumImagePlot):                    
                     chosen_plot.set_view_refs(self._main, plots_tab)
                 
-                visualizer_plots = chosen_plot.create_plots()
+                plots = chosen_plot.create_plots()
                 
-                plots_tab.append((image_name, visualizer_plots))
+                plots_tab.append((image_name, plots))
                 self._all_plots.append(chosen_plot)
                 self._all_dataset_info.append(chosen_plot.create_dataset_info())
 
@@ -131,7 +129,7 @@ class HomePageView:
             self._plots_tab = plots_tab
             
             # Watch for tab changes (new watcher on new tab object)
-            self._plots_tab_watcher = self._plots_tab.param.watch(self._on_tab_with_visualizers_change, ACTIVE, onlychanged=False)
+            self._plots_tab_watcher = self._plots_tab.param.watch(self._on_tab_with_plot_change, ACTIVE, onlychanged=False)
             
             # Set the active tab based on shared state or default
             plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
@@ -142,7 +140,7 @@ class HomePageView:
         except Exception as e:
             raise DMPlotCreationError(e)
 
-    def _on_tab_with_visualizers_change(self, event):
+    def _on_tab_with_plot_change(self, event):
         """Handle tab changes by updating sidebar with selected dataset info."""
 
         # Get the selected tab index
@@ -154,6 +152,13 @@ class HomePageView:
         # Update sidebar with the corresponding dataset info
         self._left_sidebar.remove_dataset_info()
         self._left_sidebar.add_component(self._all_dataset_info[selected_tab_index])
+        
+        self._right_sidebar.preprocessed_settings.clear()
+        if isinstance(self._all_plots[selected_tab_index], SpectrumImagePlot):
+            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_cut_range_details())
+            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_savgol_details())
+            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_remove_spikes_details())
+            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_fitting_details())
     
     def cleanup_plots(self):
         """Stop streams and release dataset references on all active plot instances.

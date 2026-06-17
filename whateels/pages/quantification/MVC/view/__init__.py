@@ -1,9 +1,10 @@
 import panel as pn
+from bokeh.models import Tooltip
 
 from whateels.helpers import CSS_ROOT
 from whateels.components import UploadedFile, ToggleButton, SimpleDetails, ModalManager
 from panel.pane import HTML
-from .modals import PeriodicTableOfElementsModal
+from .modals import PeriodicTableOfElementsModal, AtomModal
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ..model import QuantificationModel
@@ -15,6 +16,7 @@ class QuantificationView:
     _STRETCH_BOTH = "stretch_both"
     _STRETCH_HEIGHT = "stretch_height"
     _PERIODIC_TABLE_MODAL_ID = 'Periodic Table of Elements'
+    _ATOM_MODAL_ID = 'Atom Modal'
 
     def __init__(self, model: "QuantificationModel", custom_page: "GeneralPageTemplate"):
         self._model = model
@@ -49,6 +51,10 @@ class QuantificationView:
         self._modal_manager.register_modal(
             self._PERIODIC_TABLE_MODAL_ID,
             PeriodicTableOfElementsModal(custom_page=custom_page)
+        )
+        self._modal_manager.register_modal(
+            self._ATOM_MODAL_ID,
+            AtomModal(custom_page=custom_page)
         )
 
         self._init_components()
@@ -202,22 +208,56 @@ class QuantificationView:
           <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="currentColor" stroke="none">Element</text>
         </svg>
         """
-        ACTIVE_SVG = """
+        Z_ELEMENT_SVG = """
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="20" height="20" rx="2"/>
           <text x="5" y="8" font-size="4.5" font-family="Arial,sans-serif" fill="white" stroke="none">Z</text>
           <text x="12" y="16" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="white" stroke="none" font-weight="bold">E</text>
-          <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="white" stroke="none">Element</text>
+          <text x="12" y="20.5" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="white" stroke="none">Element</text>
+        </svg>
+        """
+        ATOM_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" opacity="0.9" stroke-width="1.5">
+        <!-- Fondo redondeado blanco -->
+        <rect x="2" y="2" width="20" height="20" rx="2" fill="white" stroke="black"/>
+        <!-- Órbita superior (elipse inclinada) -->
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(-30 12 10.5)"/>
+        <!-- Órbita inferior -->
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(30 12 10.5)"/>
+        <!-- Órbita horizontal -->
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="black" stroke-width="0.8" stroke-opacity="0.9" transform="rotate(90 12 10.5)"/>
+        <!-- Núcleo (círculo central) -->
+        <circle cx="12" cy="10.5" r="2.2" fill="black" stroke="none"/>
+        <!-- Electrón en órbita superior izquierda -->
+        <circle cx="6.5" cy="7" r="1" fill="black" stroke="none" opacity="0.85"/>
+        <!-- Electrón en órbita inferior -->
+        <circle cx="13" cy="17" r="1" fill="black" stroke="none" opacity="0.85"/>
+        <!-- Electrón en órbita superior derecha -->
+        <circle cx="17" cy="6.5" r="1" fill="black" stroke="none" opacity="0.85"/>
+        <!-- Texto -->
+        <text x="12" y="20.5" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="black" stroke="none">Model</text>
+        </svg>
+        """
+        ATOM_ACTIVE_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black" stroke="black" opacity="0.9" stroke-width="1.5">
+        <rect x="2" y="2" width="20" height="20" rx="2" fill="black" stroke="black"/>
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="white" stroke-width="0.8" stroke-opacity="0.95" transform="rotate(-30 12 10.5)"/>
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="white" stroke-width="0.8" stroke-opacity="0.95" transform="rotate(30 12 10.5)"/>
+        <ellipse cx="12" cy="10.5" rx="7" ry="3" fill="none" stroke="white" stroke-width="0.8" stroke-opacity="0.95" transform="rotate(90 12 10.5)"/>
+        <circle cx="12" cy="10.5" r="2.2" fill="white" stroke="none"/>
+        <circle cx="6.5" cy="7" r="1" fill="white" stroke="none" opacity="0.95"/>
+        <circle cx="13" cy="17" r="1" fill="white" stroke="none" opacity="0.95"/>
+        <circle cx="17" cy="6.5" r="1" fill="white" stroke="none" opacity="0.95"/>
+        <text x="12" y="20.5" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="white" stroke="none">Model</text>
         </svg>
         """
         
         periodic_table_button = pn.widgets.ButtonIcon(
             icon=SVG,
-            active_icon=ACTIVE_SVG,
+            active_icon=Z_ELEMENT_SVG,
             size='3em',
             margin=(21,2,0,8),
         )
-        
         periodic_table_button.on_click(lambda _ : self._modal_manager.open_modal(self._PERIODIC_TABLE_MODAL_ID))
         
         element_atomic_number_wrapper = pn.Row(
@@ -233,6 +273,13 @@ class QuantificationView:
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
+        )
+        add_element_tooltip = pn.widgets.TooltipIcon(
+            value=Tooltip(
+                content='You also must select an area in the left plot.',
+                position='left',
+            ),
+            width=30,
         )
 
         self._quanti_element_item = pn.Column(
@@ -250,13 +297,18 @@ class QuantificationView:
             content=pn.Column(
                 # *[widget for widget in self._quanti_input.values()],
                 element_atomic_number_wrapper,
-                self._quanti_input["shells_multiselect"],
-                self._quanti_add_element_button,
+                pn.Row(
+                    self._quanti_input["shells_multiselect"],
+                    sizing_mode=self._STRETCH_WIDTH,
+                ),
+                pn.Row(
+                    self._quanti_add_element_button,
+                    add_element_tooltip,
+                    sizing_mode=self._STRETCH_WIDTH,
+                ),
                 sizing_mode=self._STRETCH_WIDTH
             ),
             expanded=True,
-            button_type_on_collapse='primary',
-            button_type_on_expand='success',
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0,0,10,0)
         )
@@ -282,6 +334,14 @@ class QuantificationView:
             height=55,
             disabled=True
         )
+
+        atom_button = pn.widgets.ButtonIcon(
+            icon=ATOM_SVG,
+            active_icon=ATOM_ACTIVE_SVG,
+            size='3em',
+            margin=(11,2,0,8),
+        )
+        atom_button.on_click(lambda _ : self._modal_manager.open_modal(self._ATOM_MODAL_ID))
         
         self._quanti_run_button = pn.widgets.Button(
             name='Run Quantification',
@@ -303,11 +363,8 @@ class QuantificationView:
             details,
             self._element_item_view_container,
             pn.Row(
-                pn.widgets.TooltipIcon(
-                    value='You also must select an area in the left plot.',
-                    width=30,
-                ),
                 self._quanti_toggle_button,
+                atom_button,
                 sizing_mode=self._STRETCH_WIDTH,
                 margin=(10, 0, 0, 0)
             ),

@@ -1,16 +1,11 @@
 
-import time
-_whe_start_time = time.perf_counter()
+import sys
 import panel as pn
 import holoviews as hv
-from pathlib import Path
-from whateels.helpers import KillProcess, ASSETS_ROOT
-from whateels.pages.home import HomePage
-from whateels.pages.metadata import Metadata
-from whateels.pages.clustering import Clustering
-from whateels.pages.clustering_2 import Clustering2Page
-from whateels.pages.quantification import Quantification
-from whateels.pages.fitting import Fitting
+# Import only what is strictly needed for startup — avoids triggering
+# scipy/numpy imports that live in the full helpers package.
+from whateels.helpers.kill_process import KillProcess
+from whateels.helpers.constants import ASSETS_ROOT
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
@@ -45,6 +40,13 @@ class App:
         # Kill any process using the port
         KillProcess.by_port(port) # Ensure the port is free
 
+        # Imports are static so PyInstaller can trace them, but placed here
+        # (inside run()) so they execute AFTER the splash screen is already
+        # visible. Heavy deps (numpy, scipy) are only pulled in at this point.
+        
+        from whateels.pages import HomePage, Metadata, Clustering, Clustering2Page, Quantification, Fitting
+
+        # Return a loader function so each page is only instantiated when Panel opens it.
         def _lazy(page_cls):
             def _loader():
                 return page_cls()
@@ -67,4 +69,5 @@ class App:
             show=show,
             allow_websocket_origin=["*"],
             static_dirs={"assets": str(ASSETS_ROOT)},
+            on_session_destroyed=lambda _ : sys.exit(0) # Ensure full process termination on session close,
         )

@@ -3,7 +3,11 @@ Processes DM3/DM4 files to xarray datasets for electron microscopy.
 Pipeline: validate → extract → clean → create dataset → attach metadata → output xarray Dataset
 """
 
+import logging
 import os, numpy as np, xarray as xr
+import struct
+
+_log = logging.getLogger(__name__)
 from whateels.errors.dm import (
     DMEmptyInfoDictionary, 
     DMNonEelsError, 
@@ -11,10 +15,8 @@ from whateels.errors.dm import (
     DMFileLoadingError, 
     DMFileUploadError
 )
-from whateels.helpers.logging_utils import Logger
 from ..dm_file_processing import DM_EELS_Reader
 from .data_processor_service import DataProcessorService
-from whateels.helpers.in_memory_file import InMemoryFile
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -31,35 +33,70 @@ class FileProcessorService:
         Init with model config.
         """
         self._model = model
-        self._logger = Logger.get_logger("dm_file_reader.log", __name__)
 
     # -- Public Methods --
 
-    def process_upload(self, filename: str, file_content: bytes) -> list[xr.Dataset]:
+    def process_upload(self, filename: str, file_content: str) -> list[xr.Dataset]:
         """
-        Process uploaded file in memory and return datasets.
+        Process the uploaded file by validating and parsing it.
+
+        Args:
+            filename (str): The name of the uploaded file.
+            file_content (str): Full local path to the file on disk.
+
+        Returns:
+            list: Parsed datasets from the file.
+
+        Raises:
+            DMFileUploadError: If the file upload or processing fails.
         """
+        temp_path = file_content
+
+        # Validate file size before parsing.
+        # DM4 header bytes 4-11 store the body length (total_size - 16).
+        # We warn on mismatch but do not abort — the parser will handle partial files.
+        on_disk_size = os.path.getsize(temp_path)
         try:
-            # Create enhanced in-memory file-like object from uploaded content
-            self._model.in_memory_file = InMemoryFile(file_content, filename)
-            
-            # Log memory processing info
-            file_size_mb = len(file_content) / (1024**2)
-            self._logger.info(f"Processing file {filename} ({file_size_mb:.2f} MB) in memory")
+            with open(temp_path, "rb") as f:
+                header = f.read(12)
+            if len(header) >= 12:
+                dm_version = struct.unpack(">I", header[0:4])[0]
+                if dm_version == 4:
+                    body_len = struct.unpack(">Q", header[4:12])[0]
+                elif dm_version == 3:
+                    body_len = struct.unpack(">I", header[4:8])[0]
+                else:
+                    body_len = None
+                if body_len is not None:
+                    expected_total = body_len + 16
+                    if on_disk_size != expected_total:
+                        _log.warning(
+                            "[FileProcessor] Size mismatch for '%s': "
+                            "header expects %d bytes, on_disk=%d bytes (delta=%d). "
+                            "File may be incomplete — proceeding anyway.",
+                            filename, expected_total, on_disk_size, on_disk_size - expected_total,
+                        )
+        except Exception as exc:
+            _log.warning("[FileProcessor] Could not read DM header for size check: %s", exc)
 
-            # Load the DM3/DM4 file directly from memory
-            all_datasets = self._load_dm_file(self._model.in_memory_file)
-
-            if not all_datasets:
-                raise DMFileLoadingError(filename)
-            
-            self._logger.info(f"Successfully processed {len(all_datasets)} dataset(s) from memory")
-            return all_datasets
-            
-        except DMFileLoadingError:
-            raise DMFileLoadingError(f"Failed to load DM3/DM4 file: {filename}")
+        try:
+            all_datasets = self._load_dm_file(temp_path)
         except Exception as e:
             raise DMFileUploadError(e)
+
+        return all_datasets
+
+    def process_from_path(self, filepath: str) -> list[xr.Dataset]:
+        """
+        Load a DM file directly from a local path.
+        Bypasses the WebSocket/browser upload — no RAM buffering of the raw bytes.
+        """
+        if not os.path.isfile(filepath):
+            raise DMFileLoadingError(f"File not found: {filepath}")
+        all_datasets = self._load_dm_file(filepath)
+        if not all_datasets:
+            raise DMFileLoadingError(filepath)
+        return all_datasets
 
     # -- Private Methods --
 
@@ -102,9 +139,6 @@ class FileProcessorService:
         except Exception as exception:
             self._handle_file_error(exception)
             return []
-        finally:
-            # Clean up in-memory file reference
-            del self._model.in_memory_file
         
     def _store_metadata(self, infoDict: dict | None = None) -> None:
         """
@@ -131,7 +165,7 @@ class FileProcessorService:
         file_size = os.path.getsize(filepath)
 
         if file_size < MIN_FILE_SIZE:
-            print(FILE_SIZE_TOO_SMALL_MESSAGE)
+            # print(FILE_SIZE_TOO_SMALL_MESSAGE)
             return False
         return True
 

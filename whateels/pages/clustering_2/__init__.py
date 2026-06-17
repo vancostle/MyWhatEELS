@@ -10,20 +10,22 @@ class Clustering2Page(GeneralPageTemplate):
         
         if controller.is_valid_tab_and_dataset():
             super().__init__(
-                title="Clustering 2 Page",
+                title="Adv. Clustering Page",
                 main=[view.main],
                 sidebar=[view.left_sidebar],
                 right_sidebar=[view.right_sidebar],
                 modal=view.modals,
-                sidebar_width=275
+                sidebar_width=260,
+                collapsed_sidebar=True,
             )
             return
         
         super().__init__(
-            title="Clustering 2 Page",
+            title="Adv.Clustering Page",
             main=[view.main],
             sidebar=[view.left_sidebar],
             modal=view.modals,
-            sidebar_width=275
+            sidebar_width=260,
+            collapsed_sidebar=True,
         )
         

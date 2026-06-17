@@ -16,6 +16,11 @@ import numpy as np
 import time
 import holoviews as hv
 from holoviews import streams as hv_streams
+from bokeh.events import MouseLeave, MouseMove
+from bokeh.models import CustomJS
+import logging
+
+_logger = logging.getLogger(__name__)
 
 from whateels.helpers import SpectrumExtractor
 from whateels.interfaces import IPlot
@@ -40,6 +45,7 @@ class BaseSpectrumImagePlot(IPlot):
     # Default axis titles — subclasses may override
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+    _ROI_CHUNK_PIXELS = 4096
 
     def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss', paneA_select_tools=['lasso_select', 'box_select']):
         """
@@ -70,9 +76,34 @@ class BaseSpectrumImagePlot(IPlot):
         self._region_rows = np.array([], dtype=np.int32)
         self._region_cols = np.array([], dtype=np.int32)
         self._last_hover_point = None
+        self._last_hover_pixel = None
+        self._hover_last_event_ts = None
+        self._hover_last_render_ts = None
+        self._hover_pending_point = None
+        self._hover_last_event_pixel = None
+        self._hover_last_event_xy = None
+        self._HOVER_FPS = 30
+        self._HOVER_ACTIVE_WINDOW_MS = 120
+        self._hover_pc = None
+        self._hover_gate_widget = pn.widgets.TextInput(
+            value='',
+            visible=False,
+            disabled=True,
+            sizing_mode='fixed',
+            width=1,
+            height=1,
+        )
+        self._hover_gate_watcher = self._hover_gate_widget.param.watch(
+            self._on_hover_gate_value_changed, 'value'
+        )
+
+        # Numpy cache for fast pixel/ROI reads (avoid xarray overhead on hover).
+        self._display_numpy_cache = None
+        self._display_numpy_cache_source = None
 
         # Overlay + lasso debounce state — must exist before _setup_plots() runs
         self._paneA_base_overlay = None
+        self._hover_source = None
         self._selection_overlay = hv.Rectangles([], kdims=['x0', 'y0', 'x1', 'y1'])
         self._selection_pairs_ref = None
         self._hover_blocked = False
@@ -120,6 +151,7 @@ class BaseSpectrumImagePlot(IPlot):
         """
         left_column = pn.Column(
             self.paneA,
+            self._hover_gate_widget,
             sizing_mode='stretch_both',
             margin=0
         )
@@ -177,6 +209,14 @@ class BaseSpectrumImagePlot(IPlot):
             raise RuntimeError("Electron count data is not set. Make sure the dataset has an 'ElectronCount' attribute and is loaded correctly.")
         return self._electron_count_data
 
+    def _get_display_numpy(self):
+        """Return a cached numpy array for fast pixel/ROI access."""
+        data = self._get_display_data()
+        if self._display_numpy_cache_source is not data:
+            self._display_numpy_cache = SpectrumExtractor._as_row_col_energy(data)
+            self._display_numpy_cache_source = data
+        return self._display_numpy_cache
+
     # --- Plot / Pane Setup (HoloViews) ---
     def _setup_plots(self):
         """
@@ -223,14 +263,23 @@ class BaseSpectrumImagePlot(IPlot):
             size=0,
             alpha=0,
             nonselection_alpha=0,
-            tools=['lasso_select', 'box_select'],
+            tools=self._paneA_select_tools,
             shared_axes=False,
         )
 
         # Overlay: heatmap + selection layer
         overlay = (img * self._selectors).opts( # type: ignore
-            hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False)
+            hv.opts.Overlay(
+                responsive=True,
+                aspect='equal',
+                shared_axes=False,
+                hooks=[self._client_hover_gate_hook],
+            )
         )
+
+        # Use the heatmap itself as the hover source to avoid hit-testing the
+        # invisible selection points on every mouse move.
+        self._hover_source = img
 
         self.paneA = pn.pane.HoloViews(
             overlay,
@@ -258,11 +307,14 @@ class BaseSpectrumImagePlot(IPlot):
 
     def _setup_callbacks(self):
         """Wire HoloViews streams to interaction handlers."""
+        if self._hover_gate_widget is not None:
+            self._hover_stream = None
+        elif self._hover_source is not None:
+            self._hover_stream = hv_streams.PointerXY(source=self._hover_source)
+            self._hover_stream.add_subscriber(self._on_paneA_hover)
         if self._selectors is not None:
-            self._hover_stream = hv_streams.PointerXY(source=self._selectors)
             self._tap_stream = hv_streams.Tap(source=self._selectors)
             self._selection_stream = hv_streams.Selection1D(source=self._selectors)
-            self._hover_stream.add_subscriber(self._on_paneA_hover)
             self._tap_stream.add_subscriber(self._on_paneA_click)
             self._selection_stream.add_subscriber(self._on_paneA_selected)
 
@@ -274,6 +326,15 @@ class BaseSpectrumImagePlot(IPlot):
         self._debounce_pc = pn.state.add_periodic_callback(
             self._check_selection_debounce, period=250, start=False
         )
+        # Periodic callback to flush the hover queue (started on first hover)
+        try:
+            hover_period = max(10, int(self._get_hover_period_ms()))
+        except Exception:
+            hover_period = 33
+        try:
+            self._hover_pc = pn.state.add_periodic_callback(self._flush_hover_queue, period=hover_period, start=False)
+        except Exception:
+            _logger.exception("Failed to create hover periodic callback")
         # DoubleTap stream to reset lasso selection
         if self._selectors is not None:
             self._double_tap_stream = hv_streams.DoubleTap(source=self._selectors)
@@ -286,7 +347,15 @@ class BaseSpectrumImagePlot(IPlot):
         if not point:
             point = {"x": 0, "y": 0}
         i, j = round(point["y"]), round(point["x"])
-        spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
+        spec = None
+        data_values = self._get_display_numpy()
+        try:
+            spec = data_values[i, j, :]
+        except Exception:
+            try:
+                spec = data_values[j, i, :]
+            except Exception:
+                spec = SpectrumExtractor.get_spectrum_from_pixel(self._get_display_data(), i, j)
         return hv.Curve(
             (self._energy, spec),
             kdims=['x'],
@@ -325,17 +394,101 @@ class BaseSpectrumImagePlot(IPlot):
             framewise=True,
         )
 
-    def _get_spectrum_from_indices_fast(self, pairs):
-        """Fast ROI spectrum extraction using cached row/col arrays when available."""
-        if not pairs:
+    @staticmethod
+    def _roi_sum_dtype(data_values):
+        """Use a wide accumulator to avoid integer overflow during large ROI sums."""
+        return np.complex128 if np.iscomplexobj(data_values) else np.float64
+
+    @staticmethod
+    def _rectangular_roi_bounds(rows, cols):
+        """Return rectangular ROI bounds when rows/cols cover a complete rectangle."""
+        if rows.size == 0 or cols.size == 0 or rows.size != cols.size:
             return None
 
-        data_values = self._get_display_data().values
+        row_min = int(rows.min())
+        row_max = int(rows.max())
+        col_min = int(cols.min())
+        col_max = int(cols.max())
+        row_count = row_max - row_min + 1
+        col_count = col_max - col_min + 1
+        if row_count <= 0 or col_count <= 0:
+            return None
+
+        rect_size = row_count * col_count
+        if rect_size != int(rows.size):
+            return None
+
+        flat = (
+            (rows.astype(np.int64, copy=False) - row_min) * col_count
+            + (cols.astype(np.int64, copy=False) - col_min)
+        )
+        if np.unique(flat).size != rows.size:
+            return None
+
+        return row_min, row_max, col_min, col_max
+
+    def _sum_rectangular_roi(self, data_values, rows, cols):
+        """Sum a complete rectangular ROI via slicing, avoiding advanced-index copies."""
+        bounds = self._rectangular_roi_bounds(rows, cols)
+        if bounds is None or data_values.ndim != 3:
+            return None
+
+        row_min, row_max, col_min, col_max = bounds
+        if (
+            row_min < 0
+            or col_min < 0
+            or row_max >= data_values.shape[0]
+            or col_max >= data_values.shape[1]
+        ):
+            return None
+
+        block = data_values[row_min:row_max + 1, col_min:col_max + 1, :]
+        spec = np.sum(block, axis=(0, 1), dtype=self._roi_sum_dtype(data_values))
+        return spec, int(rows.size)
+
+    def _sum_indexed_roi_chunked(self, data_values, rows, cols):
+        """Sum an arbitrary ROI in bounded chunks to keep lasso memory use stable."""
+        if data_values.ndim != 3 or rows.size == 0 or cols.size == 0 or rows.size != cols.size:
+            return None
+
+        if (
+            int(rows.min()) < 0
+            or int(cols.min()) < 0
+            or int(rows.max()) >= data_values.shape[0]
+            or int(cols.max()) >= data_values.shape[1]
+        ):
+            return None
+
+        dtype = self._roi_sum_dtype(data_values)
+        acc = np.zeros(data_values.shape[-1], dtype=dtype)
+        n_points = int(rows.size)
+        chunk_size = max(1, int(self._ROI_CHUNK_PIXELS))
+        for start in range(0, n_points, chunk_size):
+            stop = min(start + chunk_size, n_points)
+            acc += np.sum(
+                data_values[rows[start:stop], cols[start:stop], :],
+                axis=0,
+                dtype=dtype,
+            )
+        return acc, n_points
+
+    def _get_spectrum_from_indices_fast(self, pairs):
+        """Fast ROI spectrum extraction using cached row/col arrays when available."""
+        if pairs is None:
+            return None
+        try:
+            n_pairs = len(pairs)
+        except TypeError:
+            return None
+        if n_pairs == 0:
+            return None
+
+        data_values = self._get_display_numpy()
 
         use_cached = (
             pairs is self._region_pairs
             and self._region_rows.size > 0
-            and self._region_rows.size == len(pairs)
+            and self._region_rows.size == n_pairs
         )
 
         if use_cached:
@@ -355,13 +508,25 @@ class BaseSpectrumImagePlot(IPlot):
                 return None
 
         try:
-            block = data_values[ii, jj, :]
-            return block.sum(axis=0), len(pairs)
+            rect_result = self._sum_rectangular_roi(data_values, ii, jj)
+            if rect_result is not None:
+                return rect_result
+
+            chunked_result = self._sum_indexed_roi_chunked(data_values, ii, jj)
+            if chunked_result is not None:
+                return chunked_result
+            raise IndexError("ROI indices do not match display data shape.")
         except Exception:
             # Fallback for data cubes using (x, y, E) order.
             try:
-                block = data_values[jj, ii, :]
-                return block.sum(axis=0), len(pairs)
+                rect_result = self._sum_rectangular_roi(data_values, jj, ii)
+                if rect_result is not None:
+                    return rect_result
+
+                chunked_result = self._sum_indexed_roi_chunked(data_values, jj, ii)
+                if chunked_result is not None:
+                    return chunked_result
+                raise IndexError("Swapped ROI indices do not match display data shape.")
             except Exception:
                 return SpectrumExtractor.get_spectrum_from_indices(self._get_display_data(), pairs)
 
@@ -373,6 +538,132 @@ class BaseSpectrumImagePlot(IPlot):
             if fig is not None and not isinstance(fig, hv.Overlay):
                 fig = hv.Overlay([fig])
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+
+    def _client_hover_gate_hook(self, plot, element):
+        """Install a browser-side mousemove gate that only syncs true pixel changes."""
+        try:
+            fig = getattr(plot, 'state', None)
+            if fig is None or getattr(fig, 'id', None) is None:
+                return
+            self._attach_hover_gate_to_fig(fig)
+        except Exception:
+            _logger.exception("_client_hover_gate_hook failed")
+
+    def _resolve_hover_gate_model(self, fig):
+        """Return the gate TextInput bokeh model living in the same document as fig."""
+        widget = self._hover_gate_widget
+        models = getattr(widget, '_models', {}) if widget is not None else {}
+        candidates = []
+        for value in models.values():
+            try:
+                model = value[0]
+            except Exception:
+                model = None
+            if model is not None:
+                candidates.append(model)
+        if not candidates:
+            return None, False
+        fig_doc = getattr(fig, 'document', None)
+        if fig_doc is not None:
+            for model in candidates:
+                if getattr(model, 'document', None) is fig_doc:
+                    return model, True
+        # No document-level match (yet) — most recent render as last resort.
+        return candidates[-1], False
+
+    def _attach_hover_gate_to_fig(self, fig, retries: int = 5):
+        """Wire the MouseMove/MouseLeave gate JS on a paneA figure.
+
+        paneA can render before the (hidden) gate widget — both at initial page
+        load and when an outer layout is swapped back in (e.g. clustering
+        restoring the plots after showing its progress display). In that case
+        the gate widget has no bokeh model yet (or only a stale one from the
+        destroyed layout), so attaching is retried on the next server tick
+        until a gate model in the figure's own document exists.
+        """
+        if self._hover_gate_widget is None or getattr(fig, '_whatEELS_hover_gate_attached', False):
+            return
+
+        gate_model, doc_matched = self._resolve_hover_gate_model(fig)
+        if not doc_matched and retries > 0:
+            try:
+                doc = pn.state.curdoc
+            except Exception:
+                doc = None
+            if doc is not None:
+                doc.add_next_tick_callback(
+                    lambda: self._attach_hover_gate_to_fig(fig, retries=retries - 1)
+                )
+                return
+        if gate_model is None:
+            return
+
+        move_code = """
+            if (!window.__whatEELS_hoverGate) {
+                window.__whatEELS_hoverGate = {x: null, y: null};
+            }
+            const x = Math.round(cb_obj.x);
+            const y = Math.round(cb_obj.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) {
+                return;
+            }
+            const state = window.__whatEELS_hoverGate;
+            if (state.x === x && state.y === y) {
+                return;
+            }
+            state.x = x;
+            state.y = y;
+            gate.value = JSON.stringify({x: x, y: y, t: Date.now()});
+        """
+        leave_code = """
+            gate.value = '';
+            if (window.__whatEELS_hoverGate) {
+                window.__whatEELS_hoverGate.x = null;
+                window.__whatEELS_hoverGate.y = null;
+            }
+        """
+
+        fig.js_on_event(MouseMove, CustomJS(args={'gate': gate_model}, code=move_code))
+        fig.js_on_event(MouseLeave, CustomJS(args={'gate': gate_model}, code=leave_code))
+        try:
+            fig._whatEELS_hover_gate_attached = True
+        except Exception:
+            pass
+
+    def _on_hover_gate_value_changed(self, event):
+        value = getattr(event, 'new', '') or ''
+        if not value:
+            self._hover_pending_point = None
+            self._hover_last_event_ts = None
+            self._hover_last_event_pixel = None
+            self._hover_last_event_xy = None
+            if self._hover_pc is not None and self._hover_pc.running:
+                self._hover_pc.stop()
+            return
+
+        try:
+            import json
+            data = json.loads(value) if isinstance(value, str) else value
+            x = data.get('x', None)
+            y = data.get('y', None)
+            if x is None or y is None:
+                return
+            point = {'x': float(x), 'y': float(y)}
+        except Exception:
+            return
+
+        current_pixel = (round(point['y']), round(point['x']))
+        if self._last_hover_pixel == current_pixel:
+            return
+
+        self._last_hover_point = point
+        self._last_hover_pixel = current_pixel
+        self._hover_pending_point = None
+        self._hover_last_event_pixel = current_pixel
+        self._hover_last_event_xy = (point['x'], point['y'])
+        self._hover_last_event_ts = self._now_ms()
+        self._hover_last_render_ts = self._hover_last_event_ts
+        self._handle_hover_render(point)
 
     def _show_spectrum(self, *, point=None, region_pairs=None):
         """
@@ -476,11 +767,13 @@ class BaseSpectrumImagePlot(IPlot):
             self._selection_pairs_ref = None
         if self._paneA_base_overlay is not None and self.paneA is not None:
             self.paneA.object = (
-                self._paneA_base_overlay * self._selection_overlay
+                self._paneA_base_overlay * self._selection_overlay # type: ignore
             ).opts(
                 hv.opts.Overlay(
-                    responsive=True, aspect='equal', shared_axes=False,
-                    active_tools=['lasso_select'],
+                    responsive=True, 
+                    aspect='equal', 
+                    shared_axes=False,
+                    hooks=[self._client_hover_gate_hook]
                 )
             )
 
@@ -488,19 +781,18 @@ class BaseSpectrumImagePlot(IPlot):
         """Handle PointerXY hover — show pixel spectrum unless region is selected."""
         if x is None or y is None:
             return
-        point = {"x": x, "y": y}
-        self._last_hover_point = point
-        if self._region_pairs:
-            self._show_spectrum(point=point, region_pairs=self._region_pairs)
-        else:
-            self._show_spectrum(point=point)
+        self._queue_hover(x, y)
 
     def _on_paneA_click(self, x=None, y=None):
         """Handle Tap click — same as hover in the base implementation."""
         if x is None or y is None:
             return
+        self._last_hover_pixel = (round(y), round(x))
         point = {"x": x, "y": y}
         self._last_hover_point = point
+        self._hover_pending_point = None
+        self._hover_last_event_ts = None
+        self._hover_last_render_ts = self._now_ms()
         if self._region_pairs:
             self._show_spectrum(point=point, region_pairs=self._region_pairs)
         else:
@@ -533,6 +825,9 @@ class BaseSpectrumImagePlot(IPlot):
         self._region_pairs = []
         self._region_rows = np.array([], dtype=np.int32)
         self._region_cols = np.array([], dtype=np.int32)
+        self._last_hover_pixel = None
+        self._hover_pending_point = None
+        self._hover_last_event_ts = None
         self._pending_selection_index = None
         self._pending_selection_ts = None
         self._update_selection_overlay([])
@@ -591,6 +886,138 @@ class BaseSpectrumImagePlot(IPlot):
     def _set_ranges_and_convert(self, fig):
         return self._apply_current_ranges(fig)
 
+    def _get_live_paneB_bokeh_plot(self):
+        """Return the live bokeh figure for paneB, if it exists."""
+        try:
+            models = getattr(self.paneB, '_models', {}) if self.paneB is not None else {}
+            model_tuple = next(iter(models.values()), None) if models else None
+            if model_tuple:
+                return model_tuple[0]
+        except Exception:
+            pass
+        return None
+
+    def _try_fast_hover_update(self, point) -> bool:
+        """Update the live paneB line data in-place for hover when possible."""
+        bokeh_plot = self._get_live_paneB_bokeh_plot()
+        if bokeh_plot is None:
+            return False
+
+        try:
+            renderer = None
+            for candidate in getattr(bokeh_plot, 'renderers', []) or []:
+                if hasattr(candidate, 'data_source'):
+                    source = getattr(candidate, 'data_source', None)
+                    if source is not None and 'x' in source.data and 'y' in source.data:
+                        renderer = candidate
+                        break
+            if renderer is None:
+                return False
+
+            i, j = round(point['y']), round(point['x'])
+            data_values = self._get_display_numpy()
+            try:
+                spec = data_values[i, j, :]
+            except Exception:
+                try:
+                    spec = data_values[j, i, :]
+                except Exception:
+                    return False
+
+            source = renderer.data_source
+            source.data = {
+                'x': self._energy,
+                'y': spec,
+            }
+            return True
+        except Exception:
+            _logger.exception("_try_fast_hover_update failed")
+            return False
+
+    def _get_hover_period_ms(self) -> int:
+        try:
+            if self._HOVER_FPS and self._HOVER_FPS > 0:
+                return max(10, int(1000 / float(self._HOVER_FPS)))
+        except Exception:
+            pass
+        return 33
+
+    def _queue_hover(self, x, y):
+        if self._hover_blocked:
+            return
+        current_xy = (float(x), float(y))
+        last_xy = self._hover_last_event_xy
+        if last_xy is not None:
+            dx = abs(current_xy[0] - last_xy[0])
+            dy = abs(current_xy[1] - last_xy[1])
+            # Ignore micro-jitter and exact repeats from PointerXY.
+            if max(dx, dy) < 0.9:
+                return
+        current_pixel = (round(y), round(x))
+        if self._hover_last_event_pixel == current_pixel:
+            return
+        self._hover_last_event_xy = current_xy
+        self._hover_last_event_pixel = current_pixel
+        point = {"x": x, "y": y}
+        self._last_hover_point = point
+        self._hover_pending_point = point
+        self._hover_last_event_ts = self._now_ms()
+        if self._hover_pc is not None and not self._hover_pc.running:
+            self._hover_pc.start()
+
+    def _flush_hover_queue(self):
+        if self._hover_pending_point is None:
+            if self._hover_pc is not None and self._hover_pc.running:
+                self._hover_pc.stop()
+            return
+
+        now = self._now_ms()
+        if self._hover_last_event_ts is None:
+            if self._hover_pc is not None and self._hover_pc.running:
+                self._hover_pc.stop()
+            return
+
+        # If there has been no movement for at least one tick and we're still on
+        # the same pixel, stop the hover loop immediately.
+        current_pixel = (round(self._hover_pending_point["y"]), round(self._hover_pending_point["x"]))
+        if (
+            self._last_hover_pixel == current_pixel
+            and (now - int(self._hover_last_event_ts)) > self._get_hover_period_ms()
+        ):
+            self._hover_pending_point = None
+            if self._hover_pc is not None and self._hover_pc.running:
+                self._hover_pc.stop()
+            return
+
+        if now - int(self._hover_last_event_ts) > self._HOVER_ACTIVE_WINDOW_MS:
+            self._hover_pending_point = None
+            if self._hover_pc is not None and self._hover_pc.running:
+                self._hover_pc.stop()
+            return
+
+        if self._hover_last_render_ts is not None:
+            if (now - int(self._hover_last_render_ts)) < self._get_hover_period_ms():
+                return
+
+        point = self._hover_pending_point
+        current_pixel = (round(point["y"]), round(point["x"]))
+        if self._last_hover_pixel == current_pixel:
+            return
+
+        self._last_hover_pixel = current_pixel
+        self._hover_last_render_ts = now
+        self._handle_hover_render(point)
+        # Only render once per queued hover; require a new event to render again.
+        self._hover_pending_point = None
+
+    def _handle_hover_render(self, point):
+        if not self._region_pairs and self._try_fast_hover_update(point):
+            return
+        if self._region_pairs:
+            self._show_spectrum(point=point, region_pairs=self._region_pairs)
+        else:
+            self._show_spectrum(point=point)
+
     def cleanup(self):
         """Unsubscribe all HoloViews streams and release dataset references."""
         # Stop and clean up debounce periodic callback
@@ -601,6 +1028,14 @@ class BaseSpectrumImagePlot(IPlot):
             except Exception:
                 pass
             self._debounce_pc = None
+
+        if self._hover_pc is not None:
+            try:
+                if self._hover_pc.running:
+                    self._hover_pc.stop()
+            except Exception:
+                pass
+            self._hover_pc = None
 
         # Remove subscribers first — streams hold strong refs to bound methods
         # (e.g. self._on_paneA_hover), which would keep this plot alive via the
@@ -638,10 +1073,18 @@ class BaseSpectrumImagePlot(IPlot):
         self._dataset = None  # type: ignore[assignment]
         self._e_axis = None  # type: ignore[assignment]
         self._electron_count_data = None  # type: ignore[assignment]
+        self._display_numpy_cache = None
+        self._display_numpy_cache_source = None
         self._energy = None  # type: ignore[assignment]
         self._region_pairs = []
         self._region_rows = np.array([], dtype=np.int32)
         self._region_cols = np.array([], dtype=np.int32)
+        self._last_hover_pixel = None
+        self._hover_pending_point = None
+        self._hover_last_event_ts = None
+        self._hover_last_render_ts = None
+        self._hover_last_event_pixel = None
+        self._hover_last_event_xy = None
         self.paneA = None
         self.paneB = None
         self._selectors = None
@@ -654,5 +1097,13 @@ class BaseSpectrumImagePlot(IPlot):
         self._paneB_dmap = None
         self._plots_layout = None
         self._paneA_base_overlay = None
+        self._hover_source = None
+        if self._hover_gate_watcher is not None and self._hover_gate_widget is not None:
+            try:
+                self._hover_gate_widget.param.unwatch(self._hover_gate_watcher)
+            except Exception:
+                pass
+        self._hover_gate_watcher = None
+        self._hover_gate_widget = None
         self._selection_overlay = None
         self._selection_pairs_ref = None

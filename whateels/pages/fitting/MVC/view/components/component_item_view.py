@@ -11,6 +11,10 @@ class ComponentItemView(pn.Column):
     """Editable UI card for a single fitting component and its parameter bounds."""
 
     _STRETCH_WIDTH = 'stretch_width'
+    _EXPANDED_COLOR = "#ca4bc8"
+    _COLLAPSED_COLOR = "#7373da"
+    _DELETE_COLOR = "#dc3545"
+    _BUTTON_TEXT_COLOR = "#ffffff"
 
     def __init__(self, controller, component_item: "ComponentItem", model, energy, view : "FittingView", expandable: bool = True):
         """Initialize controls, callbacks, and collapsible layout for one component."""
@@ -32,7 +36,14 @@ class ComponentItemView(pn.Column):
 
         self.delete_button = pn.widgets.Button(
             name='Delete',
-            button_type='danger'
+            button_type='default',
+            stylesheets=[f"""
+            button, .bk-btn {{
+                background-color: {self._DELETE_COLOR} !important;
+                border-color: {self._DELETE_COLOR} !important;
+                color: {self._BUTTON_TEXT_COLOR} !important;
+            }}
+            """],
         )
 
         # Toggle state identifiers.
@@ -43,10 +54,24 @@ class ComponentItemView(pn.Column):
         _NAME = 'label'
         _ON_CLICK = 'on_click'
         _BUTTON_TYPE = 'button_type'
+        _COLOR = 'color'
+        _TEXT_COLOR = 'text_color'
 
         states = {
-            _ON: {_NAME: "\u25B2 " + component_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'success'},
-            _OFF: {_NAME: "\u25BC " + component_item.__str__(), _ON_CLICK: (), _BUTTON_TYPE: 'primary'}
+            _ON: {
+                _NAME: "\u25B2 " + component_item.__str__(),
+                _ON_CLICK: (),
+                _BUTTON_TYPE: 'default',
+                _COLOR: self._EXPANDED_COLOR,
+                _TEXT_COLOR: self._BUTTON_TEXT_COLOR,
+            },
+            _OFF: {
+                _NAME: "\u25BC " + component_item.__str__(),
+                _ON_CLICK: (),
+                _BUTTON_TYPE: 'default',
+                _COLOR: self._COLLAPSED_COLOR,
+                _TEXT_COLOR: self._BUTTON_TEXT_COLOR,
+            },
         }
 
         self.slider_button = ToggleButton(

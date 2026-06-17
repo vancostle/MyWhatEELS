@@ -6,9 +6,6 @@ State is cached per-user (or globally if no auth configured).
 """
 
 import param
-from whateels.helpers.logging import Logger
-
-_logger = Logger.get_logger("shared_state.log", __name__)
 
 class AppState(param.Parameterized):
     """
@@ -73,7 +70,8 @@ class AppState(param.Parameterized):
 
     preprocessed_plot_dataset = param.Parameter(default=None, doc="""
         Copy of plot_dataset with its ElectronCount replaced by the fully
-        preprocessed DataArray (spike removal, background subtraction, cut range).
+        preprocessed DataArray (spike removal, Savitzky-Golay smoothing,
+        background subtraction, cut range).
         Set when the user applies preprocessors on the home page.
         None when no preprocessing has been applied or after reverting to raw.
         Consumers access the ElectronCount via preprocessed_plot_dataset["ElectronCount"].
@@ -85,55 +83,45 @@ class AppState(param.Parameterized):
     @param.depends('metadata', watch=True)
     def _on_metadata_change(self):
         """Called automatically when metadata parameter changes."""
-        if self.metadata is not None:
-            _logger.info(f"Metadata updated via param")
-        else:
-            _logger.info("Metadata cleared via param")
+        # print(f"Metadata updated via param: {self.metadata}")
+        pass
             
     @param.depends('multifit', watch=True)
     def _on_multifit_change(self):
         """Called automatically when multifit parameter changes."""
-        if self.multifit is not None:
-            _logger.info(f"Multifit updated via param")
-        else:
-            _logger.info("Multifit cleared via param")
+        # print(f"Multifit updated via param: {self.multifit}")
+        pass
 
     @param.depends('plot_dataset', watch=True)
     def _on_plot_dataset_change(self):
         """Called when the shared plot dataset changes."""
-        if self.plot_dataset is not None:
-            _logger.info("plot_dataset published to AppState")
-        else:
-            _logger.info("plot_dataset cleared in AppState")
+        # print("Plot dataset updated via param.")
+        pass
     
     @param.depends('all_datasets', watch=True)
     def _on_datasets_change(self):
         """Called automatically when all_datasets parameter changes."""
-        count = len(self.all_datasets) if isinstance(self.all_datasets, list) else 0
-        _logger.info(f"All datasets updated via param, count: {count}")
-        self.clear_elements_selected()
+        # count = len(self.all_datasets) if isinstance(self.all_datasets, list) else 0
+        # self.clear_elements_selected()
+        pass
         
     @param.depends('filename', watch=True)
     def _on_filename_change(self):
         """Called automatically when filename parameter changes."""
-        if self.filename is not None and self.filename != "":
-            _logger.info(f"Filename updated via param: {self.filename}")
-        else:
-            _logger.info("Filename cleared via param")
+        # print(f"Filename updated via param: {self.filename}")
         self.clear_elements_selected()
             
     @param.depends('selected_tab_index_dataset', watch=True)
     def _on_selected_tab_index_change(self):
         """Called automatically when selected_tab_index_dataset changes."""
-        _logger.info(f"Selected dataset tab index changed to: {self.selected_tab_index_dataset}")
-        
+        # print(f"Selected dataset tab index updated via param: {self.selected_tab_index_dataset}")
+        self.clear_elements_selected()        
+
     @param.depends('last_clustering_result', watch=True)
     def _on_last_clustering_result_change(self):
         """Called automatically when last_clustering_result changes."""
-        if self.last_clustering_result is not None:
-            _logger.info("Last clustering result updated via param")
-        else:
-            _logger.info("Last clustering result cleared via param")
+        # print("Last clustering result updated via param.")
+        pass
 
     def clear_metadata(self):
         self.metadata = None

@@ -1,0 +1,138 @@
+:host {
+    background-color: #f8fafc;
+    font-family: "Lexend", sans-serif;
+    flex-grow: 1;
+    flex-basis: 320px;
+
+    height: inherit;
+
+    & .background {
+        display: none;
+    }
+    
+    & > aside {
+        position: sticky;
+        top: var(--header-height);
+        height: calc(100dvh - var(--header-height) - 1px);
+        overflow-y: auto;
+
+        display: flex;
+        justify-content: flex-end;
+
+        & > nav {
+            display: flex;
+            height: inherit;
+            padding: var(--margin-header-content) 2rem;
+
+            & > ul {
+                .close-button {
+                    width: 30px;
+                    height: 24px;
+
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+
+                &:first-of-type {
+                    display: none;
+
+
+                    & li:first-of-type {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                }
+
+                &:last-of-type {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+            }
+        }
+    }
+}
+
+@media (width <= 1024px) {
+    :host {
+        position: fixed;
+        top: -100%;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        z-index: 1000;
+
+        background-color: transparent;
+
+        &.active {
+            top: 0;
+
+            & > aside {
+                box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        & .background {
+            display: block;
+            position: absolute;
+            inset: 0;
+            z-index: 1000;
+            background-color: #130a13bd;
+            cursor: pointer;
+        }
+
+        & > aside {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1001;
+            height: inherit;
+
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            min-width: inherit;
+            width: 320px;
+
+            background-color: transparent;
+
+            & nav {
+                background-color: rgb(255, 255, 255);
+                padding: 0 .85rem calc(var(--header-height)) .85rem;
+
+                width: inherit;
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+
+                & > ul {
+                    &:first-of-type {
+                        padding: .7rem 0 2rem 0;
+                        display: flex;
+                        gap: 1rem;
+
+                        & button {
+                            background: none;
+                            border: none;
+                            font-size: 1.5rem;
+                            cursor: pointer;
+                            color: var(--ui-accent-light);
+                            padding: 0;
+
+                            &:hover {
+                                color: var(--ui-brand-secondary);
+                            }
+                        }
+                    }
+                    &:last-of-type {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 1rem;
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,6 +1,7 @@
 import panel as pn
 
 from whateels.helpers import LoadCSS, CSS_ROOT
+from whateels.components.disk_streaming_file_dropper import DiskStreamingFileDropper
 from typing import Callable, Optional, Tuple
 
 class FileUploader(pn.Column):
@@ -9,7 +10,7 @@ class FileUploader(pn.Column):
 
     def __init__(
         self,
-        on_file_uploaded_callback: Optional[Callable[[str, bytes], None]] = None,
+        on_file_uploaded_callback: Optional[Callable[[str, bytes | str], None]] = None,
         on_file_removed_callback: Optional[Callable[[str], None]] = None,
         reject_message: str = "File upload failed.",
         valid_extensions: tuple = (".dm3", ".dm4"),
@@ -24,8 +25,9 @@ class FileUploader(pn.Column):
         self._valid_extensions = valid_extensions
         self._multiple_files = multiple_files
         
-        # Load any provided CSS files
-        pn.config.css_files.append('/assets/css/file_uploader.css') # type: ignore
+        # Load any provided CSS files (guard avoids duplicate ImportedStyleSheet models)
+        if '/assets/css/file_uploader.css' not in pn.config.css_files: # type: ignore
+            pn.config.css_files.append('/assets/css/file_uploader.css') # type: ignore
         
         # Track the currently uploaded filename for removal callback
         self._current_filename = None
@@ -52,7 +54,7 @@ class FileUploader(pn.Column):
             self._show_success_message()
     
     @property
-    def on_file_uploaded_callback(self) -> Optional[Callable[[str, bytes], None]]:
+    def on_file_uploaded_callback(self) -> Optional[Callable[[str, bytes | str], None]]:
         """Callback for file upload events."""
         return self._on_file_uploaded_callback
     
@@ -62,7 +64,7 @@ class FileUploader(pn.Column):
         return self._on_file_removed_callback
     
     @on_file_uploaded_callback.setter
-    def on_file_uploaded_callback(self, callback: Optional[Callable[[str, bytes], None]]):
+    def on_file_uploaded_callback(self, callback: Optional[Callable[[str, bytes | str], None]]):
         """
         Set the callback function for file upload events.
         
@@ -81,12 +83,12 @@ class FileUploader(pn.Column):
         """
         self._on_file_removed_callback = callback
     
-    def _create_file_widget(self) -> Tuple[pn.widgets.FileDropper, pn.Column, pn.pane.HTML, pn.Column, pn.Column]:
+    def _create_file_widget(self) -> Tuple[DiskStreamingFileDropper, pn.Column, pn.pane.HTML, pn.Column, pn.Column]:
         """Create the main file dropper widget."""
         STRETCH_WIDTH = "stretch_width"
         STRETCH_BOTH = "stretch_both"
         
-        filedropper = pn.widgets.FileDropper(
+        filedropper = DiskStreamingFileDropper(
             sizing_mode=STRETCH_BOTH,
             multiple=self._multiple_files,  # Only allow single file uploads
             css_classes=['filedropper'],
@@ -114,7 +116,7 @@ class FileUploader(pn.Column):
 
             # Completely reset by replacing the FileDropper widget
             filedroppper_container.clear()
-            new_filedropper = pn.widgets.FileDropper(
+            new_filedropper = DiskStreamingFileDropper(
                 sizing_mode=STRETCH_WIDTH,
                 multiple=self._multiple_files,
                 css_classes=['filedropper'],
@@ -239,8 +241,6 @@ class FileUploader(pn.Column):
             if callable(self._on_file_removed_callback):
                 self._on_file_removed_callback(self._current_filename)
             self._current_filename = None
-            
-            print("Clearing messages after file removal")
     
     def _is_valid_file_extension(self, filename: str) -> bool:
         """

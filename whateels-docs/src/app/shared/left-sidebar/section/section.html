@@ -1,0 +1,8 @@
+<app-heading [href]="href()">{{ title() }}</app-heading>
+<ul>
+    @for (item of items(); track item.href) {
+        <li>
+            <app-item [href]="item.href" [name]="item.name" [isActive]="item.isActive ?? false"></app-item>
+        </li>
+    }
+</ul>

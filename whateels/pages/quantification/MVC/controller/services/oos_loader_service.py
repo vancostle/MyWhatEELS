@@ -32,6 +32,26 @@ e = 1.602176487 * 1E-19    # Electron charge in C
 m0 = 9.10938215 * 1E-31    # Electron rest mass in kg
 a0 = 5.2917720859 * 1E-11  # Bohr radius in m
 c = 299792458              # Speed of light in m/s
+KEV_TO_EV = 1E3
+MRAD_TO_RAD = 1E-3
+ELECTRON_REST_ENERGY_EV = m0 * c**2 / e
+
+
+def _beam_energy_kev_to_ev(beam_energy_kev):
+    """Return beam energy in eV from the WhatEELS beam energy stored in keV."""
+    beam_energy_kev = float(beam_energy_kev)
+    if beam_energy_kev <= 0:
+        raise ZeroDivisionError(
+            'Beam energy (V) cannot be zero, check your data and provide an appropriate voltage.'
+        )
+    return beam_energy_kev * KEV_TO_EV
+
+
+def _collection_angle_mrad_to_rad(collection_angle_mrad):
+    collection_angle_mrad = float(collection_angle_mrad)
+    if collection_angle_mrad <= 0:
+        raise ValueError("Collection angle must be positive and provided in mrad.")
+    return collection_angle_mrad * MRAD_TO_RAD
 
 class Loader_OOS():
     """
@@ -173,7 +193,7 @@ class Loader_OOS():
         Parameters:
             z_number: Atomic number of the element.
             subshell: String representing the subshell transition.
-            V: Beam energy in eV (optional if si is provided).
+            V: Beam energy in keV (optional if si is provided).
             b: Collection angle in mrad (optional if si is provided).
             si: Hyperspy object containing metadata (optional).
 
@@ -188,21 +208,24 @@ class Loader_OOS():
             # Extract beam energy and collection angle from metadata
             V = si.metadata.Acquisition_instrument.TEM.beam_energy
             b = si.metadata.Acquisition_instrument.TEM.Detector.EELS.collection_angle
-        elif si is None and (V, b) == (None, None):
+        elif si is None and (V is None or b is None):
             raise ValueError("Beam energy or/and collection angle missing, please provide them manually.")
 
         _, oos, eloss = self.oos_reader(z_number, subshell)
-        v = 2 * e * V / m0  # Electron velocity based on the applied potential
-        T = m0 * v**2 / 2   # Kinetic energy of the electron
-        gamma = (1 - (v / c)**2)**(-1/2)  # Relativistic factor
+        T_eV = _beam_energy_kev_to_ev(V)
+        beta_rad = _collection_angle_mrad_to_rad(b)
+        gamma = 1 + T_eV / ELECTRON_REST_ENERGY_EV
 
-        try:
-            Oe = eloss / (2 * gamma * T)  # Characteristic energy
-        except ZeroDivisionError:
-            raise ZeroDivisionError('Beam energy (V) cannot be zero, check your data and provide an appropriate voltage.')
+        if not np.isfinite(gamma):
+            raise ValueError(
+                f"Relativistic factor is not finite for beam energy {V}. "
+                "Check that the value is a positive beam energy in keV."
+            )
+
+        theta_E = eloss / (2 * gamma * T_eV)
 
         # Calculate the differential cross-section
-        return 4 * np.pi * (a0 * R)**2 * 1 / (eloss * T) * oos * np.log(1 + (b / Oe)**2)
+        return 4 * np.pi * (a0 * R)**2 * 1 / (eloss * T_eV) * oos * np.log(1 + (beta_rad / theta_E)**2)
 
     def cross_section(self, z_number, subshell, V=None, b=None, si=None) -> float:
         """
@@ -211,7 +234,7 @@ class Loader_OOS():
         Parameters:
             z_number: Atomic number of the element.
             subshell: String representing the subshell transition.
-            V: Beam energy in eV (optional if si is provided).
+            V: Beam energy in keV (optional if si is provided).
             b: Collection angle in mrad (optional if si is provided).
             si: Hyperspy object containing metadata (optional).
 
