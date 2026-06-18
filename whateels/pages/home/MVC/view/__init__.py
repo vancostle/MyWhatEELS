@@ -1,3 +1,4 @@
+import time
 import panel as pn
 import gc
 from whateels.errors.dm.data import DMPlotCreationError
@@ -22,14 +23,24 @@ class HomePageView:
             pn.config.css_files.append('/assets/css/home.css') # type: ignore
         
         # Layout components
+        _t0 = time.perf_counter()
         self._main = HomePageMainLayout(model)
+        _t1 = time.perf_counter()
         self._left_sidebar = HomePageLeftSidebar(
             model,
             sizing_mode=self._STRETCH_WIDTH,
         )
+        _t2 = time.perf_counter()
         self._right_sidebar = HomePageRightSidebar(
             model,
             sizing_mode=self._STRETCH_WIDTH,
+        )
+        _t3 = time.perf_counter()
+        print(
+            f"  [View breakdown]"
+            f"  MainLayout: {(_t1-_t0)*1000:.1f} ms"
+            f"  |  LeftSidebar: {(_t2-_t1)*1000:.1f} ms"
+            f"  |  RightSidebar: {(_t3-_t2)*1000:.1f} ms"
         )
         
         # Store all dataset information

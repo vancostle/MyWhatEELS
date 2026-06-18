@@ -51,26 +51,38 @@ SPLASH_PORT = 5007
 
 if __name__ == "__main__":
     try:
-        # Print ASCII art banner on startup
-        print(_BANNER)
+        import time as _time
+        _t_start = _time.perf_counter()
 
-        # Display a bold, red-background message to keep the window open
+        print(_BANNER)
         msg = "Please keep this window open while WhatEELS is running."
         print(f"{_ANSI_RED_BG_BOLD_WHITE}               {msg}                 {_ANSI_RESET}".center(80))
         print("\n")
 
-        # splash has only lightweight stdlib imports, so it loads instantly.
         import splash
+        _t_splash_import = _time.perf_counter()
 
         # 1. Open the browser with the splash screen BEFORE any heavy import.
-        #    The user sees the animation immediately while Panel/HoloViews load.
         splash.start(PORT, SPLASH_PORT)
+        _t_splash_start = _time.perf_counter()
 
-        # 2. Heavy imports happen here, hidden behind the splash.
+        # 2. Heavy imports (panel, holoviews, pn.extension, hv.extension).
         from whateels import App
+        _t_whateels_import = _time.perf_counter()
 
         # 3. Start the real Panel app (blocking - runs until Ctrl+C).
         app = App(title=APP_NAME)
+        _t_app_init = _time.perf_counter()
+
+        print(
+            f"\n[main.py] Full startup breakdown:"
+            f"\n  splash import:    {(_t_splash_import  - _t_start)         * 1000:.1f} ms"
+            f"\n  splash.start():   {(_t_splash_start   - _t_splash_import) * 1000:.1f} ms"
+            f"\n  from whateels:    {(_t_whateels_import- _t_splash_start)  * 1000:.1f} ms  ← panel+hv+pn.extension"
+            f"\n  App():            {(_t_app_init       - _t_whateels_import)* 1000:.1f} ms"
+            f"\n  TOTAL to serve(): {(_t_app_init       - _t_start)         * 1000:.1f} ms\n"
+        )
+
         app.run(port=PORT, show=False)
     except Exception:
         print("\n[WhatEELS] Startup error:\n")
