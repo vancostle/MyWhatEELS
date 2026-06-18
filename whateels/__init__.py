@@ -44,22 +44,39 @@ class App:
         # (inside run()) so they execute AFTER the splash screen is already
         # visible. Heavy deps (numpy, scipy) are only pulled in at this point.
         
-        from whateels.pages import HomePage, Metadata, Clustering, Clustering2Page, Quantification, Fitting
+        # Static imports inside each closure — PyInstaller traces them at build
+        # time, but they only execute when a user first navigates to that route.
+        def _home():
+            from whateels.pages.home import HomePage
+            return HomePage()
 
-        # Return a loader function so each page is only instantiated when Panel opens it.
-        def _lazy(page_cls):
-            def _loader():
-                return page_cls()
-            return _loader
+        def _metadata():
+            from whateels.pages.metadata import Metadata
+            return Metadata()
 
-        # Define the pages for the application
+        def _clustering():
+            from whateels.pages.clustering import Clustering
+            return Clustering()
+
+        def _clustering_2():
+            from whateels.pages.clustering_2 import Clustering2Page
+            return Clustering2Page()
+
+        def _quantification():
+            from whateels.pages.quantification import Quantification
+            return Quantification()
+
+        def _fitting():
+            from whateels.pages.fitting import Fitting
+            return Fitting()
+
         pages = {
-            "/": _lazy(HomePage),
-            "/metadata-details": _lazy(Metadata),
-            "/clustering": _lazy(Clustering),
-            "/clustering-2": _lazy(Clustering2Page),
-            "/quantification": _lazy(Quantification),
-            "/fitting": _lazy(Fitting),
+            "/":                 _home,
+            "/metadata-details": _metadata,
+            "/clustering":       _clustering,
+            "/clustering-2":     _clustering_2,
+            "/quantification":   _quantification,
+            "/fitting":          _fitting,
         }
 
         return pn.serve(

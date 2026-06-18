@@ -1,25 +1,21 @@
 from .home import HomePage
-from .home_test import HomePageTest
-from .login import Login
 from .metadata import Metadata
 from .clustering import Clustering
-from .multifitting import MultiFitting
-from .quantification import Quantification
-from .demo import DemoPage
-from .login import Login
 from .clustering_2 import Clustering2Page
+from .quantification import Quantification
 from .fitting import Fitting
+
+# Unused in production routing — import explicitly when needed
+# from .home_test import HomePageTest
+# from .login import Login
+# from .multifitting import MultiFitting
+# from .demo import DemoPage
 
 __all__ = [
     "HomePage",
-    "HomePageTest",
-    "Login", 
-    "Metadata", 
-    "Clustering", 
-    "MultiFitting", 
-    "Quantification", 
-    "DemoPage",
-    "Login",
+    "Metadata",
+    "Clustering",
     "Clustering2Page",
+    "Quantification",
     "Fitting",
 ]
