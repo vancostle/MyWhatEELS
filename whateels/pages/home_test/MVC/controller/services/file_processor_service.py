@@ -17,7 +17,6 @@ from whateels.errors.dm import (
 )
 from ..dm_file_processing import DM_EELS_Reader
 from .data_processor_service import DataProcessorService
-from whateels.helpers.in_memory_file import InMemoryFile
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -34,17 +33,16 @@ class FileProcessorService:
         Init with model config.
         """
         self._model = model
-        self._active_temp_file_path: str | None = None
 
     # -- Public Methods --
 
-    def process_upload(self, filename: str, file_content: str | bytes) -> list[xr.Dataset]:
+    def process_upload(self, filename: str, file_content: str) -> list[xr.Dataset]:
         """
         Process the uploaded file by validating and parsing it.
 
         Args:
             filename (str): The name of the uploaded file.
-            file_content (str | bytes): The file content or path to the file.
+            file_content (str): Full local path to the file on disk.
 
         Returns:
             list: Parsed datasets from the file.
@@ -52,7 +50,7 @@ class FileProcessorService:
         Raises:
             DMFileUploadError: If the file upload or processing fails.
         """
-        temp_path = file_content if isinstance(file_content, str) else self._save_temp_file(filename, file_content)
+        temp_path = file_content
 
         # Validate file size before parsing.
         # DM4 header bytes 4-11 store the body length (total_size - 16).
@@ -87,18 +85,6 @@ class FileProcessorService:
             raise DMFileUploadError(e)
 
         return all_datasets
-
-    def cleanup_active_temp_file(self) -> None:
-        """Delete the currently tracked streamed temp file, if any."""
-        if not self._active_temp_file_path:
-            return
-        try:
-            if os.path.exists(self._active_temp_file_path):
-                os.unlink(self._active_temp_file_path)
-        except OSError:
-            pass
-        finally:
-            self._active_temp_file_path = None
 
     def process_from_path(self, filepath: str) -> list[xr.Dataset]:
         """
@@ -153,10 +139,6 @@ class FileProcessorService:
         except Exception as exception:
             self._handle_file_error(exception)
             return []
-        finally:
-            # Clean up in-memory file reference (only present for byte-stream uploads)
-            if hasattr(self._model, 'in_memory_file'):
-                del self._model.in_memory_file
         
     def _store_metadata(self, infoDict: dict | None = None) -> None:
         """

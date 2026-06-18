@@ -3,8 +3,8 @@ from .MVC import HomePageController, HomePageView, HomePageModel
 
 class HomePageTest(GeneralPageTemplate):
     """
-    HomePageTest class for the WhatEELS application.
-    This class extends GeneralPageTemplate to create a specific home page layout for testing purposes.
+    HomePage class for the WhatEELS application.
+    This class extends CustomPage to create a specific home page layout.
     """
 
     def __init__(self):

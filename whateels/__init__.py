@@ -6,6 +6,7 @@ import holoviews as hv
 # scipy/numpy imports that live in the full helpers package.
 from whateels.helpers.kill_process import KillProcess
 from whateels.helpers.constants import ASSETS_ROOT
+from whateels.pages.home_test import HomePageTest
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
@@ -49,6 +50,10 @@ class App:
         def _home():
             from whateels.pages.home import HomePage
             return HomePage()
+        
+        def _home_test():
+            from whateels.pages.home_test import HomePageTest
+            return HomePageTest()
 
         def _metadata():
             from whateels.pages.metadata import Metadata
@@ -71,7 +76,8 @@ class App:
             return Fitting()
 
         pages = {
-            "/":                 _home,
+            "/":                 _home_test,
+            # "/":                 _home,
             "/metadata-details": _metadata,
             "/clustering":       _clustering,
             "/clustering-2":     _clustering_2,

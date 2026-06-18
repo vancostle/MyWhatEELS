@@ -8,12 +8,11 @@ Features:
 - Handles errors robustly by raising exceptions with clear messages.
 """
 
-from .plots import SpectrumLinePlot, SpectrumImagePlot, SingleSpectrumPlot, ImagePlot
-
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import HomePageModel
     from xarray import Dataset
+    from .plots import SpectrumLinePlot, SpectrumImagePlot, SingleSpectrumPlot, ImagePlot
 
 import traceback
 
@@ -27,10 +26,11 @@ class PlotsFactory:
     """
     
     def __init__(self, model: "HomePageModel") -> None:
+        # Imported here so scipy/lmfit/holoviews only load when a file is
+        # actually processed, not when the Home page first renders.
+        from .plots import SpectrumLinePlot, SpectrumImagePlot, SingleSpectrumPlot, ImagePlot
+
         self._model = model
-        
-        # Mapping of dataset types to visualizer classes
-        # This can be extended with more visualizers as needed
         self._all_plots = {
             model.constants.SPECTRUM_LINE: SpectrumLinePlot,
             model.constants.SPECTRUM_IMAGE: SpectrumImagePlot,
@@ -39,10 +39,10 @@ class PlotsFactory:
         }
 
     def choose_plots(
-        self, 
-        dataset_type: str, 
-        dataset: "Dataset"
-    ) -> SpectrumLinePlot | SpectrumImagePlot | SingleSpectrumPlot | ImagePlot | None:
+        self,
+        dataset_type: str,
+        dataset: "Dataset",
+    ) -> "SpectrumLinePlot | SpectrumImagePlot | SingleSpectrumPlot | ImagePlot | None":
         """
         Instantiates and returns the appropriate EELS visualizer for the specified dataset type.
 

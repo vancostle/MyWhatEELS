@@ -39,21 +39,67 @@ class HomePageController:
         self._file_processor = FileProcessorService(model)
         
         # Set up callbacks for file uploader events
-        # self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
-        # self._view.left_sidebar.file_uploader.on_file_removed_callback = self._handle_file_removal
+        self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
+        self._view.left_sidebar.file_uploader.on_file_removed_callback = self._handle_file_removal
         
         if all_datasets := getattr(self._model.app_state, "all_datasets", None):
             # Initial layout setup based on existing datasets
             self._view.create_tab_and_dataset_info(all_datasets)
             
-    def _handle_file_upload(self, filename: str, signals: list):
-        print(f"[home_rosetta] File: {filename}")
-        print(f"[home_rosetta] Signal count: {len(signals)}")
-        for i, sig in enumerate(signals):
-            data = sig.get("data")
-            print(f"  [{i}] shape={getattr(data, 'shape', None)}  dtype={getattr(data, 'dtype', None)}")
-            print(f"       axes={sig.get('axes')}")
-            print(f"       metadata keys={sorted(sig.get('metadata', {}).keys())}")
+    def _handle_file_upload(self, filename: str, file_content: str):
+        """
+        Handle complete file upload workflow: process file → create visualizations → update UI.
+        
+        Args:
+            filename: Uploaded file name
+            file_content: Full local path to the selected file on disk
+            
+        Returns:
+            bool: True if successful, False if failed
+            
+        Raises:
+            DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
+        """
+
+        try:
+            # Release previous plot resources before loading a new file.
+            self._view.cleanup_plots()
+
+            # Clear any existing datasets and metadata
+            app_state = self._model.app_state
+            app_state.clear_all()
+            
+            app_state.filename = filename
+
+            all_datasets: list[Dataset] = []
+            
+            # Show loading state
+            self._view.main.loading_placeholder()
+            
+            # Process the file
+            all_datasets = self._file_processor.process_upload(filename, file_content)
+
+            # Update AppState with all loaded datasets for global access
+            app_state.all_datasets = all_datasets
+            
+            if not all_datasets:
+                self._view.main.error_placeholder()
+                return
+            
+            self._view.create_tab_and_dataset_info(all_datasets)
+
+        except DMFileLoadingError as e:
+            self._view.main.error_placeholder()
+            raise e
+        except DMFileUploadError as e:
+            self._view.main.error_placeholder()
+            raise e
+        except DMShapeMismatchError as e:
+            self._view.main.error_placeholder()
+            raise e
+        except Exception as e:
+            self._view.main.error_placeholder()
+            raise DMFileUploadError(e)
 
         
     def _handle_file_removal(self, filename: str) -> None:
@@ -70,16 +116,11 @@ class HomePageController:
             # Stop streams and release dataset refs on all active plot instances
             # before clearing the UI — this is what actually frees the numpy memory.
             self._view.cleanup_plots()
-            self._file_processor.cleanup_active_temp_file()
 
             # Clear UI components
             self._view.left_sidebar.remove_dataset_info()
             self._view.main.empty_placeholder()
             self._view.right_sidebar.preprocessed_settings.clear()
-            
-            # Clear in-memory file to free resources (only exists for byte uploads)
-            if hasattr(self._model, 'in_memory_file'):
-                del self._model.in_memory_file
             
             # Clear global AppState data
             self._model.app_state.clear_all()

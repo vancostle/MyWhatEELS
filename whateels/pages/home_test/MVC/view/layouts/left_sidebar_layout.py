@@ -1,7 +1,7 @@
 import panel as pn
 
-from whateels.helpers.constants import ASSETS_ROOT
 from whateels.components import FileDialogUploader
+from whateels.helpers.constants import ASSETS_ROOT
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -15,6 +15,7 @@ class HomePageLeftSidebar(pn.Column):
         self._model = model
         
         self._dataset_info = pn.Column(sizing_mode=self._STRETCH_WIDTH)
+        self._file_uploader: FileDialogUploader = FileDialogUploader() # Placeholder, will be set up below
         self._welcome_message = pn.Column(sizing_mode=self._STRETCH_WIDTH)
         
         super().__init__(
@@ -22,6 +23,10 @@ class HomePageLeftSidebar(pn.Column):
             **kwargs
         )
 
+    @property
+    def file_uploader(self) -> FileDialogUploader:
+        """FileDialogUploader widget for file upload interactions."""
+        return self._file_uploader
     @property
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
@@ -41,15 +46,12 @@ class HomePageLeftSidebar(pn.Column):
 
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
-        self._file_dialog_uploader = FileDialogUploader(
-            default_message="Click to select a dm3 or dm4 file",
-            on_file_uploaded_callback=lambda filename, payload: print(f"File uploaded: {filename} ({payload})"),  # Placeholder callback, replace with actual handler
-            on_file_removed_callback=lambda filename: print(f"File removed: {filename}"),  # Placeholder callback, replace with actual handler
-        )
+        self._file_uploader = self._create_file_uploader()
 
         self._welcome_message = pn.Column(
             pn.pane.Markdown(
                 """
+                # TEST PAGE
                 ### Welcome to WhatEELS!
                 
                 Relax, get yourself a cup of coffee  
@@ -68,7 +70,7 @@ class HomePageLeftSidebar(pn.Column):
 
         self._path_input = None  # kept for potential future use
         self._sidebar_container_layout = pn.Column(
-            self._file_dialog_uploader,
+            self._file_uploader,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH
         )
@@ -87,3 +89,21 @@ class HomePageLeftSidebar(pn.Column):
             self.remove(self.dataset_info)
             del self.dataset_info
             
+    def _create_file_uploader(self) -> FileDialogUploader:
+        initial_filepath = ""
+        all_datasets = self._model.app_state.all_datasets
+
+        if isinstance(all_datasets, list) and len(all_datasets) > 0:
+            # Datasets already in AppState (back-navigation): restore success state.
+            # We only have the filename stored, not the full path, so we pass the
+            # filename alone — the JS will display it but clipboard-copy won't have a path.
+            filename_candidate = self._model.app_state.filename
+            if isinstance(filename_candidate, str) and filename_candidate:
+                initial_filepath = filename_candidate
+
+        return FileDialogUploader(
+            default_message=self._model.constants.FILE_DROPPER_TITLE,
+            accepted_file_types=list(self._model.constants.FILE_DROPPER_VALID_EXTENSIONS),
+            error_message=self._model.constants.FILE_DROPPER_REJECT_MESSAGE,
+            initial_filepath=initial_filepath,
+        )
