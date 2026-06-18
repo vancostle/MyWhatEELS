@@ -1,9 +1,7 @@
 import panel as pn
 import gc
 from whateels.errors.dm.data import DMPlotCreationError
-import panel as pn
 from .plots_factory import PlotsFactory
-from .plots import SpectrumImagePlot
 from .layouts import HomePageLeftSidebar, HomePageMainLayout, HomePageRightSidebar
 
 from typing import TYPE_CHECKING
@@ -116,7 +114,8 @@ class HomePageView:
                     raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
 
                 # Wire the plot's fitting SimpleDetails into the sidebar
-                if isinstance(chosen_plot, SpectrumImagePlot):                    
+                from .plots import SpectrumImagePlot
+                if isinstance(chosen_plot, SpectrumImagePlot):
                     chosen_plot.set_view_refs(self._main, plots_tab)
                 
                 plots = chosen_plot.create_plots()
@@ -154,6 +153,7 @@ class HomePageView:
         self._left_sidebar.add_component(self._all_dataset_info[selected_tab_index])
         
         self._right_sidebar.preprocessed_settings.clear()
+        from .plots import SpectrumImagePlot
         if isinstance(self._all_plots[selected_tab_index], SpectrumImagePlot):
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_cut_range_details())
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_savgol_details())

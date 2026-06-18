@@ -1,18 +1,22 @@
+import functools
 from whateels.helpers.constants import HTML_ROOT
 
 class Placeholders:
-    
+
     @staticmethod
     def _load_html_template(filename: str) -> str:
         """Load an HTML template from a file"""
-        READ_MODE = 'r'
-        UTF_8 = 'utf-8'
+        with open(filename, 'r', encoding='utf-8') as f:
+            return f.read()
 
-        with open(filename, READ_MODE, encoding=UTF_8) as f:
-            html = f.read()
+    @functools.cached_property
+    def NO_FILE_LOADED(self) -> str:
+        return self._load_html_template(str(HTML_ROOT / "no_file_loaded.min.html"))
 
-        return html
+    @functools.cached_property
+    def LOADING_FILE(self) -> str:
+        return self._load_html_template(str(HTML_ROOT / "loading_file.min.html"))
 
-    NO_FILE_LOADED = _load_html_template(str(HTML_ROOT / "no_file_loaded.min.html"))
-    LOADING_FILE = _load_html_template(str(HTML_ROOT / "loading_file.min.html"))
-    ERROR_FILE = _load_html_template(str(HTML_ROOT / "error_file.min.html"))
+    @functools.cached_property
+    def ERROR_FILE(self) -> str:
+        return self._load_html_template(str(HTML_ROOT / "error_file.min.html"))
