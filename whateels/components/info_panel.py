@@ -51,9 +51,10 @@ class InfoPanel(pn.Column):
         SPACER_HEIGHT_MEDIUM = 10
         MARGIN_ZERO = 0
 
-        # Optionally load metadata button HTML
+        # Cabecera de la tarjeta: titulo a la izquierda y el boton circular a la derecha.
         header_items = [pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=MARGIN_ZERO)]
         if self._show_metadata_button:
+            # El icono del boton se carga como HTML para conservar el aspecto exacto del diseno.
             metadata_html_path = HTML_ROOT / HTML_FILE
             with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
                 metadata_button_html = f.read()
@@ -66,23 +67,9 @@ class InfoPanel(pn.Column):
             margin=MARGIN_ZERO
         )
         
-        # Dynamically generate info rows from _information_keys and _information_values
+        # Cada fila puede ser texto plano o un widget compacto (como el input editable de Home).
         info_rows = [
-            pn.Row(
-                pn.Row(
-                    pn.pane.HTML(
-                        str(f'{key}:'),
-                        css_classes=["dataset-info-key"],
-                    ),
-                    sizing_mode=STRETCH_WIDTH
-                ),
-                pn.pane.HTML(
-                    str(value), 
-                    css_classes=["dataset-info-value"]
-                ),
-                sizing_mode=STRETCH_WIDTH,
-                margin=(0, 6, 0, 6)
-            )
+            self._create_info_row(key, value, STRETCH_WIDTH)
             for key, value in self._information.items()
         ]
 
@@ -96,3 +83,27 @@ class InfoPanel(pn.Column):
         )
 
         return dataset_info
+
+    def _create_info_row(self, key, value, sizing_mode: str) -> pn.Row:
+        # Si el valor es un widget Panel, lo dejamos tal cual.
+        # Si no, lo convertimos a HTML para mantener el mismo estilo tipografico.
+        if isinstance(value, pn.viewable.Viewable):
+            value_component = value
+        else:
+            value_component = pn.pane.HTML(
+                str(value),
+                css_classes=["dataset-info-value"]
+            )
+
+        return pn.Row(
+            pn.Row(
+                pn.pane.HTML(
+                    str(f'{key}:'),
+                    css_classes=["dataset-info-key"],
+                ),
+                sizing_mode=sizing_mode
+            ),
+            value_component,
+            sizing_mode=sizing_mode,
+            margin=(0, 6, 0, 6)
+        )
