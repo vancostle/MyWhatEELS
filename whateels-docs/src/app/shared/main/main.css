@@ -1,0 +1,98 @@
+:host {
+    display: contents;
+    
+    & > div {
+        height: inherit;
+        flex-grow: 1;
+        max-width: 802px;
+        flex-basis: 802px;
+        width: 100%;
+
+        display: flex;
+        flex-direction: column;
+
+        & > main {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: "Lexend", sans-serif;
+            flex: 1;
+
+            padding: var(--margin-header-content) 2rem 0 2rem;
+
+            & h1 {
+                display: flex;
+                flex-direction: column;
+
+                color: var(--ui-brand-secondary);
+                font-size: .8rem;
+                font-weight: bold;
+                margin-bottom: .8rem;
+            }
+
+            & .markdown-shell {
+                position: relative;
+                min-height: 10rem;
+            }
+
+            & .markdown-loader {
+                display: grid;
+                place-items: center;
+                min-height: 10rem;
+
+                position: absolute;
+                top: 0;
+                left: 0;
+
+                width: 100%;
+                height: calc(100dvh - (var(--margin-header-content) * 2) - var(--header-height));
+            }
+
+            & .spinner {
+                width: 2rem;
+                height: 2rem;
+                border-radius: 50%;
+                border: 3px solid #d9dce3;
+                border-top-color: var(--ui-brand-secondary);
+                animation: spin 0.8s linear infinite;
+
+                background:
+                    radial-gradient(
+                        circle at center,
+                        rgba(255, 255, 255, 1) 20%,
+                        rgba(255, 255, 255, 0.8) 70%,
+                        rgba(255, 255, 255, 0.4) 88%,
+                        transparent 100%
+                    );
+                
+                position: fixed;
+            }
+        }
+
+        & > app-divider {
+            padding: 0 2rem;
+        }
+    }
+}
+
+@media (width <= 1024px) {
+    :host {
+        justify-content: center;
+
+        & > div {
+            & > main {
+                padding: calc(var(--margin-header-content) / 2) .85rem 0 .85rem;
+            }
+
+            & > app-divider {
+                padding: 0 .85rem;
+            }
+        }
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

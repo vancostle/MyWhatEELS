@@ -1,0 +1,179 @@
+:host {
+    width: 100vw;
+    height: 100dvh;
+
+    position: fixed;
+
+    font-family: "Lexend", sans-serif;
+
+    left: 0;
+    top: 0;
+
+    z-index: 1000;
+
+    display: flex;
+    justify-content: center;
+
+    padding: 0;
+
+    &.active {
+        display: flex;
+        justify-content: center;
+        pointer-events: auto;
+        opacity: 1;
+    }
+
+    &:not(.active) {
+        display: none;
+        pointer-events: none;
+        opacity: 0;
+    }
+
+    & .search-container {
+        position: relative;
+        z-index: 1001;
+
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-width: 500px;
+        flex-basis: 500px;
+        height: fit-content;
+        font-size: 1rem;
+
+        border-radius: 15px;
+        overflow: clip;
+        background-color: rgba(255, 255, 255, 1);
+
+        margin: 1rem 1rem 0 1rem;
+        border: 1px solid var(--ui-accent-light);
+
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+        & .search-results {
+            overflow: clip;
+
+            & .no-results {
+                padding: 2rem 1rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 1rem;
+                color: var(--ui-accent-normal);
+
+                & i {
+                    font-size: 1.25rem;
+                }
+            }
+
+            & .results {
+                display: flex;
+                flex-direction: column;
+                padding: .7rem;
+
+                max-height: 90dvh;
+
+                &:empty {
+                    display: none;
+                }
+
+                & .result-item {
+                    padding: 1rem;
+                    cursor: pointer;
+                    border-radius: 10px;
+
+                    &:hover{
+                        background-color: #f8fafc;
+
+                        & p:first-of-type {
+                            color: var(--ui-brand-secondary);
+                        }
+                    }
+
+                    & a {
+                        text-decoration: none;
+                        display: flex;
+                        flex-direction: column;
+                        gap: .4rem;
+                    }
+
+                    & p {
+                        font-size: .9rem;
+                        color: var(--ui-accent-dark);
+
+                        &:last-of-type {
+                            font-size: .8rem;
+                            color: var(--ui-accent-normal);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    & .search-input {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        cursor: pointer;
+
+
+        flex: 1;
+        border-bottom: 1px solid var(--ui-accent-light);
+        overflow: clip;
+
+        color: var(--ui-accent-light);
+
+        position: relative;
+
+        & i {
+            font-size: 1.2rem;
+            color: var(--ui-accent-light);
+            pointer-events: none;
+            position: absolute;
+            top: 50%;
+            left: 1rem;
+            transform: translateY(-50%);
+        }
+
+        &:hover {
+            border-color: var(--ui-accent-dark);
+            color: var(--ui-accent-normal);
+
+            & i {
+                color: var(--ui-accent-normal);
+            }
+        }
+
+        & input {
+            padding: 1rem 3rem;
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 1rem;
+            color: var(--ui-accent-dark);
+
+            &::placeholder {
+                color: var(--ui-accent-light);
+            }
+        }
+    }
+
+    & .background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: inherit;
+        height: inherit;
+        background-color: #130a13bd;
+        cursor: pointer;
+    }
+}
+
+
+/* Only for iOS devices */
+@supports (-webkit-touch-callout: none) {
+  textarea, input[type="text"] {
+    font-size: 16px !important; /* Prevents iOS from zooming in on the textarea */
+  }
+}

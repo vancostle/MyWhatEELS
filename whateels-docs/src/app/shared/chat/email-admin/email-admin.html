@@ -1,0 +1,34 @@
+<article class="email">
+    <header class="chat-header">
+        <h6>Email to admin</h6>
+        <button (click)="closeChat()">
+            <i class="fa-solid fa-window-minimize"></i>
+        </button>
+    </header>
+    <form id="email-form" class="chat-body" [formGroup]="emailForm" (ngSubmit)="sendEmail($event)">
+        <div>
+            <label for="name">Name:</label>
+            @if (emailForm.controls.name.touched && emailForm.controls.name.invalid) {
+                <small class="field-error">Invalid name.</small>
+            }
+        </div>
+        <input type="text" id="name" placeholder="Your name" formControlName="name">
+        <div>
+            <label for="email">Email:</label>
+            @if (emailForm.controls.email.touched && emailForm.controls.email.invalid) {
+                <small class="field-error">Invalid email address.</small>
+            }
+        </div>
+        <input type="email" id="email" placeholder="Your email" formControlName="email">
+        <div>
+            <label for="message">Message:</label>
+            @if (emailForm.controls.message.touched && emailForm.controls.message.invalid) {
+                <small class="field-error">At least 10 characters long.</small>
+            }
+        </div>
+        <textarea id="message" placeholder="Your message" formControlName="message"></textarea>
+    </form>
+    <footer class="chat-footer">
+        <input type="submit" value="Send Email" form="email-form" [disabled]="emailForm.invalid">
+    </footer>
+</article>

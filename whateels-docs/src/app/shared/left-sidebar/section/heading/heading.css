@@ -1,0 +1,20 @@
+:host {
+    & h3 {
+        font-size: .8rem;
+        font-weight: bold;
+        text-transform: capitalize;
+
+        display: flex;
+    }
+
+    & a {
+        color: var(--ui-accent-dark);
+        text-decoration: none;
+        flex: 1;
+    }
+
+    & a:hover {
+        text-decoration: underline;
+        cursor: pointer;
+    }
+}
