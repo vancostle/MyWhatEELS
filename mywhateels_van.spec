@@ -190,7 +190,7 @@ datas = [
     ('whateels/assets/html/*.html', 'whateels/assets/html'),
     ('whateels/assets/js/*.js', 'whateels/assets/js'),
     ('whateels/assets/img/*', 'whateels/assets/img'),
-    ('whateels/assets/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/assets/oos/Hartree_Xsections_FSalvat'),
+    ('whateels/data/oos/Hartree_Xsections_FSalvat/*.json', 'whateels/data/oos/Hartree_Xsections_FSalvat'),
     *extra_metadata,
     *extra_datas,
 ]
