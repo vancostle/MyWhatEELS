@@ -7,7 +7,6 @@ import holoviews as hv
 # scipy/numpy imports that live in the full helpers package.
 from whateels.helpers.kill_process import KillProcess
 from whateels.helpers.constants import ASSETS_ROOT
-from whateels.pages.home_test import HomePageTest
 
 # Configure Panel and HoloViews once globally — calling these inside page
 # views or methods wastes time on every invocation.
