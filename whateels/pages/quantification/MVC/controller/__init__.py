@@ -195,12 +195,14 @@ class QuantificationController(BaseController):
         max_eaxis_cs = None
         for ishell in element_item.shells:
             eaxis, counts, onset = self.loader_oos.oos_reader(element_item.element, ishell)
-            V = self._layout.get_active_dataset().attrs['beam_energy']
-            b = self._layout.get_active_dataset().attrs['collection_angle']
-            element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b,), V, b]
+            active_attrs = self._layout.get_active_dataset().attrs
+            V = active_attrs['beam_energy']
+            b = active_attrs['collection_angle']
+            a = active_attrs.get('convergence_angle')
+            element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b, a = a,), V, b]
 
             min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])
-            max_eaxis_cs = eaxis[0] if max_eaxis_cs is None else max(max_eaxis_cs, eaxis[0])            
+            max_eaxis_cs = eaxis[0] if max_eaxis_cs is None else max(max_eaxis_cs, eaxis[0])
         if min_eaxis_cs + self.ELEMENT_EAXIS_THRESHOLD < self._layout.get_energy_range()[0]:
             add_element_button.disabled = True
             add_element_button.name = "Bad Energy Range"
@@ -230,12 +232,14 @@ class QuantificationController(BaseController):
         max_eaxis_cs = None
         for ishell in element_item.shells:
             eaxis, counts, onset = self.loader_oos.oos_reader(element_item.element, ishell)
-            V = self._layout.get_active_dataset().attrs['beam_energy']
-            b = self._layout.get_active_dataset().attrs['collection_angle']
-            element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b,), V, b]
+            active_attrs = self._layout.get_active_dataset().attrs
+            V = active_attrs['beam_energy']
+            b = active_attrs['collection_angle']
+            a = active_attrs.get('convergence_angle')
+            element_item.cross_sections[ishell] = [eaxis, counts, onset, self.loader_oos.df_cross_section(element_item.element, ishell, V = V, b = b, a = a,), V, b]
 
             min_eaxis_cs = eaxis[0] if min_eaxis_cs is None else min(min_eaxis_cs, eaxis[0])
-            max_eaxis_cs = eaxis[0] if max_eaxis_cs is None else max(max_eaxis_cs, eaxis[0])                
+            max_eaxis_cs = eaxis[0] if max_eaxis_cs is None else max(max_eaxis_cs, eaxis[0])
 
         element_item_view = ElementItemView(self, element_item, self.model, (self._layout.get_energy_range()[0], min_eaxis_cs, self._layout.get_energy_range()[-1]), self.view)
         element_item.set_quant_range(min_eaxis_cs, max_eaxis_cs)
