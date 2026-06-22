@@ -36,7 +36,7 @@ class HomePageController:
         pn.state.on_session_destroyed(lambda _: (v := _view_ref()) and v.cleanup())
 
         # Initialize file processing services
-        self._file_processor = FileProcessorService(model)
+        self._file_processor = RosettaFileProcessorService(model)
         
         # Set up callbacks for file uploader events
         self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
@@ -61,35 +61,23 @@ class HomePageController:
             DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
         
-        print("--------------------------------")
-        print(f"File uploaded: {filename}, file_path: {file_path}")
-        print("--------------------------------")
-
         try:
-            # Release previous plot resources before loading a new file.
             self._view.cleanup_plots()
 
-            # Clear any existing datasets and metadata
             app_state = self._model.app_state
             app_state.clear_all()
-            
             app_state.filename = filename
 
-            all_datasets: list[Dataset] = []
-            
-            # Show loading state
             self._view.main.loading_placeholder()
-            
-            # Process the file
-            all_datasets = self._file_processor.process_upload(filename, file_path)
 
-            # Update AppState with all loaded datasets for global access
+            all_datasets: list[Dataset] = self._file_processor.process_upload(filename, file_path)
+
             app_state.all_datasets = all_datasets
-            
+
             if not all_datasets:
                 self._view.main.error_placeholder()
                 return
-            
+
             self._view.create_tab_and_dataset_info(all_datasets)
 
         except DMFileLoadingError as e:
