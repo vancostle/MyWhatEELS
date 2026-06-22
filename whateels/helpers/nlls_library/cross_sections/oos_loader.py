@@ -1,5 +1,4 @@
-import os
-import sys
+from pathlib import Path
 
 import numpy as np
 import json
@@ -7,6 +6,7 @@ import json
 import scipy as sp
 import copy as cp
 
+from whateels.helpers.constants import OOS_ROOT
 from ..initialization_panel import Fileinput    
 ################################################################################
 
@@ -36,7 +36,7 @@ def _collection_angle_mrad_to_rad(collection_angle_mrad):
         raise ValueError("Collection angle must be positive and provided in mrad.")
     return collection_angle_mrad * MRAD_TO_RAD
 
-def oos_reader(z_number:int, subshell:str, directory = 'Hartree_Xsections_FSalvat'):
+def oos_reader(z_number:int, subshell:str, directory = None):
     """
     this function reads the OOSdatabase from the directory where the database is stored
 
@@ -49,9 +49,13 @@ def oos_reader(z_number:int, subshell:str, directory = 'Hartree_Xsections_FSalva
         oos: oss
         onset: energy loss of the transition
     """
-    #Default directory to look for the database
-    #TODO implement a directory change routine
-    print('syspath', sys.path)
+    if directory is None:
+        data_dir = OOS_ROOT / "Hartree_Xsections_FSalvat"
+    else:
+        data_dir = Path(directory)
+        if not data_dir.is_absolute() and not data_dir.exists():
+            data_dir = OOS_ROOT / data_dir
+
     try:
         z_number = int(z_number)  # Attempt to convert to an integer
         if z_number < 10:
@@ -63,16 +67,7 @@ def oos_reader(z_number:int, subshell:str, directory = 'Hartree_Xsections_FSalva
     except ValueError:
         print("z_number must be a valid integer between 1 and 99")
 
-    directories_possible = [el for el in sys.path if 'cross_sections' in el]
-    print('possible dir', directories_possible)
-
-    if len(directories_possible) == 0:
-        raise RuntimeError("No directories available to dive in.")
-    # elif '\\' in directory:
-    #     ruta = '/'.join(directories_possible[0].split('\\'))
-    #     directory = f'{ruta}/{directory}'
-
-    with open(f'{sys.path[0]}/{directory}/{oos_filename}.json','r') as g:
+    with open(data_dir / f'{oos_filename}.json','r') as g:
         oos_file = json.load(g)
 
     for item in oos_file:
