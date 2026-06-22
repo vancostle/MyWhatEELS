@@ -77,8 +77,8 @@ class App:
             return Fitting()
 
         pages = {
-            # "/":                 _home_test,
-            "/":                 _home,
+            "/":                 _home_test,
+            # "/":                 _home,
             "/metadata-details": _metadata,
             "/clustering":       _clustering,
             "/clustering-2":     _clustering_2,

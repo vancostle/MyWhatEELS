@@ -46,13 +46,13 @@ class HomePageController:
             # Initial layout setup based on existing datasets
             self._view.create_tab_and_dataset_info(all_datasets)
             
-    def _handle_file_upload(self, filename: str, file_content: str):
+    def _handle_file_upload(self, filename: str, file_path: str):
         """
         Handle complete file upload workflow: process file → create visualizations → update UI.
         
         Args:
             filename: Uploaded file name
-            file_content: Full local path to the selected file on disk
+            file_path: Full local path to the selected file on disk
             
         Returns:
             bool: True if successful, False if failed
@@ -60,6 +60,10 @@ class HomePageController:
         Raises:
             DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
+        
+        print("--------------------------------")
+        print(f"File uploaded: {filename}, file_path: {file_path}")
+        print("--------------------------------")
 
         try:
             # Release previous plot resources before loading a new file.
@@ -77,7 +81,7 @@ class HomePageController:
             self._view.main.loading_placeholder()
             
             # Process the file
-            all_datasets = self._file_processor.process_upload(filename, file_content)
+            all_datasets = self._file_processor.process_upload(filename, file_path)
 
             # Update AppState with all loaded datasets for global access
             app_state.all_datasets = all_datasets

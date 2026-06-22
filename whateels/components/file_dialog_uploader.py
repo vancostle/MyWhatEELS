@@ -678,7 +678,7 @@ class FileDialogUploader(JSComponent):
         return os.path.splitext(path)[1].lower() in set(extensions)
 
     def _handle_file_selected_clicked(self, event):
-        if self.disabled:
+        if bool(self.disabled):
             return
 
         path = open_native_file_dialog(self._accepted_extensions())
@@ -696,7 +696,7 @@ class FileDialogUploader(JSComponent):
 
     def _handle_msg(self, msg): # type: ignore
         if isinstance(msg, dict) and msg.get("type") == "file_path_submitted":
-            if self.disabled:
+            if bool(self.disabled):
                 return
 
             raw_path = msg.get("path")
