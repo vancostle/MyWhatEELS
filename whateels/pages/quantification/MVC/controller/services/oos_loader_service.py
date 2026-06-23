@@ -264,39 +264,30 @@ class Loader_OOS():
             
     def df_cross_section(self, z_number, subshell, V=None, b=None, a=None, si=None):
         """
-        Energy-loss differential cross section for the angle-restricted EELS
-        geometry, following Salvat's relativistic PWBA (RPWBA) formulation.
+        Energy-loss differential cross section following Egerton's
+        angle-integrated dipole formula (Eq. 3.149).
 
         The reference oscillator strengths (the ``oos`` returned by
         :meth:`oos_reader`) are the optical (Q->0) limit of the longitudinal
-        generalized oscillator strength tabulated by Salvat within the RPWBA
-        with a DHFS potential. The cross section collected within a semi-angle
-        ``beta`` is given by Salvat's compact small-angle formula (his
-        Appendix E, Eq. E.12),
+        generalized oscillator strength tabulated by Salvat within the
+        relativistic PWBA with a DHFS potential. The cross section collected
+        within a semi-angle ``beta`` is
 
-            d(sigma)/dW = (2 pi Z0^2 e^4)/(m_e v^2) (1/W) (df/dW)
-                          [ ln Y - beta_v^2 (1 - 1/Y) ] ,
+            d(sigma)/dE = (4 pi a0^2 R^2)/(E T) (df/dE)
+                          ln[ 1 + (beta / theta_E)^2 ] ,
 
-        with Z0 = 1 for electrons, where ``W`` is the energy loss, ``df/dW`` the
-        OOS, ``beta_v = v/c`` the relativistic speed of the probe, and the
-        relativistic kinematic factor ``Y`` (Eq. E.13) is
+        with ``E`` the energy loss, ``T`` the incident kinetic energy, and the
+        relativistic characteristic angle
 
-            Y = 1 + sqrt( [E(E + 2 m_e c^2)]^3 (E - W)(E - W + 2 m_e c^2) )
-                    / [ (m_e c^2)^2 W^2 ]
-                    * 4 sin^2(beta/2) ,
+            theta_E = E / (gamma m0 v^2) = E / (2 TGT) ,
+            TGT     = T (1 + T/2 m0c^2) / (1 + T/m0c^2) .
 
-        with ``E`` the probe kinetic energy. Unlike the small-angle dipole form
-        of Egerton (Eq. 3.149), this keeps the exact relativistic kinematics
-        (``Y``) and the transverse/retardation term ``- beta_v^2 (1 - 1/Y)``,
-        so it is the form consistent with Salvat's relativistic OOS.
-
-        Salvat's formula assumes parallel illumination. When a finite
-        convergence semi-angle ``a`` (alpha) is provided, the collection
-        semi-angle in ``Y`` is replaced by Egerton's effective collection
-        semi-angle ``beta*`` (see :func:`effective_collection_angle_mrad`),
-        which approximately accounts for the partial overlap of the convergence
-        and collection cones. With ``a`` set to ``None`` or zero, the parallel
-        sharp-cutoff collection at ``beta`` is recovered.
+        When a finite convergence semi-angle ``a`` (alpha) is provided, the
+        collection semi-angle ``beta`` is replaced by Egerton's effective
+        collection semi-angle ``beta*`` (see :func:`effective_collection_angle_mrad`),
+        which accounts for the partial overlap of the convergence and collection
+        cones. With ``a`` set to ``None`` or zero, the standard sharp-cutoff
+        collection at ``beta`` is recovered.
 
         Parameters:
             z_number: Atomic number of the element.
@@ -324,8 +315,7 @@ class Loader_OOS():
         _, oos, eloss = self.oos_reader(z_number, subshell)
         T_eV = _beam_energy_kev_to_ev(V)
         beta_rad = _collection_angle_mrad_to_rad(b)
-        mec2 = ELECTRON_REST_ENERGY_EV
-        gamma = 1 + T_eV / mec2
+        gamma = 1 + T_eV / ELECTRON_REST_ENERGY_EV
 
         if not np.isfinite(gamma):
             raise ValueError(
@@ -333,41 +323,29 @@ class Loader_OOS():
                 "Check that the value is a positive beam energy in keV."
             )
 
-        # Relativistic speed of the probe, beta_v^2 = (v/c)^2 = 1 - 1/gamma^2.
-        beta_v2 = 1.0 - 1.0 / gamma ** 2
+        # Relativistic characteristic angle theta_E = E / (gamma m0 v^2) = E/(2 TGT),
+        # with TGT = T (1 + T/2 m0c^2) / (1 + T/m0c^2) the relativistic kinetic term
+        # (Egerton p. 420), the same convention used by the convergence correction.
+        V_keV = float(V)
+        tgt_eV = T_eV * (1.0 + V_keV / 1022.0) / (1.0 + V_keV / 511.0)
+        theta_E = eloss / (2.0 * tgt_eV)
 
-        # Convergence correction: Salvat's formula is for parallel illumination;
-        # for finite alpha we feed Egerton's effective collection semi-angle
-        # beta* into the kinematic factor Y instead of the nominal beta.
+        # Geometric (alpha/beta) correction: replace the collection semi-angle by
+        # Egerton's effective semi-angle beta* when a convergence angle is given.
         alpha_rad = _convergence_angle_mrad_to_rad(a)
         if alpha_rad > 0.0:
             beta_collection_rad = effective_collection_angle_mrad(V, eloss, a, b) * MRAD_TO_RAD
         else:
             beta_collection_rad = beta_rad
 
-        # Relativistic kinematic factor Y (Salvat Eq. E.13). Note the square root
-        # over the full kinematic product, with (T-E)(T-E+2 me c^2) INSIDE the
-        # root; the angular dependence enters through 4 sin^2(beta/2) (~ beta^2
-        # at small angles).
-        root = (T_eV * (T_eV + 2.0 * mec2)) ** 3 * (T_eV - eloss) * (T_eV - eloss + 2.0 * mec2)
-        Y = 1.0 + np.sqrt(root) / (mec2 ** 2 * eloss ** 2) * 4.0 * np.sin(beta_collection_rad / 2.0) ** 2
-
-        # Salvat angular/relativistic bracket (Eq. E.12): the logarithmic
-        # collection term plus the transverse (retardation) correction.
-        collection_term = np.log(Y) - beta_v2 * (1.0 - 1.0 / Y)
-
-        # Prefactor (2 pi Z0^2 e^4)/(m_e v^2)(1/W), with Z0 = 1, written with
-        # e^2 = 2 a0 R and m_e v^2 = m_e c^2 * beta_v^2:
-        #     8 pi (a0 R)^2 / (m_e c^2 beta_v^2 W).
-        prefactor = 8.0 * np.pi * (a0 * R) ** 2 / (mec2 * beta_v2 * eloss)
-
-        return prefactor * oos * collection_term
+        # Egerton Eq. 3.149 (angle-integrated dipole form).
+        return 4.0 * np.pi * (a0 * R) ** 2 / (eloss * T_eV) * oos * np.log(1.0 + (beta_collection_rad / theta_E) ** 2)
 
     def cross_section(self, z_number, subshell, V=None, b=None, a=None, si=None) -> float:
         """
-        Partial ionization cross section, obtained by integrating Salvat's
-        energy-loss differential cross section (:meth:`df_cross_section`) over
-        the tabulated energy-loss axis.
+        Partial ionization cross section, obtained by integrating the
+        energy-loss differential cross section (:meth:`df_cross_section`,
+        Egerton Eq. 3.149) over the tabulated energy-loss axis.
 
         Parameters:
             z_number: Atomic number of the element.
