@@ -90,7 +90,8 @@ def effective_collection_angle_mrad(beam_energy_kev, eloss_eV, alpha_mrad, beta_
 
     References
     ----------
-    R. F. Egerton, EELS in the Electron Microscope, 2nd ed., p. 420.
+    R. F. Egerton, EELS in the Electron Microscope, 2nd ed., 
+    "Appendix B: Computer Programs, B.5. Incident-Convergence Correction", p. 420.
     """
     alpha_mrad = float(alpha_mrad)
     beta_mrad = float(beta_mrad)
