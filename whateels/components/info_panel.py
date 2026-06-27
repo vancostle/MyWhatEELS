@@ -96,15 +96,20 @@ class InfoPanel(pn.Column):
                     text-align: right;
                     height: 20px !important;
                     min-height: 20px;
+                    font-size: 12px;
+                    font-family: monospace;
 
                     border: 0 !important;
-                    border-bottom: 1px solid #b63fb5 !important;
+                    border-bottom: 1px solid transparent !important;
                     background: transparent !important;
                     box-shadow: none !important;
                     outline: none !important;
                     border-radius: 0 !important;
                     padding: 0 !important;
-                    max-width: 80px !important;
+                    max-width: 65px !important;
+                }
+                :host .bk-input:is(:focus,:hover,:focus-visible) {
+                    border-bottom: 1px solid #b63fb5 !important;
                 }
                 :host .bk-input-container {
                     justify-content: flex-end !important;
