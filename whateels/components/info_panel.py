@@ -1,6 +1,6 @@
 import panel as pn
 
-from whateels.helpers import CSS_ROOT, HTML_ROOT, LoadCSS
+from whateels.helpers import HTML_ROOT
 
 class InfoPanel(pn.Column):
     """ Creates a dataset information panel displaying key metadata attributes. """
@@ -46,25 +46,20 @@ class InfoPanel(pn.Column):
         # HTML content
         DATASET_INFO_TITLE = f"<span class=\"dataset-info-title\">{self._title}</span>"
         
-        # Spacing
-        SPACER_HEIGHT_SMALL = 5
-        SPACER_HEIGHT_MEDIUM = 10
-        MARGIN_ZERO = 0
-
         # Cabecera de la tarjeta: titulo a la izquierda y el boton circular a la derecha.
-        header_items = [pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=MARGIN_ZERO)]
+        header_items = [pn.pane.HTML(DATASET_INFO_TITLE, sizing_mode=STRETCH_WIDTH, margin=0)]
         if self._show_metadata_button:
             # El icono del boton se carga como HTML para conservar el aspecto exacto del diseno.
             metadata_html_path = HTML_ROOT / HTML_FILE
             with open(metadata_html_path, READ_MODE, encoding=UTF_8) as f:
                 metadata_button_html = f.read()
-            metadata_button = pn.pane.HTML(metadata_button_html, margin=MARGIN_ZERO)
+            metadata_button = pn.pane.HTML(metadata_button_html, margin=0)
             header_items.append(metadata_button)
         header = pn.Row(
             *header_items,
             sizing_mode=STRETCH_WIDTH,
             css_classes=DATASET_INFO_HEADER_CLASS,
-            margin=MARGIN_ZERO
+            margin=0,
         )
         
         # Cada fila puede ser texto plano o un widget compacto (como el input editable de Home).
@@ -75,9 +70,12 @@ class InfoPanel(pn.Column):
 
         dataset_info = pn.Column(
             header,
-            pn.Spacer(height=SPACER_HEIGHT_SMALL),
-            *info_rows,
-            pn.Spacer(height=SPACER_HEIGHT_MEDIUM),
+            pn.Column(
+                *info_rows,
+                sizing_mode=STRETCH_WIDTH,
+                margin=0,
+                css_classes=["dataset-info-row-wrapper"]
+            ),
             sizing_mode=STRETCH_WIDTH,
             css_classes=DATASET_INFO_CLASS
         )
@@ -85,25 +83,59 @@ class InfoPanel(pn.Column):
         return dataset_info
 
     def _create_info_row(self, key, value, sizing_mode: str) -> pn.Row:
-        # Si el valor es un widget Panel, lo dejamos tal cual.
-        # Si no, lo convertimos a HTML para mantener el mismo estilo tipografico.
-        if isinstance(value, pn.viewable.Viewable):
+        if isinstance(value, pn.widgets.TextInput):
+            # Use widget.name as the unit suffix (e.g. "kV"), then clear it
+            # so Panel doesn't render its own label above the input.
+            suffix = value.name
+            value.name = ""
+            
+            value.css_classes = ["dataset-info-editable-input"]
+            value.stylesheets = ["""
+                :host .bk-input {
+                    margin-left: 1rem;
+                    text-align: right;
+                    height: 20px !important;
+                    min-height: 20px;
+
+                    border: 0 !important;
+                    border-bottom: 1px solid #b63fb5 !important;
+                    background: transparent !important;
+                    box-shadow: none !important;
+                    outline: none !important;
+                    border-radius: 0 !important;
+                    padding: 0 !important;
+                    max-width: 80px !important;
+                }
+                :host .bk-input-container {
+                    justify-content: flex-end !important;
+                }
+            """]
+            value.margin = (0, 0, 0, 0)
+            
+            value_component = pn.Row(
+                value,
+                pn.widgets.StaticText(value=suffix) if bool(suffix) else None,
+                css_classes=["dataset-info-editable-input-wrapper"],
+                margin=(0, 0, 0, 0),
+                sizing_mode="stretch_width"
+            )
+        elif isinstance(value, pn.viewable.Viewable):
             value_component = value
         else:
             value_component = pn.pane.HTML(
                 str(value),
-                css_classes=["dataset-info-value"]
+                css_classes=["dataset-info-value"],
+                margin=(0, 0, 0, 0)
             )
 
         return pn.Row(
-            pn.Row(
-                pn.pane.HTML(
-                    str(f'{key}:'),
-                    css_classes=["dataset-info-key"],
-                ),
-                sizing_mode=sizing_mode
+            pn.pane.HTML(
+                str(f'{key}:'),
+                css_classes=["dataset-info-key"],
+                margin=(0, 0, 0, 0),
             ),
             value_component,
             sizing_mode=sizing_mode,
-            margin=(0, 6, 0, 6)
+            margin=0,
+            css_classes=["dataset-info-row"]
         )

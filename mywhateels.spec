@@ -138,11 +138,12 @@ for dist in (
     'lmfit',
     'umap-learn',
     'hdbscan',
+    'rosettasciio',
 ):
     metadata.extend(collect_optional_metadata(dist))
 
 package_data = []
-for pkg in ('panel', 'bokeh', 'holoviews', 'matplotlib'):
+for pkg in ('panel', 'bokeh', 'holoviews', 'matplotlib', 'rsciio'):
     package_data.extend(collect_optional_data(pkg))
 
 
@@ -223,6 +224,15 @@ a = Analysis(
         'numba.core.datamodel',
         'numba.cpython',
         'numba.np',
+
+        # RosettaSciIO — DM3/DM4 reader
+        'rsciio',
+        'rsciio.digitalmicrograph',
+        'rsciio.utils',
+        'pint',
+        'box',
+        'dateutil',
+        'yaml',
     ],
     hookspath=[],
     runtime_hooks=[],

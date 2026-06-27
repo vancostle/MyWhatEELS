@@ -28,6 +28,14 @@
     }
 }
 
+#sidebar {
+    padding: 16px 10px 5px 10px !important;
+}
+
+#sidebar.sidenav > ul > div .bk-panel-models-layout-Column {
+    min-width: 0;
+}
+
 .custom-nav-link.markdown {
     margin: 0 !important;
     padding: 0 !important;

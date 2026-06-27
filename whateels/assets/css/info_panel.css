@@ -1,13 +1,17 @@
+:host {
+    box-sizing: border-box;
+}
 .dataset-info {
     /* Marco general de la tarjeta: superficie suave, sin esquinas grandes. */
     padding: 0;
     list-style-type: none;
     border-radius: 4px;
     background-color: var(--panel-surface-color, #f1f1f1);
-    margin: 0 0 0 5px;
+    margin: 0;
     opacity: 0;
     overflow: hidden;
     box-shadow: 0px 0px 5px #d8d8d8;
+    min-width: 150px;
 }
 
 .dataset-info.animated {
@@ -68,6 +72,38 @@
     background-color: white;
 }
 
+.dataset-info-row-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 6px 0px 6px;
+    min-width: 0;
+}
+
+.dataset-info-row {
+    display: flex;
+    gap: 0;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    min-width: initial;
+}
+
+.dataset-info-key {
+    white-space: nowrap;
+    margin: auto 0;
+}
+
+.dataset-info-editable-input-wrapper {
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+}
+
+.dataset-info-key + .bk-Row {
+    gap: 6px;
+}
+
 .dataset-info-key, .dataset-info-value {
     /* Etiquetas y valores usan la misma familia monoespaciada para alinear columnas. */
     color: var(--panel-on-surface-color, #000);
@@ -75,80 +111,13 @@
     font-family: monospace;
 }
 
-.dataset-info-editable-value {
-    /* Fila compacta: el numero, el espacio y la unidad comparten una misma linea visual. */
-    display: flex;
-    align-items: baseline;
-    justify-content: flex-end;
-    gap: 5px;
-    min-width: 64px;
-    height: 11px;
-    line-height: 11px;
-}
-
 .dataset-info-editable-input {
-    /* Contenedor del input editables, con altura minima para no romper la fila. */
-    margin: 0;
-    min-width: 38px;
-    height: 11px;
-    line-height: 11px;
+    min-width: initial;
+    flex: 1;
 }
 
-.dataset-info-editable-input,
-.dataset-info-editable-input.bk-TextInput,
-.dataset-info-editable-input.bk-input-group,
-.dataset-info-editable-input > div,
-.dataset-info-editable-input > .bk,
-.dataset-info-editable-input .bk,
-.dataset-info-editable-input .bk-input-group {
-    margin: 0 !important;
-    padding: 0 !important;
-    min-height: 11px !important;
-    height: 11px !important;
-    max-height: 11px !important;
-    line-height: 11px !important;
-}
-
-.dataset-info-editable-input label,
-.dataset-info-editable-input .bk-input-group label {
-    /* El widget no necesita etiqueta visible; solo queremos el valor. */
-    display: none !important;
-}
-
-.dataset-info-editable-input input,
-.dataset-info-editable-input .bk-input,
-.dataset-info-editable-input input.bk-input {
-    /* La caja interna se aplana al maximo para parecer texto y no formulario. */
-    width: 38px !important;
-    height: 11px !important;
-    min-height: 11px !important;
-    max-height: 11px !important;
-    line-height: 11px !important;
-    padding: 0 !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    color: var(--panel-on-surface-color, #000);
-    font-size: 12px;
-    font-family: monospace;
-    text-align: right;
-    box-shadow: none !important;
-    outline: none !important;
-    box-sizing: border-box !important;
-    appearance: none !important;
-}
-
-.dataset-info-editable-input input:hover,
-.dataset-info-editable-input input:focus,
-.dataset-info-editable-input input:focus-visible,
-.dataset-info-editable-input .bk-input:hover,
-.dataset-info-editable-input .bk-input:focus,
-.dataset-info-editable-input .bk-input:focus-visible,
-.dataset-info-editable-input input.bk-input:focus {
-    border-bottom: 1px solid #b63fb5 !important;
-    background: transparent !important;
-    outline: none !important;
-    box-shadow: none !important;
+.dataset-info-editable-input + .bk-Div {
+    margin: auto 0;
 }
 
 .dataset-info-unit {

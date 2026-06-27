@@ -1,6 +1,6 @@
 import panel as pn
 
-from whateels.components import FileDialogUploader
+from whateels.components import FileDialogUploader, InfoPanel
 from whateels.helpers.constants import ASSETS_ROOT
 
 from typing import TYPE_CHECKING, Optional
@@ -47,6 +47,21 @@ class HomePageLeftSidebar(pn.Column):
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
+        
+        info_panel = InfoPanel(information={
+            "Beam energy":  
+                pn.widgets.TextInput(
+                    name="kV", 
+                    value="200", 
+                ),
+            "Dataset type": "SIMS",
+            "Scan angle": 
+                pn.widgets.TextInput(
+                    name="deg", 
+                    value="10",
+                ),
+            "Example of string": "This is a string",
+        }, margin=(20, 0, 0, 0))
 
         self._welcome_message = pn.Column(
             pn.pane.Markdown(
@@ -57,7 +72,7 @@ class HomePageLeftSidebar(pn.Column):
                 Relax, get yourself a cup of coffee  
                 and get ready to analyse some EELS data.
                 """,
-                sizing_mode=self._STRETCH_WIDTH
+                sizing_mode=self._STRETCH_WIDTH,
             ),
             pn.pane.SVG(
                 str(ASSETS_ROOT / 'img' / 'we_rainbow_logo.svg'),
@@ -71,8 +86,11 @@ class HomePageLeftSidebar(pn.Column):
         self._path_input = None  # kept for potential future use
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
+            info_panel,
             pn.Spacer(height=10),
-            sizing_mode=self._STRETCH_WIDTH
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["sidebar-container-layout"],
+            stylesheets=[":host { min-width: 0; } .bk-panel-models-layout-Column { min-width: 0; }"]
         )
         return self._sidebar_container_layout
         
