@@ -98,6 +98,7 @@
     box-sizing: border-box;
     flex: 1;
     min-width: 0;
+    font-family: monospace;
 }
 
 .dataset-info-key + .bk-Row {

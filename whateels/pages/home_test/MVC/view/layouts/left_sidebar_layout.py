@@ -49,17 +49,9 @@ class HomePageLeftSidebar(pn.Column):
         self._file_uploader = self._create_file_uploader()
         
         info_panel = InfoPanel(information={
-            "Beam energy":  
-                pn.widgets.TextInput(
-                    name="kV", 
-                    value="200", 
-                ),
+            "Beam energy": pn.widgets.TextInput(name="kV", value="200"),
             "Dataset type": "SIMS",
-            "Scan angle": 
-                pn.widgets.TextInput(
-                    name="deg", 
-                    value="10",
-                ),
+            "Scan angle": pn.widgets.TextInput(name="deg", value="10"),
             "Example of string": "This is a string",
         }, margin=(20, 0, 0, 0))
 
