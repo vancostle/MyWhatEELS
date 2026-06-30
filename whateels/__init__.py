@@ -1,6 +1,5 @@
 
 import sys
-import time
 import panel as pn
 import holoviews as hv
 # Import only what is strictly needed for startup — avoids triggering
@@ -38,9 +37,7 @@ class App:
         self._title = title
 
     def run(self, port : int = _DEFAULT_PORT, show : bool = True):
-        _t0 = time.perf_counter()
         KillProcess.by_port(port)
-        _t_kill = time.perf_counter()
 
         # Imports are static so PyInstaller can trace them, but placed here
         # (inside run()) so they execute AFTER the splash screen is already
@@ -80,15 +77,6 @@ class App:
             "/quantification":   _quantification,
             "/fitting":          _fitting,
         }
-
-        _t_end = time.perf_counter()
-        print(
-            f"\n[App.run()] Server startup breakdown:"
-            f"\n  Kill port:    {(_t_kill - _t0)   * 1000:.1f} ms"
-            f"\n  Pages setup:  {(_t_end  - _t_kill)* 1000:.1f} ms"
-            f"\n  TOTAL:        {(_t_end  - _t0)    * 1000:.1f} ms"
-            f"\n  → pn.serve() starting on port {port}...\n"
-        )
 
         return pn.serve(
             pages, # type: ignore

@@ -35,7 +35,6 @@ class HomePageController:
         _view_ref = weakref.ref(view)
         pn.state.on_session_destroyed(lambda _: (v := _view_ref()) and v.cleanup())
 
-        
         # Set up callbacks for file uploader events
         self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
         self._view.left_sidebar.file_uploader.on_file_removed_callback = self._handle_file_removal
@@ -59,37 +58,46 @@ class HomePageController:
             DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
         
-        try:
-            self._view.cleanup_plots()
+        self._view.cleanup_plots()
+        
+        if (filename.endswith('.emd')):
+            print('You just uploaded a .emd file.')
+        elif (filename.endswith('.npy')):
+            print('You just uploaded a .npy file.')
+        elif (filename.endswith('.hypsy')):
+            print('You just uploaded a .hypsy file.')
+        else:
+            print('You just uploaded a .dm3 or .dm4 file.')
+            try:
 
-            app_state = self._model.app_state
-            app_state.clear_all()
-            app_state.filename = filename
+                app_state = self._model.app_state
+                app_state.clear_all()
+                app_state.filename = filename
 
-            self._view.main.loading_placeholder()
+                self._view.main.loading_placeholder()
 
-            all_datasets, used_fallback = self._process_with_fallback(filename, file_path)
+                all_datasets, used_fallback = self._process_with_fallback(filename, file_path)
 
-            app_state.all_datasets = all_datasets
+                app_state.all_datasets = all_datasets
 
-            if not all_datasets:
+                if not all_datasets:
+                    self._view.main.error_placeholder()
+                    return
+
+                self._view.create_tab_and_dataset_info(all_datasets, used_fallback=used_fallback)
+
+            except DMFileLoadingError as e:
                 self._view.main.error_placeholder()
-                return
-
-            self._view.create_tab_and_dataset_info(all_datasets, used_fallback=used_fallback)
-
-        except DMFileLoadingError as e:
-            self._view.main.error_placeholder()
-            raise e
-        except DMFileUploadError as e:
-            self._view.main.error_placeholder()
-            raise e
-        except DMShapeMismatchError as e:
-            self._view.main.error_placeholder()
-            raise e
-        except Exception as e:
-            self._view.main.error_placeholder()
-            raise DMFileUploadError(e)
+                raise e
+            except DMFileUploadError as e:
+                self._view.main.error_placeholder()
+                raise e
+            except DMShapeMismatchError as e:
+                self._view.main.error_placeholder()
+                raise e
+            except Exception as e:
+                self._view.main.error_placeholder()
+                raise DMFileUploadError(e)
 
         
     def _process_with_fallback(self, filename: str, file_path: str) -> "tuple[list[Dataset], bool]":
