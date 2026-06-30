@@ -1,3 +1,4 @@
+import time
 import panel as pn
 import gc
 from whateels.errors.dm.data import DMPlotCreationError
@@ -22,14 +23,24 @@ class HomePageView:
             pn.config.css_files.append('/assets/css/home.css') # type: ignore
         
         # Layout components
+        _t0 = time.perf_counter()
         self._main = HomePageMainLayout(model)
+        _t1 = time.perf_counter()
         self._left_sidebar = HomePageLeftSidebar(
             model,
             sizing_mode=self._STRETCH_WIDTH,
         )
+        _t2 = time.perf_counter()
         self._right_sidebar = HomePageRightSidebar(
             model,
             sizing_mode=self._STRETCH_WIDTH,
+        )
+        _t3 = time.perf_counter()
+        print(
+            f"  [View breakdown]"
+            f"  MainLayout: {(_t1-_t0)*1000:.1f} ms"
+            f"  |  LeftSidebar: {(_t2-_t1)*1000:.1f} ms"
+            f"  |  RightSidebar: {(_t3-_t2)*1000:.1f} ms"
         )
         
         # Store all dataset information
@@ -73,7 +84,7 @@ class HomePageView:
         """Delete the right sidebar layout."""
         self._right_sidebar.clear()
         
-    def create_tab_and_dataset_info(self, all_datasets: list["Dataset"], used_fallback: bool = False) -> None:
+    def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
         """
         Create visualizations for all datasets and setup tabbed UI interface.
         
@@ -133,13 +144,7 @@ class HomePageView:
             # Set the active tab based on shared state or default
             plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
             
-            if used_fallback:
-                print("DEBUG: RSCIIO was used.")
-                pn.state.notifications.warning( # type: ignore
-                    "Our parser could not read this file — loaded via RosettaSciIO fallback. "
-                    "Results should be equivalent but please verify.",
-                    duration=6000,
-                )
+            # Update UI
             self._main.update(plots_tab)
             
         except Exception as e:

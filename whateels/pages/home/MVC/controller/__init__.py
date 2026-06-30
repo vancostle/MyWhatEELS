@@ -35,8 +35,6 @@ class HomePageController:
         _view_ref = weakref.ref(view)
         pn.state.on_session_destroyed(lambda _: (v := _view_ref()) and v.cleanup())
 
-        # Initialize file processing services
-        self._file_processor = FileProcessorService(model)
         
         # Set up callbacks for file uploader events
         self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
@@ -46,13 +44,13 @@ class HomePageController:
             # Initial layout setup based on existing datasets
             self._view.create_tab_and_dataset_info(all_datasets)
             
-    def _handle_file_upload(self, filename: str, file_content: str):
+    def _handle_file_upload(self, filename: str, file_path: str):
         """
         Handle complete file upload workflow: process file → create visualizations → update UI.
         
         Args:
             filename: Uploaded file name
-            file_content: Full local path to the selected file on disk
+            file_path: Full local path to the selected file on disk
             
         Returns:
             bool: True if successful, False if failed
@@ -60,33 +58,25 @@ class HomePageController:
         Raises:
             DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
-
+        
         try:
-            # Release previous plot resources before loading a new file.
             self._view.cleanup_plots()
 
-            # Clear any existing datasets and metadata
             app_state = self._model.app_state
             app_state.clear_all()
-            
             app_state.filename = filename
 
-            all_datasets: list[Dataset] = []
-            
-            # Show loading state
             self._view.main.loading_placeholder()
-            
-            # Process the file
-            all_datasets = self._file_processor.process_upload(filename, file_content)
 
-            # Update AppState with all loaded datasets for global access
+            all_datasets, used_fallback = self._process_with_fallback(filename, file_path)
+
             app_state.all_datasets = all_datasets
-            
+
             if not all_datasets:
                 self._view.main.error_placeholder()
                 return
-            
-            self._view.create_tab_and_dataset_info(all_datasets)
+
+            self._view.create_tab_and_dataset_info(all_datasets, used_fallback=used_fallback)
 
         except DMFileLoadingError as e:
             self._view.main.error_placeholder()
@@ -102,6 +92,27 @@ class HomePageController:
             raise DMFileUploadError(e)
 
         
+    def _process_with_fallback(self, filename: str, file_path: str) -> "tuple[list[Dataset], bool]":
+        """Try own parser first; fall back to RosettaSciIO if it raises.
+
+        Returns:
+            (datasets, used_fallback)
+
+        Raises:
+            DMFileUploadError: If both parsers fail, with context from both errors.
+        """
+        try:
+            return FileProcessorService(self._model).process_upload(filename, file_path), False
+        except Exception as primary_error:
+            try:
+                return RosettaFileProcessorService(self._model).process_upload(filename, file_path), True
+            except Exception as fallback_error:
+                raise DMFileUploadError(
+                    f"Both parsers failed for '{filename}'.\n"
+                    f"  Own parser:  {primary_error}\n"
+                    f"  RosettaSciIO: {fallback_error}"
+                ) from fallback_error
+
     def _handle_file_removal(self, filename: str) -> None:
         """
         Handle file removal: cleanup UI, clear datasets, reset application state.

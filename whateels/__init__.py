@@ -51,10 +51,6 @@ class App:
         def _home():
             from whateels.pages.home import HomePage
             return HomePage()
-        
-        def _home_test():
-            from whateels.pages.home_test import HomePageTest
-            return HomePageTest()
 
         def _metadata():
             from whateels.pages.metadata import Metadata
@@ -77,8 +73,7 @@ class App:
             return Fitting()
 
         pages = {
-            "/":                 _home_test,
-            # "/":                 _home,
+            "/":                 _home,
             "/metadata-details": _metadata,
             "/clustering":       _clustering,
             "/clustering-2":     _clustering_2,

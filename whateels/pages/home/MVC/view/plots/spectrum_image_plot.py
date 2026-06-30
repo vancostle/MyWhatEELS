@@ -21,7 +21,6 @@ from whateels.pages.home.utils.plot_helpers import (
 from whateels.state import CacheManager
 from whateels.base.plots.base_spectrum_image_plot import BaseSpectrumImagePlot
 from holoviews import streams as hv_streams
-from .dataset_info import create_home_dataset_info
 
 from typing import TYPE_CHECKING, override
 if TYPE_CHECKING:
@@ -162,15 +161,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
-        )
-
-    @override
-    def create_dataset_info(self):
-        return create_home_dataset_info(
-            self._model,
-            self._dataset,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=0,
         )
 
     # --- Widget Setup ---
