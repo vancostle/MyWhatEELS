@@ -47,13 +47,6 @@ class HomePageLeftSidebar(pn.Column):
     def _create_layout(self) -> pn.Column:
         """Create the sidebar layout with file uploader and spacing."""
         self._file_uploader = self._create_file_uploader()
-        
-        info_panel = InfoPanel(information={
-            "Beam energy": pn.widgets.TextInput(name="kV", value="200"),
-            "Dataset type": "SIMS",
-            "Scan angle": pn.widgets.TextInput(name="deg", value="10"),
-            "Example of string": "This is a string",
-        }, margin=(20, 0, 0, 0))
 
         self._welcome_message = pn.Column(
             pn.pane.Markdown(
@@ -78,7 +71,6 @@ class HomePageLeftSidebar(pn.Column):
         self._path_input = None  # kept for potential future use
         self._sidebar_container_layout = pn.Column(
             self._file_uploader,
-            info_panel,
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["sidebar-container-layout"],

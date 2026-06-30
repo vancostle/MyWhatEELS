@@ -73,7 +73,7 @@ class HomePageView:
         """Delete the right sidebar layout."""
         self._right_sidebar.clear()
         
-    def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
+    def create_tab_and_dataset_info(self, all_datasets: list["Dataset"], used_fallback: bool = False) -> None:
         """
         Create visualizations for all datasets and setup tabbed UI interface.
         
@@ -133,7 +133,13 @@ class HomePageView:
             # Set the active tab based on shared state or default
             plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
             
-            # Update UI
+            if used_fallback:
+                print("DEBUG: RSCIIO was used.")
+                pn.state.notifications.warning( # type: ignore
+                    "Our parser could not read this file — loaded via RosettaSciIO fallback. "
+                    "Results should be equivalent but please verify.",
+                    duration=6000,
+                )
             self._main.update(plots_tab)
             
         except Exception as e:

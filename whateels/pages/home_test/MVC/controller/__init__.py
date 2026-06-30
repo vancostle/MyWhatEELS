@@ -35,8 +35,6 @@ class HomePageController:
         _view_ref = weakref.ref(view)
         pn.state.on_session_destroyed(lambda _: (v := _view_ref()) and v.cleanup())
 
-        # Initialize file processing services
-        self._file_processor = RosettaFileProcessorService(model)
         
         # Set up callbacks for file uploader events
         self._view.left_sidebar.file_uploader.on_file_uploaded_callback = self._handle_file_upload
@@ -70,7 +68,7 @@ class HomePageController:
 
             self._view.main.loading_placeholder()
 
-            all_datasets: list[Dataset] = self._file_processor.process_upload(filename, file_path)
+            all_datasets, used_fallback = self._process_with_fallback(filename, file_path)
 
             app_state.all_datasets = all_datasets
 
@@ -78,7 +76,7 @@ class HomePageController:
                 self._view.main.error_placeholder()
                 return
 
-            self._view.create_tab_and_dataset_info(all_datasets)
+            self._view.create_tab_and_dataset_info(all_datasets, used_fallback=used_fallback)
 
         except DMFileLoadingError as e:
             self._view.main.error_placeholder()
@@ -94,6 +92,27 @@ class HomePageController:
             raise DMFileUploadError(e)
 
         
+    def _process_with_fallback(self, filename: str, file_path: str) -> "tuple[list[Dataset], bool]":
+        """Try own parser first; fall back to RosettaSciIO if it raises.
+
+        Returns:
+            (datasets, used_fallback)
+
+        Raises:
+            DMFileUploadError: If both parsers fail, with context from both errors.
+        """
+        try:
+            return FileProcessorService(self._model).process_upload(filename, file_path), False
+        except Exception as primary_error:
+            try:
+                return RosettaFileProcessorService(self._model).process_upload(filename, file_path), True
+            except Exception as fallback_error:
+                raise DMFileUploadError(
+                    f"Both parsers failed for '{filename}'.\n"
+                    f"  Own parser:  {primary_error}\n"
+                    f"  RosettaSciIO: {fallback_error}"
+                ) from fallback_error
+
     def _handle_file_removal(self, filename: str) -> None:
         """
         Handle file removal: cleanup UI, clear datasets, reset application state.
