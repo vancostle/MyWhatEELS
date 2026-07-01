@@ -260,15 +260,35 @@ class FileProcessorService:
     def _is_metadata_eels(self, metadata: dict, image: np.ndarray | None = None) -> bool:
         """
         Determine if metadata or image shape indicates EELS data.
+
+        Detection order:
+        1. Explicit EELS tag in ImageTags.
+        2. Energy axis detected via calibration units containing "eV".
+        3. 3D array shape (spectrum image or spectrum line with spatial nav axis).
         """
         IMAGE_TAGS = 'ImageTags'
         EELS = 'EELS'
-        # Check for EELS tag in metadata
+        IMAGE_DATA = 'ImageData'
+        CALIBRATIONS = 'Calibrations'
+        DIMENSION = 'Dimension'
+        UNITS = 'Units'
+
         if IMAGE_TAGS in metadata and EELS in metadata[IMAGE_TAGS]:
             return True
-        # If image is provided, check for 3D shape (EELS spectrum image)
+
+        # Check calibration units for any "eV" axis.
+        try:
+            dims = metadata[IMAGE_DATA][CALIBRATIONS][DIMENSION]
+            for dim_entry in dims.values():
+                units = dim_entry.get(UNITS, '') or ''
+                if 'ev' in units.lower():
+                    return True
+        except (KeyError, TypeError, AttributeError):
+            pass
+
         if image is not None and len(image.shape) == 3:
             return True
+
         return False
 
     def _handle_file_error(self, exception: Exception) -> list:

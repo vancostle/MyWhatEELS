@@ -172,6 +172,11 @@ class DM_EELS_data:
     def _filter_spectrum_images(self, infoDict):
         """
         Filter and extract spectrum images from metadata dictionary.
+
+        Uses a two-pass strategy:
+        - Pass 1 (strict): images with non-trivial ImageTags (more than just GMS Version).
+        - Pass 2 (lenient): any image with ImageData present, for minimal-metadata files
+          such as test/synthetic DM files.
         
         Parameters
         ----------
@@ -181,12 +186,12 @@ class DM_EELS_data:
         Returns
         -------
         dict
-            Filtered spectrum images with valid EELS data
+            Filtered spectrum images with valid data
             
         Raises
         ------
         DMNonEelsError
-            If no valid spectrum images found
+            If no valid images found in either pass
         """
         IMAGE_LIST = "ImageList"
         GMS_VERSION = "GMS Version"
@@ -194,7 +199,8 @@ class DM_EELS_data:
         try:
             all_blocks = infoDict[IMAGE_LIST]
 
-            spectrum_images = {
+            # Pass 1 — prefer images with rich ImageTags metadata.
+            strict = {
                 k: v for k, v in all_blocks.items()
                 if (
                     isinstance(v, dict)
@@ -205,12 +211,20 @@ class DM_EELS_data:
                     and not (len(v[self._IMAGE_TAGS]) == 1 and GMS_VERSION in v[self._IMAGE_TAGS])
                 )
             }
-            
-            if not spectrum_images:
-                raise ValueError("No valid spectrum images found")
-                
-            return spectrum_images
-            
+            if strict:
+                return strict
+
+            # Pass 2 — fall back to any block that has ImageData (e.g. test/synthetic files
+            # where ImageTags is minimal or only carries GMS Version).
+            lenient = {
+                k: v for k, v in all_blocks.items()
+                if isinstance(v, dict) and self._IMAGE_DATA in v
+            }
+            if lenient:
+                return lenient
+
+            raise ValueError("No valid image data found")
+
         except Exception:
             message = f"The dictionary provided after parsing the file does not contain spectral information.\n{infoDict.keys()}"
             raise DMNonEelsError(message)

@@ -109,6 +109,7 @@ class HomePageController:
         Raises:
             DMFileUploadError: If both parsers fail, with context from both errors.
         """
+
         try:
             return FileProcessorService(self._model).process_upload(filename, file_path), False
         except Exception as primary_error:

@@ -134,7 +134,6 @@ class HomePageView:
             plots_tab.active = app_state.selected_tab_index_dataset or DEFAULT_TAB_INDEX
             
             if used_fallback:
-                print("DEBUG: RSCIIO was used.")
                 pn.state.notifications.warning( # type: ignore
                     "Our parser could not read this file — loaded via RosettaSciIO fallback. "
                     "Results should be equivalent but please verify.",
