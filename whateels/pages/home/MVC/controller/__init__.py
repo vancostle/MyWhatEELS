@@ -65,7 +65,7 @@ class HomePageController:
         elif (filename.endswith('.npy')):
             print('You just uploaded a .npy file.')
         elif (filename.endswith('.hspy')):
-            print('You just uploaded a .hypsy file.')
+            print('You just uploaded a .hspy file.')
         else:
             print('You just uploaded a .dm3 or .dm4 file.')
             try:
