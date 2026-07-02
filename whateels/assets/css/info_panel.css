@@ -2,7 +2,6 @@
     box-sizing: border-box;
 }
 .dataset-info {
-    /* Marco general de la tarjeta: superficie suave, sin esquinas grandes. */
     padding: 0;
     list-style-type: none;
     border-radius: 4px;
@@ -15,12 +14,10 @@
 }
 
 .dataset-info.animated {
-    /* Entrada animada para que la tarjeta aparezca con un gesto ligero. */
     animation: dataset-info-bounce-fadein 0.6s cubic-bezier(.68,-0.55,.27,1.55) 0s forwards;
 }
 
 .dataset-info-header {
-    /* Franja superior morada con el titulo y el boton de metadata. */
     background-color: #b63fb5;
     color: white;
     margin: 0;
@@ -29,7 +26,6 @@
 }
 
 .dataset-info-title {
-    /* Titulo principal de la tarjeta. */
     margin: 0;
     padding: 0;
     font-size: 14px;
@@ -38,7 +34,6 @@
     color: white;
 }
 
-/* Boton de metadata: el SVG vive en HTML y aqui solo ajustamos su contenedor. */
 .metadata-button-container {
     display: flex;
     align-items: center;
@@ -49,7 +44,6 @@
 }
 
 .metadata-button {
-    /* Boton circular pequeno con el simbolo "+". */
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -106,7 +100,6 @@
 }
 
 .dataset-info-key, .dataset-info-value {
-    /* Etiquetas y valores usan la misma familia monoespaciada para alinear columnas. */
     color: var(--panel-on-surface-color, #000);
     font-size: 12px;
     font-family: monospace;
@@ -122,7 +115,6 @@
 }
 
 .dataset-info-unit {
-    /* La unidad se alinea con la base del numero y no debe partirse en varias lineas. */
     display: inline-flex;
     align-items: baseline;
     height: 11px;
@@ -152,7 +144,6 @@
     stroke: black;
 }
 
-/* Filas de contenido sobre fondo blanco para mantener la lectura limpia. */
 .dataset-info > div > div:not(.dataset-info-header) {
     background-color: #ffffff;
     padding: 8px 16px;

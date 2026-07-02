@@ -20,7 +20,8 @@ class HomePageLeftSidebar(pn.Column):
         
         super().__init__(
             self._create_layout(),
-            **kwargs
+            **kwargs,
+            stylesheets=[":host {border: 1px solid red !important;}"]
         )
 
     @property
@@ -74,7 +75,6 @@ class HomePageLeftSidebar(pn.Column):
             pn.Spacer(height=10),
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["sidebar-container-layout"],
-            stylesheets=[":host { min-width: 0; } .bk-panel-models-layout-Column { min-width: 0; }"]
         )
         return self._sidebar_container_layout
         
