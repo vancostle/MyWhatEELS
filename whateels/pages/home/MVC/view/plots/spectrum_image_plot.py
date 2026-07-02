@@ -14,7 +14,7 @@ from bokeh.models import Range1d
 
 from whateels.helpers import SpectrumExtractor
 from whateels.helpers.fitting.multifitting import MultiFit
-from whateels.components import SplitJs, SimpleDetails, ToggleButton, ProgressDisplay
+from whateels.components import SplitJs, SimpleDetails, ToggleButton, ProgressDisplay, InfoPanel
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
@@ -161,6 +161,35 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             left_column=left_column,
             right_column=right_column,
             sizing_mode='stretch_both',
+        )
+        
+    @override
+    def create_dataset_info(self) -> InfoPanel:
+        """
+        Returns a panel with dataset information (shape, beam energy, angles).
+        Shared implementation for all spectrum image plot subclasses.
+        """
+        NOT_AVAILABLE = 'N/A'
+        attrs = self._dataset.attrs if self._dataset is not None else {}
+
+        shape = attrs.get('shape', NOT_AVAILABLE)
+        beam_energy = attrs.get('beam_energy', NOT_AVAILABLE)
+        convergence_angle = attrs.get('convergence_angle', NOT_AVAILABLE)
+        collection_angle = attrs.get('collection_angle', NOT_AVAILABLE)
+
+        beam_energy_input = pn.widgets.TextInput(name="keV", value=str(beam_energy))
+        convergence_angle_input = pn.widgets.TextInput(name="mrad", value=str(convergence_angle))
+        collection_angle_input = pn.widgets.TextInput(name="mrad", value=str(collection_angle))
+        
+        return InfoPanel(
+            title="Dataset Information",
+            information={
+                "Shape": shape,
+                "Beam Energy": beam_energy_input,
+                "Convergence Angle": convergence_angle_input,
+                "Collection Angle": collection_angle_input,
+            },
+            margin=0,
         )
 
     # --- Widget Setup ---

@@ -187,32 +187,22 @@ class BaseSpectrumImagePlot(IPlot):
         convergence_angle = attrs.get('convergence_angle', NOT_AVAILABLE)
         collection_angle = attrs.get('collection_angle', NOT_AVAILABLE)
 
-        # return InfoPanel(
-        #     title="Dataset Information",
-        #     information={
-        #         "Shape": shape,
-        #         "Beam Energy": beam_energy_fmt,
-        #         "Convergence Angle": convergence_angle_fmt,
-        #         "Collection Angle": collection_angle_fmt,
-        #     },
-        #     sizing_mode='stretch_width',
-        #     margin=0,
-        # )
-        
-        beam_energy_input = pn.widgets.TextInput(name="keV", value=str(beam_energy))
-        convergence_angle_input = pn.widgets.TextInput(name="mrad", value=str(convergence_angle))
-        collection_angle_input = pn.widgets.TextInput(name="mrad", value=str(collection_angle))
-        
+        beam_energy_fmt = f"{beam_energy} keV" if beam_energy != NOT_AVAILABLE else NOT_AVAILABLE
+        convergence_angle_fmt = f"{convergence_angle} mrad" if convergence_angle != NOT_AVAILABLE else NOT_AVAILABLE
+        collection_angle_fmt = f"{collection_angle} mrad" if collection_angle != NOT_AVAILABLE else NOT_AVAILABLE
+
         return InfoPanel(
             title="Dataset Information",
             information={
                 "Shape": shape,
-                "Beam Energy": beam_energy_input,
-                "Convergence Angle": convergence_angle_input,
-                "Collection Angle": collection_angle_input,
+                "Beam Energy": beam_energy_fmt,
+                "Convergence Angle": convergence_angle_fmt,
+                "Collection Angle": collection_angle_fmt,
             },
+            sizing_mode='stretch_width',
             margin=0,
         )
+
     def _get_display_data(self):
         """Return the electron count data cube to use for display (can be overridden by subclasses)."""
         if self._electron_count_data is None:
