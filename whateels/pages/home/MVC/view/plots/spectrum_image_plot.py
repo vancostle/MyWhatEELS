@@ -122,6 +122,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._paneB_range_mode = "autorange"
         self._reset_in_progress = False  # Flag to prevent callback freeze during reset
         self._reset_finalize_attempts = 0
+        
+        # InfoPanel inputs
+        self._beam_energy_input = pn.widgets.TextInput(name="keV", value="None")
+        self._convergence_angle_input = pn.widgets.TextInput(name="mrad", value="None")
+        self._collection_angle_input = pn.widgets.TextInput(name="mrad", value="None")
+        self._watch_metadata_inputs()
 
         # Numpy cache for the fast hover path — avoids xarray _as_row_col_energy conversion
         # on every mouse move. Invalidated automatically when _get_display_data() changes identity.
@@ -176,21 +182,104 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         beam_energy = attrs.get('beam_energy', NOT_AVAILABLE)
         convergence_angle = attrs.get('convergence_angle', NOT_AVAILABLE)
         collection_angle = attrs.get('collection_angle', NOT_AVAILABLE)
-
-        beam_energy_input = pn.widgets.TextInput(name="keV", value=str(beam_energy))
-        convergence_angle_input = pn.widgets.TextInput(name="mrad", value=str(convergence_angle))
-        collection_angle_input = pn.widgets.TextInput(name="mrad", value=str(collection_angle))
+        
+        self._beam_energy_input.value = self._format_metadata_value(beam_energy)
+        self._convergence_angle_input.value = self._format_metadata_value(convergence_angle)
+        self._collection_angle_input.value = self._format_metadata_value(collection_angle)
         
         return InfoPanel(
             title="Dataset Information",
             information={
                 "Shape": shape,
-                "Beam Energy": beam_energy_input,
-                "Convergence Angle": convergence_angle_input,
-                "Collection Angle": collection_angle_input,
+                "Beam Energy": self._beam_energy_input,
+                "Convergence Angle": self._convergence_angle_input,
+                "Collection Angle": self._collection_angle_input,
             },
             margin=0,
         )
+
+    # --- Editable metadata helpers ---
+
+    _NOT_AVAILABLE = "N/A"
+    _EDITABLE_METADATA_FIELDS = (
+        ("beam_energy",        "_beam_energy_input"),
+        ("convergence_angle",  "_convergence_angle_input"),
+        ("collection_angle",   "_collection_angle_input"),
+    )
+
+    def _watch_metadata_inputs(self) -> None:
+        """Attach param watchers so typing a new value updates the dataset and AppState."""
+        for attr_name, widget_attr in self._EDITABLE_METADATA_FIELDS:
+            widget: pn.widgets.TextInput = getattr(self, widget_attr)
+            widget.param.watch(
+                lambda event, a=attr_name: self._on_metadata_input_change(event, a),
+                "value",
+            )
+
+    def _on_metadata_input_change(self, event, attr_name: str) -> None:
+        numeric = self._to_optional_float(event.new)
+        if numeric is None or self._dataset is None:
+            # Restore the last valid value stored in the dataset.
+            if self._dataset is not None:
+                event.obj.value = self._format_metadata_value(
+                    self._dataset.attrs.get(attr_name)
+                )
+            return
+
+        app_state = self._model.app_state
+        self._dataset.attrs[attr_name] = numeric
+
+        if hasattr(app_state, "clear_elements_selected"):
+            app_state.clear_elements_selected()
+
+        all_datasets = app_state.all_datasets
+        if isinstance(all_datasets, list):
+            updated = list(all_datasets)
+            matched = False
+            for i, candidate in enumerate(updated):
+                if candidate is self._dataset:
+                    candidate.attrs[attr_name] = numeric
+                    matched = True
+                    break
+            if not matched:
+                idx = app_state.selected_tab_index_dataset
+                if 0 <= idx < len(updated):
+                    updated[idx].attrs[attr_name] = numeric
+            app_state.all_datasets = updated
+
+        self._sync_shared_dataset(app_state.plot_dataset, attr_name, numeric)
+        self._sync_shared_dataset(app_state.preprocessed_plot_dataset, attr_name, numeric)
+        event.obj.value = self._format_metadata_value(numeric)
+
+    def _sync_shared_dataset(self, shared, attr_name: str, value: float) -> None:
+        if shared is None:
+            return
+        if shared is self._dataset or self._same_named_dataset(shared):
+            shared.attrs[attr_name] = value
+
+    def _same_named_dataset(self, candidate) -> bool:
+        source_name = self._dataset.attrs.get("image_name") if self._dataset else None
+        candidate_name = getattr(candidate, "attrs", {}).get("image_name")
+        return bool(source_name) and source_name == candidate_name
+
+    @staticmethod
+    def _to_optional_float(value) -> float | None:
+        if value in (None, "N/A", "None", ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _format_metadata_value(value) -> str:
+        if value is None:
+            return ""
+        try:
+            f = float(value)
+            return f"{f:g}"
+        except (TypeError, ValueError):
+            return ""
 
     # --- Widget Setup ---
     def _setup_widgets(self):
