@@ -24,6 +24,7 @@ class InfoPanel(pn.Column):
 
         super().__init__(
             self._create_layout(),
+            stylesheets=[":host {box-sizing: border-box; min-width: 0; }"],
             **params
         )
         

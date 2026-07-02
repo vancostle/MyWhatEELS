@@ -21,7 +21,6 @@ class HomePageLeftSidebar(pn.Column):
         super().__init__(
             self._create_layout(),
             **kwargs,
-            stylesheets=[":host {border: 1px solid red !important;}"]
         )
 
     @property
