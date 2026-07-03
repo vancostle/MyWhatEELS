@@ -29,13 +29,26 @@ class RosettaFileProcessorService:
 
     # ── Public ──────────────────────────────────────────────────────────────
 
+    _READERS: dict[str, str] = {
+        ".dm3":  "rsciio.digitalmicrograph",
+        ".dm4":  "rsciio.digitalmicrograph",
+        ".hspy": "rsciio.hspy",
+        ".zspy": "rsciio.hspy",
+    }
+
     def process_upload(self, filename: str, file_path: str) -> list[xr.Dataset]:
         """
         Read *file_path* with rsciio and return a list of cleaned xr.Datasets.
         Also stores the first signal's metadata in AppState.
         """
-        from rsciio.digitalmicrograph import file_reader
+        import importlib
 
+        ext = os.path.splitext(filename)[1].lower()
+        reader_module = self._READERS.get(ext)
+        if reader_module is None:
+            raise ValueError(f"Unsupported file extension '{ext}'. Supported: {list(self._READERS)}")
+
+        file_reader = importlib.import_module(reader_module).file_reader
         signals: list[dict] = file_reader(file_path)
         if not signals:
             return []
@@ -54,7 +67,11 @@ class RosettaFileProcessorService:
 
     def _signal_to_dataset(self, signal: dict, file_path: str) -> xr.Dataset | None:
         data: np.ndarray = np.array(signal['data'], dtype=np.float64)
-        axes: list[dict] = sorted(signal['axes'], key=lambda a: a['index_in_array'])
+        # DM reader provides 'index_in_array'; hspy reader does not (axes already ordered).
+        axes: list[dict] = sorted(
+            signal['axes'],
+            key=lambda a: a.get('index_in_array', signal['axes'].index(a)),
+        )
         meta: dict = signal['metadata']
         orig: dict = signal.get('original_metadata', {})
 
@@ -237,7 +254,8 @@ class RosettaFileProcessorService:
 
     @staticmethod
     def _axis_to_array(axis: dict) -> np.ndarray:
-        return axis['offset'] + axis['scale'] * np.arange(axis['size'])
+        # hspy reader stores 'size' as a string; DM reader stores it as int.
+        return axis['offset'] + axis['scale'] * np.arange(int(axis['size']))
 
     @staticmethod
     def _find_energy_axis_idx(axes: list[dict]) -> int | None:

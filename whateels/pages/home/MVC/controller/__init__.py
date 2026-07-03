@@ -8,6 +8,11 @@ from whateels.errors.dm.data import (
     DMShapeMismatchError,
     DMFileRemovalError,
 )
+from whateels.errors.hspy.data import (
+    HSpyFileLoadingError,
+    HSpyFileUploadError,
+    HSpyShapeMismatchError,
+)
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -65,11 +70,36 @@ class HomePageController:
             print('You just uploaded a .emd file.')
         elif (filename.endswith('.npy')):
             print('You just uploaded a .npy file.')
-        elif (filename.endswith('.hspy')):
-            print('You just uploaded a .hspy file.')
-            from rsciio.hspy import file_reader as hspy_reader
-            hyperspy_file = hspy_reader(file_path, lazy=False)
-            print(hyperspy_file)
+        elif (filename.endswith('.hspy') or filename.endswith('.zspy')):
+            try:
+                app_state = self._model.app_state
+                app_state.clear_all()
+                app_state.filename = filename
+
+                self._view.main.loading_placeholder()
+
+                all_datasets = RosettaFileProcessorService(self._model).process_upload(filename, file_path)
+
+                app_state.all_datasets = all_datasets
+
+                if not all_datasets:
+                    self._view.main.error_placeholder()
+                    return
+
+                self._view.create_tab_and_dataset_info(all_datasets)
+
+            except HSpyFileLoadingError as e:
+                self._view.main.error_placeholder()
+                raise e
+            except HSpyFileUploadError as e:
+                self._view.main.error_placeholder()
+                raise e
+            except HSpyShapeMismatchError as e:
+                self._view.main.error_placeholder()
+                raise e
+            except Exception as e:
+                self._view.main.error_placeholder()
+                raise HSpyFileUploadError(e)
         elif (filename.endswith('.dm3')) or (filename.endswith('.dm4')):
             print('You just uploaded a .dm3 or .dm4 file.')
             try:
