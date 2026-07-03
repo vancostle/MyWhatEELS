@@ -52,88 +52,52 @@ class HomePageController:
     def _handle_file_upload(self, filename: str, file_path: str):
         """
         Handle complete file upload workflow: process file → create visualizations → update UI.
-        
-        Args:
-            filename: Uploaded file name
-            file_path: Full local path to the selected file on disk
-            
-        Returns:
-            bool: True if successful, False if failed
-            
-        Raises:
-            DMFileLoadingError, DMFileUploadError, DMShapeMismatchError
         """
-        
         self._view.cleanup_plots()
-        
-        if (filename.endswith('.emd')):
+
+        if filename.endswith('.emd'):
             print('You just uploaded a .emd file.')
-        elif (filename.endswith('.npy')):
+        elif filename.endswith('.npy'):
             print('You just uploaded a .npy file.')
-        elif (filename.endswith('.hspy') or filename.endswith('.zspy')):
+        elif filename.endswith(('.hspy', '.zspy')):
             try:
-                app_state = self._model.app_state
-                app_state.clear_all()
-                app_state.filename = filename
-
-                self._view.main.loading_placeholder()
-
+                self._prepare_for_upload(filename)
                 all_datasets = RosettaFileProcessorService(self._model).process_upload(filename, file_path)
-
-                app_state.all_datasets = all_datasets
-
-                if not all_datasets:
-                    self._view.main.error_placeholder()
-                    return
-
-                self._view.create_tab_and_dataset_info(all_datasets)
-
-            except HSpyFileLoadingError as e:
-                self._view.main.error_placeholder()
-                raise e
-            except HSpyFileUploadError as e:
-                self._view.main.error_placeholder()
-                raise e
-            except HSpyShapeMismatchError as e:
+                self._finish_upload(all_datasets)
+            except (HSpyFileLoadingError, HSpyFileUploadError, HSpyShapeMismatchError) as e:
                 self._view.main.error_placeholder()
                 raise e
             except Exception as e:
                 self._view.main.error_placeholder()
                 raise HSpyFileUploadError(e)
-        elif (filename.endswith('.dm3')) or (filename.endswith('.dm4')):
-            print('You just uploaded a .dm3 or .dm4 file.')
+        elif filename.endswith(('.dm3', '.dm4')):
             try:
-
-                app_state = self._model.app_state
-                app_state.clear_all()
-                app_state.filename = filename
-
-                self._view.main.loading_placeholder()
-
+                self._prepare_for_upload(filename)
                 all_datasets, used_fallback = self._process_with_fallback(filename, file_path)
-
-                app_state.all_datasets = all_datasets
-
-                if not all_datasets:
-                    self._view.main.error_placeholder()
-                    return
-
-                self._view.create_tab_and_dataset_info(all_datasets, used_fallback=used_fallback)
-
-            except DMFileLoadingError as e:
-                self._view.main.error_placeholder()
-                raise e
-            except DMFileUploadError as e:
-                self._view.main.error_placeholder()
-                raise e
-            except DMShapeMismatchError as e:
+                self._finish_upload(all_datasets, used_fallback=used_fallback)
+            except (DMFileLoadingError, DMFileUploadError, DMShapeMismatchError) as e:
                 self._view.main.error_placeholder()
                 raise e
             except Exception as e:
                 self._view.main.error_placeholder()
                 raise DMFileUploadError(e)
 
-        
+    def _prepare_for_upload(self, filename: str) -> None:
+        """Clear state and show loading indicator before processing."""
+        app_state = self._model.app_state
+        app_state.clear_all()
+        app_state.filename = filename
+        self._view.main.loading_placeholder()
+
+    def _finish_upload(self, all_datasets: "list[Dataset]", used_fallback: bool = False) -> None:
+        """Store datasets and update the view after successful processing."""
+        app_state = self._model.app_state
+        app_state.all_datasets = all_datasets
+        if not all_datasets:
+            self._view.main.error_placeholder()
+            return
+        self._view.create_tab_and_dataset_info(all_datasets, used_fallback=used_fallback)
+
     def _process_with_fallback(self, filename: str, file_path: str) -> "tuple[list[Dataset], bool]":
         """Try own parser first; fall back to RosettaSciIO if it raises.
 
@@ -159,12 +123,6 @@ class HomePageController:
     def _handle_file_removal(self, filename: str) -> None:
         """
         Handle file removal: cleanup UI, clear datasets, reset application state.
-        
-        Args:
-            filename: Name of removed file
-            
-        Raises:
-            DMFileRemovalError: When cleanup operations fail
         """
         try:
             # Stop streams and release dataset refs on all active plot instances
