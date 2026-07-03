@@ -13,6 +13,11 @@ from whateels.errors.hspy.data import (
     HSpyFileUploadError,
     HSpyShapeMismatchError,
 )
+from whateels.errors.npy.data import (
+    NpyFileLoadingError,
+    NpyFileUploadError,
+    NpyShapeMismatchError,
+)
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -57,9 +62,19 @@ class HomePageController:
 
         if filename.endswith('.emd'):
             print('You just uploaded a .emd file.')
-        elif filename.endswith('.npy'):
-            print('You just uploaded a .npy file.')
-        elif filename.endswith(('.hspy', '.zspy')):
+        elif filename.endswith(('.npy', '.npz')):
+            try:
+                self._prepare_for_upload(filename)
+                all_datasets = NpyProcessorService(self._model).process_upload(filename, file_path)
+                self._finish_upload(all_datasets)
+            except (NpyFileLoadingError, NpyFileUploadError, NpyShapeMismatchError) as e:
+                self._view.main.error_placeholder()
+                raise e
+            except Exception as e:
+                self._view.main.error_placeholder()
+                raise NpyFileUploadError(e)
+            
+        elif filename.endswith('.hspy'):
             try:
                 self._prepare_for_upload(filename)
                 all_datasets = RosettaFileProcessorService(self._model).process_upload(filename, file_path)

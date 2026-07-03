@@ -8,5 +8,6 @@ operations, keeping the main controller focused on orchestration.
 from .file_processor_service import FileProcessorService
 from .data_processor_service import DataProcessorService
 from .rsciio_processor_service import RosettaFileProcessorService
+from .npy_processor_service import NpyProcessorService
 
-__all__ = ['FileProcessorService', 'DataProcessorService', 'RosettaFileProcessorService']
+__all__ = ['FileProcessorService', 'DataProcessorService', 'RosettaFileProcessorService', 'NpyProcessorService']

@@ -1,18 +1,22 @@
 """
-Convert a DM3/DM4 file to .hspy (HyperSpy) and .npy (NumPy) formats.
+Convert a DM3/DM4 file to .hspy, .npz and/or .npy formats.
 
 Usage
 -----
     python tools/convert_dm.py path/to/file.dm3
     python tools/convert_dm.py path/to/file.dm4 --out path/to/output_dir
-    python tools/convert_dm.py path/to/file.dm3 --fmt hspy       # only .hspy
-    python tools/convert_dm.py path/to/file.dm3 --fmt npy        # only .npy
-    python tools/convert_dm.py path/to/file.dm3 --fmt hspy npy   # both (default)
+    python tools/convert_dm.py path/to/file.dm3 --fmt hspy npz npy   # all three (default)
+    python tools/convert_dm.py path/to/file.dm3 --fmt hspy            # only .hspy
 
 Each signal inside the DM file becomes a separate output file:
-    <stem>_signal0.hspy  /  <stem>_signal0.npy
-    <stem>_signal1.hspy  /  <stem>_signal1.npy
+    <stem>_signal0.hspy / <stem>_signal0.npz / <stem>_signal0.npy
     ...
+
+Format notes
+------------
+.hspy   HyperSpy HDF5 — full axes + metadata
+.npz    NumPy zip archive — data + calibrated axis arrays (WhatEELS preferred)
+.npy    Raw NumPy array — data only, axis calibration is lost
 
 Dependencies: hyperspy, numpy  (both present in the project venv)
 """
@@ -50,17 +54,21 @@ def _output_stem(dm_path: Path, out_dir: Path, index: int, total: int) -> Path:
     return out_dir / (dm_path.stem + suffix)
 
 
-def _save_hspy(signal, stem: Path) -> None:
-    out = stem.with_suffix(".hspy")
-    # HyperSpy writes metadata as strings; on Windows the default 'charmap' codec
-    # chokes on non-ASCII characters (e.g. → in the title).  Sanitise before saving.
+def _sanitise_title(signal) -> None:
+    """Replace non-ASCII characters in the signal title (Windows charmap workaround)."""
     try:
-        original_title = signal.metadata.General.title
-        signal.metadata.General.title = original_title.encode("ascii", errors="replace").decode("ascii")
+        t = signal.metadata.General.title
+        signal.metadata.General.title = t.encode("ascii", errors="replace").decode("ascii")
     except Exception:
         pass
+
+
+def _save_hspy(signal, stem: Path) -> None:
+    out = stem.with_suffix(".hspy")
+    _sanitise_title(signal)
     signal.save(str(out), overwrite=True)
     print(f"[convert_dm]   → {out}")
+
 
 
 def _save_npy(signal, stem: Path) -> None:
@@ -68,6 +76,35 @@ def _save_npy(signal, stem: Path) -> None:
     out = stem.with_suffix(".npy")
     np.save(str(out), signal.data)
     print(f"[convert_dm]   → {out}  (shape={signal.data.shape}, dtype={signal.data.dtype})")
+
+
+def _save_npz(signal, stem: Path) -> None:
+    """Save data + calibrated axis arrays into a single .npz archive.
+
+    The archive contains:
+        data          – the raw N-D array
+        axis_<name>   – one array per axis with calibrated coordinates
+        axis_names    – axis names in order (e.g. ['y', 'x', 'Energy loss'])
+        axis_units    – axis units in order (e.g. ['', '', 'eV'])
+    """
+    import numpy as np
+
+    out = stem.with_suffix(".npz")
+    arrays: dict[str, np.ndarray] = {"data": signal.data}
+
+    axis_names: list[str] = []
+    axis_units: list[str] = []
+    for ax in signal.axes_manager.navigation_axes[::-1] + signal.axes_manager.signal_axes[::-1]:
+        key = f"axis_{ax.name}" if ax.name else f"axis_{ax.index_in_array}"
+        arrays[key] = ax.axis          # calibrated coordinate array
+        axis_names.append(ax.name or "")
+        axis_units.append(ax.units or "")
+
+    arrays["axis_names"] = np.array(axis_names)
+    arrays["axis_units"] = np.array(axis_units)
+
+    np.savez(str(out), **arrays)
+    print(f"[convert_dm]   → {out}  (shape={signal.data.shape}, axes={axis_names})")
 
 
 # ---------------------------------------------------------------------------
@@ -95,10 +132,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--fmt",
         nargs="+",
-        choices=["hspy", "npy"],
-        default=["hspy", "npy"],
+        choices=["hspy", "npz", "npy"],
+        default=["hspy", "npz", "npy"],
         metavar="FORMAT",
-        help="Output format(s): hspy, npy, or both (default: both).",
+        help="Output format(s): hspy, npz, npy (default: all three).",
     )
     return parser.parse_args(argv)
 
@@ -125,13 +162,20 @@ def main(argv: list[str] | None = None) -> int:
     for i, signal in enumerate(signals):
         stem = _output_stem(dm_path, out_dir, i, len(signals))
         print(f"[convert_dm] Signal {i}: {signal}")
-        try:
-            if "hspy" in formats:
-                _save_hspy(signal, stem)
-            if "npy" in formats:
-                _save_npy(signal, stem)
-        except Exception as exc:
-            print(f"[convert_dm] ERROR saving signal {i}: {exc}", file=sys.stderr)
+        failed = False
+        for fmt, saver in [
+            ("hspy", _save_hspy),
+            ("npz",  _save_npz),
+            ("npy",  _save_npy),
+        ]:
+            if fmt not in formats:
+                continue
+            try:
+                saver(signal, stem)
+            except Exception as exc:
+                print(f"[convert_dm] ERROR saving signal {i} as .{fmt}: {exc}", file=sys.stderr)
+                failed = True
+        if failed:
             return 1
 
     print("[convert_dm] Done.")

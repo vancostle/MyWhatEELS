@@ -33,7 +33,6 @@ class RosettaFileProcessorService:
         ".dm3":  "rsciio.digitalmicrograph",
         ".dm4":  "rsciio.digitalmicrograph",
         ".hspy": "rsciio.hspy",
-        ".zspy": "rsciio.hspy",
     }
 
     def process_upload(self, filename: str, file_path: str) -> list[xr.Dataset]:
