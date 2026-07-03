@@ -39,6 +39,7 @@ class FileDialogUploader(JSComponent):
             
             .file-dialog-uploader {
                 flex: 1;
+                min-width: 0;
             }
 
             .component-wrapper {

@@ -8,6 +8,7 @@ from whateels.errors.dm.data import (
     DMShapeMismatchError,
     DMFileRemovalError,
 )
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..model import HomePageModel
@@ -66,7 +67,10 @@ class HomePageController:
             print('You just uploaded a .npy file.')
         elif (filename.endswith('.hspy')):
             print('You just uploaded a .hspy file.')
-        else:
+            from rsciio.hspy import file_reader as hspy_reader
+            hyperspy_file = hspy_reader(file_path, lazy=False)
+            print(hyperspy_file)
+        elif (filename.endswith('.dm3')) or (filename.endswith('.dm4')):
             print('You just uploaded a .dm3 or .dm4 file.')
             try:
 

@@ -15,6 +15,6 @@ class Constants:
     IMAGE = 'Img'
     
     # FileDropper constants
-    FILE_DROPPER_TITLE = "Click to select a DM3 or DM4 file"
-    FILE_DROPPER_VALID_EXTENSIONS = ('.dm3', '.dm4', '.hspy', '.npy', '.emd')
-    FILE_DROPPER_REJECT_MESSAGE = "Only DM3/DM4 files!"
+    FILE_DROPPER_TITLE = "Select DM3, DM4 or HyperSpy file"
+    FILE_DROPPER_VALID_EXTENSIONS = ('.dm3', '.dm4', '.hspy', '.zspy', '.npy', '.emd')
+    FILE_DROPPER_REJECT_MESSAGE = "Unsupported file type!"

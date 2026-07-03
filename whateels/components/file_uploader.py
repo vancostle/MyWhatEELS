@@ -1,6 +1,5 @@
 import panel as pn
 
-from whateels.helpers import LoadCSS, CSS_ROOT
 from whateels.components.disk_streaming_file_dropper import DiskStreamingFileDropper
 from typing import Callable, Optional, Tuple
 
