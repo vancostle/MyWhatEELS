@@ -6,6 +6,7 @@ import numpy as np
 import holoviews as hv
 
 from typing import override, TYPE_CHECKING
+from whateels.helpers.dataset_axis import eloss_axis_label
 from whateels.interfaces import IPlot
 from whateels.components import InfoPanel
 
@@ -23,6 +24,7 @@ class SingleSpectrumPlot(IPlot):
     def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         self._model = model
         self._dataset = dataset
+        self._x_axis_spectrum_title = eloss_axis_label(self._dataset, self._X_AXIS_SPECTRUM_TITLE)
 
     @override
     def create_plots(self) -> pn.viewable.Viewable:
@@ -39,14 +41,14 @@ class SingleSpectrumPlot(IPlot):
 
         curve = hv.Curve(
             (energy, spectrum),
-            kdims=['Energy Loss (eV)'],
+            kdims=[self._x_axis_spectrum_title],
             vdims=['Intensity (a.u.)'],
             label='Spectrum'
         ).opts(
             color='black',
             line_width=2,
             title='EELS Spectrum',
-            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            xlabel=self._x_axis_spectrum_title,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
             shared_axes=False,

@@ -921,7 +921,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         return hv.Curve((energy_axis, spec_arr), kdims=['x'], vdims=['y']).opts(
             color='black', line_width=1.5, alpha = 0.7,
             title=title,
-            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            xlabel=self._x_axis_spectrum_title,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True, shared_axes=False, framewise=True,
             axiswise=False,

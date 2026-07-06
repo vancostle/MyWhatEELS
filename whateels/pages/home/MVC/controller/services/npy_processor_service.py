@@ -58,6 +58,14 @@ class NpyProcessorService:
         if ds is None:
             return []
 
+        c = self._model.constants
+        if ext == ".npy":
+            ds.attrs[c.ELOSS_CALIBRATED_ATTR] = False
+            ds.attrs[c.ELOSS_AXIS_LABEL_ATTR] = c.ELOSS_AXIS_LABEL_CHANNEL
+        else:
+            ds.attrs[c.ELOSS_CALIBRATED_ATTR] = True
+            ds.attrs[c.ELOSS_AXIS_LABEL_ATTR] = c.ELOSS_AXIS_LABEL_EV
+
         ds = self._data_processor.clean_dataset(ds)
         is_eels = 'Eloss' in ds.coords
         ds.attrs['dataset_type']      = self._data_processor.determine_dataset_type(ds, is_eels)
@@ -134,6 +142,28 @@ class NpyProcessorService:
 
     # ── .npy loader ──────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _orient_to_y_x_eloss(data: np.ndarray) -> np.ndarray:
+        """Return array as (y, x, Eloss).
+
+        HyperSpy / convert_dm store navigation axes first and the signal (energy)
+        axis last, e.g. (70, 100, 2048).  For EELS the energy dimension is typically
+        the largest — never the smallest.
+        """
+        if data.ndim != 3:
+            return data
+
+        d0, d1, d2 = data.shape
+        # Energy axis = largest dimension (typical EELS: 2048 >> 70, 100).
+        energy_idx = int(np.argmax(data.shape))
+
+        if energy_idx == 2:
+            return data
+        if energy_idx == 0:
+            return data.transpose(1, 2, 0)   # (E, y, x) → (y, x, E)
+        # energy_idx == 1
+        return data.transpose(0, 2, 1)       # (y, E, x) → (y, x, E)
+
     def _array_to_dataset(self, data: np.ndarray, filename: str) -> xr.Dataset | None:
         """Convert a raw numpy array to an xr.Dataset with synthetic integer axes."""
         ndim = data.ndim
@@ -152,9 +182,7 @@ class NpyProcessorService:
             )
 
         if ndim == 3:
-            d0, d1, d2 = data.shape
-            if d0 < d1 and d0 < d2:
-                data = data.transpose(1, 2, 0)
+            data = self._orient_to_y_x_eloss(data)
             ny, nx, ne = data.shape
             return xr.Dataset(
                 {'ElectronCount': (['y', 'x', 'Eloss'], data)},

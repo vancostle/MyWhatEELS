@@ -8,6 +8,12 @@ class Constants:
     ELOSS = 'Eloss'
     ELECTRON_COUNT = 'ElectronCount'
 
+    # Eloss axis metadata (set by file loaders; read by plots)
+    ELOSS_CALIBRATED_ATTR = 'eloss_calibrated'
+    ELOSS_AXIS_LABEL_ATTR = 'eloss_axis_label'
+    ELOSS_AXIS_LABEL_EV = 'Energy Loss (eV)'
+    ELOSS_AXIS_LABEL_CHANNEL = 'Channel index'
+
     # Dataset types
     SPECTRUM_LINE = 'SLi'
     SPECTRUM_IMAGE = 'SIm'

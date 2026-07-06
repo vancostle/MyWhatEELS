@@ -7,6 +7,7 @@ import holoviews as hv
 from holoviews import streams as hv_streams
 import xarray as xr
 
+from whateels.helpers.dataset_axis import eloss_axis_label
 from whateels.components import InfoPanel
 from whateels.interfaces import IPlot
 from typing import override, TYPE_CHECKING
@@ -42,6 +43,7 @@ class SpectrumLinePlot(IPlot):
         self._spectrum_range_stream = None
         self._heatmap_overlay = None
         self._spectrum_curve = None
+        self._x_axis_spectrum_title = eloss_axis_label(self._dataset, self._X_AXIS_SPECTRUM_TITLE)
 
     @override
     def create_plots(self):
@@ -83,7 +85,7 @@ class SpectrumLinePlot(IPlot):
             colorbar=True,
             title=self._IMAGE_TITLE,
             xlabel=self._IMAGE_X_LABEL,
-            ylabel=self._IMAGE_Y_LABEL,
+            ylabel=self._x_axis_spectrum_title,
             invert_yaxis=True,
             responsive=True,
             framewise=True,
@@ -205,7 +207,7 @@ class SpectrumLinePlot(IPlot):
             # Empty spectrum
             return hv.Curve([], kdims=[e_name], vdims=[self._Y_AXIS_SPECTRUM_TITLE]).opts(
                 title="Click on heatmap to extract spectrum",
-                xlabel=self._X_AXIS_SPECTRUM_TITLE,
+                xlabel=self._x_axis_spectrum_title,
                 ylabel=self._Y_AXIS_SPECTRUM_TITLE,
                 responsive=True,
                 framewise=True,
@@ -215,7 +217,7 @@ class SpectrumLinePlot(IPlot):
         except Exception:
             return hv.Curve([], kdims=[e_name], vdims=[self._Y_AXIS_SPECTRUM_TITLE]).opts(
                 title="Click on heatmap to extract spectrum",
-                xlabel=self._X_AXIS_SPECTRUM_TITLE,
+                xlabel=self._x_axis_spectrum_title,
                 ylabel=self._Y_AXIS_SPECTRUM_TITLE,
                 responsive=True,
                 framewise=True,
@@ -226,13 +228,13 @@ class SpectrumLinePlot(IPlot):
         values = spectrum.fillna(0.0).where(np.isfinite(spectrum), 0.0).values
         curve = hv.Curve(
             (energy, values),
-            kdims=[self._X_AXIS_SPECTRUM_TITLE],
+            kdims=[self._x_axis_spectrum_title],
             vdims=[self._Y_AXIS_SPECTRUM_TITLE]
         ).opts(
             color='crimson',
             line_width=2,
             title=self._SPECTRUM_TITLE,
-            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            xlabel=self._x_axis_spectrum_title,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
             framewise=True,
@@ -255,7 +257,7 @@ class SpectrumLinePlot(IPlot):
         line = hv.Curve(
             ([x_value, x_value], [y_min, y_max]),
             kdims=[self._IMAGE_X_LABEL],
-            vdims=[self._IMAGE_Y_LABEL]
+            vdims=[self._x_axis_spectrum_title]
         ).opts(
             color='red',
             line_dash='dashed',

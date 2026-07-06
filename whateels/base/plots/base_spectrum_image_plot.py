@@ -58,6 +58,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._dataset = dataset
         self._eloss_name = eloss_name
         self._paneA_select_tools = paneA_select_tools
+        self._x_axis_spectrum_title = self._resolve_eloss_axis_label()
 
         # Energy axis
         self._e_axis = self._dataset.coords[self._eloss_name].values
@@ -365,12 +366,16 @@ class BaseSpectrumImagePlot(IPlot):
             line_width=1.5,
             alpha=0.7,
             title=f"Hover (x={j}, y={i})",
-            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            xlabel=self._x_axis_spectrum_title,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
             shared_axes=False,
             framewise=True,
         )
+
+    def _resolve_eloss_axis_label(self) -> str:
+        from whateels.helpers.dataset_axis import eloss_axis_label
+        return eloss_axis_label(self._dataset, self._X_AXIS_SPECTRUM_TITLE)
 
     def _figB_region(self, pairs):
         """Return an hv.Curve for a region (summed spectrum)."""
@@ -387,7 +392,7 @@ class BaseSpectrumImagePlot(IPlot):
             line_width=1.5,
             alpha=0.7,
             title=f"ROI — sum (points={n_points})",
-            xlabel=self._X_AXIS_SPECTRUM_TITLE,
+            xlabel=self._x_axis_spectrum_title,
             ylabel=self._Y_AXIS_SPECTRUM_TITLE,
             responsive=True,
             shared_axes=False,
