@@ -28,6 +28,7 @@ import os
 import logging
 import numpy as np
 import xarray as xr
+from whateels.errors.npy.data import NpyFileUploadError
 from .data_processor_service import DataProcessorService
 
 from typing import TYPE_CHECKING
@@ -75,7 +76,41 @@ class NpyProcessorService:
         ds.attrs.setdefault('beam_energy',       None)
         ds.attrs.setdefault('collection_angle',  None)
         ds.attrs.setdefault('convergence_angle', None)
+
+        self._store_metadata(self._build_file_metadata(ds, filename, file_path, ext))
         return [ds]
+
+    def _build_file_metadata(
+        self,
+        ds: xr.Dataset,
+        filename: str,
+        file_path: str,
+        ext: str,
+    ) -> dict:
+        """Build a JSON-serializable metadata dict from the processed dataset."""
+        c = self._model.constants
+        return {
+            'source_format': ext.lstrip('.'),
+            'filename': filename,
+            'original_name': ds.attrs.get('original_name', os.path.basename(file_path)),
+            'image_name': ds.attrs.get('image_name'),
+            'dataset_type': ds.attrs.get('dataset_type'),
+            'shape': ds.attrs.get('shape'),
+            'beam_energy': ds.attrs.get('beam_energy'),
+            'collection_angle': ds.attrs.get('collection_angle'),
+            'convergence_angle': ds.attrs.get('convergence_angle'),
+            'eloss_calibrated': ds.attrs.get(c.ELOSS_CALIBRATED_ATTR),
+            'eloss_axis_label': ds.attrs.get(c.ELOSS_AXIS_LABEL_ATTR),
+        }
+
+    def _store_metadata(self, infoDict: dict | None = None) -> None:
+        """Store metadata in app state (same contract as FileProcessorService)."""
+        if not infoDict:
+            raise NpyFileUploadError("Expected an information dictionary from npy/npz parser.")
+        try:
+            self._model.app_state.metadata = infoDict
+        except Exception as exc:
+            raise NpyFileUploadError(exc)
 
     # ── .npz loader ──────────────────────────────────────────────────────────
 

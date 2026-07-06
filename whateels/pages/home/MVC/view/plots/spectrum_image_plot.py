@@ -40,6 +40,14 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
 
+    # Editable metadata helpers
+    _NOT_AVAILABLE = "N/A"
+    _EDITABLE_METADATA_FIELDS = (
+        ("beam_energy",        "_beam_energy_input"),
+        ("convergence_angle",  "_convergence_angle_input"),
+        ("collection_angle",   "_collection_angle_input"),
+    )
+
     def __init__(self, model: "HomePageModel", dataset: "Dataset"):
         self._model = model
 
@@ -124,9 +132,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._reset_finalize_attempts = 0
         
         # InfoPanel inputs
-        self._beam_energy_input = pn.widgets.TextInput(name="keV", value="None")
-        self._convergence_angle_input = pn.widgets.TextInput(name="mrad", value="None")
-        self._collection_angle_input = pn.widgets.TextInput(name="mrad", value="None")
+        self._beam_energy_input = pn.widgets.TextInput(name="keV", value="None", placeholder="None")
+        self._convergence_angle_input = pn.widgets.TextInput(name="mrad", value="None", placeholder="None")
+        self._collection_angle_input = pn.widgets.TextInput(name="mrad", value="None", placeholder="None")
         self._watch_metadata_inputs()
 
         # Numpy cache for the fast hover path — avoids xarray _as_row_col_energy conversion
@@ -197,15 +205,6 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             },
             margin=0,
         )
-
-    # --- Editable metadata helpers ---
-
-    _NOT_AVAILABLE = "N/A"
-    _EDITABLE_METADATA_FIELDS = (
-        ("beam_energy",        "_beam_energy_input"),
-        ("convergence_angle",  "_convergence_angle_input"),
-        ("collection_angle",   "_collection_angle_input"),
-    )
 
     def _watch_metadata_inputs(self) -> None:
         """Attach param watchers so typing a new value updates the dataset and AppState."""
