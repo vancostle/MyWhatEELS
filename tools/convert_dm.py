@@ -63,6 +63,89 @@ def _sanitise_title(signal) -> None:
         pass
 
 
+def _optional_float(value) -> float | None:
+    if value is None:
+        return None
+    if hasattr(value, "magnitude"):
+        value = value.magnitude
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _instrument_from_signal(signal) -> dict:
+    """Read beam energy and angles from HyperSpy metadata (same sources as rsciio)."""
+    beam_energy = collection_angle = convergence_angle = None
+    meta = signal.metadata
+
+    try:
+        beam_energy = _optional_float(
+            meta.get_item("Acquisition_instrument.TEM.beam_energy")
+        )
+        convergence_angle = _optional_float(
+            meta.get_item("Acquisition_instrument.TEM.convergence_angle")
+        )
+        collection_angle = _optional_float(
+            meta.get_item("Acquisition_instrument.TEM.Detector.EELS.collection_angle")
+        )
+        if collection_angle is None:
+            collection_angle = _optional_float(
+                meta.get_item("Acquisition_instrument.TEM.EELS.collection_angle")
+            )
+    except Exception:
+        pass
+
+    orig = getattr(signal, "original_metadata", None)
+    if hasattr(orig, "as_dictionary"):
+        try:
+            orig = orig.as_dictionary()
+        except Exception:
+            orig = None
+    if isinstance(orig, dict):
+        for entry in orig.get("ImageList", {}).values():
+            if not isinstance(entry, dict):
+                continue
+            tags = entry.get("ImageTags")
+            if not isinstance(tags, dict):
+                continue
+            if beam_energy is None:
+                try:
+                    v = _optional_float(tags["Microscope Info"]["Voltage"])
+                    if v is not None:
+                        beam_energy = v / 1000.0
+                except (KeyError, TypeError):
+                    pass
+            if collection_angle is None:
+                try:
+                    collection_angle = _optional_float(
+                        tags["EELS"]["Experimental Conditions"]["Collection semi-angle (mrad)"]
+                    )
+                except (KeyError, TypeError):
+                    pass
+            if convergence_angle is None:
+                try:
+                    convergence_angle = _optional_float(
+                        tags["EELS"]["Experimental Conditions"]["Convergence semi-angle (mrad)"]
+                    )
+                except (KeyError, TypeError):
+                    pass
+            break
+
+    image_name = None
+    try:
+        image_name = str(meta.General.title).strip() or None
+    except Exception:
+        pass
+
+    return {
+        "beam_energy": beam_energy,
+        "collection_angle": collection_angle,
+        "convergence_angle": convergence_angle,
+        "image_name": image_name,
+    }
+
+
 def _save_hspy(signal, stem: Path) -> None:
     out = stem.with_suffix(".hspy")
     _sanitise_title(signal)
@@ -86,6 +169,8 @@ def _save_npz(signal, stem: Path) -> None:
         axis_<name>   – one array per axis with calibrated coordinates
         axis_names    – axis names in order (e.g. ['y', 'x', 'Energy loss'])
         axis_units    – axis units in order (e.g. ['', '', 'eV'])
+        beam_energy, collection_angle, convergence_angle – optional scalars from DM4
+        image_name    – optional signal title
     """
     import numpy as np
 
@@ -103,8 +188,17 @@ def _save_npz(signal, stem: Path) -> None:
     arrays["axis_names"] = np.array(axis_names)
     arrays["axis_units"] = np.array(axis_units)
 
+    instrument = _instrument_from_signal(signal)
+    print(f"[convert_dm]   instrument from dm4: {instrument}")
+    for key in ("beam_energy", "collection_angle", "convergence_angle"):
+        value = instrument.get(key)
+        if value is not None:
+            arrays[key] = np.array(value, dtype=np.float64)
+    if instrument.get("image_name"):
+        arrays["image_name"] = np.asarray(instrument["image_name"], dtype=str)
+
     np.savez(str(out), **arrays)
-    print(f"[convert_dm]   → {out}  (shape={signal.data.shape}, axes={axis_names})")
+    print(f"[convert_dm]   -> {out}  (shape={signal.data.shape}, axes={axis_names})")
 
 
 # ---------------------------------------------------------------------------

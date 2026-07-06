@@ -109,6 +109,8 @@
 
 .dataset-info-editable-input + .bk-Div {
     margin: auto 0;
+    font-size: 12px !important;
+    font-family: monospace !important;
 }
 
 .dataset-info-unit {

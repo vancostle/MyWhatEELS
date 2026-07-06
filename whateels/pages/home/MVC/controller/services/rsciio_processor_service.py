@@ -197,6 +197,10 @@ class RosettaFileProcessorService:
 
         # ── collection angle ─────────────────────────────────────────────────
         collection_angle = eels_meta.get('collection_angle', None)
+        if collection_angle is None:
+            detector = acq.get('Detector', {})
+            if isinstance(detector, dict):
+                collection_angle = detector.get('EELS', {}).get('collection_angle', None)
         if collection_angle is None and image_tags:
             try:
                 collection_angle = (

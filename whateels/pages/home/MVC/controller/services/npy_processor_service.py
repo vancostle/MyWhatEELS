@@ -11,6 +11,7 @@ reconstruct the full dataset with real eV coordinates.  Expected keys:
     axis_<name>   – calibrated coordinate array for each axis
     axis_names    – axis names in order
     axis_units    – axis units in order
+    beam_energy, collection_angle, convergence_angle – optional (from convert_dm)
 
 .npy files
 ----------
@@ -71,7 +72,8 @@ class NpyProcessorService:
         is_eels = 'Eloss' in ds.coords
         ds.attrs['dataset_type']      = self._data_processor.determine_dataset_type(ds, is_eels)
         ds.attrs['original_name']     = os.path.basename(file_path)
-        ds.attrs['image_name']        = os.path.splitext(os.path.basename(file_path))[0]
+        if 'image_name' not in ds.attrs:
+            ds.attrs['image_name']    = os.path.splitext(os.path.basename(file_path))[0]
         ds.attrs['shape']             = list(ds.ElectronCount.shape)
         ds.attrs.setdefault('beam_energy',       None)
         ds.attrs.setdefault('collection_angle',  None)
@@ -116,7 +118,7 @@ class NpyProcessorService:
 
     def _load_npz(self, file_path: str, filename: str) -> xr.Dataset | None:
         """Reconstruct a calibrated xr.Dataset from an .npz produced by convert_dm.py."""
-        archive = np.load(file_path, allow_pickle=False)
+        archive = np.load(file_path, allow_pickle=True)
         data: np.ndarray = archive['data'].astype(np.float64)
 
         axis_names: list[str] = list(archive['axis_names'])
@@ -140,40 +142,47 @@ class NpyProcessorService:
         ]
 
         ndim = data.ndim
+        ds: xr.Dataset | None = None
 
         if ndim == 3 and energy_idx is not None:
-            # Ensure layout is (y, x, Eloss).
             if energy_idx == 2:
                 pass
             elif energy_idx == 0:
                 data = data.transpose(1, 2, 0)
                 axes = [axes[1], axes[2], axes[0]]
-            y_ax, x_ax, e_ax = axes[0], axes[1], axes[2]
-            return xr.Dataset(
+            _, _, e_ax = axes[0], axes[1], axes[2]
+            ds = xr.Dataset(
                 {'ElectronCount': (['y', 'x', 'Eloss'], data)},
                 coords={'y': np.arange(data.shape[0]), 'x': np.arange(data.shape[1]), 'Eloss': e_ax},
             )
 
-        if ndim == 2 and energy_idx is not None:
-            e_ax = axes[energy_idx]
-            nav_ax = axes[1 - energy_idx]
+        elif ndim == 2 and energy_idx is not None:
             if energy_idx == 0:
                 data = data.T
             data3d = data.reshape(1, data.shape[0], data.shape[1])
-            return xr.Dataset(
+            ds = xr.Dataset(
                 {'ElectronCount': (['y', 'x', 'Eloss'], data3d)},
-                coords={'y': [0], 'x': np.arange(data3d.shape[1]), 'Eloss': e_ax},
+                coords={'y': [0], 'x': np.arange(data3d.shape[1]), 'Eloss': axes[energy_idx]},
             )
 
-        if ndim == 1:
+        elif ndim == 1:
             e_ax = axes[0] if axes else np.arange(data.shape[0])
-            return xr.Dataset(
+            ds = xr.Dataset(
                 {'ElectronCount': (['y', 'x', 'Eloss'], data.reshape(1, 1, -1))},
                 coords={'y': [0], 'x': [0], 'Eloss': e_ax},
             )
 
-        # Fallback: no energy axis identified — treat as plain .npy
-        return self._array_to_dataset(data, filename)
+        else:
+            ds = self._array_to_dataset(data, filename)
+
+        if ds is not None:
+            for key in ('beam_energy', 'collection_angle', 'convergence_angle'):
+                if key in archive.files:
+                    ds.attrs[key] = float(np.asarray(archive[key]).item())
+            if 'image_name' in archive.files:
+                ds.attrs['image_name'] = str(np.asarray(archive['image_name']).item())
+
+        return ds
 
     # ── .npy loader ──────────────────────────────────────────────────────────
 
