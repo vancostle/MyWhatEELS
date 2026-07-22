@@ -125,15 +125,17 @@ class HomePageController:
 
         try:
             return FileProcessorService(self._model).process_upload(filename, file_path), False
-        except Exception as primary_error:
-            try:
-                return RosettaFileProcessorService(self._model).process_upload(filename, file_path), True
-            except Exception as fallback_error:
-                raise DMFileUploadError(
-                    f"Both parsers failed for '{filename}'.\n"
-                    f"  Own parser:  {primary_error}\n"
-                    f"  RosettaSciIO: {fallback_error}"
-                ) from fallback_error
+        # except Exception as primary_error:
+            # try:
+            #     return RosettaFileProcessorService(self._model).process_upload(filename, file_path), True
+            # except Exception as fallback_error:
+            #     raise DMFileUploadError(
+            #         f"Both parsers failed for '{filename}'.\n"
+            #         f"  Own parser:  {primary_error}\n"
+            #         f"  RosettaSciIO: {fallback_error}"
+            #     ) from fallback_error
+        except Exception as e:
+            raise Exception(f"Error in _process_with_fallback: {e}")
 
     def _handle_file_removal(self, filename: str) -> None:
         """
