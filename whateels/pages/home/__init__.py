@@ -12,7 +12,7 @@ class HomePage(GeneralPageTemplate):
         # handles cleanup of the old session's resources automatically.
         # AppState (user data) is preserved separately in pn.state.cache.
         model = HomePageModel()
-        view = HomePageView(model)
+        view = HomePageView(model, custom_page=self)
         HomePageController(model, view)
 
         super().__init__(
@@ -20,6 +20,7 @@ class HomePage(GeneralPageTemplate):
             main=[view.main],
             sidebar=[view.left_sidebar, view.left_sidebar.welcome_message],
             right_sidebar=[view.right_sidebar],
+            modal=view.modals,
             sidebar_width=260,
             right_sidebar_width=378,
             collapsed_right_sidebar=True,

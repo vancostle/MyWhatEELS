@@ -2,6 +2,7 @@ import panel as pn
 import time
 import threading
 import os
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import holoviews as hv
@@ -18,6 +19,7 @@ from whateels.components import SplitJs, SimpleDetails, ToggleButton, ProgressDi
 from whateels.pages.home.utils.plot_helpers import (
     get_range_slider_value, apply_fitting, get_pixel_spectrum, start_pc, stop_pc
 )
+from whateels.pages.home.utils.pca import PCADecomposition, sanitize_pca_matrix
 from whateels.state import CacheManager
 from whateels.base.plots.base_spectrum_image_plot import BaseSpectrumImagePlot
 from holoviews import streams as hv_streams
@@ -28,6 +30,22 @@ if TYPE_CHECKING:
     from ...model import HomePageModel
     from xarray import Dataset
 
+
+@dataclass(frozen=True, slots=True)
+class _PCAInputSnapshot:
+    """Exact application state that must be restored when PCA is reverted."""
+
+    display_data: object
+    preprocessed_electron_count: object | None
+    preprocessed_source: str | None
+    preprocessors_applied: bool
+    app_state_dataset: object | None
+    had_spikes: bool
+    had_savgol: bool
+    had_multifit: bool
+    had_cut_range: bool
+
+
 class SpectrumImagePlot(BaseSpectrumImagePlot):
     """
     Visualizador de Spectrum Image usando HoloViews + Panel (backend Bokeh).
@@ -36,6 +54,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     # Panel sizing modes
     _STRETCH_WIDTH = "stretch_width"
+    _DEFAULT_PCA_SCREE_COMPONENTS = 100
+    _DEFAULT_PCA_RECONSTRUCTION_COMPONENTS = 5
 
     # Axis titles for spectrum plot
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
@@ -80,6 +100,27 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._savgol_polyorder_select = pn.widgets.Select()
         self._savgol_window = 15
         self._savgol_polyorder = 2
+
+        self._pca_scree_components_input = pn.widgets.IntInput()
+        self._pca_components_input = pn.widgets.IntInput()
+        self._show_pca_scree_button = pn.widgets.Button()
+        self._apply_pca_button = ToggleButton()
+        self._pca_decomposition: PCADecomposition | None = None
+        self._pca_cache_source = None
+        self._pca_input_electron_count = None
+        self._pca_previous_electron_count = None
+        self._pca_previous_source: str | None = None
+        self._pca_previous_preprocessors_applied = False
+        self._pca_previous_app_state_dataset = None
+        self._pca_input_had_spikes = False
+        self._pca_input_had_savgol = False
+        self._pca_input_had_multifit = False
+        self._pca_input_had_cut_range = False
+        self._applied_pca_components: int | None = None
+        self._pca_scree_callback = None
+        self._pca_operation_running = False
+        self._pca_operation_generation = 0
+        self._pca_disposed = False
         
         self._multifitting_switch = pn.widgets.Switch()
         self._multifitting_switch_watcher = None
@@ -106,6 +147,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_previous_source: str | None = None
         self._multifit_input_had_spikes = False
         self._multifit_input_had_savgol = False
+        self._multifit_input_had_pca = False
+        self._multifit_input_had_cut_range = False
         self._despiked_cube = None
         self._despike_cache_signature = None
         self._savgol_cube = None
@@ -249,6 +292,39 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             value=self._savgol_polyorder,
             sizing_mode=self._STRETCH_WIDTH,
         )
+
+        max_pca_components = self._get_pca_max_components(self._electron_count_data)
+        default_scree_components = min(
+            self._DEFAULT_PCA_SCREE_COMPONENTS,
+            max_pca_components,
+        )
+        default_pca_components = min(
+            self._DEFAULT_PCA_RECONSTRUCTION_COMPONENTS,
+            max_pca_components,
+        )
+        self._pca_scree_components_input = pn.widgets.IntInput(
+            name="Components for Scree Plot",
+            value=default_scree_components,
+            start=1,
+            end=max_pca_components,
+            step=1,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        self._pca_components_input = pn.widgets.IntInput(
+            name="Components for Reconstruction",
+            value=default_pca_components,
+            start=1,
+            end=max_pca_components,
+            step=1,
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        self._show_pca_scree_button = pn.widgets.Button(
+            name="View Scree Plot",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(8, 0, 0, 0),
+        )
+        self._show_pca_scree_button.on_click(self._on_show_pca_scree)
         
         self._multifitting_switch = pn.widgets.Switch(
             name="Multifitting",
@@ -314,6 +390,24 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             states={
                 "on": {"label": 'Revert Savitzky-Golay', "on_click": self._on_revert_savgol, "button_type": 'warning'},
                 "off": {"label": 'Apply Savitzky-Golay', "on_click": self._on_apply_savgol, "button_type": 'success'},
+            },
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(8, 0, 0, 0),
+        )
+
+        self._apply_pca_button = ToggleButton(
+            initial_state=False,
+            states={
+                "on": {
+                    "label": "Revert PCA Reconstruction",
+                    "on_click": self._on_revert_pca,
+                    "button_type": "warning",
+                },
+                "off": {
+                    "label": "Apply PCA Reconstruction",
+                    "on_click": self._on_apply_pca,
+                    "button_type": "success",
+                },
             },
             sizing_mode=self._STRETCH_WIDTH,
             margin=(8, 0, 0, 0),
@@ -411,6 +505,25 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             margin=(0, 0, 8, 0),
             sizing_mode=self._STRETCH_WIDTH,
         )
+
+    def create_pca_details(self) -> SimpleDetails:
+        """Build and return the PCA decomposition SimpleDetails block."""
+        return SimpleDetails(
+            title="PCA Decomposition Settings",
+            content=pn.Column(
+                self._pca_scree_components_input,
+                self._pca_components_input,
+                self._show_pca_scree_button,
+                self._apply_pca_button,
+                sizing_mode=self._STRETCH_WIDTH,
+            ),
+            margin=(0, 0, 8, 0),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+    def set_pca_scree_callback(self, callback) -> None:
+        """Set the view callback that populates and opens the scree-plot modal."""
+        self._pca_scree_callback = callback
 
     def set_view_refs(self, main, plots_tab) -> None:
         """Inject main layout and plots tab references so the plot can show progress and restore content."""
@@ -593,8 +706,29 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             CacheManager.get_cached_app_state().clear_preprocessed_plot_dataset()
             self._sync_range_slider_to_energy_axis(np.asarray(self._e_axis), reset_value=False)
 
+    def _pca_layer_is_active(self) -> bool:
+        """Return whether a committed PCA layer is present in the pipeline."""
+        return (
+            self._apply_pca_button.is_on()
+            and self._pca_input_electron_count is not None
+            and self._applied_pca_components is not None
+        )
+
+    def _block_upstream_change_while_pca_active(self) -> bool:
+        """Enforce LIFO: upstream preprocessors cannot change below PCA."""
+        if not self._pca_layer_is_active():
+            return False
+        pn.state.notifications.warning(
+            "Revert downstream Multifitting and PCA before changing an earlier preprocessing step.",
+            duration=4000,
+        ) # type: ignore
+        return True
+
     def _on_apply_cut_range(self):
         """Apply cut range to the active display cube while preserving preprocessing."""
+        if self._block_upstream_change_while_pca_active():
+            return
+
         previous_electron_count = self._preprocessed_electron_count if self._preprocessors_applied else None
         previous_source = self._preprocessed_source if self._preprocessors_applied else None
         display_source = self._get_display_data()
@@ -656,9 +790,17 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_revert_cut_range(self):
         """Revert cut range and restore raw data or the pre-cut preprocessing state."""
+        if self._block_upstream_change_while_pca_active():
+            return
+
         previous_electron_count = self._cut_range_previous_electron_count
         previous_source = self._cut_range_previous_source
         active_source = self._preprocessed_source
+        cut_range_source = self._cut_range_preprocessed_electron_count
+        discard_cut_based_multifit = (
+            active_source == 'multifit'
+            and self._multifit_input_had_cut_range
+        )
 
         app_state = CacheManager.get_cached_app_state()
         if (
@@ -668,6 +810,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             app_state.clear_preprocessed_plot_dataset()
 
         self._clear_cut_range_state(clear_preprocessed_payload=False)
+        if self._pca_cache_source is cut_range_source:
+            self._pca_decomposition = None
+            self._pca_cache_source = None
         if previous_electron_count is not None:
             self._preprocessed_electron_count = previous_electron_count
             self._preprocessed_source = previous_source
@@ -677,14 +822,42 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 np.asarray(previous_electron_count.coords[self._eloss_name].values),
                 reset_value=False,
             )
+            if discard_cut_based_multifit:
+                if self._apply_multifitting_button.is_on():
+                    self._apply_multifitting_button.toggle()
+                self._multifitting_switch.value = False
+                self._multifit_input_had_spikes = False
+                self._multifit_input_had_savgol = False
+                self._multifit_input_had_pca = False
+                self._multifit_input_had_cut_range = False
+                self._multifit_previous_electron_count = None
+                self._multifit_previous_source = None
         else:
             if active_source == 'spikes' and self._apply_remove_spikes_button.is_on():
                 self._apply_remove_spikes_button.toggle()
             if active_source == 'savgol' and self._apply_savgol_button.is_on():
                 self._apply_savgol_button.toggle()
+            if active_source == 'pca' and self._apply_pca_button.is_on():
+                self._apply_pca_button.toggle()
+                self._pca_input_electron_count = None
+                self._applied_pca_components = None
             if active_source == 'multifit' and self._apply_multifitting_button.is_on():
                 self._apply_multifitting_button.toggle()
+                if self._multifit_input_had_spikes and self._apply_remove_spikes_button.is_on():
+                    self._apply_remove_spikes_button.toggle()
+                if self._multifit_input_had_savgol and self._apply_savgol_button.is_on():
+                    self._apply_savgol_button.toggle()
+                if self._multifit_input_had_pca and self._apply_pca_button.is_on():
+                    self._apply_pca_button.toggle()
+                    self._pca_input_electron_count = None
+                    self._applied_pca_components = None
             self._multifitting_switch.value = False
+            self._multifit_input_had_spikes = False
+            self._multifit_input_had_savgol = False
+            self._multifit_input_had_pca = False
+            self._multifit_input_had_cut_range = False
+            self._multifit_previous_electron_count = None
+            self._multifit_previous_source = None
             self._preprocessed_electron_count = None
             self._preprocessed_source = None
             self._preprocessors_applied = False
@@ -799,6 +972,471 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         if p >= w:
             p = max(0, w - 1)
         return w, p
+
+    def _get_pca_max_components(self, source_data) -> int:
+        """Return the maximum PCA rank for a spectrum-image DataArray."""
+        eloss_dim = self._get_eloss_dim(source_data)
+        try:
+            n_features = int(source_data.sizes[eloss_dim])
+            n_samples = int(np.prod([
+                int(source_data.sizes[dim])
+                for dim in source_data.dims
+                if dim != eloss_dim
+            ]))
+        except Exception:
+            shape = tuple(int(size) for size in source_data.shape)
+            n_features = shape[-1] if shape else 0
+            n_samples = int(np.prod(shape[:-1])) if len(shape) > 1 else 0
+
+        maximum = min(n_samples, n_features)
+        if maximum < 1:
+            raise ValueError("PCA requires at least one spectrum and one energy channel.")
+        return int(maximum)
+
+    def _get_pca_source_data(self):
+        """Return the exact visible cube used as PCA input.
+
+        Once PCA is active, keep using its captured input for scree-plot
+        recalculation instead of decomposing the reconstructed output again.
+        """
+        if self._apply_pca_button.is_on() and self._pca_input_electron_count is not None:
+            return self._pca_input_electron_count
+        return self._get_display_data()
+
+    def _clamp_pca_component_input(
+        self,
+        widget: pn.widgets.IntInput,
+        source_data,
+        default_value: int,
+    ) -> int:
+        """Clamp one PCA component input to the available data rank."""
+        maximum = self._get_pca_max_components(source_data)
+        try:
+            selected = int(widget.value)
+        except Exception:
+            selected = min(int(default_value), maximum)
+        selected = max(1, min(selected, maximum))
+
+        widget.start = 1
+        widget.end = maximum
+        if widget.value != selected:
+            widget.value = selected
+        return selected
+
+    def _get_pca_scree_component_selection(self, source_data) -> int:
+        """Return how many principal components the scree plot must calculate."""
+        return self._clamp_pca_component_input(
+            self._pca_scree_components_input,
+            source_data,
+            self._DEFAULT_PCA_SCREE_COMPONENTS,
+        )
+
+    def _get_pca_component_selection(self, source_data) -> int:
+        """Return how many principal components reconstruction must retain."""
+        return self._clamp_pca_component_input(
+            self._pca_components_input,
+            source_data,
+            self._DEFAULT_PCA_RECONSTRUCTION_COMPONENTS,
+        )
+
+    def _prepare_pca_matrix(self, source_data):
+        """Return canonical DataArray and finite samples-by-energy matrix."""
+        eloss_dim = self._get_eloss_dim(source_data)
+        spatial_dims = tuple(dim for dim in source_data.dims if dim != eloss_dim)
+        if len(spatial_dims) != 2:
+            raise ValueError(
+                f"PCA expects two spatial dimensions and one energy dimension; "
+                f"received dims={source_data.dims}."
+            )
+
+        canonical = source_data.transpose(*spatial_dims, eloss_dim)
+        cube = np.asarray(canonical.values, dtype=np.float64)
+        if cube.ndim != 3:
+            raise ValueError(
+                f"PCA expects a 3D spectrum image, got shape={cube.shape}."
+            )
+        matrix = sanitize_pca_matrix(cube.reshape(-1, cube.shape[-1]))
+        return canonical, matrix
+
+    def _open_pca_scree_plot(
+        self,
+        scree_components: int,
+        selected_components: int,
+    ) -> None:
+        """Open the Home view's shared scree-plot modal."""
+        decomposition = self._pca_decomposition
+        if decomposition is None:
+            return
+        if self._pca_scree_callback is None:
+            pn.state.notifications.warning(
+                "The PCA scree-plot popup is not available.",
+                duration=3500,
+            ) # type: ignore
+            return
+
+        dataset_name = self._dataset.attrs.get("image_name")
+        self._pca_scree_callback(
+            decomposition.explained_variance_ratio,
+            scree_components,
+            selected_components,
+            str(dataset_name) if dataset_name is not None else None,
+        )
+
+    def _on_show_pca_scree(self, _=None):
+        """Fit PCA if needed, then show explained variance in a popup."""
+        if self._pca_operation_running:
+            return
+
+        source_data = self._get_pca_source_data()
+        scree_components = self._get_pca_scree_component_selection(source_data)
+        selected_components = self._get_pca_component_selection(source_data)
+        if (
+            self._pca_decomposition is not None
+            and self._pca_cache_source is source_data
+            and self._pca_decomposition.max_components >= scree_components
+        ):
+            self._open_pca_scree_plot(
+                scree_components,
+                selected_components,
+            )
+            return
+
+        self._start_pca_operation(
+            source_data,
+            scree_components,
+            selected_components,
+            apply_reconstruction=False,
+            show_scree=True,
+        )
+
+    def _on_apply_pca(self):
+        """Apply a reconstruction using the requested principal components."""
+        if self._pca_operation_running:
+            return
+
+        source_data = self._get_pca_source_data()
+        scree_components = self._get_pca_scree_component_selection(source_data)
+        selected_components = self._get_pca_component_selection(source_data)
+        self._start_pca_operation(
+            source_data,
+            scree_components,
+            selected_components,
+            apply_reconstruction=True,
+            show_scree=True,
+        )
+
+    def _start_pca_operation(
+        self,
+        source_data,
+        scree_components: int,
+        selected_components: int,
+        *,
+        apply_reconstruction: bool,
+        show_scree: bool,
+    ) -> None:
+        """Show progress and start a PCA fit/reconstruction worker."""
+        self._pca_operation_running = True
+        self._pca_operation_generation += 1
+        generation = self._pca_operation_generation
+        document = pn.state.curdoc
+        app_state = self._model.app_state
+        input_snapshot = _PCAInputSnapshot(
+            display_data=source_data,
+            preprocessed_electron_count=self._preprocessed_electron_count,
+            preprocessed_source=self._preprocessed_source,
+            preprocessors_applied=bool(self._preprocessors_applied),
+            app_state_dataset=app_state.preprocessed_plot_dataset,
+            had_spikes=self._apply_remove_spikes_button.is_on(),
+            had_savgol=self._apply_savgol_button.is_on(),
+            had_multifit=self._apply_multifitting_button.is_on(),
+            had_cut_range=bool(self._cut_range_active),
+        )
+        required_components = (
+            max(int(scree_components), int(selected_components))
+            if apply_reconstruction
+            else int(scree_components)
+        )
+        cached_decomposition = (
+            self._pca_decomposition
+            if (
+                self._pca_cache_source is source_data
+                and self._pca_decomposition is not None
+                and self._pca_decomposition.max_components >= required_components
+            )
+            else None
+        )
+        self._disable_sidebar_widgets()
+        self._progress_display.reset()
+        self._progress_display.visible = True
+        self._progress_display.update(5, "Preparing PCA data...", level="info")
+
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            label = "Applying PCA Reconstruction..." if apply_reconstruction else "Computing PCA Scree Plot..."
+            self._main_ref.update(pn.Tabs((label, self._progress_display)))
+
+        threading.Thread(
+            target=self._run_pca_thread,
+            args=(
+                input_snapshot,
+                int(scree_components),
+                int(selected_components),
+                apply_reconstruction,
+                show_scree,
+                cached_decomposition,
+                document,
+                app_state,
+                generation,
+            ),
+            daemon=True,
+        ).start()
+
+    def _is_pca_operation_current(self, generation: int) -> bool:
+        """Return whether a PCA worker still belongs to this live plot."""
+        return (
+            not self._pca_disposed
+            and int(generation) == self._pca_operation_generation
+        )
+
+    def _schedule_pca_ui(self, document, generation: int, callback) -> None:
+        """Run a PCA UI callback only while its worker is still current."""
+        def guarded_callback():
+            if self._is_pca_operation_current(generation):
+                callback()
+
+        if document is not None:
+            try:
+                document.add_next_tick_callback(guarded_callback)
+                return
+            except Exception:
+                pass
+        guarded_callback()
+
+    def _schedule_pca_progress(
+        self,
+        document,
+        generation: int,
+        value: int,
+        message: str,
+        level: str = "info",
+    ) -> None:
+        """Schedule a progress update on the owning Bokeh document."""
+        self._schedule_pca_ui(
+            document,
+            generation,
+            lambda: self._progress_display.update(
+                value,
+                message,
+                level=level,
+            ),
+        )
+
+    @staticmethod
+    def _set_toggle_state(button: ToggleButton, desired_state: bool) -> None:
+        """Force a ToggleButton to the requested state without firing callbacks."""
+        if button.is_on() != bool(desired_state):
+            button.toggle()
+
+    def _run_pca_thread(
+        self,
+        input_snapshot: _PCAInputSnapshot,
+        scree_components: int,
+        selected_components: int,
+        apply_reconstruction: bool,
+        show_scree: bool,
+        cached_decomposition,
+        document,
+        app_state,
+        generation: int,
+    ) -> None:
+        """Compute PCA off-thread and commit results on the owning UI document."""
+        operation_succeeded = False
+        decomposition = None
+        reconstructed_da = None
+        published_dataset = None
+        error_message = None
+        try:
+            if not self._is_pca_operation_current(generation):
+                return
+
+            source_data = input_snapshot.display_data
+            canonical, matrix = self._prepare_pca_matrix(source_data)
+            required_components = (
+                max(int(scree_components), int(selected_components))
+                if apply_reconstruction
+                else int(scree_components)
+            )
+            if cached_decomposition is not None:
+                decomposition = cached_decomposition
+                self._schedule_pca_progress(
+                    document,
+                    generation,
+                    45,
+                    "Using cached PCA decomposition...",
+                )
+            else:
+                self._schedule_pca_progress(
+                    document,
+                    generation,
+                    20,
+                    (
+                        f"Calculating {required_components} principal components "
+                        f"from {matrix.shape[0]} spectra across {matrix.shape[1]} channels..."
+                    ),
+                )
+                decomposition = PCADecomposition.fit(
+                    matrix,
+                    n_components=required_components,
+                )
+
+            if not self._is_pca_operation_current(generation):
+                return
+
+            if apply_reconstruction:
+                if not 1 <= int(selected_components) <= decomposition.max_components:
+                    raise ValueError(
+                        "PCA reconstruction requests more components than were calculated."
+                    )
+                self._schedule_pca_progress(
+                    document,
+                    generation,
+                    65,
+                    f"Reconstructing with {selected_components} principal components...",
+                )
+                reconstructed_matrix = decomposition.reconstruct(
+                    matrix,
+                    selected_components,
+                )
+                reconstructed_cube = reconstructed_matrix.reshape(canonical.shape)
+                reconstructed_da = canonical.copy(
+                    data=reconstructed_cube,
+                ).transpose(*source_data.dims)
+                published_dataset = self._dataset.assign(
+                    {"ElectronCount": reconstructed_da}
+                )
+
+            self._schedule_pca_progress(
+                document,
+                generation,
+                95,
+                "Finalizing PCA results...",
+            )
+            self._schedule_pca_ui(
+                document,
+                generation,
+                lambda: self._progress_display.completion(
+                    (
+                        f"PCA reconstruction applied with {selected_components} components."
+                        if apply_reconstruction
+                        else f"PCA scree plot is ready with {scree_components} components."
+                    )
+                ),
+            )
+            operation_succeeded = True
+            time.sleep(0.5)
+        except Exception as exc:
+            error_message = f"PCA failed: {str(exc)}"
+            self._schedule_pca_ui(
+                document,
+                generation,
+                lambda: self._progress_display.error(error_message),
+            )
+            time.sleep(1)
+        finally:
+            if self._is_pca_operation_current(generation):
+                self._schedule_pca_ui(
+                    document,
+                    generation,
+                    lambda: self._complete_pca_operation(
+                        input_snapshot=input_snapshot,
+                        scree_components=scree_components,
+                        selected_components=selected_components,
+                        apply_reconstruction=apply_reconstruction,
+                        show_scree=show_scree,
+                        operation_succeeded=operation_succeeded,
+                        decomposition=decomposition,
+                        reconstructed_da=reconstructed_da,
+                        published_dataset=published_dataset,
+                        app_state=app_state,
+                        error_message=error_message,
+                    ),
+                )
+
+    def _complete_pca_operation(
+        self,
+        *,
+        input_snapshot: _PCAInputSnapshot,
+        scree_components: int,
+        selected_components: int,
+        apply_reconstruction: bool,
+        show_scree: bool,
+        operation_succeeded: bool,
+        decomposition,
+        reconstructed_da,
+        published_dataset,
+        app_state,
+        error_message: str | None,
+    ) -> None:
+        """Commit PCA state and refresh Panel components on the UI thread."""
+        refresh_plots = False
+        self._pca_operation_running = False
+
+        if operation_succeeded and decomposition is not None:
+            self._pca_decomposition = decomposition
+            self._pca_cache_source = input_snapshot.display_data
+
+            if apply_reconstruction:
+                # PCA is an additional reversible layer over the exact cube
+                # currently displayed. Commit its input snapshot only after the
+                # numerical operation has succeeded.
+                self._pca_input_electron_count = input_snapshot.display_data
+                self._pca_previous_electron_count = (
+                    input_snapshot.preprocessed_electron_count
+                )
+                self._pca_previous_source = input_snapshot.preprocessed_source
+                self._pca_previous_preprocessors_applied = (
+                    input_snapshot.preprocessors_applied
+                )
+                self._pca_previous_app_state_dataset = (
+                    input_snapshot.app_state_dataset
+                )
+                self._pca_input_had_spikes = input_snapshot.had_spikes
+                self._pca_input_had_savgol = input_snapshot.had_savgol
+                self._pca_input_had_multifit = input_snapshot.had_multifit
+                self._pca_input_had_cut_range = input_snapshot.had_cut_range
+                self._preprocessed_electron_count = reconstructed_da
+                self._preprocessed_source = "pca"
+                self._preprocessors_applied = True
+                self._applied_pca_components = int(selected_components)
+                app_state.preprocessed_plot_dataset = published_dataset
+                self._current_y_range = None
+                self._current_y_autorange = True
+                self._set_toggle_state(self._apply_pca_button, True)
+                refresh_plots = True
+        elif apply_reconstruction:
+            # No preprocessing state was changed before the worker succeeded, so
+            # a failed PCA leaves the prior SavGol/spike/multifit result intact.
+            self._set_toggle_state(self._apply_pca_button, False)
+
+        if self._main_ref is not None and self._plots_tab_ref is not None:
+            self._main_ref.update(self._plots_tab_ref)
+
+        self._enable_sidebar_widgets()
+        if refresh_plots:
+            self._refresh_paneA()
+            self._refresh_paneB()
+
+        if (
+            show_scree
+            and operation_succeeded
+            and self._pca_decomposition is not None
+        ):
+            self._open_pca_scree_plot(
+                scree_components,
+                selected_components,
+            )
+
+        if error_message:
+            pn.state.notifications.error(error_message, duration=5000) # type: ignore
 
     # Home keeps its own curve builder because the displayed Eloss axis can change
     # after preprocessors like Cut Range. BaseSpectrumImagePlot builds curves with
@@ -1589,7 +2227,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             round(float(self._spike_threshold), 6) == self._applied_spike_threshold
             and self._spike_window == self._applied_spike_window
         )
-        if values_match and not self._preprocessors_applied:
+        if (
+            values_match
+            and not self._preprocessors_applied
+            and self._preprocessed_electron_count is not None
+        ):
             self._preprocessors_applied = True
             if self._preprocessed_electron_count is not None:
                 CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
@@ -1613,7 +2255,11 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
             round(float(self._spike_threshold), 6) == self._applied_spike_threshold
             and self._spike_window == self._applied_spike_window
         )
-        if values_match and not self._preprocessors_applied:
+        if (
+            values_match
+            and not self._preprocessors_applied
+            and self._preprocessed_electron_count is not None
+        ):
             self._preprocessors_applied = True
             if self._preprocessed_electron_count is not None:
                 CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
@@ -1635,6 +2281,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider.disabled = True
         self._savgol_window_select.disabled = True
         self._savgol_polyorder_select.disabled = True
+        self._pca_scree_components_input.disabled = True
+        self._pca_components_input.disabled = True
+        self._show_pca_scree_button.disabled = True
         self._multifitting_switch.disabled = True
         self._cut_range_min_input.disabled = True
         self._cut_range_max_input.disabled = True
@@ -1642,32 +2291,81 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._apply_cut_range_button.disabled = True
         self._apply_remove_spikes_button.disabled = True
         self._apply_savgol_button.disabled = True
+        self._apply_pca_button.disabled = True
         self._apply_multifitting_button.disabled = True
 
     def _apply_sidebar_apply_locks(self):
-        """Lock only the controls of the currently applied preprocessor section."""
-        spikes_applied = self._preprocessors_applied and self._preprocessed_source == 'spikes'
-        savgol_applied = self._preprocessors_applied and self._preprocessed_source == 'savgol'
-        multifit_applied = self._preprocessors_applied and self._preprocessed_source == 'multifit'
+        """Lock active stages and enforce last-in-first-out preprocessing."""
+        pca_is_top = (
+            self._preprocessors_applied
+            and self._preprocessed_source == 'pca'
+            and self._apply_pca_button.is_on()
+        )
+        multifit_applied = (
+            self._preprocessors_applied
+            and self._preprocessed_source == 'multifit'
+        )
+        multifit_based_on_pca = (
+            multifit_applied
+            and self._multifit_input_had_pca
+            and self._apply_pca_button.is_on()
+        )
+        pca_in_pipeline = pca_is_top or multifit_based_on_pca
+
+        spikes_applied = (
+            (
+                self._preprocessors_applied
+                and self._preprocessed_source == 'spikes'
+            )
+            or (pca_in_pipeline and self._pca_input_had_spikes)
+            or (multifit_applied and self._multifit_input_had_spikes)
+        )
+        savgol_applied = (
+            (
+                self._preprocessors_applied
+                and self._preprocessed_source == 'savgol'
+            )
+            or (pca_in_pipeline and self._pca_input_had_savgol)
+            or (multifit_applied and self._multifit_input_had_savgol)
+        )
+        multifit_in_pipeline = (
+            multifit_applied
+            or (pca_is_top and self._pca_input_had_multifit)
+        )
         cut_range_applied = self._cut_range_active
-        multifit_based_on_spikes = multifit_applied and self._multifit_input_had_spikes
-        multifit_based_on_savgol = multifit_applied and self._multifit_input_had_savgol
 
-        # If Remove Spikes is currently applied, freeze only its own sliders.
-        self._spike_threshold_slider.disabled = spikes_applied or multifit_based_on_spikes
-        self._spike_window_slider.disabled = spikes_applied or multifit_based_on_spikes
-        self._savgol_window_select.disabled = savgol_applied or multifit_based_on_savgol
-        self._savgol_polyorder_select.disabled = savgol_applied or multifit_based_on_savgol
+        # A PCA layer snapshots its complete input pipeline. Freeze upstream
+        # stages until PCA (and any downstream multifit) is reverted.
+        self._spike_threshold_slider.disabled = spikes_applied or pca_in_pipeline
+        self._spike_window_slider.disabled = spikes_applied or pca_in_pipeline
+        self._savgol_window_select.disabled = savgol_applied or pca_in_pipeline
+        self._savgol_polyorder_select.disabled = savgol_applied or pca_in_pipeline
+        self._pca_components_input.disabled = pca_in_pipeline
+        self._pca_scree_components_input.disabled = False
 
-        # If Multifitting is currently applied, freeze only fitting controls.
-        self._fitting_switch.disabled = multifit_applied
-        self._multifitting_switch.disabled = multifit_applied
-        self._range_slider.disabled = multifit_applied or (not self._fitting_active)
+        self._fitting_switch.disabled = multifit_in_pipeline
+        self._multifitting_switch.disabled = multifit_in_pipeline
+        self._range_slider.disabled = (
+            multifit_in_pipeline
+            or (not self._fitting_active)
+        )
 
-        # Freeze only the Cut Range section when Cut Range is currently applied.
-        self._cut_range_min_input.disabled = cut_range_applied
-        self._cut_range_max_input.disabled = cut_range_applied
-        self._cut_range_reset_button.disabled = cut_range_applied
+        self._cut_range_min_input.disabled = cut_range_applied or pca_in_pipeline
+        self._cut_range_max_input.disabled = cut_range_applied or pca_in_pipeline
+        self._cut_range_reset_button.disabled = cut_range_applied or pca_in_pipeline
+
+        if pca_in_pipeline:
+            self._apply_cut_range_button.disabled = True
+            self._apply_remove_spikes_button.disabled = True
+            self._apply_savgol_button.disabled = True
+
+        # Multifit may be applied after PCA. If it is already below PCA, its
+        # Revert button is locked until PCA is popped. Conversely, PCA cannot be
+        # reverted while a downstream multifit is still active.
+        self._apply_multifitting_button.disabled = (
+            pca_is_top and self._pca_input_had_multifit
+        )
+        self._apply_pca_button.disabled = multifit_based_on_pca
 
     def _enable_sidebar_widgets(self):
         """Enable/disable sidebar widgets based on current preprocessing state."""
@@ -1677,6 +2375,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider.disabled = False
         self._savgol_window_select.disabled = False
         self._savgol_polyorder_select.disabled = False
+        self._pca_scree_components_input.disabled = False
+        self._pca_components_input.disabled = False
+        self._show_pca_scree_button.disabled = False
         self._multifitting_switch.disabled = False
         self._cut_range_min_input.disabled = False
         self._cut_range_max_input.disabled = False
@@ -1684,11 +2385,15 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._apply_cut_range_button.disabled = False
         self._apply_remove_spikes_button.disabled = False
         self._apply_savgol_button.disabled = False
+        self._apply_pca_button.disabled = False
         self._apply_multifitting_button.disabled = False
         self._apply_sidebar_apply_locks()
 
     def _on_apply_remove_spikes(self):
         """Disable sidebar, show progress in main, run all active preprocessors in a background thread."""
+        if self._block_upstream_change_while_pca_active():
+            return
+
         # A new despike application supersedes a previously displayed multifit output.
         if self._apply_multifitting_button.is_on():
             self._apply_multifitting_button.toggle()
@@ -1699,6 +2404,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
         self._multifit_input_had_savgol = False
+        self._multifit_input_had_pca = False
+        self._multifit_input_had_cut_range = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -1728,6 +2435,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_apply_savgol(self):
         """Apply Savitzky-Golay smoothing across the energy axis."""
+        if self._block_upstream_change_while_pca_active():
+            return
+
         if self._apply_multifitting_button.is_on():
             self._apply_multifitting_button.toggle()
             self._on_revert_multifitting()
@@ -1737,6 +2447,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
         self._multifit_input_had_savgol = False
+        self._multifit_input_had_pca = False
+        self._multifit_input_had_cut_range = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -1801,6 +2513,10 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_input_had_savgol = (
             self._preprocessors_applied and self._preprocessed_source == 'savgol'
         )
+        self._multifit_input_had_pca = (
+            self._preprocessors_applied and self._preprocessed_source == 'pca'
+        )
+        self._multifit_input_had_cut_range = self._cut_range_active
 
         threading.Thread(target=self._run_multifitting_thread, daemon=True).start()
 
@@ -1817,7 +2533,16 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         except Exception:
             eloss_signature = (0.0, 0.0, int(input_arr.shape[-1]))
 
-        if self._apply_remove_spikes_button.is_on():
+        # PCA may sit on top of despiking or Savitzky-Golay while their
+        # buttons remain active. Give the top layer priority so a downstream
+        # multifit cannot reuse a cache entry for the pre-PCA cube.
+        if self._apply_pca_button.is_on():
+            source_signature = (
+                'pca',
+                int(self._applied_pca_components or 1),
+                id(input_da),
+            )
+        elif self._apply_remove_spikes_button.is_on():
             source_signature = (
                 'despiked',
                 round(float(self._spike_threshold), 6),
@@ -1945,32 +2670,41 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 self._restore_after_remove_spikes()
 
     def _on_revert_multifitting(self):
-        """Revert multifitting and restore the previous display cube (raw or despiked)."""
+        """Revert multifitting and restore its exact previous display cube."""
         if self._cut_range_active and self._cut_range_preprocessed_electron_count is not None:
             if self._multifit_previous_electron_count is not None:
-                restored_data, _ = self._build_cut_range_preprocessed_data(self._multifit_previous_electron_count)
+                if self._multifit_input_had_cut_range:
+                    # Cut Range already existed when multifitting started, so the
+                    # snapshot is already cut and its pre-cut history must remain.
+                    restored_data = self._multifit_previous_electron_count
+                else:
+                    # Cut Range was applied on top of multifitting. Reapply that
+                    # range to the full pre-multifit snapshot and make it the
+                    # value restored when Cut Range itself is reverted.
+                    restored_data, _ = self._build_cut_range_preprocessed_data(
+                        self._multifit_previous_electron_count
+                    )
+                    self._cut_range_previous_electron_count = self._multifit_previous_electron_count
+                    self._cut_range_previous_source = self._multifit_previous_source
                 restored_source = self._multifit_previous_source or 'cut_range'
                 self._preprocessed_electron_count = restored_data
                 self._preprocessed_source = restored_source
                 self._preprocessors_applied = True
-                if self._multifit_previous_source is not None:
-                    self._cut_range_previous_electron_count = self._multifit_previous_electron_count
-                    self._cut_range_previous_source = self._multifit_previous_source
-                else:
-                    self._cut_range_previous_electron_count = None
-                    self._cut_range_previous_source = None
                 CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": restored_data})
             else:
                 self._preprocessed_electron_count = self._cut_range_preprocessed_electron_count
                 self._preprocessed_source = 'cut_range'
                 self._preprocessors_applied = True
-                self._cut_range_previous_electron_count = None
-                self._cut_range_previous_source = None
+                if not self._multifit_input_had_cut_range:
+                    self._cut_range_previous_electron_count = None
+                    self._cut_range_previous_source = None
                 CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": self._preprocessed_electron_count})
 
             self._multifitting_switch.value = False
             self._multifit_input_had_spikes = False
             self._multifit_input_had_savgol = False
+            self._multifit_input_had_pca = False
+            self._multifit_input_had_cut_range = False
             self._multifit_previous_electron_count = None
             self._multifit_previous_source = None
             self._current_y_range = None
@@ -1994,6 +2728,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
         self._multifit_input_had_savgol = False
+        self._multifit_input_had_pca = False
+        self._multifit_input_had_cut_range = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
         self._current_y_range = None
@@ -2306,6 +3042,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_revert_remove_spikes(self):
         """Stop applying preprocessors and revert paneB and paneA to raw spectrum and image. Restore selection overlay if region is selected."""
+        if self._block_upstream_change_while_pca_active():
+            return
+
         had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
 
         if self._apply_multifitting_button.is_on():
@@ -2313,6 +3052,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
         self._multifit_input_had_savgol = False
+        self._multifit_input_had_pca = False
+        self._multifit_input_had_cut_range = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -2351,6 +3092,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
 
     def _on_revert_savgol(self):
         """Stop applying Savitzky-Golay smoothing and restore raw or Cut Range data."""
+        if self._block_upstream_change_while_pca_active():
+            return
+
         had_preprocessed = self._preprocessors_applied or self._preprocessed_electron_count is not None
 
         if self._apply_multifitting_button.is_on():
@@ -2358,6 +3102,8 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifitting_switch.value = False
         self._multifit_input_had_spikes = False
         self._multifit_input_had_savgol = False
+        self._multifit_input_had_pca = False
+        self._multifit_input_had_cut_range = False
         self._multifit_previous_electron_count = None
         self._multifit_previous_source = None
 
@@ -2389,6 +3135,59 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         else:
             self._refresh_paneA()
 
+        self._refresh_paneB()
+        self._enable_sidebar_widgets()
+
+    def _on_revert_pca(self):
+        """Remove PCA and restore its exact input pipeline and AppState."""
+        if self._pca_operation_running:
+            return
+
+        # A multifit applied after PCA is the top layer and must be reverted
+        # first. The UI disables this button in that state; retain a defensive
+        # guard for direct callback invocation.
+        if (
+            self._apply_multifitting_button.is_on()
+            and self._multifit_input_had_pca
+        ):
+            pn.state.notifications.warning(
+                "Revert Multifitting before reverting its PCA input.",
+                duration=4000,
+            ) # type: ignore
+            return
+
+        self._preprocessed_electron_count = self._pca_previous_electron_count
+        self._preprocessed_source = self._pca_previous_source
+        self._preprocessors_applied = (
+            self._pca_previous_preprocessors_applied
+        )
+
+        if self._pca_previous_app_state_dataset is None:
+            self._model.app_state.clear_preprocessed_plot_dataset()
+        else:
+            self._model.app_state.preprocessed_plot_dataset = (
+                self._pca_previous_app_state_dataset
+            )
+
+        self._pca_input_electron_count = None
+        self._pca_previous_electron_count = None
+        self._pca_previous_source = None
+        self._pca_previous_preprocessors_applied = False
+        self._pca_previous_app_state_dataset = None
+        self._pca_input_had_spikes = False
+        self._pca_input_had_savgol = False
+        self._pca_input_had_multifit = False
+        self._pca_input_had_cut_range = False
+        self._applied_pca_components = None
+
+        self._sync_range_slider_to_energy_axis(
+            self._get_display_energy_axis(),
+            reset_value=False,
+        )
+        self._current_y_range = None
+        self._current_y_autorange = True
+
+        self._refresh_paneA()
         self._refresh_paneB()
         self._enable_sidebar_widgets()
 
@@ -2522,6 +3321,13 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
     @override
     def cleanup(self):
         """Stop periodic callback, unwatch widgets, and release all references."""
+        # Invalidate any in-flight PCA worker before releasing its data/UI refs.
+        # The numerical thread may continue briefly, but its guarded commit and
+        # modal callbacks will be discarded.
+        self._pca_disposed = True
+        self._pca_operation_generation += 1
+        self._pca_operation_running = False
+
         stop_pc(self._pc)
         self._pc = None
 
@@ -2568,6 +3374,9 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._spike_window_slider = pn.widgets.IntSlider()
         self._savgol_window_select = pn.widgets.Select()
         self._savgol_polyorder_select = pn.widgets.Select()
+        self._pca_scree_components_input = pn.widgets.IntInput()
+        self._pca_components_input = pn.widgets.IntInput()
+        self._show_pca_scree_button = pn.widgets.Button()
         self._multifitting_switch = pn.widgets.Switch()
         self._cut_range_min_input = pn.widgets.FloatInput()
         self._cut_range_max_input = pn.widgets.FloatInput()
@@ -2580,6 +3389,7 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._applied_cut_range = None
         self._apply_remove_spikes_button = ToggleButton()
         self._apply_savgol_button = ToggleButton()
+        self._apply_pca_button = ToggleButton()
         self._apply_multifitting_button = ToggleButton()
         self._preprocessors_applied = False
         self._preprocessed_source = None
@@ -2588,6 +3398,22 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
         self._multifit_previous_source = None
         self._multifit_input_had_spikes = False
         self._multifit_input_had_savgol = False
+        self._multifit_input_had_pca = False
+        self._multifit_input_had_cut_range = False
+        self._pca_decomposition = None
+        self._pca_cache_source = None
+        self._pca_input_electron_count = None
+        self._pca_previous_electron_count = None
+        self._pca_previous_source = None
+        self._pca_previous_preprocessors_applied = False
+        self._pca_previous_app_state_dataset = None
+        self._pca_input_had_spikes = False
+        self._pca_input_had_savgol = False
+        self._pca_input_had_multifit = False
+        self._pca_input_had_cut_range = False
+        self._applied_pca_components = None
+        self._pca_scree_callback = None
+        self._pca_operation_running = False
         self._despiked_cube = None
         self._despike_cache_signature = None
         self._savgol_cube = None

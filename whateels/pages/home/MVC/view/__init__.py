@@ -1,13 +1,15 @@
 import panel as pn
 import gc
 from whateels.errors.dm.data import DMPlotCreationError
-import panel as pn
+from whateels.components import ModalManager
 from .plots_factory import PlotsFactory
 from .plots import SpectrumImagePlot
 from .layouts import HomePageLeftSidebar, HomePageMainLayout, HomePageRightSidebar
+from .modals import PCAScreePlotModal
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
+    from whateels.templates import GeneralPageTemplate
     from ..model import HomePageModel
     from xarray import Dataset
 
@@ -15,9 +17,20 @@ class HomePageView:
     
     _STRETCH_WIDTH = "stretch_width"
     _STRETCH_BOTH = "stretch_both"
+    _PCA_SCREE_MODAL_ID = "PCA Scree Plot"
     
-    def __init__(self, model: "HomePageModel"):
+    def __init__(
+        self,
+        model: "HomePageModel",
+        custom_page: "GeneralPageTemplate",
+    ):
         self._model = model
+        self._modal_manager = ModalManager(custom_page)
+        self._pca_scree_modal = PCAScreePlotModal(custom_page=custom_page)
+        self._modal_manager.register_modal(
+            self._PCA_SCREE_MODAL_ID,
+            self._pca_scree_modal,
+        )
         
         # Load any provided CSS files (guard avoids duplicate ImportedStyleSheet models)
         if '/assets/css/home.css' not in pn.config.css_files: # type: ignore
@@ -74,6 +87,27 @@ class HomePageView:
     def right_sidebar(self):
         """Delete the right sidebar layout."""
         self._right_sidebar.clear()
+
+    @property
+    def modals(self) -> list:
+        """Modal components rendered by the Home page template."""
+        return self._modal_manager.modals
+
+    def _show_pca_scree_plot(
+        self,
+        explained_variance_ratio,
+        scree_components: int,
+        selected_components: int,
+        dataset_name: str | None = None,
+    ) -> None:
+        """Populate and open the shared PCA scree-plot popup."""
+        self._pca_scree_modal.set_results(
+            explained_variance_ratio,
+            scree_components,
+            selected_components,
+            dataset_name,
+        )
+        self._modal_manager.open_modal(self._PCA_SCREE_MODAL_ID)
         
     def create_tab_and_dataset_info(self, all_datasets: list["Dataset"]) -> None:
         """
@@ -116,8 +150,9 @@ class HomePageView:
                     raise DMPlotCreationError(f"No visualizer found for dataset type: {dataset_type}")
 
                 # Wire the plot's fitting SimpleDetails into the sidebar
-                if isinstance(chosen_plot, SpectrumImagePlot):                    
+                if isinstance(chosen_plot, SpectrumImagePlot):
                     chosen_plot.set_view_refs(self._main, plots_tab)
+                    chosen_plot.set_pca_scree_callback(self._show_pca_scree_plot)
                 
                 plots = chosen_plot.create_plots()
                 
@@ -158,6 +193,7 @@ class HomePageView:
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_cut_range_details())
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_savgol_details())
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_remove_spikes_details())
+            self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_pca_details())
             self._right_sidebar.preprocessed_settings.append(self._all_plots[selected_tab_index].create_fitting_details())
     
     def cleanup_plots(self):
@@ -178,6 +214,8 @@ class HomePageView:
             self._plots_tab = None
 
         self._all_dataset_info.clear()
+        self._pca_scree_modal.close()
+        self._pca_scree_modal.clear_results()
 
     def cleanup(self):
         """Clean up resources before page reload or session end."""
