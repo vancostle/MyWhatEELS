@@ -14,7 +14,22 @@ class Constants:
     IMAGE = 'Img'
     
     DEFAULT_BACKGROUND_SUBTRACTION = False
-    
+
+    # Right sidebar tabs
+    TAB_MANUAL = "Manual"
+    TAB_ELEMENTAL = "Elemental"
+    TAB_RESULTS = "Results"
+
+    # Elemental NLLS defaults
+    AVAILABLE_ELEMENTAL_MODELS = ["GaussianModel", "LorentzianModel", "PseudoVoigtModel", "SplitLorentzianModel"]
+    DEFAULT_ELEMENTAL_MODEL = "GaussianModel"
+    DEFAULT_ELEMENTAL_ENERGY_CENTER = 500
+    ELEMENTAL_ENERGY_RANGE_THRESHOLD = 50
+    DEFAULT_ELEMENTAL_FLEXIBILITY = "Low"
+    AVAILABLE_ELEMENTAL_FLEXIBILITIES = ["Low", "Medium", "High", "Maximum"]
+    AVAILABLE_ELEMENTAL_AREAS = ["Area 1"]
+    DEFAULT_ELEMENTAL_AREA = "Area 1"
+
     # K-Means defaults
     DEFAULT_SELECTED_NORM = 'none'
     AVAILABLE_NORMS = [DEFAULT_SELECTED_NORM, 'l1', 'l2', 'max']

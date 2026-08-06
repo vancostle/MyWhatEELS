@@ -47,6 +47,12 @@ class FittingView:
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
         self._use_preprocessed_data_switch: pn.widgets.Switch = pn.widgets.Switch()
 
+        self._elemental_input: dict[str, pn.widgets.Widget] = {}
+        self._elemental_add_component_button = pn.widgets.Button()
+        self._elemental_fit_references_button = pn.widgets.Button()
+        self._elemental_run_nlls_button = pn.widgets.Button()
+        self._elemental_save_model_button = pn.widgets.FileDownload()
+
         self._init_components()
 
     @property
@@ -83,7 +89,12 @@ class FittingView:
     def dataset_info(self) -> Optional[pn.viewable.Viewable]:
         """Reference to the last dataset info component added to the sidebar."""
         return self._dataset_info_layout
-    
+
+    @property
+    def no_file_placeholder(self) -> pn.viewable.Viewable:
+        """Access the 'no file loaded' placeholder shown in main when no dataset is selected."""
+        return self._no_file_placeholder
+
     @property
     def component_input(self) -> dict[str, pn.widgets.Widget]:
         """Access fitting component input widgets."""
@@ -107,6 +118,27 @@ class FittingView:
     def component_item_view_container(self) -> pn.Column:
         """Access the container for component item views."""
         return self._component_item_view_container
+
+    @property
+    def elemental_input(self) -> dict[str, pn.widgets.Widget]:
+        """Access the Elemental NLLS input widgets."""
+        return self._elemental_input
+    @property
+    def elemental_add_component_button(self) -> pn.widgets.Button:
+        """Access the Elemental NLLS 'Add Component' button."""
+        return self._elemental_add_component_button
+    @property
+    def elemental_fit_references_button(self) -> pn.widgets.Button:
+        """Access the Elemental NLLS 'Fit References' button."""
+        return self._elemental_fit_references_button
+    @property
+    def elemental_run_nlls_button(self) -> pn.widgets.Button:
+        """Access the Elemental NLLS 'Run Elemental NLLS' button."""
+        return self._elemental_run_nlls_button
+    @property
+    def elemental_save_model_button(self) -> pn.widgets.FileDownload:
+        """Access the Elemental NLLS 'Save Current Model' button."""
+        return self._elemental_save_model_button
 
 
     @dataset_info.setter
@@ -151,12 +183,12 @@ class FittingView:
         """Build right sidebar controls for component definition and fitting actions."""
 
         background_subtraction_label = pn.pane.Markdown(
-            "### Use Preprocessed Data", 
+            "### Use Preprocessed Data",
         )
 
         self._use_preprocessed_data_switch = pn.widgets.Switch(
-            name="Use Preprocessed Data", 
-            value=False, 
+            name="Use Preprocessed Data",
+            value=False,
             sizing_mode='stretch_both',
             css_classes=["background-subtraction-switch"]
         )
@@ -170,7 +202,7 @@ class FittingView:
         )
         background_subtraction_container = pn.Row(
             pn.widgets.TooltipIcon(
-                value=subtraction_bg_tooltip, 
+                value=subtraction_bg_tooltip,
                 css_classes=["tooltip-icon"]
             ),
             background_subtraction_label,
@@ -178,6 +210,47 @@ class FittingView:
             sizing_mode=self._STRETCH_WIDTH,
             css_classes=["background-subtraction-container"]
         )
+
+        manual_tab = self._create_manual_tab()
+        elemental_tab = self._create_elemental_tab()
+        results_tab = self._create_results_tab()
+
+        constants = self._model.constants
+        # Tabs render inside Bokeh's shadow root, so align their headers with a
+        # component stylesheet instead of the page-level fitting.css file.
+        fitting_tabs = pn.Tabs(
+            (constants.TAB_MANUAL, manual_tab),
+            (constants.TAB_ELEMENTAL, elemental_tab),
+            (constants.TAB_RESULTS, results_tab),
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["fitting-tabs"],
+            stylesheets=["""
+                .bk-header {
+                    width: 100%;
+                }
+
+                .bk-tab {
+                    flex: 1 1 0;
+                    text-align: center;
+                }
+            """]
+        )
+
+        right_sidebar = pn.Column(
+            background_subtraction_container,
+            pn.Column(
+                fitting_tabs,
+                sizing_mode=self._STRETCH_BOTH,
+                styles={'flex': '1'}
+            ),
+            styles={'display': 'flex'},
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+        return right_sidebar
+
+    def _create_manual_tab(self) -> pn.Column:
+        """Build the 'Manual' tab: component creation controls and Show Energy Map."""
+
         # Component creation controls.
         self._component_model_input = {
             "energy_center": pn.widgets.IntInput(
@@ -189,7 +262,7 @@ class FittingView:
                 margin=(0,0,10,0),
             ),
             "model_select": pn.widgets.Select(
-                name="Select Model", 
+                name="Select Model",
                 options=["GaussianModel",
                         "LorentzianModel",
                         "PseudoVoigtModel",
@@ -208,7 +281,7 @@ class FittingView:
             ),
             "flexibility": pn.widgets.Select(
                 name="Flexibility",
-                options=["Low", "Medium", "High", "Maximum"],  
+                options=["Low", "Medium", "High", "Maximum"],
                 sizing_mode=self._STRETCH_WIDTH,
                 margin=(0,0,10,0)
             )
@@ -222,7 +295,7 @@ class FittingView:
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
         )
-        
+
         details = SimpleDetails(
             title="NLLS Instructions",
             content=pn.Column(
@@ -238,7 +311,7 @@ class FittingView:
         # Toggle button state identifiers.
         _ON = 'on'
         _OFF = 'off'
-        
+
         # Dictionary keys used by ToggleButton state schema.
         _NAME = 'label'
         _ON_CLICK = 'on_click'
@@ -260,10 +333,117 @@ class FittingView:
         self._component_item_view_container = pn.Column(sizing_mode=self._STRETCH_BOTH,
                                                         css_classes=["component-container"])
 
-        right_sidebar = pn.Column(
-            background_subtraction_container,
+        manual_tab = pn.Column(
             details,
             self._energy_map_toggle_button,
             sizing_mode=self._STRETCH_BOTH,
+            css_classes=["manual-tab"]
         )
-        return right_sidebar
+        return manual_tab
+
+    def _create_elemental_tab(self) -> pn.Column:
+        """Build the 'Elemental' tab: Elemental NLLS model builder controls and action buttons."""
+        constants = self._model.constants
+
+        self._elemental_input = {
+            "model_select": pn.widgets.Select(
+                name="Available model",
+                options=constants.AVAILABLE_ELEMENTAL_MODELS,
+                value=constants.DEFAULT_ELEMENTAL_MODEL,
+                sizing_mode=self._STRETCH_WIDTH,
+                margin=(0,0,10,0)
+            ),
+            "energy_center": pn.widgets.IntInput(
+                name='Energy Center',
+                sizing_mode=self._STRETCH_WIDTH,
+                value=constants.DEFAULT_ELEMENTAL_ENERGY_CENTER,
+                start=1,
+                end=10000,
+                margin=(0,0,10,0),
+            ),
+            "energy_range": pn.widgets.EditableRangeSlider(
+                name='Energy Range (eV)',
+                sizing_mode=self._STRETCH_WIDTH,
+                value=(
+                    constants.DEFAULT_ELEMENTAL_ENERGY_CENTER - constants.ELEMENTAL_ENERGY_RANGE_THRESHOLD,
+                    constants.DEFAULT_ELEMENTAL_ENERGY_CENTER + constants.ELEMENTAL_ENERGY_RANGE_THRESHOLD,
+                ),
+                start=constants.DEFAULT_ELEMENTAL_ENERGY_CENTER - constants.ELEMENTAL_ENERGY_RANGE_THRESHOLD,
+                end=constants.DEFAULT_ELEMENTAL_ENERGY_CENTER + constants.ELEMENTAL_ENERGY_RANGE_THRESHOLD,
+                margin=(0,0,10,0),
+            ),
+            "flexibility": pn.widgets.Select(
+                name="Flexibility",
+                options=constants.AVAILABLE_ELEMENTAL_FLEXIBILITIES,
+                value=constants.DEFAULT_ELEMENTAL_FLEXIBILITY,
+                sizing_mode=self._STRETCH_WIDTH,
+                margin=(0,0,10,0)
+            ),
+            "area": pn.widgets.Select(
+                name="Area",
+                options=constants.AVAILABLE_ELEMENTAL_AREAS,
+                value=constants.DEFAULT_ELEMENTAL_AREA,
+                sizing_mode=self._STRETCH_WIDTH,
+                margin=(0,0,10,0)
+            ),
+        }
+
+        self._elemental_add_component_button = pn.widgets.Button(
+            name='Add Component',
+            button_type='primary',
+            height=55,
+            margin=(10,0,0,0),
+            sizing_mode=self._STRETCH_WIDTH,
+            disabled=True,
+        )
+
+        self._elemental_fit_references_button = pn.widgets.Button(
+            name='Fit References',
+            button_type='success',
+            height=55,
+            margin=(10,0,0,0),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        self._elemental_run_nlls_button = pn.widgets.Button(
+            name='Run Elemental NLLS',
+            button_type='success',
+            height=55,
+            margin=(10,0,0,0),
+            sizing_mode=self._STRETCH_WIDTH,
+        )
+
+        self._elemental_save_model_button = pn.widgets.FileDownload(
+            label="Save Current Model",
+            button_type="primary",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10,0,0,0),
+            icon="download",
+            icon_size="20px",
+            disabled=True,
+        )
+
+        elemental_tab = pn.Column(
+            pn.Column(
+                *[widget for widget in self._elemental_input.values()],
+                sizing_mode=self._STRETCH_BOTH,
+                css_classes=["elemental-input-container"]
+            ),
+            self._elemental_add_component_button,
+            self._elemental_fit_references_button,
+            self._elemental_run_nlls_button,
+            self._elemental_save_model_button,
+            sizing_mode=self._STRETCH_BOTH,
+            css_classes=["elemental-tab"]
+        )
+
+        return elemental_tab
+
+    def _create_results_tab(self) -> pn.Column:
+        """Build the 'Results' tab. Placeholder pending Elemental NLLS results implementation."""
+        results_tab = pn.Column(
+            pn.pane.Markdown("Elemental NLLS results will be shown here once available."),
+            sizing_mode=self._STRETCH_BOTH,
+            css_classes=["results-tab"]
+        )
+        return results_tab
