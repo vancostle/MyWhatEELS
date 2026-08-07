@@ -63,3 +63,6 @@ desktop.ini
 # Executable and compressed files
 *.exe
 *.zip
+
+# Local utility scripts not part of the project
+inspect_slider.py
