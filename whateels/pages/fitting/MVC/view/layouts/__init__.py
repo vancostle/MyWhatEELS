@@ -1,9 +1,9 @@
-from .main_layout import QuantificationMainLayout
-from .left_sidebar_layout import QuanficationLeftSidebarLayout
-from .right_sidebar_layout import QuantificationRightSidebarLayout
+from .main_layout import FittingMainLayout
+from .left_sidebar_layout import FittingLeftSidebarLayout
+from .right_sidebar_layout import FittingRightSidebarLayout
 
 __all__ = [
-    "QuantificationMainLayout",
-    "QuanficationLeftSidebarLayout",
-    "QuantificationRightSidebarLayout"
+    "FittingMainLayout",
+    "FittingLeftSidebarLayout",
+    "FittingRightSidebarLayout",
 ]

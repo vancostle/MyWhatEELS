@@ -2,14 +2,14 @@ import panel as pn
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ...model import QuantificationModel
+    from ...model import FittingModel
 
-class QuantificationMainLayout(pn.Column):
+class FittingMainLayout(pn.Column):
     """Legacy standalone main-layout container kept for compatibility."""
     
     _STRETCH_BOTH = "stretch_both"
     
-    def __init__(self, model: "QuantificationModel") -> None:
+    def __init__(self, model: "FittingModel") -> None:
         """Initialize placeholder panes and create a no-file default layout."""
         
         # Initialize placeholders

@@ -91,6 +91,24 @@
     margin-top: .25rem;
 }
 
+.my-range .bk-row,
+.my-range .bk-input-group,
+.my-range .bk-input-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.my-range .bk-input-group .bk-input,
+.my-range .bk-input-wrapper .bk-input {
+    min-width: 0;
+    width: auto;
+    flex: 1 1 0;
+}
+
 /* Ajuste de alineación para el label externo del slider (Option 1) */
 .range-label-wrapper { /* fila contenedora */
     padding-right: 40px; /* reserva 40px a la derecha del panel */

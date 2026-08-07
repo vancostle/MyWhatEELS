@@ -25,6 +25,14 @@
 
     box-sizing: border-box;
 
+    /* FastListTemplate declares only `overflow-y: auto` here, so per CSS spec overflow-x
+       computes to `auto` too: any content wider than the 330px sidebar grew a horizontal
+       scrollbar at THIS level. The tab bodies now clip/scroll on their own containers
+       (see the inline `styles=` in right_sidebar_layout.py, which is the only way to reach
+       them: everything below is rendered inside a Bokeh shadow root that this file cannot
+       cross). This is the last-resort guard, not the fix. */
+    overflow-x: hidden;
+
     & > .nav.flex-column {
         height: 100%;
     }
@@ -78,4 +86,21 @@
 
 .background-subtraction-container {
     max-height: 65px;
+}
+
+/* Ported from clustering.css: the fitting view already uses the class but
+   fitting.css did not define it. */
+.tooltip-icon {
+    margin: 0;
+}
+
+/* Read-only informative panes of the Elemental tab. */
+.elemental-status {
+    font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+/* The action stack must never steal height from the scrollable container. */
+.elemental-actions {
+    flex-shrink: 0;
 }

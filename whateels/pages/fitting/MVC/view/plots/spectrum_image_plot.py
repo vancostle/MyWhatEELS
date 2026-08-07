@@ -14,7 +14,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
-from whateels.components import SplitJs
+from whateels.components import SplitJs, create_dataset_info_card
 from whateels.state import CacheManager
 
 if TYPE_CHECKING:
@@ -76,6 +76,21 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         if dataset is not None and hasattr(dataset, 'ElectronCount'):
             return dataset.ElectronCount
         return self._electron_count_data
+
+    @override
+    def create_dataset_info(self):
+        """Return the shared editable Dataset Information card for the left sidebar.
+
+        The base implementation builds a read-only InfoPanel. Fitting uses the very same card
+        as Home so that E0, alpha and beta stay in sync: editing it writes straight into
+        `dataset.attrs` and propagates through AppState, whichever page you edit it from.
+        """
+        return create_dataset_info_card(
+            self._model,
+            self._dataset,
+            sizing_mode='stretch_width',
+            margin=0,
+        )
 
     # --- paneA setup override: now handled by base ---
 
