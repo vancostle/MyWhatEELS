@@ -48,6 +48,15 @@ class FittingRightSidebarLayout(pn.Column):
         """Wrapping-row styles, optionally merged with row-specific declarations."""
         return {**FittingRightSidebarLayout._ROW_FLUID, **extra}
 
+    @staticmethod
+    def _left_tooltip_icon(content: str, **params) -> pn.widgets.TooltipIcon:
+        """Create a help icon whose popup stays inside the right sidebar viewport."""
+        params.setdefault("css_classes", ["tooltip-icon"])
+        return pn.widgets.TooltipIcon(
+            value=Tooltip(content=content, position="left"),
+            **params,
+        )
+
     # Sliders need their own container inside a SimpleDetails (see _in_slider_container).
     _SLIDER_TYPES = (
         pn.widgets.EditableRangeSlider,
@@ -135,19 +144,6 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
         )
-        self._elemental_oos_method_version = pn.widgets.StaticText(
-            name="OOS method / version",
-            value=constants.DEFAULT_ELEMENTAL_OOS_METHOD_VERSION,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-        )
-        self._elemental_oos_status = pn.pane.Markdown(
-            constants.ELEMENTAL_OOS_STATUS_PLACEHOLDER,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-            css_classes=["elemental-status"],
-        )
-
         self._elemental_add_edge_button = pn.widgets.Button(
             name='Add Edge',
             button_type='primary',
@@ -179,11 +175,6 @@ class FittingRightSidebarLayout(pn.Column):
             margin=(10, 0, 0, 0),
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
-        )
-        self._elemental_load_clustering_json_input = pn.widgets.FileInput(
-            accept=".json",
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(10, 0, 10, 0),
         )
         self._elemental_fit_current_reference_button = pn.widgets.Button(
             name='Fit Current Reference',
@@ -358,16 +349,6 @@ class FittingRightSidebarLayout(pn.Column):
         return self._elemental_onset_readout
 
     @property
-    def elemental_oos_method_version(self) -> pn.widgets.StaticText:
-        """Access the Elemental NLLS OOS method/version text."""
-        return self._elemental_oos_method_version
-
-    @property
-    def elemental_oos_status(self) -> pn.pane.Markdown:
-        """Access the Elemental NLLS OOS status pane."""
-        return self._elemental_oos_status
-
-    @property
     def elemental_add_edge_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Add Edge' button."""
         return self._elemental_add_edge_button
@@ -386,11 +367,6 @@ class FittingRightSidebarLayout(pn.Column):
     def elemental_use_current_clustering_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Use Current Clustering' button."""
         return self._elemental_use_current_clustering_button
-
-    @property
-    def elemental_load_clustering_json_input(self) -> pn.widgets.FileInput:
-        """Access the Elemental NLLS clustering JSON file input."""
-        return self._elemental_load_clustering_json_input
 
     @property
     def elemental_fit_current_reference_button(self) -> pn.widgets.Button:
@@ -431,10 +407,7 @@ class FittingRightSidebarLayout(pn.Column):
             if is_preprocessed_available else "Must do some preprocessing first at home page before using this option."
         )
         background_subtraction_container = pn.Row(
-            pn.widgets.TooltipIcon(
-                value=subtraction_bg_tooltip,
-                css_classes=["tooltip-icon"]
-            ),
+            self._left_tooltip_icon(subtraction_bg_tooltip),
             background_subtraction_label,
             self._use_preprocessed_data_switch,
             sizing_mode=self._STRETCH_WIDTH,
@@ -639,7 +612,6 @@ class FittingRightSidebarLayout(pn.Column):
 
         edge_details = self._create_elemental_edge_section()
         model_details = self._create_elemental_model_section()
-        oos_status_details = self._create_elemental_oos_status_section()
         areas_details = self._create_elemental_areas_section()
         run_setup_details = self._create_elemental_run_setup_section()
 
@@ -653,7 +625,6 @@ class FittingRightSidebarLayout(pn.Column):
                 self._elemental_geometry_status,
                 edge_details,
                 model_details,
-                oos_status_details,
                 areas_details,
                 run_setup_details,
                 sizing_mode=self._STRETCH_BOTH,
@@ -734,19 +705,13 @@ class FittingRightSidebarLayout(pn.Column):
             self._elemental_input["element_atomic_number"],
             pn.Row(
                 self._elemental_input["subshells"],
-                pn.widgets.TooltipIcon(
-                    value=constants.TOOLTIP_ELEMENTAL_SUBSHELLS,
-                    css_classes=["tooltip-icon"],
-                ),
+                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_SUBSHELLS),
                 sizing_mode=self._STRETCH_WIDTH,
                 styles=self._fluid_row_styles(),
             ),
             pn.Row(
                 self._elemental_input["chemical_shift"],
-                pn.widgets.TooltipIcon(
-                    value=Tooltip(content=constants.CHEMICAL_SHIFT_TOOLTIP, position='left'),
-                    width=30,
-                ),
+                self._left_tooltip_icon(constants.CHEMICAL_SHIFT_TOOLTIP, width=30),
                 sizing_mode=self._STRETCH_WIDTH,
                 styles=self._fluid_row_styles(),
             ),
@@ -817,10 +782,7 @@ class FittingRightSidebarLayout(pn.Column):
             pn.Row(
                 self._elemental_input["soften_edge"],
                 self._elemental_input["soften_strength"],
-                pn.widgets.TooltipIcon(
-                    value=constants.TOOLTIP_ELEMENTAL_SOFTEN,
-                    css_classes=["tooltip-icon"],
-                ),
+                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_SOFTEN),
                 margin=0,
                 sizing_mode=self._STRETCH_WIDTH,
                 styles=self._fluid_row_styles(gap='10px'),
@@ -839,33 +801,6 @@ class FittingRightSidebarLayout(pn.Column):
             styles=dict(self._SECTION_CONTAINED),
         )
 
-    def _create_elemental_oos_status_section(self) -> SimpleDetails:
-        """Build the read-only 'OOS Status' section. The controller writes its text."""
-        constants = self._model.constants
-
-        content = pn.Column(
-            pn.Row(
-                self._elemental_oos_method_version,
-                pn.widgets.TooltipIcon(
-                    value=constants.TOOLTIP_ELEMENTAL_OOS_METHOD,
-                    css_classes=["tooltip-icon"],
-                ),
-                sizing_mode=self._STRETCH_WIDTH,
-                styles=self._fluid_row_styles(),
-            ),
-            self._elemental_oos_status,
-            sizing_mode=self._STRETCH_WIDTH,
-        )
-
-        return SimpleDetails(
-            title=constants.SECTION_ELEMENTAL_OOS_STATUS,
-            content=content,
-            expanded=False,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-            styles=dict(self._SECTION_CONTAINED),
-        )
-
     def _create_elemental_areas_section(self) -> SimpleDetails:
         """Build the 'Areas' section. Real area options are written by the controller."""
         constants = self._model.constants
@@ -877,12 +812,25 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
         )
+        self._elemental_input["default_reference_strategy"] = pn.widgets.Select(
+            name="Default reference source",
+            options=constants.AVAILABLE_ELEMENTAL_REFERENCE_STRATEGIES,
+            value=constants.DEFAULT_ELEMENTAL_REFERENCE_STRATEGY,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+        )
 
         content = pn.Column(
             self._elemental_input["active_area"],
+            pn.Row(
+                self._elemental_input["default_reference_strategy"],
+                self._left_tooltip_icon(
+                    constants.TOOLTIP_ELEMENTAL_REFERENCE_STRATEGY
+                ),
+                sizing_mode=self._STRETCH_WIDTH,
+                styles=self._fluid_row_styles(),
+            ),
             self._elemental_use_current_clustering_button,
-            pn.pane.Markdown("##### Load Clustering JSON", margin=(10, 0, 0, 0)),
-            self._elemental_load_clustering_json_input,
             sizing_mode=self._STRETCH_WIDTH,
         )
 
@@ -922,19 +870,13 @@ class FittingRightSidebarLayout(pn.Column):
         content = pn.Column(
             pn.Row(
                 self._elemental_input["fit_areas"],
-                pn.widgets.TooltipIcon(
-                    value=constants.TOOLTIP_ELEMENTAL_FIT_AREAS,
-                    css_classes=["tooltip-icon"],
-                ),
+                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_FIT_AREAS),
                 sizing_mode=self._STRETCH_WIDTH,
                 styles=self._fluid_row_styles(),
             ),
             pn.Row(
                 self._in_slider_container(self._elemental_input["fit_range"]),
-                pn.widgets.TooltipIcon(
-                    value=constants.TOOLTIP_ELEMENTAL_FIT_RANGE,
-                    css_classes=["tooltip-icon"],
-                ),
+                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_FIT_RANGE),
                 sizing_mode=self._STRETCH_WIDTH,
                 styles=self._fluid_row_styles(),
             ),

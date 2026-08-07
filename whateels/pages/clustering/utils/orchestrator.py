@@ -115,7 +115,7 @@ class ClusteringOrchestrator:
             labels: Cluster labels array
             centres: Cluster centers array
         """
-        self.model.last_clustering_result = {
+        result = {
             "clustering": {
                 "file": self.model.get_uploaded_filename(),
                 "spectrum_image": self.model.current_image_name,
@@ -127,6 +127,10 @@ class ClusteringOrchestrator:
                 }
             }
         }
+        self.model.last_clustering_result = result
+        # Publish immediately so Fitting can consume the current clustering without
+        # requiring the user to download its JSON first.
+        self.model.app_state.last_clustering_result = result
     
     def finalize_clustering(self, n_clusters: int, algorithm_name: str, plots_layout):
         """

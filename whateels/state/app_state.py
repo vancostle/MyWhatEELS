@@ -77,6 +77,34 @@ class AppState(param.Parameterized):
         Consumers access the ElectronCount via preprocessed_plot_dataset["ElectronCount"].
     """)
 
+    nlls_workspace = param.Parameter(default=None, doc="""
+        Active Elemental NLLS workspace. It is separate from the manual fitting
+        dictionary and always carries a DatasetIdentity.
+    """)
+
+    nlls_results = param.Parameter(default=None, doc="""
+        Dense xarray result of an Elemental NLLS run. ModelResult objects are
+        never stored here.
+    """)
+
+    nlls_run_state = param.ObjectSelector(
+        default="idle",
+        objects=[
+            "idle",
+            "building",
+            "fitting_references",
+            "running",
+            "cancelling",
+            "complete",
+            "error",
+        ],
+        doc="Current Elemental NLLS controller/service state.",
+    )
+
+    nlls_revision = param.Integer(default=0, bounds=(0, None), doc="""
+        Reactive revision incremented whenever mutable NLLS workspace content changes.
+    """)
+
     def __init__(self):
         super().__init__()
 
@@ -145,6 +173,13 @@ class AppState(param.Parameterized):
     def clear_preprocessed_plot_dataset(self):
         self.preprocessed_plot_dataset = None
 
+    def clear_nlls_state(self):
+        """Clear only Elemental NLLS state, preserving manual fitting fields."""
+        self.nlls_workspace = None
+        self.nlls_results = None
+        self.nlls_run_state = "idle"
+        self.nlls_revision += 1
+
     def clear_all(self):
         """Clear all shared state parameters."""
         self.clear_metadata()
@@ -154,3 +189,4 @@ class AppState(param.Parameterized):
         self.clear_selected_tab_index()
         self.clear_last_clustering_result()
         self.clear_preprocessed_plot_dataset()
+        self.clear_nlls_state()

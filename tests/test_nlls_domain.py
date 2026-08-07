@@ -1,0 +1,537 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from dataclasses import replace
+from pathlib import Path
+
+import numpy as np
+import xarray as xr
+
+from whateels.nlls.areas import ClusteringAreaAdapter
+from whateels.nlls.contracts import (
+    AreaModelSpec,
+    BroadeningSpec,
+    ContinuumSpec,
+    DatasetIdentity,
+    EdgeSpec,
+    ExperimentalGeometry,
+    FineStructureSpec,
+    FitRange,
+    ModelComposition,
+)
+from whateels.nlls.cross_sections import (
+    OOSContinuumProvider,
+    OOSCurveSnapshot,
+    OOSPhysicalCurve,
+)
+from whateels.nlls.defaults import (
+    CHEMICAL_SHIFT_CONVENTION,
+    OOS_FORMULA_VERSION,
+    OOS_PROVIDER_VERSION,
+    OOS_UNITS,
+    canonical_subshell_groups,
+    continuum_parameter_specs,
+    fine_structure_parameter_specs,
+)
+from whateels.nlls.errors import (
+    InvalidClusteringError,
+    InvalidOOSDataError,
+    InvalidSourceError,
+    MissingOOSTableError,
+)
+from whateels.nlls.model_builder import NLLSModelBuilder
+from whateels.nlls.provenance import (
+    publish_power_law_subtracted_dataset,
+    validate_background_subtracted,
+)
+from whateels.nlls.workspace import NLLSWorkspace
+from whateels.nlls.references import (
+    ReferenceFitService,
+    ReferenceSpectrumSelection,
+    ReferenceSpectrumService,
+)
+
+
+def _write_table(directory: Path, atomic_number: int = 10) -> None:
+    payload = [
+        "Testium",
+        "Ts",
+        float(atomic_number),
+        {
+            "L2": {
+                "onset": 100.0,
+                "eaxis": [100.0, 105.0, 112.0, 125.0, 145.0],
+                "counts": [0.2, 0.19, 0.16, 0.1, 0.04],
+            },
+            "L3": {
+                "onset": 95.0,
+                "eaxis": [95.0, 101.0, 110.0, 127.0, 145.0],
+                "counts": [0.3, 0.27, 0.2, 0.09, 0.03],
+            },
+        },
+    ]
+    (directory / f"OOS{atomic_number:02d}.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+
+
+def _dataset() -> xr.Dataset:
+    eloss = np.linspace(90.0, 145.0, 56)
+    counts = np.ones((3, 4, eloss.size), dtype=float)
+    return xr.Dataset(
+        {"ElectronCount": (("y", "x", "Eloss"), counts)},
+        coords={"y": np.arange(3), "x": np.arange(4), "Eloss": eloss},
+        attrs={
+            "original_name": "synthetic.dm4",
+            "image_name": "synthetic",
+            "beam_energy": 200.0,
+            "collection_angle": 20.0,
+            "convergence_angle": 0.0,
+        },
+    )
+
+
+def _identity(dataset: xr.Dataset) -> DatasetIdentity:
+    published = publish_power_law_subtracted_dataset(
+        dataset, dataset["ElectronCount"], fit_range_eV=(90.0, 99.0)
+    )
+    history = validate_background_subtracted(published)
+    return DatasetIdentity.from_dataset(
+        published,
+        tab_index=0,
+        source_kind="preprocessed",
+        preprocessing_history=history,
+        background_subtracted=True,
+    )
+
+
+def _clustering_result(labels, *, file="synthetic.dm4", image="synthetic"):
+    return {
+        "clustering": {
+            "file": file,
+            "spectrum_image": image,
+            "type": "K-Means",
+            "inputs": {"n_clusters": len(np.unique(labels))},
+            "outputs": {"labels": labels, "centres": [[999.0]]},
+        }
+    }
+
+
+class OOSProviderTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.data_dir = Path(self.temp.name)
+        _write_table(self.data_dir)
+        self.provider = OOSContinuumProvider(self.data_dir)
+        self.geometry = ExperimentalGeometry(200.0, 20.0, 0.0)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_catalog_load_and_missing_shell(self):
+        self.assertEqual(self.provider.available_edges(10), ("L2", "L3"))
+        raw = self.provider.load_raw(10, "L2")
+        self.assertEqual(raw.symbol, "Ts")
+        self.assertEqual(raw.onset_eV, 100.0)
+        self.assertTrue(np.all(np.diff(raw.energy_eV) > 0.0))
+        with self.assertRaises(MissingOOSTableError):
+            self.provider.load_raw(10, "K1")
+
+    def test_cross_section_uses_real_energy_axis(self):
+        physical = self.provider.differential_cross_section(
+            self.provider.load_raw(10, "L2"), self.geometry
+        )
+        self.assertEqual(physical.sigma.shape, physical.energy_eV.shape)
+        self.assertTrue(np.all(np.isfinite(physical.sigma)))
+        self.assertGreater(np.count_nonzero(physical.sigma), 1)
+        self.assertGreater(float(np.ptp(physical.sigma)), 0.0)
+
+    def test_finite_alpha_correction_is_finite_and_changes_curve(self):
+        raw = self.provider.load_raw(10, "L2")
+        parallel = self.provider.differential_cross_section(raw, self.geometry)
+        convergent = self.provider.differential_cross_section(
+            raw, ExperimentalGeometry(200.0, 20.0, 10.0)
+        )
+        self.assertTrue(np.all(np.isfinite(convergent.sigma)))
+        self.assertGreater(float(np.max(np.abs(convergent.sigma - parallel.sigma))), 0.0)
+
+    def test_doublet_curve_is_normalized_and_reversible(self):
+        eloss = np.linspace(90.0, 145.0, 111)
+        snapshot = self.provider.curve(
+            10,
+            ("L2", "L3"),
+            self.geometry,
+            eloss,
+            BroadeningSpec(enabled=False, sigma_eV=0.0),
+            FitRange(95.0, 140.0),
+        )
+        self.assertAlmostEqual(float(np.max(snapshot.normalized_shape)), 1.0)
+        np.testing.assert_allclose(
+            snapshot.normalized_shape * snapshot.normalization_factor,
+            snapshot.physical_shape,
+        )
+        l2 = self.provider.curve(
+            10,
+            ("L2",),
+            self.geometry,
+            eloss,
+            BroadeningSpec(enabled=False, sigma_eV=0.0),
+            FitRange(95.0, 140.0),
+        )
+        l3 = self.provider.curve(
+            10,
+            ("L3",),
+            self.geometry,
+            eloss,
+            BroadeningSpec(enabled=False, sigma_eV=0.0),
+            FitRange(95.0, 140.0),
+        )
+        np.testing.assert_allclose(snapshot.physical_shape, l2.physical_shape + l3.physical_shape)
+
+    def test_integration_uses_irregular_energy_axis(self):
+        curve = OOSPhysicalCurve(
+            energy_eV=np.array([0.0, 0.25, 1.5, 3.0]),
+            sigma=np.array([0.0, 2.0, 2.0, 0.0]),
+            units=OOS_UNITS,
+            formula_version=OOS_FORMULA_VERSION,
+            onset_eV=0.0,
+            table_checksums=("test",),
+        )
+        expected = 4.25
+        self.assertAlmostEqual(self.provider.integrate(curve, 0.0, 3.0), expected)
+
+    def test_fit_range_without_edge_support_is_rejected(self):
+        with self.assertRaises(InvalidOOSDataError):
+            self.provider.curve(
+                10,
+                ("L2",),
+                self.geometry,
+                np.linspace(10.0, 50.0, 41),
+                BroadeningSpec(enabled=False, sigma_eV=0.0),
+                FitRange(10.0, 50.0),
+            )
+
+    def test_corrupt_json_is_reported_as_invalid_oos_data(self):
+        (self.data_dir / "OOS11.json").write_text("{broken", encoding="utf-8")
+        with self.assertRaises(InvalidOOSDataError):
+            self.provider.available_edges(11)
+
+
+class ProvenanceAndWorkspaceTests(unittest.TestCase):
+    def test_only_public_power_law_history_unlocks_source(self):
+        dataset = _dataset()
+        with self.assertRaises(InvalidSourceError):
+            validate_background_subtracted(dataset)
+        published = publish_power_law_subtracted_dataset(
+            dataset,
+            dataset["ElectronCount"],
+            fit_range_eV=(90.0, 99.0),
+        )
+        history = validate_background_subtracted(published)
+        self.assertTrue(published.attrs["background_subtracted"])
+        self.assertEqual(history[-1]["operation"], "power_law_background_subtraction")
+
+    def test_source_revision_changes_when_preprocessed_values_change(self):
+        dataset = _dataset()
+        first = publish_power_law_subtracted_dataset(
+            dataset, dataset["ElectronCount"], fit_range_eV=(90.0, 99.0)
+        )
+        second_counts = dataset["ElectronCount"].copy(data=dataset["ElectronCount"].values * 2.0)
+        second = publish_power_law_subtracted_dataset(
+            dataset, second_counts, fit_range_eV=(90.0, 99.0)
+        )
+        first_revision = validate_background_subtracted(first)[-1]["revision"]
+        second_revision = validate_background_subtracted(second)[-1]["revision"]
+        self.assertNotEqual(first_revision, second_revision)
+
+    def test_workspace_invalidates_only_changed_area(self):
+        dataset = publish_power_law_subtracted_dataset(
+            _dataset(), _dataset()["ElectronCount"], fit_range_eV=(90.0, 99.0)
+        )
+        history = validate_background_subtracted(dataset)
+        identity = DatasetIdentity.from_dataset(
+            dataset,
+            tab_index=0,
+            source_kind="preprocessed",
+            preprocessing_history=history,
+            background_subtracted=True,
+        )
+        workspace = NLLSWorkspace.create(
+            identity, ExperimentalGeometry.from_dataset(dataset)
+        )
+        workspace.clone_area("default", "cluster_0", "Cluster 0")
+        cluster_revision = workspace.areas["cluster_0"].revision
+        workspace.set_model_composition("default", ModelComposition.CONTINUUM_ONLY)
+        self.assertGreater(workspace.areas["default"].revision, 0)
+        self.assertEqual(workspace.areas["cluster_0"].revision, cluster_revision)
+
+    def test_doublet_group_completion(self):
+        groups = canonical_subshell_groups(("L3",), ("K1", "L2", "L3"))
+        self.assertEqual(groups, (("L2", "L3"),))
+
+
+class ClusteringAreaTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.dataset = _dataset()
+        self.identity = _identity(self.dataset)
+        self.labels = np.array(
+            [
+                [0, 0, 2, 2],
+                [0, 0, 2, 2],
+                [0, 0, 2, 2],
+            ]
+        )
+
+    def test_adapter_builds_stable_exclusive_masks(self):
+        areas = ClusteringAreaAdapter.from_result(
+            _clustering_result(self.labels), self.identity, (3, 4)
+        )
+        self.assertEqual(tuple(area.area_id for area in areas), ("cluster_0", "cluster_2"))
+        self.assertEqual(tuple(area.label_value for area in areas), (0, 2))
+        self.assertEqual(int(np.count_nonzero(areas[0].mask)), 6)
+        self.assertEqual(int(np.count_nonzero(areas[1].mask)), 6)
+        self.assertFalse(areas[0].mask.flags.writeable)
+        self.assertNotEqual(areas[0].mask_fingerprint, areas[1].mask_fingerprint)
+        np.testing.assert_array_equal(
+            areas[0].mask.astype(int) + areas[1].mask.astype(int),
+            np.ones((3, 4), dtype=int),
+        )
+
+    def test_adapter_rejects_wrong_shape_and_dataset_identity(self):
+        with self.assertRaises(InvalidClusteringError):
+            ClusteringAreaAdapter.from_result(
+                _clustering_result(self.labels), self.identity, (4, 3)
+            )
+        with self.assertRaises(InvalidClusteringError):
+            ClusteringAreaAdapter.from_result(
+                _clustering_result(self.labels, file="different.dm4"),
+                self.identity,
+                (3, 4),
+            )
+
+    def test_adapter_rejects_non_integral_or_negative_labels(self):
+        invalid = self.labels.astype(float)
+        invalid[0, 0] = 0.5
+        with self.assertRaises(InvalidClusteringError):
+            ClusteringAreaAdapter.from_result(
+                _clustering_result(invalid), self.identity, (3, 4)
+            )
+        invalid[0, 0] = -1.0
+        with self.assertRaises(InvalidClusteringError):
+            ClusteringAreaAdapter.from_result(
+                _clustering_result(invalid), self.identity, (3, 4)
+            )
+
+    def test_workspace_applies_independent_cluster_areas_and_preserves_masks_on_reset(self):
+        workspace = NLLSWorkspace.create(
+            self.identity, ExperimentalGeometry.from_dataset(self.dataset)
+        )
+        workspace.set_model_composition("default", ModelComposition.CONTINUUM_ONLY)
+        definitions = ClusteringAreaAdapter.from_result(
+            _clustering_result(self.labels), self.identity, (3, 4)
+        )
+        clustered = workspace.apply_clustering(definitions)
+        self.assertEqual(workspace.runnable_area_ids, ("cluster_0", "cluster_2"))
+        self.assertEqual(workspace.active_area, "cluster_0")
+        self.assertEqual(
+            clustered[0].model_composition, ModelComposition.CONTINUUM_ONLY
+        )
+        workspace.set_model_composition("cluster_0", ModelComposition.CONTINUUM_PLUS_ELNES)
+        self.assertEqual(
+            workspace.areas["cluster_2"].model_composition,
+            ModelComposition.CONTINUUM_ONLY,
+        )
+
+        fingerprint = workspace.areas["cluster_0"].mask_fingerprint
+        mask = workspace.areas["cluster_0"].mask.copy()
+        workspace.reset_area("cluster_0")
+        self.assertEqual(workspace.areas["cluster_0"].mask_fingerprint, fingerprint)
+        np.testing.assert_array_equal(workspace.areas["cluster_0"].mask, mask)
+
+    def test_cluster_reference_is_recomputed_from_active_cube_not_saved_centres(self):
+        areas = ClusteringAreaAdapter.from_result(
+            _clustering_result(self.labels), self.identity, (3, 4)
+        )
+        cube = np.arange(3 * 4 * 5, dtype=float).reshape(3, 4, 5)
+        reference = ReferenceSpectrumService.from_mask(cube, areas[1].mask)
+        np.testing.assert_allclose(reference, np.mean(cube[self.labels == 2], axis=0))
+        self.assertFalse(np.any(reference == 999.0))
+
+
+class BuilderTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.snapshot = OOSCurveSnapshot(
+            energy_eV=np.array([0.0, 1.0, 2.0]),
+            normalized_shape=np.array([0.0, 1.0, 0.0]),
+            physical_shape=np.array([0.0, 2.0, 0.0]),
+            normalization_factor=2.0,
+            units=OOS_UNITS,
+            formula_version=OOS_FORMULA_VERSION,
+            provider_version=OOS_PROVIDER_VERSION,
+            atomic_number=10,
+            symbol="Ts",
+            shells=("L2", "L3"),
+            onsets_eV=(1.0, 1.1),
+            table_checksums=("a", "b"),
+            broadening_sigma_eV=0.0,
+            fit_range=FitRange(0.0, 2.0),
+        )
+
+        class FakeProvider:
+            def curve(inner_self, *args, **kwargs):
+                return self.snapshot
+
+        self.builder = NLLSModelBuilder(FakeProvider())
+        amp, shift = continuum_parameter_specs()
+        center, sigma, fine_amp = fine_structure_parameter_specs(1.0, 1.0)
+        self.area = AreaModelSpec(
+            area_id="default",
+            label="Default",
+            edges=(EdgeSpec("ts_l23_edge", 10, "Ts", ("L2", "L3"), 1.0),),
+            continuum_specs=(
+                ContinuumSpec(
+                    id="ts_l23_continuum",
+                    edge_id="ts_l23_edge",
+                    atomic_number=10,
+                    symbol="Ts",
+                    shells=("L2", "L3"),
+                    prefix="ts_l23_cont_",
+                    onset_eV=1.0,
+                    broadening=BroadeningSpec(False, 0.0),
+                    amplitude=amp,
+                    chemical_shift=shift,
+                    provider_version=OOS_PROVIDER_VERSION,
+                    chemical_shift_convention=CHEMICAL_SHIFT_CONVENTION,
+                ),
+            ),
+            fine_structure_specs=(
+                FineStructureSpec(
+                    id="ts_l2_elnes",
+                    edge_id="ts_l23_edge",
+                    shell="L2",
+                    prefix="ts_l2_elnes_",
+                    shape="GaussianModel",
+                    center=center,
+                    sigma=sigma,
+                    amplitude=fine_amp,
+                ),
+            ),
+        )
+
+    def test_positive_shift_moves_oos_feature_to_lower_energy(self):
+        model = self.builder._make_oos_component(self.snapshot, "test_")
+        params = model.make_params(A=1.0, chemical_shift=1.0)
+        evaluated = model.eval(params=params, x=np.array([0.0, 1.0, 2.0]))
+        self.assertEqual(int(np.argmax(evaluated)), 0)
+
+    def test_continuum_only_excludes_elnes_parameters(self):
+        area = replace(self.area, model_composition=ModelComposition.CONTINUUM_ONLY)
+        built = self.builder.build(
+            area, ExperimentalGeometry(200.0, 20.0, 0.0), np.array([0.0, 1.0, 2.0])
+        )
+        self.assertIn("ts_l23_cont_A", built.params)
+        self.assertNotIn("ts_l2_elnes_center", built.params)
+
+    def test_continuum_plus_elnes_includes_both_component_types(self):
+        built = self.builder.build(
+            self.area,
+            ExperimentalGeometry(200.0, 20.0, 0.0),
+            np.array([0.0, 1.0, 2.0]),
+        )
+        self.assertIn("ts_l23_cont_A", built.params)
+        self.assertIn("ts_l2_elnes_center", built.params)
+
+    def test_reference_fit_returns_lightweight_snapshot(self):
+        area = replace(self.area, model_composition=ModelComposition.CONTINUUM_ONLY)
+        geometry = ExperimentalGeometry(200.0, 20.0, 0.0)
+        eloss = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
+        built = self.builder.build(area, geometry, eloss)
+        generating = built.params.copy()
+        generating["ts_l23_cont_A"].value = 5.0
+        reference = built.model.eval(params=generating, x=eloss)
+        dataset = publish_power_law_subtracted_dataset(
+            _dataset(), _dataset()["ElectronCount"], fit_range_eV=(90.0, 99.0)
+        )
+        history = validate_background_subtracted(dataset)
+        identity = DatasetIdentity.from_dataset(
+            dataset,
+            tab_index=0,
+            source_kind="preprocessed",
+            preprocessing_history=history,
+            background_subtracted=True,
+        )
+        snapshot = ReferenceFitService(self.builder).fit_area(
+            area,
+            geometry,
+            identity,
+            reference,
+            eloss,
+            FitRange(0.0, 2.0),
+        )
+        self.assertTrue(snapshot.success)
+        fitted = {item["name"]: item["value"] for item in snapshot.params}
+        self.assertAlmostEqual(fitted["ts_l23_cont_A"], 5.0, places=6)
+        self.assertIsInstance(snapshot.best_fit, np.ndarray)
+        self.assertFalse(snapshot.best_fit.flags.writeable)
+        self.assertFalse(snapshot.reference_spectrum.flags.writeable)
+
+    def test_model_build_snapshot_contains_portable_preview_and_provenance(self):
+        area = replace(self.area, model_composition=ModelComposition.CONTINUUM_ONLY)
+        geometry = ExperimentalGeometry(200.0, 20.0, 0.0)
+        eloss = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
+        built = self.builder.build(area, geometry, eloss, FitRange(0.0, 2.0))
+        identity = _identity(_dataset())
+        snapshot = self.builder.snapshot(built, area, identity, eloss)
+        self.assertEqual(snapshot.area_id, "default")
+        self.assertEqual(snapshot.component_ids, ("ts_l23_continuum",))
+        self.assertEqual(snapshot.preview.shape, eloss.shape)
+        self.assertFalse(snapshot.preview.flags.writeable)
+        self.assertEqual(snapshot.dataset_source_revision, identity.source_revision)
+        self.assertEqual(snapshot.curve_metadata[0]["provider_version"], OOS_PROVIDER_VERSION)
+        workspace = NLLSWorkspace.create(identity, geometry)
+        workspace.areas["default"] = area
+        workspace.commit_model_build(snapshot)
+        self.assertTrue(workspace.is_area_built("default"))
+        workspace.reset_area("default")
+        self.assertFalse(workspace.is_area_built("default"))
+        self.assertNotIn("default", workspace.model_builds)
+        self.assertEqual(workspace.areas["default"].edges, ())
+
+    def test_fit_many_isolates_one_invalid_reference(self):
+        geometry = ExperimentalGeometry(200.0, 20.0, 0.0)
+        eloss = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
+        good_area = replace(
+            self.area,
+            area_id="cluster_0",
+            model_composition=ModelComposition.CONTINUUM_ONLY,
+        )
+        bad_area = replace(good_area, area_id="cluster_1")
+        built = self.builder.build(good_area, geometry, eloss)
+        generating = built.params.copy()
+        generating["ts_l23_cont_A"].value = 4.0
+        reference = built.model.eval(params=generating, x=eloss)
+        identity = _identity(_dataset())
+        batch = ReferenceFitService(self.builder).fit_many(
+            (good_area, bad_area),
+            geometry,
+            identity,
+            {
+                "cluster_0": ReferenceSpectrumSelection(
+                    reference, "clustering_mean", 6, "mask-0"
+                ),
+                "cluster_1": ReferenceSpectrumSelection(
+                    np.array([1.0, 2.0]), "clustering_mean", 6, "mask-1"
+                ),
+            },
+            eloss,
+            FitRange(0.0, 2.0),
+        )
+        self.assertEqual(batch.successful_area_ids, ("cluster_0",))
+        self.assertEqual(batch.failed_area_ids, ("cluster_1",))
+        self.assertEqual(batch.failures[0].error_type, "InsufficientReferenceDataError")
+
+
+if __name__ == "__main__":
+    unittest.main()

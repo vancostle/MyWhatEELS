@@ -5,6 +5,7 @@ from xarray import Dataset
 from whateels.helpers.safe_converter import SafeConverter
 from ..model.component_item import ComponentItem
 from ..view.components.component_item_view import ComponentItemView
+from .nlls_controller import NLLSController
 
 import panel as pn
 
@@ -50,6 +51,7 @@ class FittingController(BaseController):
         
         self._layout.create_tab_and_dataset_info([all_datasets[tab_param]])
         self._nlls_user_update(view)
+        self._nlls_controller = NLLSController(self, view, app_state)
 
         # Keep switch availability aligned with Home preprocessing state while page is open.
         self._preprocessed_dataset_watcher = app_state.param.watch(
@@ -77,12 +79,17 @@ class FittingController(BaseController):
         # Enable/disable 'Add Component' reactively based on lasso selection
         if self._layout._chosen_visualizers:
             vis = self._layout._chosen_visualizers[0]
-            vis.on_selection_change = (
-                lambda has_sel: setattr(self._view.fitting_add_component_button, 'disabled', not has_sel)
-            )
+            def _on_selection_change(has_selection):
+                self._view.fitting_add_component_button.disabled = not has_selection
+                if not has_selection and hasattr(self, '_nlls_controller'):
+                    self._nlls_controller.on_roi_changed()
+
+            vis.on_selection_change = _on_selection_change
 
             def _on_region_committed():
                 vis.update_plot()  # pushes new ROI to paneB, updates app_state.spectra
+                if hasattr(self, '_nlls_controller'):
+                    self._nlls_controller.on_roi_changed()
                 if self._model.dictionary.get('components'):
                     try:
                         self._model.create_model()  # syncs model._spectra from app_state.spectra
@@ -225,6 +232,8 @@ class FittingController(BaseController):
     def _on_preprocessed_dataset_changed(self, event) -> None:
         """React to Home preprocessing publication/clear while fitting page is already open."""
         self._sync_preprocessed_switch_state()
+        if hasattr(self, '_nlls_controller'):
+            self._nlls_controller.on_source_changed(initial=True)
     
     def update_plot(self, fitting_results = None):
         """Proxy plot updates to layout manager."""
@@ -271,6 +280,8 @@ class FittingController(BaseController):
         self._view.energy_map_toggle_button.disabled = True
         self._view.fitting_add_component_button.disabled = True
         self.layout.reset_for_data_source_change()
+        if hasattr(self, '_nlls_controller'):
+            self._nlls_controller.on_source_changed()
 
         source_name = "Home preprocessed" if event.new else "raw"
         pn.state.notifications.info(

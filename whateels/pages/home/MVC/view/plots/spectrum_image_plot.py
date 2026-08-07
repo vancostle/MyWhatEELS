@@ -21,6 +21,7 @@ from whateels.pages.home.utils.plot_helpers import (
 )
 from whateels.pages.home.utils.pca import PCADecomposition, sanitize_pca_matrix
 from whateels.state import CacheManager
+from whateels.nlls.provenance import publish_power_law_subtracted_dataset
 from whateels.base.plots.base_spectrum_image_plot import BaseSpectrumImagePlot
 from holoviews import streams as hv_streams
 from .dataset_info import create_home_dataset_info
@@ -2638,7 +2639,12 @@ class SpectrumImagePlot(BaseSpectrumImagePlot):
                 coords=input_da.coords,
             )
             self._preprocessed_electron_count = preprocessed_da
-            CacheManager.get_cached_app_state().preprocessed_plot_dataset = self._dataset.assign({"ElectronCount": preprocessed_da})
+            published_dataset = publish_power_law_subtracted_dataset(
+                self._dataset,
+                preprocessed_da,
+                fit_range_eV=fit_range,
+            )
+            CacheManager.get_cached_app_state().preprocessed_plot_dataset = published_dataset
             self._preprocessors_applied = True
             self._preprocessed_source = 'multifit'
             self._multifitting_switch.value = True

@@ -155,10 +155,6 @@ class FittingView:
         """Access the Elemental NLLS 'Use Current Clustering' button."""
         return self._elemental_use_current_clustering_button
     @property
-    def elemental_load_clustering_json_input(self) -> pn.widgets.FileInput:
-        """Access the Elemental NLLS clustering JSON file input."""
-        return self._elemental_load_clustering_json_input
-    @property
     def elemental_background_status(self) -> pn.pane.Alert:
         """Access the Elemental NLLS background status pane."""
         return self._elemental_background_status
@@ -170,16 +166,6 @@ class FittingView:
     def elemental_onset_readout(self) -> pn.widgets.StaticText:
         """Access the read-only Elemental NLLS edge onset readout."""
         return self._elemental_onset_readout
-    @property
-    def elemental_oos_status(self) -> pn.pane.Markdown:
-        """Access the Elemental NLLS OOS status pane."""
-        return self._elemental_oos_status
-    @property
-    def elemental_oos_method_version(self) -> pn.widgets.StaticText:
-        """Access the Elemental NLLS OOS method/version text."""
-        return self._elemental_oos_method_version
-
-
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
         """Set the last dataset info component (must be a Panel Viewable)."""
@@ -254,11 +240,8 @@ class FittingView:
         self._elemental_cancel_button = layout.elemental_cancel_button
         self._elemental_reset_area_button = layout.elemental_reset_area_button
         self._elemental_use_current_clustering_button = layout.elemental_use_current_clustering_button
-        self._elemental_load_clustering_json_input = layout.elemental_load_clustering_json_input
         self._elemental_background_status = layout.elemental_background_status
         self._elemental_geometry_status = layout.elemental_geometry_status
         self._elemental_onset_readout = layout.elemental_onset_readout
-        self._elemental_oos_status = layout.elemental_oos_status
-        self._elemental_oos_method_version = layout.elemental_oos_method_version
 
         self._fitting_tabs = layout.fitting_tabs

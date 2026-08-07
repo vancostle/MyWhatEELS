@@ -1,3 +1,14 @@
+from whateels.nlls.defaults import (
+    CHEMICAL_SHIFT_TOOLTIP as NLLS_CHEMICAL_SHIFT_TOOLTIP,
+    DEFAULT_ELNES_SHAPE as NLLS_DEFAULT_ELNES_SHAPE,
+    DEFAULT_FLEXIBILITY as NLLS_DEFAULT_FLEXIBILITY,
+    DEFAULT_MODEL_COMPOSITION as NLLS_DEFAULT_MODEL_COMPOSITION,
+    DEFAULT_SOFTEN as NLLS_DEFAULT_SOFTEN,
+    DEFAULT_SOFTEN_SIGMA_EV as NLLS_DEFAULT_SOFTEN_SIGMA_EV,
+    SUPPORTED_ELNES_SHAPES as NLLS_SUPPORTED_ELNES_SHAPES,
+)
+
+
 class Constants:
     TITLE = "Fitting"
     
@@ -25,12 +36,17 @@ class Constants:
     # exists, and share them with the quantification view (NLLS_TODO 5.4.2:478)
     # so the domain phase does not create a third copy of these values.
     # Elemental NLLS defaults
-    AVAILABLE_ELEMENTAL_MODELS = ["GaussianModel", "LorentzianModel", "PseudoVoigtModel", "SplitLorentzianModel"]
-    DEFAULT_ELEMENTAL_MODEL = "GaussianModel"
-    DEFAULT_ELEMENTAL_FLEXIBILITY = "Medium"
+    AVAILABLE_ELEMENTAL_MODELS = list(NLLS_SUPPORTED_ELNES_SHAPES)
+    DEFAULT_ELEMENTAL_MODEL = NLLS_DEFAULT_ELNES_SHAPE
+    DEFAULT_ELEMENTAL_FLEXIBILITY = NLLS_DEFAULT_FLEXIBILITY
     AVAILABLE_ELEMENTAL_FLEXIBILITIES = ["Low", "Medium", "High", "Maximum"]
     AVAILABLE_ELEMENTAL_AREAS = ["default"]
     DEFAULT_ELEMENTAL_AREA = "default"
+    AVAILABLE_ELEMENTAL_REFERENCE_STRATEGIES = {
+        "Current ROI": "roi_mean",
+        "Central window": "central_mean",
+    }
+    DEFAULT_ELEMENTAL_REFERENCE_STRATEGY = "roi_mean"
 
     # Elemental NLLS - OOS controls (NLLS_TODO 5.1)
     # Model composition
@@ -38,7 +54,7 @@ class Constants:
         "Continuum + ELNES": "continuum_plus_elnes",
         "Continuum only": "continuum_only",
     }
-    DEFAULT_ELEMENTAL_MODEL_COMPOSITION = "continuum_plus_elnes"
+    DEFAULT_ELEMENTAL_MODEL_COMPOSITION = NLLS_DEFAULT_MODEL_COMPOSITION
 
     # Edge definition
     ELEMENTAL_MIN_ATOMIC_NUMBER = 1
@@ -54,25 +70,16 @@ class Constants:
     # Chemical shift: the only manual correction of the edge position
     DEFAULT_ELEMENTAL_CHEMICAL_SHIFT = 0.0
     ELEMENTAL_CHEMICAL_SHIFT_STEP = 0.1
-    CHEMICAL_SHIFT_TOOLTIP = (
-        "Positive chemical shift evaluates table(x + shift) and moves the modeled edge "
-        "to lower energy; ELNES center uses the opposite direction."
-    )
+    CHEMICAL_SHIFT_TOOLTIP = NLLS_CHEMICAL_SHIFT_TOOLTIP
 
     # Edge softening
-    DEFAULT_ELEMENTAL_SOFTEN_EDGE = True
-    DEFAULT_ELEMENTAL_SOFTEN_STRENGTH = 1.5
+    DEFAULT_ELEMENTAL_SOFTEN_EDGE = NLLS_DEFAULT_SOFTEN
+    DEFAULT_ELEMENTAL_SOFTEN_STRENGTH = NLLS_DEFAULT_SOFTEN_SIGMA_EV
     ELEMENTAL_SOFTEN_STRENGTH_STEP = 0.1
 
-    # OOS status (read-only, informative)
-    DEFAULT_ELEMENTAL_OOS_METHOD_VERSION = "OOS / F. Salvat Hartree cross-sections (version not resolved)"
     ELEMENTAL_BACKGROUND_STATUS_UNKNOWN = (
         "**Background status:** unknown - no validated power-law pre-edge subtraction "
         "provenance for the active source."
-    )
-    ELEMENTAL_OOS_STATUS_PLACEHOLDER = (
-        "**OOS status:** no edge selected yet. Table, version/checksum and covered energy "
-        "range will be reported here."
     )
     ELEMENTAL_GEOMETRY_STATUS_UNKNOWN = (
         "**Geometry status:** not validated yet - E0, beta and alpha will be read from the "
@@ -84,7 +91,6 @@ class Constants:
     # Elemental tab section titles
     SECTION_ELEMENTAL_EDGE = "Edge Definition"
     SECTION_ELEMENTAL_MODEL = "Model Setup"
-    SECTION_ELEMENTAL_OOS_STATUS = "OOS Status"
     SECTION_ELEMENTAL_AREAS = "Areas"
     SECTION_ELEMENTAL_RUN_SETUP = "Run Setup"
     # SECTION_ELEMENTAL_MODEL_IO removed: Save/Load Model (NLLS_TODO 5.1:287 and 12.1)
@@ -96,17 +102,16 @@ class Constants:
     )
     TOOLTIP_ELEMENTAL_FIT_AREAS = "Areas become selectable once their reference fit has converged."
     TOOLTIP_ELEMENTAL_FIT_RANGE = "The fit range is initialised from the dataset energy-loss axis."
+    TOOLTIP_ELEMENTAL_REFERENCE_STRATEGY = (
+        "Current ROI uses the mean of the committed lasso selection for the default area. "
+        "Central window uses the central 2/5–3/5 region when no ROI reference is wanted."
+    )
     TOOLTIP_ELEMENTAL_SOFTEN = (
         "Soften strength is expressed in eV, never in samples: it is converted to channels with "
         "the real dataset dispersion. If a FWHM is entered, convert once with "
         "sigma_eV = fwhm_eV / 2.354820045. The 1.5 default is kept only for compatibility with "
         "the legacy code."
     )
-    TOOLTIP_ELEMENTAL_OOS_METHOD = (
-        "Informative field: OOS / F. Salvat is the only continuum backend. It is persisted with "
-        "the model and is not a GOS selector."
-    )
-
     # K-Means defaults
     DEFAULT_SELECTED_NORM = 'none'
     AVAILABLE_NORMS = [DEFAULT_SELECTED_NORM, 'l1', 'l2', 'max']
