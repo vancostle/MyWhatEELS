@@ -95,22 +95,50 @@ class SimpleDetails(pn.Column):
             height=self._HEADER_HEIGHT,
             margin=0,
             styles={
+                "box-sizing": "border-box",
                 "cursor": "pointer",
                 "height": f"{self._HEADER_HEIGHT}px",
+                "max-width": "100%",
                 "min-height": f"{self._HEADER_HEIGHT}px",
+                "min-width": "0",
                 "overflow": "hidden",
                 "position": "relative",
                 "width": "100%",
             },
         )
 
-        self._content = pn.Column(
+        content_body = pn.Column(
             content,
             sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
             styles={
+                "box-sizing": "border-box",
                 "height": "auto",
+                "max-width": "100%",
                 "min-height": "0",
-                "padding": "10px",
+                "min-width": "0",
+                "overflow-x": "hidden",
+            },
+        )
+
+        # Do not implement the horizontal inset with CSS padding or a margin on a
+        # stretch-width layout. Panel/Bokeh measures the child before those CSS
+        # decorations are applied, so the child can still receive the full card
+        # width and then be shifted outside it. Fixed spacers participate in the
+        # layout calculation and make the centre column exactly 20 px narrower.
+        self._content = pn.Row(
+            pn.Spacer(width=10, margin=0),
+            content_body,
+            pn.Spacer(width=10, margin=0),
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(10, 0),
+            styles={
+                "box-sizing": "border-box",
+                "height": "auto",
+                "max-width": "100%",
+                "min-height": "0",
+                "min-width": "0",
+                "overflow-x": "hidden",
                 "transition": "height 0.3s ease",
             },
             visible=expanded,
@@ -121,18 +149,26 @@ class SimpleDetails(pn.Column):
             self._content,
             sizing_mode=self._STRETCH_WIDTH,
             styles={
+                "box-sizing": "border-box",
                 "height": "auto",
+                "max-width": "100%",
                 "min-height": "0",
+                "min-width": "0",
+                "overflow-x": "hidden",
             },
         )
 
         styles = {
+            "box-sizing": "border-box",
             "height": "auto",
+            "max-width": "100%",
             "min-height": "0",
+            "min-width": "0",
             "border-radius": "4px",
             "box-shadow": "0 0 5px #d8d8d8",
             "background-color": "#f7f7f7",
-            "overflow": "visible",
+            "overflow-x": "hidden",
+            "overflow-y": "visible",
         }
         styles.update(params.pop("styles", {}) or {})
 
@@ -157,8 +193,11 @@ class SimpleDetails(pn.Column):
 
         content.styles = {
             **(content.styles or {}),
+            "box-sizing": "border-box",
             "height": "auto",
+            "max-width": "100%",
             "min-height": "0",
+            "min-width": "0",
         }
 
         for child in content.objects:

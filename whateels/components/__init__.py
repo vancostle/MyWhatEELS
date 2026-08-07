@@ -4,6 +4,7 @@ from .toggle_button import ToggleButton
 from .progress_tracker_mixin import ProgressTrackerMixin
 from .progress_display import ProgressDisplay
 from .info_panel import InfoPanel
+from .dataset_info_card import create_dataset_info_card
 from .file_uploader import FileUploader
 from .simple_details import SimpleDetails
 from .details import Details
