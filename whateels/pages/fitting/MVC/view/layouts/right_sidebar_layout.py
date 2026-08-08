@@ -388,6 +388,16 @@ class FittingRightSidebarLayout(pn.Column):
         return self._elemental_geometry_status
 
     @property
+    def elemental_edge_section(self) -> SimpleDetails:
+        """Access the collapsible 'Edge Definition' section."""
+        return self._elemental_edge_section
+
+    @property
+    def elemental_model_section(self) -> SimpleDetails:
+        """Access the collapsible 'Model Setup' section."""
+        return self._elemental_model_section
+
+    @property
     def elemental_onset_readout(self) -> pn.widgets.StaticText:
         """Access the read-only Elemental NLLS edge onset readout."""
         return self._elemental_onset_readout
@@ -681,8 +691,11 @@ class FittingRightSidebarLayout(pn.Column):
         """
         self._elemental_input = {}
 
-        edge_details = self._create_elemental_edge_section()
-        model_details = self._create_elemental_model_section()
+        # Both sections start locked: the controller unlocks and opens them only once
+        # background provenance AND geometry are valid, so an unusable source can never
+        # expose Add Edge / Build Elemental Model.
+        edge_details = self._elemental_edge_section = self._create_elemental_edge_section()
+        model_details = self._elemental_model_section = self._create_elemental_model_section()
 
         elemental_tab = pn.Column(
             # Scrollable section stack. It must stay the PARENT of the SimpleDetails
@@ -807,6 +820,7 @@ class FittingRightSidebarLayout(pn.Column):
             title=constants.SECTION_ELEMENTAL_EDGE,
             content=content,
             expanded=True,
+            locked=True,
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
             styles=dict(self._SECTION_CONTAINED),
@@ -872,6 +886,7 @@ class FittingRightSidebarLayout(pn.Column):
             title=constants.SECTION_ELEMENTAL_MODEL,
             content=content,
             expanded=True,
+            locked=True,
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
             styles=dict(self._SECTION_CONTAINED),

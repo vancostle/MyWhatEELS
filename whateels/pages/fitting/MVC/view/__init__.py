@@ -174,6 +174,14 @@ class FittingView:
         """Access the Elemental NLLS experimental-geometry status pane."""
         return self._elemental_geometry_status
     @property
+    def elemental_edge_section(self):
+        """Access the collapsible Elemental 'Edge Definition' section."""
+        return self._elemental_edge_section
+    @property
+    def elemental_model_section(self):
+        """Access the collapsible Elemental 'Model Setup' section."""
+        return self._elemental_model_section
+    @property
     def elemental_onset_readout(self) -> pn.widgets.StaticText:
         """Access the read-only Elemental NLLS edge onset readout."""
         return self._elemental_onset_readout
@@ -266,6 +274,8 @@ class FittingView:
         self._elemental_use_current_clustering_button = layout.elemental_use_current_clustering_button
         self._elemental_background_status = layout.elemental_background_status
         self._elemental_geometry_status = layout.elemental_geometry_status
+        self._elemental_edge_section = layout.elemental_edge_section
+        self._elemental_model_section = layout.elemental_model_section
         self._elemental_onset_readout = layout.elemental_onset_readout
         self._elemental_results_view = layout.elemental_results_view
 

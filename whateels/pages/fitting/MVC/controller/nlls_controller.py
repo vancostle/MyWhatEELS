@@ -64,6 +64,8 @@ class NLLSController:
         self._source_error: str | None = None
         self._geometry_error: str | None = None
         self._validated_geometry: ExperimentalGeometry | None = None
+        # None until the first validation pass, so that pass always applies the gate.
+        self._sections_unlocked: bool | None = None
         self._watchers: list[Any] = []
         self.bind()
         self.on_source_changed(initial=True)
@@ -103,6 +105,12 @@ class NLLSController:
             self.app_state.param.watch(
                 self._on_current_clustering_changed, "last_clustering_result"
             )
+        )
+        # E0/alpha/beta are edited in the shared Dataset Information card, which republishes
+        # all_datasets after writing dataset.attrs. Without this watcher a geometry fixed
+        # from that card would leave the Elemental sections locked until the source is switched.
+        self._watchers.append(
+            self.app_state.param.watch(self._on_dataset_metadata_changed, "all_datasets")
         )
 
     def cleanup(self) -> None:
@@ -265,6 +273,12 @@ class NLLSController:
             )
 
     def _update_validation_status(self) -> None:
+        """Publish both gates and keep the Elemental sections consistent with them.
+
+        A valid gate publishes no alert at all: the section stack then starts at the top
+        of the tab. An invalid gate keeps its own alert visible and locks both sections
+        closed, because neither an edge nor a model can be defined against that source.
+        """
         background = self.view.elemental_background_status
         geometry = self.view.elemental_geometry_status
         if self._source_error:
@@ -291,6 +305,28 @@ class NLLSController:
         else:
             geometry.object = "**Geometry status:** waiting for a valid NLLS source."
             geometry.alert_type = "warning"
+
+        background_valid = not self._source_error
+        geometry_valid = not self._geometry_error and self._validated_geometry is not None
+        background.visible = not background_valid
+        geometry.visible = not geometry_valid
+        self._apply_section_availability(background_valid and geometry_valid)
+
+    def _apply_section_availability(self, unlocked: bool) -> None:
+        """Lock/unlock Edge Definition and Model Setup as a single gated block.
+
+        Sections are opened only on the transition into a valid source, so a user who
+        folds one of them while working keeps it folded across later refreshes.
+        """
+        just_unlocked = unlocked and self._sections_unlocked is not True
+        for name in ("elemental_edge_section", "elemental_model_section"):
+            section = getattr(self.view, name, None)
+            if section is None:
+                continue
+            section.set_locked(not unlocked)
+            if just_unlocked:
+                section.set_expanded(True)
+        self._sections_unlocked = unlocked
 
     def _refresh_element_catalog(self) -> None:
         atomic_number = int(self.view.elemental_input["element_atomic_number"].value)
@@ -554,6 +590,10 @@ class NLLSController:
 
     def _on_current_clustering_changed(self, event) -> None:
         self._refresh_button_states()
+
+    def _on_dataset_metadata_changed(self, event) -> None:
+        """Re-run both gates after the Dataset Information card rewrites the metadata."""
+        self.on_source_changed()
 
     def _on_use_current_clustering(self, event) -> None:
         try:

@@ -274,3 +274,17 @@ Estado: completada.
 - El bloque central de estados/secciones absorbe el espacio libre y dispone de scroll propio; el bloque de acciones no encoge y queda anclado al fondo con padding completo. Se sustituyó el margen superior externo de la pestaña por padding interno para que no sume altura y corte la última fila.
 - El `right-sidebar` exterior oculta su overflow: el único scroll vertical del contenido Elemental queda ahora en el contenedor central, no alrededor de los botones de acción.
 - Verificación actual: 36 pruebas correctas, incluidas disponibilidad previa del modal, ausencia de clustering compatible, composición interna del modal, vecindad del icono con `Fit` y contrato de altura/scroll; `git diff --check` correcto.
+
+### T21 — Edge Definition y Model Setup bloqueados por los estados de validación
+
+Estado: completada.
+
+- `SimpleDetails` acepta ahora `locked` y expone `expanded`, `locked`, `set_expanded()` y `set_locked()`. Una sección bloqueada se cierra, deshabilita su cabecera, ignora `toggle()`, se pinta en gris (`#b9b9c6`) con prefijo `✕` y usa `cursor: not-allowed`. `set_expanded(False)` sigue permitido con la sección bloqueada; abrirla es exactamente lo que el bloqueo impide.
+- Las secciones `Edge Definition` y `Model Setup` de la pestaña Elemental se crean con `locked=True`: sin un controlador que valide la fuente no pueden abrirse ni exponer `Add Edge` / `Build Elemental Model`.
+- `NLLSController._update_validation_status` calcula por separado la validez de background y de geometría y añade `_apply_section_availability`:
+  - Si **cualquiera** de los dos estados es inválido, ambas secciones quedan bloqueadas y cerradas.
+  - Cada aviso sólo es visible cuando su propio estado bloquea. Con los dos válidos no se muestra ningún `Alert`, de modo que las dos secciones pasan a ocupar la posición superior de la pestaña sin reordenar la maquetación.
+  - La apertura automática ocurre sólo en la transición inválido → válido (`_sections_unlocked`), así una sección plegada a mano por el usuario sigue plegada en refrescos posteriores con la misma fuente.
+- Añadido un watcher de `AppState.all_datasets`: la tarjeta compartida `Dataset Information` escribe E0/alpha/beta en `dataset.attrs` y republica esa lista, que era la única señal disponible. Sin él, corregir la geometría desde la tarjeta dejaba las secciones bloqueadas hasta conmutar la fuente raw/preprocessed.
+- Nuevas propiedades `elemental_edge_section` / `elemental_model_section` en `FittingRightSidebarLayout` y en `FittingView`, con el mismo patrón de alias ya usado por el resto de widgets Elemental.
+- Verificación: 38 pruebas correctas. Nueva cobertura de layout (secciones bloqueadas y cerradas de inicio, cabecera deshabilitada, `toggle()` sin efecto y orden `background → geometry → edge → model` en el contenedor) y de controlador (fuente válida sin avisos y con ambas secciones abiertas, plegado manual conservado, geometría bloqueada vía `all_datasets`, recuperación de la geometría y pérdida de la procedencia power-law). Smoke de render Panel/Bokeh correcto con secciones bloqueadas, desbloqueadas y con los avisos ocultos; `compileall` y `git diff --check` correctos.

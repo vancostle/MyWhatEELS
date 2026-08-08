@@ -9,6 +9,8 @@ class SimpleDetails(pn.Column):
     _HEADER_HEIGHT = 38
     _EXPANDED_PREFIX = "\u25b2 "
     _COLLAPSED_PREFIX = "\u25bc "
+    _LOCKED_PREFIX = "\u2715 "
+    _LOCKED_COLOR = "#b9b9c6"
 
     _BUTTON_TYPE_COLORS = {
         "default": "#ffffff",
@@ -31,10 +33,13 @@ class SimpleDetails(pn.Column):
         button_type_on_expand: str | None = None,
         button_type_on_collapse: str | None = None,
         text_color: str = "#ffffff",
+        locked: bool = False,
         **params
     ) -> None:
 
         self._title = title
+        self._locked = bool(locked)
+        expanded = bool(expanded) and not self._locked
         self._color_on_expand = self._resolve_color(
             color_on_expand,
             button_type_on_expand,
@@ -47,10 +52,8 @@ class SimpleDetails(pn.Column):
 
         self._apply_auto_height(content)
 
-        initial_color = self._color_on_expand if expanded else self._color_on_collapse
-
         self._header_pane = pn.pane.HTML(
-            self._header_html(expanded, initial_color),
+            self._header_html(expanded, self._header_color(expanded)),
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             styles={
@@ -62,6 +65,7 @@ class SimpleDetails(pn.Column):
             name="",
             button_type="default",
             on_click=lambda _: self.toggle(),
+            disabled=self._locked,
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             height=self._HEADER_HEIGHT,
@@ -88,7 +92,7 @@ class SimpleDetails(pn.Column):
             """],
         )
 
-        header = pn.Column(
+        self._header_container = header = pn.Column(
             self._header_pane,
             self._button_header,
             sizing_mode=self._STRETCH_WIDTH,
@@ -96,7 +100,7 @@ class SimpleDetails(pn.Column):
             margin=0,
             styles={
                 "box-sizing": "border-box",
-                "cursor": "pointer",
+                "cursor": "not-allowed" if self._locked else "pointer",
                 "height": f"{self._HEADER_HEIGHT}px",
                 "max-width": "100%",
                 "min-height": f"{self._HEADER_HEIGHT}px",
@@ -203,8 +207,18 @@ class SimpleDetails(pn.Column):
         for child in content.objects:
             self._apply_auto_height(child)
 
+    def _header_color(self, expanded: bool) -> str:
+        if self._locked:
+            return self._LOCKED_COLOR
+
+        return self._color_on_expand if expanded else self._color_on_collapse
+
     def _header_html(self, expanded: bool, background_color: str) -> str:
-        prefix = self._EXPANDED_PREFIX if expanded else self._COLLAPSED_PREFIX
+        if self._locked:
+            prefix = self._LOCKED_PREFIX
+        else:
+            prefix = self._EXPANDED_PREFIX if expanded else self._COLLAPSED_PREFIX
+        cursor = "not-allowed" if self._locked else "pointer"
 
         return f"""
         <div style="
@@ -214,7 +228,7 @@ class SimpleDetails(pn.Column):
             border-radius: 4px;
             box-sizing: border-box;
             color: {self._text_color};
-            cursor: pointer;
+            cursor: {cursor};
             display: flex;
             font-family: inherit;
             font-size: 14px;
@@ -230,10 +244,55 @@ class SimpleDetails(pn.Column):
         ">{escape(prefix + self._title)}</div>
         """
 
+    @property
+    def expanded(self) -> bool:
+        """Whether the content block is currently visible."""
+        return bool(self._content.visible)
+
+    @property
+    def locked(self) -> bool:
+        """Whether the header refuses to open or close the section."""
+        return self._locked
+
     def toggle(self):
-        self._content.visible = not bool(self._content.visible)
+        if self._locked:
+            return
 
-        expanded = self._content.visible
-        color = self._color_on_expand if expanded else self._color_on_collapse
+        self.set_expanded(not self.expanded)
 
-        self._header_pane.object = self._header_html(expanded, color)
+    def set_expanded(self, expanded: bool) -> None:
+        """Set the open/closed state directly instead of flipping it.
+
+        A locked section can only be driven closed: opening it is exactly what the
+        lock forbids, so callers do not have to unlock first just to collapse it.
+        """
+        expanded = bool(expanded)
+        if self._locked and expanded:
+            return
+
+        self._content.visible = expanded
+        self._render_header()
+
+    def set_locked(self, locked: bool) -> None:
+        """Block/allow the header. Locking always collapses the section first."""
+        locked = bool(locked)
+        if locked == self._locked:
+            return
+
+        self._locked = locked
+        self._button_header.disabled = locked
+        cursor = "not-allowed" if locked else "pointer"
+        self._header_container.styles = {
+            **(self._header_container.styles or {}),
+            "cursor": cursor,
+        }
+        if locked:
+            self._content.visible = False
+        self._render_header()
+
+    def _render_header(self) -> None:
+        expanded = self.expanded
+        self._header_pane.object = self._header_html(
+            expanded,
+            self._header_color(expanded),
+        )

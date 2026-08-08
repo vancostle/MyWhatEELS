@@ -196,6 +196,30 @@ class ManualFittingRegressionTests(unittest.TestCase):
             layout._elemental_fit_areas_modal.objects,
         )
 
+    def test_elemental_sections_start_locked_below_both_status_alerts(self):
+        layout = FittingRightSidebarLayout(self.model)
+        edge = layout.elemental_edge_section
+        model = layout.elemental_model_section
+        background = layout.elemental_background_status
+        geometry = layout.elemental_geometry_status
+
+        # No controller has validated a source yet, so nothing may be opened.
+        self.assertTrue(background.visible)
+        self.assertTrue(geometry.visible)
+        for section in (edge, model):
+            self.assertTrue(section.locked)
+            self.assertFalse(section.expanded)
+            self.assertTrue(section._button_header.disabled)
+            section.toggle()
+            self.assertFalse(section.expanded)
+
+        container = next(
+            column
+            for column in layout.fitting_tabs[1].select(pn.Column)
+            if "elemental-input-container" in column.css_classes
+        )
+        self.assertEqual(container.objects, [background, geometry, edge, model])
+
     def test_results_tab_uses_reactive_elemental_results_view(self):
         layout = FittingRightSidebarLayout(self.model)
         results = layout.elemental_results_view
@@ -514,6 +538,74 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             {"cluster_0", "cluster_1"},
         )
         self.assertIsNone(self.visualizer.clustering_payload)
+
+    def _assert_sections_locked(self):
+        for section in (
+            self.layout.elemental_edge_section,
+            self.layout.elemental_model_section,
+        ):
+            self.assertTrue(section.locked)
+            self.assertFalse(section.expanded)
+            section.toggle()
+            self.assertFalse(section.expanded)
+
+    def test_elemental_sections_are_gated_by_background_and_geometry(self):
+        edge = self.layout.elemental_edge_section
+        model = self.layout.elemental_model_section
+        background = self.layout.elemental_background_status
+        geometry = self.layout.elemental_geometry_status
+
+        # Both gates valid: no alert is published and both sections are open on top.
+        self.assertFalse(background.visible)
+        self.assertFalse(geometry.visible)
+        for section in (edge, model):
+            self.assertFalse(section.locked)
+            self.assertTrue(section.expanded)
+
+        # A section folded by hand stays folded across a refresh of the same source.
+        model.toggle()
+        self.assertFalse(model.expanded)
+        self.controller.on_source_changed()
+        self.assertFalse(model.expanded)
+        self.assertFalse(model.locked)
+
+        # Geometry alone blocked: only its own alert returns, both sections lock.
+        # Editing it in the Dataset Information card republishes all_datasets, which is
+        # the only signal the controller gets, so drive the gate through that path.
+        self.dataset.attrs["beam_energy"] = 0.0
+        self.state.all_datasets = [self.dataset]
+        self.assertFalse(background.visible)
+        self.assertTrue(geometry.visible)
+        self.assertIn("blocked", geometry.object)
+        self._assert_sections_locked()
+
+        # Recovering the geometry reopens both sections without touching the alerts.
+        self.dataset.attrs["beam_energy"] = 200.0
+        self.state.all_datasets = [self.dataset]
+        self.assertFalse(background.visible)
+        self.assertFalse(geometry.visible)
+        for section in (edge, model):
+            self.assertFalse(section.locked)
+            self.assertTrue(section.expanded)
+
+        # Background provenance missing: its alert returns and locks the sections again.
+        raw = xr.Dataset(
+            {"ElectronCount": (("y", "x", "Eloss"), np.zeros((2, 3, self.eloss.size)))},
+            coords={"y": np.arange(2), "x": np.arange(3), "Eloss": self.eloss},
+            attrs={
+                "original_name": "synthetic.dm4",
+                "image_name": "synthetic",
+                "beam_energy": 200.0,
+                "collection_angle": 20.0,
+                "convergence_angle": 0.0,
+            },
+        )
+        self.state.preprocessed_plot_dataset = None
+        self.state.plot_dataset = raw
+        self.controller.on_source_changed()
+        self.assertTrue(background.visible)
+        self.assertIn("blocked", background.object)
+        self._assert_sections_locked()
 
     def test_model_setup_remains_shared_when_clustering_is_enabled_first(self):
         workspace = self.controller.workspace
