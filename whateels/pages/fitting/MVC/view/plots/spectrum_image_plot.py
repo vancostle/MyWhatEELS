@@ -10,11 +10,12 @@ import numpy as np
 import time
 import xarray as xr
 import holoviews as hv
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, to_hex
 
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
 from whateels.components import SplitJs, create_dataset_info_card
+from whateels.helpers.colormaps import get_nclusters_cmap
 from whateels.state import CacheManager
 
 if TYPE_CHECKING:
@@ -52,6 +53,10 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self.range_slider = None
         self.fitting_button = None
         self._ignore_selection_until_ms = 0
+        self._nlls_result_active = False
+        self._nlls_clustering_active = False
+        self._nlls_clustering_label_plot = None
+        self._nlls_clustering_spectra_plot = None
 
         # BaseSpectrumImagePlot.__init__ expects (dataset, eloss_name) and calls
         # _setup_plots() + _setup_callbacks() internally.
@@ -161,13 +166,166 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def update_plot(self):
         """Refresh paneB based on ROI state (clears fit overlay)."""
+        self._nlls_result_active = False
         if self._region_pairs:
             self._update_paneB(self._figB_region(self._region_pairs))
         else:
             self._update_paneB(self._figB_hover(self._last_hover_point or {"x": 0, "y": 0}))
 
+    @property
+    def nlls_result_active(self) -> bool:
+        return self._nlls_result_active
+
+    @property
+    def nlls_clustering_active(self) -> bool:
+        return self._nlls_clustering_active
+
+    def _reset_spectrum_ranges(self) -> None:
+        """Let a newly selected NLLS plot determine its complete visible ranges."""
+        self._current_x_range = None
+        self._current_y_range = None
+        self._current_x_autorange = None
+        self._current_y_autorange = None
+
+    def _show_nlls_main_plot(self, plot) -> None:
+        self._reset_spectrum_ranges()
+        self._update_paneB(plot)
+
+    def show_nlls_reference_result(self, plot) -> None:
+        """Replace the large ROI/cluster-spectrum pane with an NLLS result plot."""
+        if plot is None:
+            self.clear_nlls_reference_result()
+            return
+        self._nlls_result_active = True
+        if self._pc and self._pc.running:
+            self._pc.stop()
+        self._show_nlls_main_plot(plot)
+
+    def clear_nlls_reference_result(self) -> None:
+        """Leave result mode and restore cluster references or the current ROI spectrum."""
+        if not self._nlls_result_active:
+            return
+        self._nlls_result_active = False
+        if self._nlls_clustering_active and self._nlls_clustering_spectra_plot is not None:
+            self._show_nlls_main_plot(self._nlls_clustering_spectra_plot)
+        elif self._region_pairs:
+            self._show_nlls_main_plot(self._figB_region(self._region_pairs))
+        else:
+            self._show_nlls_main_plot(
+                self._figB_hover(self._last_hover_point or {"x": 0, "y": 0})
+            )
+
+    def show_nlls_clustering(self, labels, energy, cluster_spectra) -> None:
+        """Show categorical cluster labels and real mean spectra in the two main panes."""
+        label_values = np.asarray(labels)
+        if label_values.ndim != 2:
+            raise ValueError(
+                f"Expected a 2D clustering label map, got shape={label_values.shape}"
+            )
+        if np.any(~np.isfinite(label_values)) or np.any(label_values != np.floor(label_values)):
+            raise ValueError("Clustering labels must be finite integers")
+        label_values = label_values.astype(int, copy=False)
+        unique_labels = np.unique(label_values)
+        if unique_labels.size == 0 or int(unique_labels[0]) < 0:
+            raise ValueError("Clustering labels must contain non-negative areas")
+
+        color_count = max(int(unique_labels[-1]) + 1, int(unique_labels.size))
+        color_order = [
+            3, 7, 15, 11, 19,
+            2, 6, 14, 10, 18,
+            1, 5, 13, 9, 17,
+            0, 4, 12, 8, 16,
+        ]
+        colors = [
+            to_hex(color)
+            for color in get_nclusters_cmap(
+                "tab20b", color_count, index_order=color_order
+            )
+        ]
+
+        ny, nx = label_values.shape
+        label_plot = hv.Image(
+            (np.arange(nx), np.arange(ny), label_values.astype(float)),
+            kdims=["x", "y"],
+            vdims=["Cluster"],
+        ).opts(
+            cmap=colors,
+            clim=(-0.5, color_count - 0.5),
+            colorbar=True,
+            invert_yaxis=True,
+            xaxis=None,
+            yaxis=None,
+            title=f"Current Clustering — {unique_labels.size} clusters",
+            responsive=True,
+            shared_axes=False,
+            aspect="equal",
+            framewise=True,
+            tools=["hover", "reset"],
+        )
+
+        x_axis = np.asarray(energy, dtype=float).reshape(-1)
+        curves = []
+        for cluster_label, area_label, spectrum in cluster_spectra:
+            y_values = np.asarray(spectrum, dtype=float).reshape(-1)
+            size = min(x_axis.size, y_values.size)
+            finite = np.isfinite(x_axis[:size]) & np.isfinite(y_values[:size])
+            if np.count_nonzero(finite) < 2:
+                continue
+            label_index = int(cluster_label)
+            curves.append(
+                hv.Curve(
+                    (x_axis[:size][finite], y_values[:size][finite]),
+                    kdims=["Energy loss (eV)"],
+                    vdims=["Electron count"],
+                    label=str(area_label),
+                ).opts(
+                    color=colors[label_index % len(colors)],
+                    line_width=2,
+                )
+            )
+        if not curves:
+            curves.append(
+                hv.Curve(
+                    ([], []),
+                    kdims=["Energy loss (eV)"],
+                    vdims=["Electron count"],
+                )
+            )
+        spectra_plot = hv.Overlay(curves).opts(
+            hv.opts.Overlay(
+                title="Cluster reference spectra",
+                xlabel="Energy loss (eV)",
+                ylabel="Electron count",
+                legend_position="top_right",
+                responsive=True,
+                shared_axes=False,
+                framewise=True,
+                show_legend=True,
+                tools=["hover", "wheel_zoom", "pan", "reset"],
+                active_tools=["wheel_zoom"],
+            )
+        )
+
+        self._nlls_result_active = False
+        self._nlls_clustering_active = True
+        self._nlls_clustering_label_plot = label_plot
+        self._nlls_clustering_spectra_plot = spectra_plot
+        self.paneA._splitjs_xy_ratio = float(nx) / float(ny) if ny else 1.0
+        self.paneA.object = label_plot
+        self._show_nlls_main_plot(spectra_plot)
+
+    def clear_nlls_clustering(self) -> None:
+        """Restore the integrated image after leaving clustered-area mode."""
+        if not self._nlls_clustering_active:
+            return
+        self.plot_image()
+
     def plot_image(self):
         """Re-render the integrated intensity heatmap and reset fit/spectra shared state."""
+        self._nlls_result_active = False
+        self._nlls_clustering_active = False
+        self._nlls_clustering_label_plot = None
+        self._nlls_clustering_spectra_plot = None
         display_data = self._get_display_data()
 
         try:
@@ -210,6 +368,10 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def plot_energy_map(self, energy_map):
         """Render a model-computed 2D energy map on paneA."""
+        self._nlls_result_active = False
+        self._nlls_clustering_active = False
+        self._nlls_clustering_label_plot = None
+        self._nlls_clustering_spectra_plot = None
         energy_map_arr = np.asarray(energy_map)
         if energy_map_arr.ndim != 2:
             raise ValueError(f"Expected a 2D energy map, got shape={energy_map_arr.shape}")
@@ -287,6 +449,10 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def _check_inactivity(self):
         """Restore ROI after hover preview times out."""
+        if self._nlls_result_active or self._nlls_clustering_active:
+            if self._pc and self._pc.running:
+                self._pc.stop()
+            return
         if not self._region_pairs:
             if self._pc and self._pc.running:
                 self._pc.stop()
@@ -313,7 +479,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._queue_hover(x, y)
 
     def _handle_hover_render(self, point):
-        if self._hover_blocked:
+        if self._hover_blocked or self._nlls_result_active or self._nlls_clustering_active:
             return
         if not self._region_pairs and self._try_fast_hover_update(point):
             return
@@ -328,6 +494,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     @override
     def _on_paneA_click(self, x=None, y=None):
         if x is None or y is None:
+            return
+        if self._nlls_result_active or self._nlls_clustering_active:
             return
         self._last_hover_pixel = (round(y), round(x))
         if self._pending_selection_ts is not None or self._hover_blocked:

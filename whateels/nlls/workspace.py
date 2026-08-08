@@ -56,6 +56,11 @@ class NLLSWorkspace:
         clustered = tuple(area_id for area_id in self.areas if area_id != "default")
         return clustered or ("default",)
 
+    @property
+    def clustering_active(self) -> bool:
+        """Whether the default ROI template is currently expanded into clusters."""
+        return any(area_id != "default" for area_id in self.areas)
+
     def _replace_area(self, area: AreaModelSpec, *, invalidate: bool = True) -> AreaModelSpec:
         if invalidate:
             area = replace(area, revision=area.revision + 1, built_revision=None)
@@ -188,6 +193,50 @@ class NLLSWorkspace:
         self.active_area = clustered[0].area_id
         self.dirty_revision += 1
         return tuple(clustered)
+
+    def clear_clustering(self, template_area: str = "default") -> AreaModelSpec:
+        """Return to the preprocessed ROI area while preserving its model and fit."""
+        if template_area not in self.areas:
+            raise ValueError(f"unknown template area: {template_area}")
+        template = self.areas[template_area]
+        self.areas = {template_area: template}
+        self.reference_fits = {
+            area_id: snapshot
+            for area_id, snapshot in self.reference_fits.items()
+            if area_id == template_area
+        }
+        self.model_builds = {
+            area_id: snapshot
+            for area_id, snapshot in self.model_builds.items()
+            if area_id == template_area
+        }
+        self.active_area = template_area
+        self.dirty_revision += 1
+        return template
+
+    def refresh_clustering_from_template(
+        self,
+        template_area: str = "default",
+    ) -> tuple[AreaModelSpec, ...]:
+        """Re-clone current cluster masks after the shared template model changes."""
+        if not self.clustering_active:
+            return ()
+        definitions = tuple(
+            AreaDefinition(
+                area_id=area.area_id,
+                label=area.label,
+                label_value=int(area.clustering_label),
+                mask=area.mask,
+                mask_fingerprint=area.mask_fingerprint,
+                source_kind="workspace",
+                clustering_type="current",
+            )
+            for area_id, area in self.areas.items()
+            if area_id != template_area
+            and area.mask is not None
+            and area.clustering_label is not None
+        )
+        return self.apply_clustering(definitions, template_area=template_area)
 
     def is_area_built(self, area_id: str) -> bool:
         area = self.areas[area_id]

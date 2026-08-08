@@ -1,7 +1,7 @@
 import panel as pn
 
 from whateels.helpers import CSS_ROOT
-from whateels.components import UploadedFile, ToggleButton
+from whateels.components import ModalManager, UploadedFile, ToggleButton
 from panel.viewable import Viewable
 from panel.pane import HTML
 from typing import TYPE_CHECKING, Optional
@@ -10,6 +10,7 @@ from .layouts import FittingRightSidebarLayout
 
 if TYPE_CHECKING:
     from ..model import FittingModel
+    from whateels.templates import GeneralPageTemplate
 
 
 class FittingView:
@@ -23,8 +24,14 @@ class FittingView:
     COMPONENT_EAXIS_THRESHOLD = 4
     COMPONENT_EAXIS_THRESHOLD_VALUE = 50
 
-    def __init__(self, model: "FittingModel"):
+    def __init__(
+        self,
+        model: "FittingModel",
+        custom_page: "GeneralPageTemplate | None" = None,
+    ):
         self._model = model
+        self._custom_page = custom_page
+        self._modal_manager = ModalManager(custom_page) if custom_page is not None else None
 
         # Register page CSS once to avoid cross-document stylesheet ownership errors.
         fitting_css = '/assets/css/fitting.css'
@@ -135,21 +142,25 @@ class FittingView:
         """Access the Elemental NLLS 'Build Elemental Model' button."""
         return self._elemental_build_model_button
     @property
-    def elemental_fit_current_reference_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Fit Current Reference' button."""
-        return self._elemental_fit_current_reference_button
+    def elemental_fit_button(self) -> pn.widgets.Button:
+        """Access the Elemental NLLS reference-fit button."""
+        return self._elemental_fit_button
     @property
-    def elemental_fit_all_references_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Fit All References' button."""
-        return self._elemental_fit_all_references_button
+    def elemental_fit_area_settings_button(self) -> pn.widgets.ButtonIcon:
+        """Access the clustered-area selection modal trigger."""
+        return self._elemental_fit_area_settings_button
+    @property
+    def elemental_fit_areas_input(self) -> pn.widgets.MultiChoice:
+        """Access the clustered-area selector hosted by the modal."""
+        return self._elemental_fit_areas_input
+    @property
+    def elemental_select_all_fit_areas_button(self) -> pn.widgets.Button:
+        """Access the modal's Select all action."""
+        return self._elemental_select_all_fit_areas_button
     @property
     def elemental_cancel_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Cancel' button."""
         return self._elemental_cancel_button
-    @property
-    def elemental_reset_area_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Reset Area' button."""
-        return self._elemental_reset_area_button
     @property
     def elemental_use_current_clustering_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Use Current Clustering' button."""
@@ -170,6 +181,10 @@ class FittingView:
     def elemental_results_view(self):
         """Access the Elemental NLLS reference-results view."""
         return self._elemental_results_view
+    @property
+    def modals(self) -> list:
+        """Return modal components for the page template container."""
+        return self._modal_manager.modals if self._modal_manager is not None else []
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
         """Set the last dataset info component (must be a Panel Viewable)."""
@@ -211,7 +226,11 @@ class FittingView:
     
     def _right_sidebar_layout(self) -> FittingRightSidebarLayout:
         """Build the right sidebar by delegating to FittingRightSidebarLayout."""
-        self._right_sidebar_layout_obj = FittingRightSidebarLayout(self._model)
+        self._right_sidebar_layout_obj = FittingRightSidebarLayout(
+            self._model,
+            self._custom_page,
+            self._modal_manager,
+        )
         return self._right_sidebar_layout_obj
 
     def _bind_right_sidebar_widgets(self):
@@ -238,11 +257,12 @@ class FittingView:
         self._elemental_input = layout.elemental_input
         self._elemental_add_edge_button = layout.elemental_add_edge_button
         self._elemental_build_model_button = layout.elemental_build_model_button
-        self._elemental_fit_current_reference_button = layout.elemental_fit_current_reference_button
-        self._elemental_fit_all_references_button = layout.elemental_fit_all_references_button
+        self._elemental_fit_button = layout.elemental_fit_button
+        self._elemental_fit_area_settings_button = layout.elemental_fit_area_settings_button
+        self._elemental_fit_areas_input = layout.elemental_fit_areas_input
+        self._elemental_select_all_fit_areas_button = layout.elemental_select_all_fit_areas_button
         self._elemental_run_nlls_button = layout.elemental_run_nlls_button
         self._elemental_cancel_button = layout.elemental_cancel_button
-        self._elemental_reset_area_button = layout.elemental_reset_area_button
         self._elemental_use_current_clustering_button = layout.elemental_use_current_clustering_button
         self._elemental_background_status = layout.elemental_background_status
         self._elemental_geometry_status = layout.elemental_geometry_status

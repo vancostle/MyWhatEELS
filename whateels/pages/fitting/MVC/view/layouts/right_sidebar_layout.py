@@ -2,11 +2,14 @@ import panel as pn
 
 from bokeh.models import Tooltip
 from whateels.components import ToggleButton, SimpleDetails
+from ..components.nlls_fit_areas_modal import NLLSFitAreasModal
 from ..components.nlls_results_view import NLLSResultsView
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ...model import FittingModel
+    from whateels.components import ModalManager
+    from whateels.templates import GeneralPageTemplate
 
 
 class FittingRightSidebarLayout(pn.Column):
@@ -19,6 +22,25 @@ class FittingRightSidebarLayout(pn.Column):
     ELEMENT_EAXIS_THRESHOLD = 50
     COMPONENT_EAXIS_THRESHOLD = 4
     COMPONENT_EAXIS_THRESHOLD_VALUE = 50
+
+    _ADJUSTMENTS_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-adjustments-horizontal" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+        <circle cx="14" cy="6" r="2" />
+        <line x1="4" y1="6" x2="12" y2="6" />
+        <line x1="16" y1="6" x2="20" y2="6" />
+        <circle cx="8" cy="12" r="2" />
+        <line x1="4" y1="12" x2="6" y2="12" />
+        <line x1="10" y1="12" x2="20" y2="12" />
+        <circle cx="17" cy="18" r="2" />
+        <line x1="4" y1="18" x2="15" y2="18" />
+        <line x1="19" y1="18" x2="20" y2="18" />
+        </svg>
+    """
+    _ADJUSTMENTS_ACTIVE_SVG = _ADJUSTMENTS_SVG.replace(
+        'stroke="currentColor"', 'stroke="#b63fb5"'
+    )
+    _FIT_AREAS_MODAL_ID = "Select Area to run fit"
 
     # --- Anti-overflow style kits -------------------------------------
     # Every Panel/Bokeh layout is a flex container whose children keep `min-width: auto`
@@ -70,9 +92,25 @@ class FittingRightSidebarLayout(pn.Column):
         pn.widgets.DiscreteSlider,
     )
 
-    def __init__(self, model: "FittingModel"):
+    def __init__(
+        self,
+        model: "FittingModel",
+        custom_page: "GeneralPageTemplate | None" = None,
+        modal_manager: "ModalManager | None" = None,
+    ):
         self._model = model
+        self._modal_manager = modal_manager
         constants = model.constants
+
+        self._elemental_fit_areas_modal = NLLSFitAreasModal(
+            custom_page,
+            title=self._FIT_AREAS_MODAL_ID,
+        )
+        if modal_manager is not None:
+            modal_manager.register_modal(
+                self._FIT_AREAS_MODAL_ID,
+                self._elemental_fit_areas_modal,
+            )
 
         # --- Shared / root widgets ---------------------------------------
         self._use_preprocessed_data_switch = pn.widgets.Switch(
@@ -162,38 +200,36 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
         )
-        self._elemental_reset_area_button = pn.widgets.Button(
-            name='Reset Area',
-            button_type='primary',
-            height=55,
-            margin=(10, 0, 0, 0),
-            sizing_mode=self._STRETCH_WIDTH,
-            disabled=True,
+        self._elemental_use_current_clustering_button = (
+            self._elemental_fit_areas_modal.use_current_clustering_button
         )
-        self._elemental_use_current_clustering_button = pn.widgets.Button(
-            name='Use Current Clustering',
-            button_type='primary',
-            height=55,
-            margin=(10, 0, 0, 0),
-            sizing_mode=self._STRETCH_WIDTH,
-            disabled=True,
-        )
-        self._elemental_fit_current_reference_button = pn.widgets.Button(
-            name='Fit Current Reference',
+        self._elemental_fit_button = pn.widgets.Button(
+            name='Fit',
             button_type='success',
             height=55,
-            margin=(10, 0, 0, 0),
+            margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
         )
-        self._elemental_fit_all_references_button = pn.widgets.Button(
-            name='Fit All References',
-            button_type='success',
+        self._elemental_fit_area_settings_button = pn.widgets.ButtonIcon(
+            icon=self._ADJUSTMENTS_SVG,
+            active_icon=self._ADJUSTMENTS_ACTIVE_SVG,
+            size='2em',
+            width=55,
             height=55,
-            margin=(10, 0, 0, 0),
-            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
             disabled=True,
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px",
+            },
         )
+        if modal_manager is not None:
+            self._elemental_fit_area_settings_button.on_click(
+                lambda _: modal_manager.open_modal(self._FIT_AREAS_MODAL_ID)
+            )
         self._elemental_run_nlls_button = pn.widgets.Button(
             name='Run Elemental NLLS',
             button_type='success',
@@ -214,8 +250,14 @@ class FittingRightSidebarLayout(pn.Column):
 
         super().__init__(
             self._create_layout(),
-            sizing_mode=self._STRETCH_WIDTH,
-            styles={'max-width': '100%', 'min-width': '0', 'overflow-x': 'hidden'},
+            sizing_mode=self._STRETCH_BOTH,
+            styles={
+                'height': '100%',
+                'max-width': '100%',
+                'min-height': '0',
+                'min-width': '0',
+                'overflow': 'hidden',
+            },
         )
 
     def _in_slider_container(self, widget):
@@ -361,24 +403,29 @@ class FittingRightSidebarLayout(pn.Column):
         return self._elemental_build_model_button
 
     @property
-    def elemental_reset_area_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Reset Area' button."""
-        return self._elemental_reset_area_button
-
-    @property
     def elemental_use_current_clustering_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Use Current Clustering' button."""
         return self._elemental_use_current_clustering_button
 
     @property
-    def elemental_fit_current_reference_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Fit Current Reference' button."""
-        return self._elemental_fit_current_reference_button
+    def elemental_fit_button(self) -> pn.widgets.Button:
+        """Access the single Elemental NLLS reference-fit action."""
+        return self._elemental_fit_button
 
     @property
-    def elemental_fit_all_references_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Fit All References' button."""
-        return self._elemental_fit_all_references_button
+    def elemental_fit_area_settings_button(self) -> pn.widgets.ButtonIcon:
+        """Access the clustered-area selection modal trigger."""
+        return self._elemental_fit_area_settings_button
+
+    @property
+    def elemental_fit_areas_input(self) -> pn.widgets.MultiChoice:
+        """Access the area selector hosted inside the fit modal."""
+        return self._elemental_fit_areas_modal.area_selector
+
+    @property
+    def elemental_select_all_fit_areas_button(self) -> pn.widgets.Button:
+        """Access the modal action that selects every cluster."""
+        return self._elemental_fit_areas_modal.select_all_button
 
     @property
     def elemental_run_nlls_button(self) -> pn.widgets.Button:
@@ -432,12 +479,14 @@ class FittingRightSidebarLayout(pn.Column):
             (constants.TAB_MANUAL, manual_tab),
             (constants.TAB_ELEMENTAL, elemental_tab),
             (constants.TAB_RESULTS, results_tab),
-            sizing_mode=self._STRETCH_WIDTH,
+            sizing_mode=self._STRETCH_BOTH,
             css_classes=["fitting-tabs"],
             stylesheets=["""
                 :host {
                     grid-template-columns: minmax(0, 1fr) !important;
+                    height: 100% !important;
                     max-width: 100%;
+                    min-height: 0;
                     min-width: 0;
                     overflow: hidden;
                 }
@@ -464,10 +513,25 @@ class FittingRightSidebarLayout(pn.Column):
             pn.Column(
                 self._fitting_tabs,
                 sizing_mode=self._STRETCH_BOTH,
-                styles={'flex': '1', 'max-width': '100%', 'min-width': '0', 'overflow': 'hidden'}
+                styles={
+                    'flex': '1 1 0',
+                    'height': '100%',
+                    'max-width': '100%',
+                    'min-height': '0',
+                    'min-width': '0',
+                    'overflow': 'hidden',
+                }
             ),
-            styles={'display': 'flex', 'max-width': '100%', 'min-width': '0', 'overflow-x': 'hidden'},
-            sizing_mode=self._STRETCH_WIDTH,
+            styles={
+                'display': 'flex',
+                'flex': '1 1 0',
+                'height': '100%',
+                'max-width': '100%',
+                'min-height': '0',
+                'min-width': '0',
+                'overflow': 'hidden',
+            },
+            sizing_mode=self._STRETCH_BOTH,
         )
         return right_sidebar
 
@@ -619,8 +683,6 @@ class FittingRightSidebarLayout(pn.Column):
 
         edge_details = self._create_elemental_edge_section()
         model_details = self._create_elemental_model_section()
-        areas_details = self._create_elemental_areas_section()
-        run_setup_details = self._create_elemental_run_setup_section()
 
         elemental_tab = pn.Column(
             # Scrollable section stack. It must stay the PARENT of the SimpleDetails
@@ -632,8 +694,6 @@ class FittingRightSidebarLayout(pn.Column):
                 self._elemental_geometry_status,
                 edge_details,
                 model_details,
-                areas_details,
-                run_setup_details,
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["elemental-input-container"],
                 # The .elemental-input-container rule in fitting.css is dead (shadow root),
@@ -641,7 +701,8 @@ class FittingRightSidebarLayout(pn.Column):
                 # makes THIS the element that absorbs any residual overflow instead of
                 # #right-sidebar, which is what used to grow the horizontal scrollbar.
                 styles={
-                    'flex': '1',
+                    'flex': '1 1 0',
+                    'min-height': '0',
                     'min-width': '0',
                     'overflow-y': 'auto',
                     'overflow-x': 'hidden',
@@ -650,12 +711,17 @@ class FittingRightSidebarLayout(pn.Column):
             ),
             # Action stack, sibling of the scroll container so it stays visible.
             pn.Column(
-                self._elemental_fit_current_reference_button,
-                self._elemental_fit_all_references_button,
+                pn.Row(
+                    self._elemental_fit_button,
+                    self._elemental_fit_area_settings_button,
+                    margin=0,
+                    sizing_mode=self._STRETCH_WIDTH,
+                    styles=self._fluid_row_styles(gap='10px'),
+                ),
                 pn.Row(
                     self._elemental_run_nlls_button,
                     self._elemental_cancel_button,
-                    margin=(10, 0, 0, 0),
+                    margin=0,
                     sizing_mode=self._STRETCH_WIDTH,
                     styles=self._fluid_row_styles(gap='10px'),
                 ),
@@ -666,15 +732,25 @@ class FittingRightSidebarLayout(pn.Column):
                     'box-sizing': 'border-box',
                     'flex-shrink': '0',
                     'max-width': '100%',
+                    'min-height': '0',
                     'min-width': '0',
                     'overflow-x': 'hidden',
-                    'padding': '0 10px',
+                    'padding': '10px',
+                    'gap': '10px',
                 },
             ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["elemental-tab"],
-            margin=(15, 0, 0, 0),
-            styles={'height': '100%', 'max-width': '100%', 'min-width': '0', 'overflow': 'hidden'},
+            margin=0,
+            styles={
+                'box-sizing': 'border-box',
+                'height': '100%',
+                'max-width': '100%',
+                'min-height': '0',
+                'min-width': '0',
+                'overflow': 'hidden',
+                'padding-top': '15px',
+            },
         )
 
         return elemental_tab
@@ -737,13 +813,7 @@ class FittingRightSidebarLayout(pn.Column):
         )
 
     def _create_elemental_model_section(self) -> SimpleDetails:
-        """Build the 'Model Setup' section: composition, ELNES shape, flexibility, softening.
-
-        It also hosts the model-level 'Reset Area' action (NLLS_TODO 13:1130). The other
-        model-level action of that matrix, 'Remove ELNES' (NLLS_TODO 13:1129 and 5.1:301),
-        is deliberately not laid out here: it is per-component and will be delegated to the
-        component card in a later phase.
-        """
+        """Build model composition controls and the reversible clustering action."""
         constants = self._model.constants
 
         self._elemental_input["model_composition"] = pn.widgets.Select(
@@ -795,7 +865,6 @@ class FittingRightSidebarLayout(pn.Column):
                 styles=self._fluid_row_styles(gap='10px'),
             ),
             self._elemental_build_model_button,
-            self._elemental_reset_area_button,
             sizing_mode=self._STRETCH_WIDTH,
         )
 
@@ -803,97 +872,6 @@ class FittingRightSidebarLayout(pn.Column):
             title=constants.SECTION_ELEMENTAL_MODEL,
             content=content,
             expanded=True,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-            styles=dict(self._SECTION_CONTAINED),
-        )
-
-    def _create_elemental_areas_section(self) -> SimpleDetails:
-        """Build the 'Areas' section. Real area options are written by the controller."""
-        constants = self._model.constants
-
-        self._elemental_input["active_area"] = pn.widgets.Select(
-            name="Active Area",
-            options=constants.AVAILABLE_ELEMENTAL_AREAS,
-            value=constants.DEFAULT_ELEMENTAL_AREA,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-        )
-        self._elemental_input["default_reference_strategy"] = pn.widgets.Select(
-            name="Default reference source",
-            options=constants.AVAILABLE_ELEMENTAL_REFERENCE_STRATEGIES,
-            value=constants.DEFAULT_ELEMENTAL_REFERENCE_STRATEGY,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-        )
-
-        content = pn.Column(
-            self._elemental_input["active_area"],
-            pn.Row(
-                self._elemental_input["default_reference_strategy"],
-                self._left_tooltip_icon(
-                    constants.TOOLTIP_ELEMENTAL_REFERENCE_STRATEGY
-                ),
-                sizing_mode=self._STRETCH_WIDTH,
-                styles=self._fluid_row_styles(),
-            ),
-            self._elemental_use_current_clustering_button,
-            sizing_mode=self._STRETCH_WIDTH,
-        )
-
-        return SimpleDetails(
-            title=constants.SECTION_ELEMENTAL_AREAS,
-            content=content,
-            expanded=False,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-            styles=dict(self._SECTION_CONTAINED),
-        )
-
-    def _create_elemental_run_setup_section(self) -> SimpleDetails:
-        """Build the 'Run Setup' section. Both controls are populated by the controller."""
-        constants = self._model.constants
-
-        self._elemental_input["fit_areas"] = pn.widgets.MultiChoice(
-            name="Areas to fit",
-            options=[],
-            value=[],
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-            disabled=True,
-        )
-        # Real bounds come from the dataset energy-loss axis.
-        self._elemental_input["fit_range"] = pn.widgets.EditableRangeSlider(
-            name="Fit Range (eV)",
-            value=(0.0, 1.0),
-            start=0.0,
-            end=1.0,
-            step=0.1,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-            disabled=True,
-        )
-
-        content = pn.Column(
-            pn.Row(
-                self._elemental_input["fit_areas"],
-                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_FIT_AREAS),
-                sizing_mode=self._STRETCH_WIDTH,
-                styles=self._fluid_row_styles(),
-            ),
-            pn.Row(
-                self._in_slider_container(self._elemental_input["fit_range"]),
-                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_FIT_RANGE),
-                sizing_mode=self._STRETCH_WIDTH,
-                styles=self._fluid_row_styles(),
-            ),
-            sizing_mode=self._STRETCH_WIDTH,
-        )
-
-        return SimpleDetails(
-            title=constants.SECTION_ELEMENTAL_RUN_SETUP,
-            content=content,
-            expanded=False,
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
             styles=dict(self._SECTION_CONTAINED),

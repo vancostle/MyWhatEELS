@@ -65,7 +65,6 @@ class NLLSController:
         self._geometry_error: str | None = None
         self._validated_geometry: ExperimentalGeometry | None = None
         self._watchers: list[Any] = []
-        self._configure_dataset_controls()
         self.bind()
         self.on_source_changed(initial=True)
 
@@ -76,6 +75,9 @@ class NLLSController:
 
     def bind(self) -> None:
         inputs = self.view.elemental_input
+        results_view = getattr(self.view, "elemental_results_view", None)
+        if results_view is not None:
+            results_view.set_main_plot_callback(self._on_main_result_plot_changed)
         self._watchers.extend(
             [
                 inputs["element_atomic_number"].param.watch(self._on_element_changed, "value"),
@@ -83,20 +85,17 @@ class NLLSController:
                 inputs["model_composition"].param.watch(
                     self._on_model_composition_changed, "value"
                 ),
-                inputs["active_area"].param.watch(self._on_active_area_changed, "value"),
-                inputs["default_reference_strategy"].param.watch(
-                    self._on_default_reference_strategy_changed, "value"
+                self.view.elemental_fit_areas_input.param.watch(
+                    self._on_fit_area_selection_changed, "value"
                 ),
-                inputs["fit_range"].param.watch(self._on_fit_range_changed, "value"),
             ]
         )
         self.view.elemental_add_edge_button.on_click(self._on_add_edge)
         self.view.elemental_build_model_button.on_click(self._on_build_model)
-        self.view.elemental_reset_area_button.on_click(self._on_reset_area_model)
-        self.view.elemental_fit_current_reference_button.on_click(
-            self._on_fit_current_reference
+        self.view.elemental_fit_button.on_click(self._on_fit)
+        self.view.elemental_select_all_fit_areas_button.on_click(
+            self._on_select_all_fit_areas
         )
-        self.view.elemental_fit_all_references_button.on_click(self._on_fit_all_references)
         self.view.elemental_use_current_clustering_button.on_click(
             self._on_use_current_clustering
         )
@@ -107,41 +106,15 @@ class NLLSController:
         )
 
     def cleanup(self) -> None:
+        results_view = getattr(self.view, "elemental_results_view", None)
+        if results_view is not None:
+            results_view.set_main_plot_callback(None)
         for watcher in self._watchers:
             try:
                 watcher.inst.param.unwatch(watcher)
             except Exception:
                 pass
         self._watchers.clear()
-
-    def _configure_dataset_controls(self) -> None:
-        dataset = self.app_state.plot_dataset
-        slider = self.view.elemental_input["fit_range"]
-        previous_value = tuple(slider.value) if len(slider.value) == 2 else None
-        if dataset is None or "Eloss" not in getattr(dataset, "coords", {}):
-            slider.disabled = True
-            return
-        eloss = np.asarray(dataset.coords["Eloss"].values, dtype=float)
-        finite = eloss[np.isfinite(eloss)]
-        if finite.size < 2:
-            slider.disabled = True
-            return
-        minimum = float(np.min(finite))
-        maximum = float(np.max(finite))
-        positive_steps = np.abs(np.diff(np.sort(np.unique(finite))))
-        positive_steps = positive_steps[positive_steps > 0.0]
-        step = float(np.median(positive_steps)) if positive_steps.size else 0.1
-        slider.start = minimum
-        slider.end = maximum
-        slider.step = max(step, np.finfo(float).eps)
-        if (
-            previous_value is not None
-            and minimum <= float(previous_value[0]) < float(previous_value[1]) <= maximum
-        ):
-            slider.value = previous_value
-        else:
-            slider.value = (minimum, maximum)
-        slider.disabled = False
 
     def _active_dataset(self):
         return self.app_state.plot_dataset
@@ -154,12 +127,21 @@ class NLLSController:
         )
 
     def _current_fit_range(self) -> FitRange:
-        lower, upper = self.view.elemental_input["fit_range"].value
-        return FitRange(min(float(lower), float(upper)), max(float(lower), float(upper)))
+        dataset = self._active_dataset()
+        if dataset is None or "Eloss" not in getattr(dataset, "coords", {}):
+            raise ValueError("active NLLS source has no Eloss coordinate")
+        eloss = np.asarray(dataset.coords["Eloss"].values, dtype=float).reshape(-1)
+        finite = eloss[np.isfinite(eloss)]
+        if finite.size < 2:
+            raise ValueError("active NLLS source needs at least two finite Eloss values")
+        minimum = float(np.min(finite))
+        maximum = float(np.max(finite))
+        if minimum >= maximum:
+            raise ValueError("active NLLS source has an invalid Eloss range")
+        return FitRange(minimum, maximum)
 
     def on_source_changed(self, initial: bool = False) -> None:
         """Invalidate stale NLLS artifacts and resynchronize all Elemental controls."""
-        self._configure_dataset_controls()
         dataset = self._active_dataset()
         try:
             history = validate_background_subtracted(dataset)
@@ -180,6 +162,7 @@ class NLLSController:
             if not initial or self.workspace is not None:
                 self.app_state.clear_nlls_state()
             self._refresh_results_view()
+            self._clear_clustering_in_main()
             self._update_validation_status()
             self._refresh_element_catalog()
             self._refresh_button_states()
@@ -194,30 +177,92 @@ class NLLSController:
         )
 
         workspace = self.workspace
-        if workspace is None or workspace.dataset_identity != identity:
+        workspace_replaced = workspace is None or workspace.dataset_identity != identity
+        if workspace_replaced:
             workspace = NLLSWorkspace.create(identity, geometry)
             workspace.set_model_composition(
                 workspace.active_area,
                 self.view.elemental_input["model_composition"].value,
             )
-            workspace.set_reference_strategy(
-                "default",
-                self.view.elemental_input["default_reference_strategy"].value,
-            )
             self.app_state.nlls_workspace = workspace
             self.app_state.nlls_results = None
             self.app_state.nlls_run_state = "idle"
             self.app_state.nlls_revision += 1
+            self._clear_clustering_in_main()
         elif workspace.geometry != geometry:
             workspace.geometry = geometry
             workspace.invalidate_all()
             self._publish_workspace()
 
         self._update_validation_status()
-        self._refresh_area_controls()
         self._refresh_element_catalog()
         self._refresh_button_states()
         self._refresh_results_view()
+
+    def _active_visualizer(self):
+        visualizers = getattr(getattr(self.parent, "layout", None), "_chosen_visualizers", ())
+        return visualizers[0] if visualizers else None
+
+    def _on_main_result_plot_changed(self, plot) -> None:
+        """Route the selected Results plot to the large spectrum pane."""
+        visualizer = self._active_visualizer()
+        if visualizer is None:
+            return
+        try:
+            if plot is None:
+                clear = getattr(visualizer, "clear_nlls_reference_result", None)
+                if clear is not None:
+                    clear()
+            else:
+                show = getattr(visualizer, "show_nlls_reference_result", None)
+                if show is not None:
+                    show(plot)
+        except Exception:
+            # A visualization failure must never roll back an already committed fit.
+            pass
+
+    def _clear_clustering_in_main(self) -> None:
+        visualizer = self._active_visualizer()
+        clear = getattr(visualizer, "clear_nlls_clustering", None)
+        if clear is not None:
+            try:
+                clear()
+            except Exception:
+                pass
+
+    def _show_clustering_in_main(self) -> None:
+        """Display current labels and cluster means, never saved normalized centres."""
+        workspace = self.workspace
+        visualizer = self._active_visualizer()
+        if workspace is None or visualizer is None:
+            return
+        show = getattr(visualizer, "show_nlls_clustering", None)
+        if show is None:
+            return
+
+        result = self.app_state.last_clustering_result
+        labels = np.asarray(result["clustering"]["outputs"]["labels"])
+        eloss = np.asarray(self._active_dataset().coords["Eloss"].values, dtype=float)
+        cluster_spectra = []
+        for area_id in workspace.runnable_area_ids:
+            area = workspace.areas[area_id]
+            if area.clustering_label is None:
+                continue
+            try:
+                selection = self._reference_selection_for_area(area_id)
+            except (NLLSError, ValueError, TypeError):
+                continue
+            cluster_spectra.append(
+                (int(area.clustering_label), area.label, selection.spectrum)
+            )
+        try:
+            show(labels, eloss, tuple(cluster_spectra))
+        except Exception as exc:
+            self._notify(
+                "warning",
+                f"Clustering areas were applied, but their plots could not be shown: {exc}",
+                7000,
+            )
 
     def _update_validation_status(self) -> None:
         background = self.view.elemental_background_status
@@ -376,80 +421,71 @@ class NLLSController:
                 selected_valid = False
         self.view.elemental_add_edge_button.disabled = not selected_valid
 
-        clustering_valid = False
+        clustering_definitions: tuple[AreaDefinition, ...] = ()
         if workspace is not None and self.app_state.last_clustering_result is not None:
             try:
-                clustering_valid = bool(self._current_clustering_definitions())
+                clustering_definitions = self._current_clustering_definitions()
             except (NLLSError, ValueError, TypeError):
-                clustering_valid = False
-        self.view.elemental_use_current_clustering_button.disabled = not clustering_valid
-        area = workspace.active_area_spec if workspace is not None else None
+                clustering_definitions = ()
+        clustering_valid = bool(clustering_definitions)
+        clustering_active = bool(workspace and workspace.clustering_active)
+        clustering_button = self.view.elemental_use_current_clustering_button
+        clustering_button.name = (
+            "Use Preprocessed Data" if clustering_active else "Use Current Clustering"
+        )
+        clustering_button.button_type = "warning" if clustering_active else "primary"
+        clustering_button.disabled = not (clustering_active or clustering_valid)
+
+        area = workspace.areas.get("default") if workspace is not None else None
         has_continuum = bool(area and area.continuum_specs)
         self.view.elemental_build_model_button.disabled = not has_continuum
-        self.view.elemental_reset_area_button.disabled = not bool(area and area.edges)
-        current_reference_available = False
-        if workspace is not None and area is not None:
-            try:
-                self._reference_mask_for_area(area.area_id)
-                current_reference_available = True
-            except (NLLSError, ValueError, TypeError):
-                current_reference_available = False
-        self.view.elemental_fit_current_reference_button.disabled = not bool(
-            area
-            and workspace.is_area_built(area.area_id)
-            and current_reference_available
+
+        fit_areas = self.view.elemental_fit_areas_input
+        if clustering_active and workspace is not None:
+            cluster_ids = workspace.runnable_area_ids
+            options = {
+                workspace.areas[area_id].label: area_id for area_id in cluster_ids
+            }
+        else:
+            cluster_ids = tuple(
+                definition.area_id for definition in clustering_definitions
+            )
+            options = {
+                definition.label: definition.area_id
+                for definition in clustering_definitions
+            }
+        previous_options = fit_areas.options if isinstance(fit_areas.options, dict) else {}
+        previous_ids = tuple(previous_options.values())
+        if previous_ids != tuple(cluster_ids):
+            fit_areas.param.update(options=options, value=list(cluster_ids))
+        else:
+            selected = [area_id for area_id in fit_areas.value if area_id in cluster_ids]
+            if selected != list(fit_areas.value):
+                fit_areas.value = selected
+        clustering_settings_available = clustering_active or clustering_valid
+        fit_areas.disabled = not clustering_settings_available
+        self.view.elemental_fit_area_settings_button.disabled = not (
+            clustering_settings_available
         )
-        runnable_area_ids = workspace.runnable_area_ids if workspace is not None else ()
-        all_built = bool(runnable_area_ids) and all(
-            workspace.is_area_built(area_id) for area_id in runnable_area_ids
-        )
-        all_references_available = bool(runnable_area_ids)
-        for area_id in runnable_area_ids:
-            try:
-                self._reference_mask_for_area(area_id)
-            except (NLLSError, ValueError, TypeError):
-                all_references_available = False
-                break
-        needs_reference_fit = any(
-            not self._reference_is_current(area_id) for area_id in runnable_area_ids
-        )
-        self.view.elemental_fit_all_references_button.disabled = not (
-            all_built and all_references_available and needs_reference_fit
+        self.view.elemental_select_all_fit_areas_button.disabled = not (
+            clustering_settings_available
         )
 
-        valid_refs = []
-        if workspace is not None:
-            valid_refs = [
-                area_id
-                for area_id, snapshot in workspace.reference_fits.items()
-                if area_id in runnable_area_ids and self._reference_is_current(area_id)
-            ]
-        fit_areas = self.view.elemental_input["fit_areas"]
-        fit_areas.options = valid_refs
-        fit_areas.value = [area_id for area_id in fit_areas.value if area_id in valid_refs]
-        if valid_refs and not fit_areas.value:
-            fit_areas.value = list(valid_refs)
-        fit_areas.disabled = not bool(valid_refs)
+        target_ids = tuple(fit_areas.value) if clustering_active else ("default",)
+        targets_available = bool(target_ids and workspace is not None)
+        for area_id in target_ids:
+            try:
+                if workspace is None or not workspace.is_area_built(area_id):
+                    targets_available = False
+                    break
+                self._reference_mask_for_area(area_id)
+            except (NLLSError, ValueError, TypeError):
+                targets_available = False
+                break
+        self.view.elemental_fit_button.disabled = not targets_available
         # Multipixel propagation/results are a later phase; never advertise a runnable action yet.
         self.view.elemental_run_nlls_button.disabled = True
         self.view.elemental_cancel_button.disabled = True
-
-    def _refresh_area_controls(self) -> None:
-        workspace = self.workspace
-        if workspace is None:
-            return
-        options = {
-            workspace.areas[area_id].label: area_id
-            for area_id in workspace.runnable_area_ids
-        }
-        active = self.view.elemental_input["active_area"]
-        active.options = options
-        if workspace.active_area not in workspace.runnable_area_ids:
-            workspace.active_area = workspace.runnable_area_ids[0]
-        active.value = workspace.active_area
-        strategy = self.view.elemental_input["default_reference_strategy"]
-        strategy.value = workspace.areas["default"].reference_strategy
-        strategy.disabled = workspace.active_area != "default"
 
     def _publish_workspace(self) -> None:
         self.app_state.nlls_workspace = self.workspace
@@ -524,44 +560,46 @@ class NLLSController:
             workspace = self.workspace
             if workspace is None:
                 raise ValueError("no valid NLLS workspace")
-            definitions = self._current_clustering_definitions()
-            areas = workspace.apply_clustering(definitions)
-            self._publish_workspace()
-            self._refresh_area_controls()
-            self.view.elemental_input["model_composition"].value = (
-                workspace.active_area_spec.model_composition.value
-            )
-            self._notify("success", f"Current clustering applied to {len(areas)} NLLS areas.")
+            if workspace.clustering_active:
+                workspace.clear_clustering()
+                self._publish_workspace()
+                self.view.elemental_input["model_composition"].value = (
+                    workspace.active_area_spec.model_composition.value
+                )
+                self._clear_clustering_in_main()
+                self._notify("success", "Returned to the preprocessed ROI data.")
+            else:
+                definitions = self._current_clustering_definitions()
+                areas = workspace.apply_clustering(definitions)
+                self._publish_workspace()
+                self.view.elemental_input["model_composition"].value = (
+                    workspace.active_area_spec.model_composition.value
+                )
+                self._show_clustering_in_main()
+                self._notify(
+                    "success",
+                    f"Current clustering applied to {len(areas)} NLLS areas.",
+                )
         except (NLLSError, ValueError, TypeError) as exc:
             self._notify("error", f"Cannot use current clustering: {exc}", 8000)
         finally:
             self._refresh_button_states()
 
+    def _on_fit_area_selection_changed(self, event) -> None:
+        self._refresh_button_states()
+
+    def _on_select_all_fit_areas(self, event) -> None:
+        selector = self.view.elemental_fit_areas_input
+        options = selector.options
+        selector.value = list(options.values()) if isinstance(options, dict) else list(options)
+        self._refresh_button_states()
+
     def _on_model_composition_changed(self, event) -> None:
         if self.workspace is None:
             return
-        self.workspace.set_model_composition(self.workspace.active_area, event.new)
+        self.workspace.set_model_composition("default", event.new)
+        self.workspace.refresh_clustering_from_template()
         self._publish_workspace()
-        self._refresh_button_states()
-
-    def _on_default_reference_strategy_changed(self, event) -> None:
-        workspace = self.workspace
-        if workspace is None or "default" not in workspace.areas:
-            return
-        workspace.set_reference_strategy("default", str(event.new))
-        self._publish_workspace()
-        self._refresh_button_states()
-
-    def _on_active_area_changed(self, event) -> None:
-        if self.workspace is None or event.new not in self.workspace.areas:
-            return
-        self.workspace.active_area = str(event.new)
-        self.app_state.nlls_revision += 1
-        composition = self.workspace.active_area_spec.model_composition.value
-        self.view.elemental_input["model_composition"].value = composition
-        self.view.elemental_input["default_reference_strategy"].disabled = (
-            self.workspace.active_area != "default"
-        )
         self._refresh_button_states()
 
     def on_roi_changed(self) -> None:
@@ -571,12 +609,6 @@ class NLLSController:
             return
         if workspace.areas["default"].reference_strategy == "roi_mean":
             workspace.discard_reference("default")
-            self._publish_workspace()
-        self._refresh_button_states()
-
-    def _on_fit_range_changed(self, event) -> None:
-        if self.workspace is not None and event.old != event.new:
-            self.workspace.invalidate_all()
             self._publish_workspace()
         self._refresh_button_states()
 
@@ -638,12 +670,13 @@ class NLLSController:
                         )
                     )
                 workspace.add_edge(
-                    workspace.active_area,
+                    "default",
                     edge,
                     continuum,
                     tuple(fine_structures),
                 )
                 added.append(f"{edge.symbol} {'+'.join(group)}")
+            workspace.refresh_clustering_from_template()
             self._publish_workspace()
             self._refresh_button_states()
             self._notify("success", f"Elemental edge added: {', '.join(added)}")
@@ -668,7 +701,6 @@ class NLLSController:
             eloss,
         )
         workspace.commit_model_build(snapshot)
-        self._publish_workspace()
         return built, snapshot
 
     def _on_build_model(self, event) -> None:
@@ -678,7 +710,9 @@ class NLLSController:
             workspace = self.workspace
             if workspace is None:
                 raise ValueError("no valid NLLS workspace")
-            built, snapshot = self._build_area(workspace.active_area)
+            built, snapshot = self._build_area("default")
+            workspace.refresh_clustering_from_template()
+            self._publish_workspace()
             normalizations = ", ".join(
                 f"{component_id}={curve.normalization_factor:.4g} {curve.units}"
                 for component_id, curve in built.curve_snapshots.items()
@@ -725,40 +759,15 @@ class NLLSController:
         self._publish_workspace()
         return snapshot
 
-    def _on_fit_current_reference(self, event) -> None:
-        workspace = self.workspace
-        if workspace is None:
-            return
-        self.app_state.nlls_run_state = "fitting_references"
-        self.view.elemental_fit_current_reference_button.loading = True
-        area_id = workspace.active_area
-        try:
-            snapshot = self._fit_area(area_id)
-            self.app_state.nlls_run_state = "idle"
-            self._refresh_results_view(preferred_area=snapshot.area_id, activate=True)
-            self._notify(
-                "success",
-                f"Reference fit converged for {snapshot.area_id}: "
-                f"redchi={snapshot.redchi:.6g}, "
-                f"{snapshot.reference_pixel_count} reference pixels.",
-                7000,
-            )
-        except Exception as exc:
-            workspace.discard_reference(area_id)
-            self._publish_workspace()
-            self.app_state.nlls_run_state = "error"
-            self._notify("error", f"Reference fit failed: {exc}", 8000)
-        finally:
-            self.view.elemental_fit_current_reference_button.loading = False
-            self._refresh_button_states()
-
-    def _fit_all_reference_batch(
+    def _fit_reference_batch(
         self,
+        area_ids: tuple[str, ...],
     ) -> tuple[tuple[str, ...], tuple[ReferenceFitFailure, ...]]:
         workspace = self.workspace
         if workspace is None:
             raise ValueError("no valid NLLS workspace")
-        area_ids = workspace.runnable_area_ids
+        if not area_ids:
+            raise ValueError("select at least one clustering area to fit")
         references: dict[str, ReferenceSpectrumSelection] = {}
         preparation_failures: list[ReferenceFitFailure] = []
         for area_id in area_ids:
@@ -808,22 +817,27 @@ class NLLSController:
         )
         return successes, failures
 
-    def _on_fit_all_references(self, event) -> None:
-        if self.workspace is None:
+    def _on_fit(self, event) -> None:
+        workspace = self.workspace
+        if workspace is None:
             return
+        target_ids = (
+            tuple(self.view.elemental_fit_areas_input.value)
+            if workspace.clustering_active
+            else ("default",)
+        )
         self.app_state.nlls_run_state = "fitting_references"
-        self.view.elemental_fit_all_references_button.loading = True
+        self.view.elemental_fit_button.loading = True
         try:
-            successes, failures = self._fit_all_reference_batch()
+            if len(target_ids) == 1:
+                snapshot = self._fit_area(target_ids[0])
+                successes = (snapshot.area_id,)
+                failures: tuple[ReferenceFitFailure, ...] = ()
+            else:
+                successes, failures = self._fit_reference_batch(target_ids)
             self.app_state.nlls_run_state = "error" if failures else "idle"
             if successes:
-                preferred = (
-                    self.workspace.active_area
-                    if self.workspace is not None
-                    and self.workspace.active_area in successes
-                    else successes[0]
-                )
-                self._refresh_results_view(preferred_area=preferred, activate=True)
+                self._refresh_results_view(preferred_area=successes[0], activate=True)
             if failures:
                 failure_summary = "; ".join(
                     f"{failure.area_id}: {failure.message}" for failure in failures
@@ -837,32 +851,16 @@ class NLLSController:
             else:
                 self._notify(
                     "success",
-                    f"Reference fits converged for {', '.join(successes)}.",
+                    f"Reference fit converged for {', '.join(successes)}.",
                 )
         except Exception as exc:
-            workspace = self.workspace
-            if workspace is not None:
-                for area_id in workspace.runnable_area_ids:
-                    workspace.discard_reference(area_id)
+            current_workspace = self.workspace
+            if current_workspace is not None:
+                for area_id in target_ids:
+                    current_workspace.discard_reference(area_id)
                 self._publish_workspace()
             self.app_state.nlls_run_state = "error"
-            self._notify("error", f"Cannot fit all references: {exc}", 10000)
+            self._notify("error", f"Reference fit failed: {exc}", 10000)
         finally:
-            self.view.elemental_fit_all_references_button.loading = False
+            self.view.elemental_fit_button.loading = False
             self._refresh_button_states()
-
-    def _on_reset_area_model(self, event) -> None:
-        workspace = self.workspace
-        if workspace is None:
-            return
-        area_id = workspace.active_area
-        workspace.reset_area(area_id)
-        self._publish_workspace()
-        self.view.elemental_input["model_composition"].value = (
-            workspace.active_area_spec.model_composition.value
-        )
-        self.view.elemental_input["default_reference_strategy"].value = (
-            workspace.areas["default"].reference_strategy
-        )
-        self._notify("success", f"Elemental area {area_id} was reset.")
-        self._refresh_button_states()

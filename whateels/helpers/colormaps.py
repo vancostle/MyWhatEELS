@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Iterable, List, Sequence, Tuple, Union
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib import colormaps
 
 ColorLike = Union[str, Tuple[float, float, float], Tuple[float, float, float, float]]
 
@@ -28,7 +28,7 @@ def get_nclusters_cmap(
     the order specified by ``index_order`` and repeated/cycled if
     ``n_clusters`` is larger than the order length.
     """
-    cmap = plt.cm.get_cmap(cmap_name)
+    cmap = colormaps.get_cmap(cmap_name)
 
     # If the Matplotlib colormap exposes a .colors sequence (ListedColormap),
     # use it directly so discrete palettes like 'tab20' preserve their entries.

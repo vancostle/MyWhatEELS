@@ -350,6 +350,12 @@ class ClusteringAreaTests(unittest.TestCase):
         self.assertEqual(workspace.areas["cluster_0"].mask_fingerprint, fingerprint)
         np.testing.assert_array_equal(workspace.areas["cluster_0"].mask, mask)
 
+        workspace.clear_clustering()
+        self.assertFalse(workspace.clustering_active)
+        self.assertEqual(workspace.runnable_area_ids, ("default",))
+        self.assertEqual(workspace.active_area, "default")
+        self.assertEqual(set(workspace.areas), {"default"})
+
     def test_cluster_reference_is_recomputed_from_active_cube_not_saved_centres(self):
         areas = ClusteringAreaAdapter.from_result(
             _clustering_result(self.labels), self.identity, (3, 4)

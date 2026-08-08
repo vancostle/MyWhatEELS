@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from html import escape
 import math
-from typing import Mapping
+from collections.abc import Callable, Mapping
 
 import holoviews as hv
 import numpy as np
@@ -34,6 +34,7 @@ class NLLSResultsView(pn.Column):
         self._snapshots: dict[str, ReferenceFitSnapshot] = {}
         self._area_labels: dict[str, str] = {}
         self._eloss = np.array([], dtype=float)
+        self._main_plot_callback: Callable[[object | None], None] | None = None
 
         self._area_select = pn.widgets.Select(
             name="Reference area",
@@ -45,22 +46,31 @@ class NLLSResultsView(pn.Column):
         )
         self._layer_selector = pn.widgets.CheckButtonGroup(
             name="Visible curves",
-            options=["Reference", "Best fit", "Components"],
-            value=["Reference", "Best fit", "Components"],
+            options=["Reference", "Best fit", "Components", "Residual"],
+            value=["Reference", "Best fit", "Components", "Residual"],
             button_type="default",
             disabled=True,
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 0, 8, 0),
             stylesheets=["""
                 :host .bk-btn-group {
-                    display: flex !important;
-                    flex-wrap: wrap !important;
+                    display: grid !important;
+                    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    grid-auto-rows: 32px !important;
+                    gap: 4px !important;
+                    width: 100% !important;
                     max-width: 100% !important;
                     min-width: 0 !important;
                 }
-                :host .bk-btn {
-                    flex: 1 1 auto !important;
+                :host .bk-btn-group .bk-btn {
+                    box-sizing: border-box !important;
+                    width: 100% !important;
+                    height: 32px !important;
+                    min-height: 32px !important;
+                    max-height: 32px !important;
                     min-width: 0 !important;
+                    margin: 0 !important;
+                    border-radius: 4px !important;
                 }
             """],
         )
@@ -90,13 +100,6 @@ class NLLSResultsView(pn.Column):
             margin=(8, 0, 0, 0),
             visible=False,
         )
-        self._parameter_pane = pn.pane.HTML(
-            "",
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(10, 0, 0, 0),
-            visible=False,
-        )
-
         controls = pn.Column(
             self._area_select,
             pn.pane.Markdown(
@@ -113,9 +116,6 @@ class NLLSResultsView(pn.Column):
             self._placeholder,
             controls,
             self._summary_pane,
-            self._plot_pane,
-            self._residual_pane,
-            self._parameter_pane,
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
             styles={
@@ -164,9 +164,11 @@ class NLLSResultsView(pn.Column):
     def residual_pane(self) -> pn.pane.HoloViews:
         return self._residual_pane
 
-    @property
-    def parameter_pane(self) -> pn.pane.HTML:
-        return self._parameter_pane
+    def set_main_plot_callback(
+        self, callback: Callable[[object | None], None] | None
+    ) -> None:
+        """Publish the selected result plot to the main spectrum panel."""
+        self._main_plot_callback = callback
 
     def clear(self, message: str | None = None) -> None:
         """Remove stale results and restore the empty-state call to action."""
@@ -184,7 +186,7 @@ class NLLSResultsView(pn.Column):
         self._summary_pane.visible = False
         self._plot_pane.visible = False
         self._residual_pane.visible = False
-        self._parameter_pane.visible = False
+        self._publish_main_plot(None)
 
     def render(
         self,
@@ -239,13 +241,21 @@ class NLLSResultsView(pn.Column):
             return
 
         self._summary_pane.object = self._summary_html(snapshot)
-        self._plot_pane.object = self._fit_overlay(snapshot)
-        self._residual_pane.object = self._residual_overlay(snapshot)
-        self._parameter_pane.object = self._parameter_table_html(snapshot)
+        fit_plot = self._fit_overlay(snapshot)
+        residual_plot = self._residual_overlay(snapshot)
+        self._plot_pane.object = fit_plot
+        self._residual_pane.object = residual_plot
         self._summary_pane.visible = True
-        self._plot_pane.visible = True
-        self._residual_pane.visible = True
-        self._parameter_pane.visible = True
+        # These panes only retain the plot objects for inspection/backwards
+        # compatibility. Rendering happens in the large main spectrum panel.
+        self._plot_pane.visible = False
+        self._residual_pane.visible = False
+        self._publish_main_plot(fit_plot)
+
+    def _publish_main_plot(self, plot) -> None:
+        callback = self._main_plot_callback
+        if callback is not None:
+            callback(plot)
 
     def _axis_for(self, values: np.ndarray) -> np.ndarray:
         values = np.asarray(values).reshape(-1)
@@ -310,6 +320,24 @@ class NLLSResultsView(pn.Column):
                         alpha=0.9,
                     )
                 )
+        if "Residual" in layers:
+            curves.extend(
+                [
+                    self._curve(
+                        self._axis_for(snapshot.residual),
+                        snapshot.residual,
+                        "Residual",
+                        color="#dc3545",
+                        line_width=1.5,
+                    ),
+                    hv.HLine(0.0).opts(
+                        color="#666666",
+                        line_dash="dashed",
+                        line_width=1,
+                        alpha=0.55,
+                    ),
+                ]
+            )
         if not curves:
             curves.append(self._empty_curve("Reference fit"))
 
@@ -332,7 +360,6 @@ class NLLSResultsView(pn.Column):
         return hv.Overlay(curves).opts(
             hv.opts.Overlay(
                 responsive=True,
-                height=275,
                 shared_axes=False,
                 framewise=True,
                 show_legend=True,
@@ -359,7 +386,6 @@ class NLLSResultsView(pn.Column):
         return (residual * zero).opts(
             hv.opts.Overlay(
                 responsive=True,
-                height=170,
                 shared_axes=False,
                 framewise=True,
                 show_legend=False,
@@ -429,46 +455,6 @@ class NLLSResultsView(pn.Column):
           <div style="color:#666;font-size:0.68rem;text-transform:uppercase;
                       letter-spacing:0.03em;">{label}</div>
           <div style="font-size:0.84rem;font-weight:600;overflow-wrap:anywhere;">{value}</div>
-        </div>
-        """
-
-    def _parameter_table_html(self, snapshot: ReferenceFitSnapshot) -> str:
-        rows = []
-        for parameter in snapshot.params:
-            name = escape(str(parameter.get("name", "")))
-            value = self._format_number(parameter.get("value"))
-            stderr = self._format_number(parameter.get("stderr"), missing="—")
-            bounds = (
-                f"{self._format_number(parameter.get('min'))} … "
-                f"{self._format_number(parameter.get('max'))}"
-            )
-            state = "free" if parameter.get("vary", False) else "fixed"
-            rows.append(
-                "<tr>"
-                f"<td>{name}</td><td>{value}</td><td>{stderr}</td>"
-                f"<td>{bounds}</td><td>{state}</td>"
-                "</tr>"
-            )
-        rows_html = "".join(rows) or (
-            '<tr><td colspan="5" style="text-align:center;">No fitted parameters</td></tr>'
-        )
-        return f"""
-        <div style="box-sizing:border-box;max-width:100%;border-radius:4px;
-                    box-shadow:0 0 5px #d8d8d8;background:#f7f7f7;overflow:hidden;">
-          <div style="background:{self._SECONDARY_COLOR};color:white;padding:8px 10px;
-                      font-weight:600;text-align:center;">Fitted parameters</div>
-          <div style="max-width:100%;overflow-x:auto;">
-            <table style="border-collapse:collapse;width:100%;font-size:0.72rem;">
-              <thead><tr style="background:#eeeeee;">
-                <th style="text-align:left;padding:6px;">Parameter</th>
-                <th style="text-align:right;padding:6px;">Value</th>
-                <th style="text-align:right;padding:6px;">Std. err.</th>
-                <th style="text-align:right;padding:6px;">Bounds</th>
-                <th style="text-align:left;padding:6px;">State</th>
-              </tr></thead>
-              <tbody>{rows_html}</tbody>
-            </table>
-          </div>
         </div>
         """
 

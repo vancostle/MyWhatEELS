@@ -31,7 +31,7 @@
        (see the inline `styles=` in right_sidebar_layout.py, which is the only way to reach
        them: everything below is rendered inside a Bokeh shadow root that this file cannot
        cross). This is the last-resort guard, not the fix. */
-    overflow-x: hidden;
+    overflow: hidden;
 
     & > .nav.flex-column {
         height: 100%;

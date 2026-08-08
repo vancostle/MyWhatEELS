@@ -54,6 +54,9 @@ FittingModel, ComponentItem = _load_manual_fitting_symbols()
 FittingRightSidebarLayout = importlib.import_module(
     "whateels.pages.fitting.MVC.view.layouts.right_sidebar_layout"
 ).FittingRightSidebarLayout
+SpectrumImageVisualizer = importlib.import_module(
+    "whateels.pages.fitting.MVC.view.plots.spectrum_image_plot"
+).SpectrumImageVisualizer
 
 
 def _load_nlls_controller():
@@ -147,7 +150,7 @@ class ManualFittingRegressionTests(unittest.TestCase):
     def test_fitting_tooltips_open_left_and_clustering_file_input_is_removed(self):
         layout = FittingRightSidebarLayout(self.model)
         tooltips = layout.select(pn.widgets.TooltipIcon)
-        self.assertGreaterEqual(len(tooltips), 7)
+        self.assertGreaterEqual(len(tooltips), 4)
         self.assertTrue(
             all(
                 isinstance(icon.value, Tooltip) and icon.value.position == "left"
@@ -160,7 +163,10 @@ class ManualFittingRegressionTests(unittest.TestCase):
     def test_oos_method_and_status_information_is_fully_removed(self):
         layout = FittingRightSidebarLayout(self.model)
         details = layout.select(SimpleDetails)
-        self.assertNotIn("OOS Status", {detail._title for detail in details})
+        detail_titles = {detail._title for detail in details}
+        self.assertNotIn("OOS Status", detail_titles)
+        self.assertNotIn("Areas", detail_titles)
+        self.assertNotIn("Run Setup", detail_titles)
         static_names = {
             str(widget.name) for widget in layout.select(pn.widgets.StaticText)
         }
@@ -170,6 +176,25 @@ class ManualFittingRegressionTests(unittest.TestCase):
         )
         self.assertNotIn("**OOS status:**", markdown)
         self.assertNotIn("Load Clustering JSON", markdown)
+        button_names = {button.name for button in layout.select(pn.widgets.Button)}
+        self.assertNotIn("Reset Area", button_names)
+        self.assertNotIn("Fit Current Reference", button_names)
+        self.assertNotIn("Fit All References", button_names)
+        self.assertIn("Fit", button_names)
+        fit_rows = [
+            row
+            for row in layout.select(pn.Row)
+            if layout.elemental_fit_button in row.objects
+        ]
+        self.assertTrue(fit_rows)
+        self.assertIn(
+            layout.elemental_fit_area_settings_button,
+            fit_rows[0].objects,
+        )
+        self.assertIn(
+            layout.elemental_use_current_clustering_button,
+            layout._elemental_fit_areas_modal.objects,
+        )
 
     def test_results_tab_uses_reactive_elemental_results_view(self):
         layout = FittingRightSidebarLayout(self.model)
@@ -181,6 +206,63 @@ class ManualFittingRegressionTests(unittest.TestCase):
             "Elemental NLLS results will be shown here once available.",
             "\n".join(str(pane.object) for pane in layout.select(pn.pane.Markdown)),
         )
+
+    def test_elemental_actions_use_a_full_height_scroll_layout(self):
+        layout = FittingRightSidebarLayout(self.model)
+        self.assertEqual(layout.sizing_mode, "stretch_both")
+        self.assertEqual(layout.fitting_tabs.sizing_mode, "stretch_both")
+        elemental_tab = layout.fitting_tabs[1]
+        self.assertEqual(elemental_tab.margin, 0)
+        self.assertEqual(elemental_tab.styles.get("height"), "100%")
+        self.assertEqual(elemental_tab.styles.get("min-height"), "0")
+        columns = elemental_tab.select(pn.Column)
+        input_container = next(
+            column
+            for column in columns
+            if "elemental-input-container" in column.css_classes
+        )
+        action_container = next(
+            column for column in columns if "elemental-actions" in column.css_classes
+        )
+        self.assertEqual(input_container.styles.get("flex"), "1 1 0")
+        self.assertEqual(input_container.styles.get("overflow-y"), "auto")
+        self.assertEqual(action_container.styles.get("flex-shrink"), "0")
+        self.assertEqual(action_container.styles.get("padding"), "10px")
+
+    def test_main_panels_switch_from_image_and_roi_to_clustering_and_result(self):
+        visualizer = SpectrumImageVisualizer(self.model, self.dataset)
+        try:
+            labels = np.array([[0, 0, 1], [0, 1, 1]], dtype=int)
+            energy = np.asarray(self.dataset.coords["Eloss"], dtype=float)
+            cube = np.asarray(self.dataset["ElectronCount"], dtype=float)
+            spectra = (
+                (0, "Cluster 0", cube[labels == 0].mean(axis=0)),
+                (1, "Cluster 1", cube[labels == 1].mean(axis=0)),
+            )
+            visualizer.show_nlls_clustering(labels, energy, spectra)
+            self.assertTrue(visualizer.nlls_clustering_active)
+            self.assertIs(visualizer.paneA.object, visualizer._nlls_clustering_label_plot)
+            self.assertIs(
+                visualizer._paneB_pipe.data,
+                visualizer._nlls_clustering_spectra_plot,
+            )
+
+            fit_plot = hv.Overlay(
+                [hv.Curve((energy, spectra[0][2]), label="Reference")]
+            )
+            visualizer.show_nlls_reference_result(fit_plot)
+            self.assertTrue(visualizer.nlls_result_active)
+            self.assertIs(visualizer._paneB_pipe.data, fit_plot)
+
+            visualizer.clear_nlls_reference_result()
+            self.assertFalse(visualizer.nlls_result_active)
+            self.assertIs(
+                visualizer._paneB_pipe.data,
+                visualizer._nlls_clustering_spectra_plot,
+            )
+            self.assertIsNotNone(visualizer.create_plots().get_root())
+        finally:
+            visualizer.cleanup()
 
 
 class ElementalReferenceControllerTests(unittest.TestCase):
@@ -262,7 +344,27 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             }
         }
         self.layout = FittingRightSidebarLayout(FittingModel())
-        self.visualizer = SimpleNamespace(_region_pairs=[(0, 0), (1, 0)])
+        self.visualizer = SimpleNamespace(
+            _region_pairs=[(0, 0), (1, 0)],
+            main_result_plot=None,
+            clustering_payload=None,
+        )
+        self.visualizer.show_nlls_reference_result = (
+            lambda plot: setattr(self.visualizer, "main_result_plot", plot)
+        )
+        self.visualizer.clear_nlls_reference_result = (
+            lambda: setattr(self.visualizer, "main_result_plot", None)
+        )
+        self.visualizer.show_nlls_clustering = (
+            lambda labels, energy, spectra: setattr(
+                self.visualizer,
+                "clustering_payload",
+                (np.asarray(labels), np.asarray(energy), spectra),
+            )
+        )
+        self.visualizer.clear_nlls_clustering = (
+            lambda: setattr(self.visualizer, "clustering_payload", None)
+        )
         parent = SimpleNamespace(
             layout=SimpleNamespace(_chosen_visualizers=[self.visualizer])
         )
@@ -286,8 +388,13 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         )
 
     def test_fit_current_uses_committed_roi_as_default_reference(self):
-        self.assertFalse(self.layout.elemental_fit_current_reference_button.disabled)
-        self.controller._on_fit_current_reference(None)
+        self.assertFalse(self.layout.elemental_fit_button.disabled)
+        self.assertFalse(self.layout.elemental_fit_area_settings_button.disabled)
+        self.assertEqual(
+            set(self.layout.elemental_fit_areas_input.options.values()),
+            {"cluster_0", "cluster_1"},
+        )
+        self.controller._on_fit(None)
         snapshot = self.controller.workspace.reference_fits["default"]
         self.assertEqual(snapshot.reference_strategy, "roi_mean")
         self.assertEqual(snapshot.reference_pixel_count, 2)
@@ -297,13 +404,24 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(self.layout.fitting_tabs.active, 2)
         self.assertEqual(results.area_select.value, "default")
         self.assertEqual(set(results.area_select.options.values()), {"default"})
-        self.assertTrue(results.plot_pane.visible)
-        self.assertTrue(results.residual_pane.visible)
+        self.assertFalse(results.plot_pane.visible)
+        self.assertFalse(results.residual_pane.visible)
         self.assertIsInstance(results.plot_pane.object, hv.Overlay)
         self.assertIsInstance(results.residual_pane.object, hv.Overlay)
+        self.assertIs(self.visualizer.main_result_plot, results.plot_pane.object)
+        self.assertEqual(
+            results.layer_selector.options,
+            ["Reference", "Best fit", "Components", "Residual"],
+        )
+        residual_curve = results.plot_pane.object.get(("Curve", "Residual"))
+        self.assertIsNotNone(residual_curve)
+        results.layer_selector.value = ["Residual"]
+        self.assertIs(self.visualizer.main_result_plot, results.plot_pane.object)
+        self.assertIsNotNone(results.plot_pane.object.get(("Curve", "Residual")))
+        results.layer_selector.value = ["Reference", "Best fit", "Components", "Residual"]
         self.assertIn("Reduced χ²", results.summary_pane.object)
         self.assertIn("Current ROI mean", results.summary_pane.object)
-        self.assertIn("Fitted parameters", results.parameter_pane.object)
+        self.assertFalse(hasattr(results, "parameter_pane"))
 
         self.visualizer._region_pairs = [(0, 1), (0, 2)]
         self.controller.on_roi_changed()
@@ -312,32 +430,54 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(results.area_select.options, {})
         self.assertFalse(results.plot_pane.visible)
 
-    def test_central_reference_option_and_reset_area(self):
-        self.layout.elemental_input["default_reference_strategy"].value = "central_mean"
-        self.visualizer._region_pairs = []
-        self.assertFalse(self.layout.elemental_fit_current_reference_button.disabled)
-        self.controller._on_fit_current_reference(None)
+    def test_roi_mode_uses_automatic_full_energy_range(self):
+        self.assertNotIn("fit_range", self.layout.elemental_input)
+        self.assertNotIn("active_area", self.layout.elemental_input)
+        self.assertNotIn("default_reference_strategy", self.layout.elemental_input)
+        self.assertEqual(
+            set(self.layout.elemental_fit_areas_input.options.values()),
+            {"cluster_0", "cluster_1"},
+        )
+        self.controller._on_fit(None)
         snapshot = self.controller.workspace.reference_fits["default"]
-        self.assertEqual(snapshot.reference_strategy, "central_mean")
-        self.assertGreater(snapshot.reference_pixel_count, 0)
+        self.assertEqual(snapshot.reference_strategy, "roi_mean")
+        self.assertEqual(snapshot.fit_range.minimum, float(np.min(self.eloss)))
+        self.assertEqual(snapshot.fit_range.maximum, float(np.max(self.eloss)))
 
-        self.controller._on_reset_area_model(None)
-        workspace = self.controller.workspace
-        self.assertEqual(workspace.areas["default"].edges, ())
-        self.assertNotIn("default", workspace.model_builds)
-        self.assertNotIn("default", workspace.reference_fits)
-        self.assertTrue(self.layout.elemental_build_model_button.disabled)
-        self.assertTrue(self.layout.elemental_fit_current_reference_button.disabled)
+    def test_clustering_settings_are_disabled_without_a_compatible_result(self):
+        self.state.last_clustering_result = None
+        self.assertTrue(
+            self.layout.elemental_use_current_clustering_button.disabled
+        )
+        self.assertTrue(self.layout.elemental_fit_area_settings_button.disabled)
+        self.assertEqual(self.layout.elemental_fit_areas_input.options, {})
 
     def test_fit_all_fits_every_cluster_and_isolates_a_failed_cluster(self):
-        self.controller._on_fit_current_reference(None)
+        self.controller._on_fit(None)
         self.controller._on_use_current_clustering(None)
         self.assertEqual(
             self.controller.workspace.runnable_area_ids,
             ("cluster_0", "cluster_1"),
         )
-        self.assertFalse(self.layout.elemental_fit_all_references_button.disabled)
-        self.controller._on_fit_all_references(None)
+        clustering_labels, clustering_energy, clustering_spectra = (
+            self.visualizer.clustering_payload
+        )
+        np.testing.assert_array_equal(clustering_labels, self.labels)
+        np.testing.assert_allclose(clustering_energy, self.eloss)
+        self.assertEqual(len(clustering_spectra), 2)
+        self.assertEqual(
+            self.layout.elemental_fit_areas_input.value,
+            ["cluster_0", "cluster_1"],
+        )
+        self.assertFalse(self.layout.elemental_fit_area_settings_button.disabled)
+        self.layout.elemental_fit_areas_input.value = ["cluster_0"]
+        self.controller._on_select_all_fit_areas(None)
+        self.assertEqual(
+            self.layout.elemental_fit_areas_input.value,
+            ["cluster_0", "cluster_1"],
+        )
+        self.assertFalse(self.layout.elemental_fit_button.disabled)
+        self.controller._on_fit(None)
         references = self.controller.workspace.reference_fits
         self.assertEqual(
             {"default", "cluster_0", "cluster_1"}, set(references)
@@ -353,7 +493,7 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         )
 
         self.dataset["ElectronCount"].values[self.labels == 1, :] = np.nan
-        self.controller._on_fit_all_references(None)
+        self.controller._on_fit(None)
         references = self.controller.workspace.reference_fits
         self.assertIn("cluster_0", references)
         self.assertNotIn("cluster_1", references)
@@ -361,6 +501,48 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(
             set(results.area_select.options.values()), {"default", "cluster_0"}
         )
+
+        self.controller._on_use_current_clustering(None)
+        self.assertEqual(self.controller.workspace.runnable_area_ids, ("default",))
+        self.assertEqual(
+            self.layout.elemental_use_current_clustering_button.name,
+            "Use Current Clustering",
+        )
+        self.assertFalse(self.layout.elemental_fit_area_settings_button.disabled)
+        self.assertEqual(
+            set(self.layout.elemental_fit_areas_input.options.values()),
+            {"cluster_0", "cluster_1"},
+        )
+        self.assertIsNone(self.visualizer.clustering_payload)
+
+    def test_model_setup_remains_shared_when_clustering_is_enabled_first(self):
+        workspace = self.controller.workspace
+        workspace.reset_area("default")
+        workspace.set_model_composition("default", "continuum_only")
+        self.controller._publish_workspace()
+        self.controller._refresh_button_states()
+
+        self.controller._on_use_current_clustering(None)
+        self.assertTrue(workspace.clustering_active)
+        self.assertFalse(
+            any(
+                workspace.is_area_built(area_id)
+                for area_id in workspace.runnable_area_ids
+            )
+        )
+
+        self.controller._on_add_edge(None)
+        self.assertTrue(workspace.areas["default"].continuum_specs)
+        self.assertTrue(
+            all(workspace.areas[area_id].continuum_specs for area_id in workspace.runnable_area_ids)
+        )
+
+        self.controller._on_build_model(None)
+        self.assertTrue(workspace.is_area_built("default"))
+        self.assertTrue(
+            all(workspace.is_area_built(area_id) for area_id in workspace.runnable_area_ids)
+        )
+        self.assertFalse(self.layout.elemental_fit_button.disabled)
 
 
 if __name__ == "__main__":

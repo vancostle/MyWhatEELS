@@ -213,3 +213,64 @@ Estado: completada.
 - Cobertura MVC añadida para placeholder inicial, apertura automática de la pestaña, overlays de fit/residual, resumen ROI, tabla de parámetros, selector ROI/clusters y retirada visual de clusters fallidos o referencias invalidadas.
 - Suite total actual: 32 pruebas, todas correctas.
 - Smoke de render Panel/Bokeh correcto: tanto el sidebar completo como `NLLSResultsView` generan un root de documento y el gráfico publicado es un `holoviews.Overlay`.
+
+## Continuación — resultados en los paneles principales
+
+### T16 — Clustering y resultados a tamaño completo
+
+Estado: completada.
+
+- `Use Current Clustering` sustituye el mapa integrado original del panel izquierdo por un mapa categórico de etiquetas, con la misma paleta discreta `tab20b` usada por Clustering y colorbar de clusters.
+- El panel espectral derecho pasa a mostrar las referencias medias reales de todos los clusters. Se recalculan sobre `ElectronCount` de la fuente NLLS activa; los `centres` normalizados del JSON/memoria de Clustering siguen sin usarse.
+- `Fit Current Reference` y `Fit All References` conservan la navegación automática a `Results`, pero el overlay `Reference / Best fit / Components` se publica ahora en el panel espectral principal, usando todo el ancho y alto disponibles.
+- Eliminados del cuerpo visible de la barra lateral los dos gráficos pequeños de fit/residual. `Results` conserva selector de área, resumen y parámetros, y añade `Main plot: Fit curves / Residual`; ambas opciones reutilizan el panel principal a tamaño completo.
+- Los controles `Reference / Best fit / Components` actualizan en vivo el gráfico principal. Se deshabilitan mientras se visualiza el residual.
+- Mientras el mapa de clustering está activo, hover/click no sustituyen accidentalmente las referencias de cluster o el resultado NLLS por un espectro de píxel.
+- Al invalidar un resultado por ROI, reset, rango o modelo, el panel principal restaura las referencias de clusters si hay clustering; en caso contrario recupera el espectro ROI/hover.
+- Cambiar a un cluster todavía no ajustado restaura sus referencias de clustering en vez de enseñar silenciosamente el fit ROI/default conservado.
+
+### T17 — Verificación del intercambio de paneles
+
+Estado: completada.
+
+- Añadida cobertura del visualizador real para la secuencia imagen/ROI → labels/referencias de clustering → resultado NLLS → referencias de clustering.
+- Añadida cobertura del controlador para publicación del overlay principal, conmutación a residual, bloqueo de capas y payload de clustering con dos medias espectrales.
+- Suite total actual: 33 pruebas, todas correctas; `compileall`, render Panel/Bokeh y `git diff --check` correctos.
+
+### T18 — Residual como capa del gráfico principal
+
+Estado: completada.
+
+- Eliminado el selector separado `Fit curves / Residual`.
+- `Residual` pasa a ser la cuarta capa conmutable junto a `Reference`, `Best fit` y `Components`; puede visualizarse simultáneamente con cualquiera de ellas.
+- Los cuatro botones conservan su tamaño y estilo, organizados como una cuadrícula 2×2 en `Results`.
+- El residual se dibuja en rojo sobre el mismo eje de cuentas e incluye una línea horizontal discontinua en cero.
+- Se conserva internamente el plot de residual aislado para inspección/compatibilidad, pero la interfaz publica siempre la combinación de capas en el panel principal grande.
+
+### T19 — Flujo Fit unificado y selección de áreas en modal
+
+Estado: completada.
+
+- Eliminada por completo la tarjeta `Fitted parameters` de `Results`; los snapshots siguen conservando sus parámetros para cálculo, trazabilidad y futuras exportaciones, pero la interfaz ya no los muestra.
+- Normalizada la cuadrícula 2×2 de `Reference / Best fit / Components / Residual`: las cuatro celdas fuerzan la misma altura, margen, radio y ancho.
+- Eliminados `Reset Area`, `Fit Current Reference`, `Fit All References`, el `SimpleDetails` de `Areas` y el `SimpleDetails` de `Run Setup`.
+- `Use Current Clustering` vive ahora en `Model Setup` y funciona como acción reversible: al activarlo muestra etiquetas/espectros de clusters y pasa a `Use Preprocessed Data`; al pulsarlo de nuevo elimina las áreas segmentadas y restaura el ROI preprocesado conservando el modelo y fit válidos de `default`.
+- Añadido un único botón `Fit`. En modo ROI ajusta automáticamente `default`; en modo clustering ajusta exactamente los clusters elegidos.
+- `Model Setup` conserva un modelo compartido en `default`: si se activa clustering antes de añadir aristas o construir, los cambios se vuelven a clonar sobre todas las máscaras. Así no quedan clusters imposibles de construir después de retirar el antiguo selector `Active Area`.
+- Añadido junto a `Fit` el mismo icono SVG de ajustes empleado por UMAP. Abre el modal `Select Area to run fit`, con `Areas to fit`, `Select all` y cierre `Okay.`.
+- El modal permanece deshabilitado en modo ROI y se habilita solamente cuando se ha aplicado un clustering. Al entrar en clustering inicializa la selección con todos los clusters; el usuario puede reducirla y `Select all` la repone completa.
+- Eliminado el slider `Fit Range` y todos sus watchers/configuración. Build, validación y fit derivan ahora un único rango automático del mínimo y máximo finitos del eje `Eloss` activo.
+- Añadido `NLLSWorkspace.clear_clustering()` para volver de forma explícita y comprobable al área ROI `default`, descartando áreas/builds/fits de clusters sin tocar los artefactos válidos del ROI.
+- Verificación actual: 34 pruebas correctas para MVC/manual y dominio NLLS, incluida selección parcial/completa, configuración compartida posterior al clustering, fallo aislado de cluster, retorno a ROI, rango automático y ausencia de controles retirados; `git diff --check` correcto.
+
+### T20 — Clustering dentro del modal y acciones ancladas
+
+Estado: completada.
+
+- El icono de ajustes permanece junto a `Fit` y `Use Current Clustering / Use Preprocessed Data` se ha trasladado al interior del modal `Select Area to run fit`.
+- El modal puede abrirse en modo ROI siempre que exista un resultado de clustering compatible. Sus clusters se cargan antes de activar el modo y la selección se conserva al pulsar `Use Current Clustering` desde el propio modal.
+- El icono, el botón de clustering, `Areas to fit` y `Select all` sólo se deshabilitan cuando no existe un clustering compatible ni hay áreas de clustering activas.
+- Rehecha la cadena de altura del sidebar (`FittingRightSidebarLayout` → contenedor raíz → `Tabs` → pestaña Elemental) con `stretch_both`, altura completa y `min-height: 0`.
+- El bloque central de estados/secciones absorbe el espacio libre y dispone de scroll propio; el bloque de acciones no encoge y queda anclado al fondo con padding completo. Se sustituyó el margen superior externo de la pestaña por padding interno para que no sume altura y corte la última fila.
+- El `right-sidebar` exterior oculta su overflow: el único scroll vertical del contenido Elemental queda ahora en el contenedor central, no alrededor de los botones de acción.
+- Verificación actual: 36 pruebas correctas, incluidas disponibilidad previa del modal, ausencia de clustering compatible, composición interna del modal, vecindad del icono con `Fit` y contrato de altura/scroll; `git diff --check` correcto.

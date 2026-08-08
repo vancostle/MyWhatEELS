@@ -10,7 +10,7 @@ class Fitting(GeneralPageTemplate):
 
     def __init__(self):
         model = FittingModel()
-        view = FittingView(model)   
+        view = FittingView(model, custom_page=self)
         FittingController(model, view)
         
         app_state = CacheManager.get_cached_app_state()
@@ -20,5 +20,6 @@ class Fitting(GeneralPageTemplate):
             main=[view.main],
             sidebar=[view.left_sidebar] if app_state.metadata is not None else [],
             right_sidebar=[] if app_state.metadata is None else [view.right_sidebar],
+            modal=view.modals,
             collapsed_sidebar=True,
         )
