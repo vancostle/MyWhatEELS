@@ -2,6 +2,7 @@ import panel as pn
 
 from bokeh.models import Tooltip
 from whateels.components import ToggleButton, SimpleDetails
+from ..components.nlls_results_view import NLLSResultsView
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -81,6 +82,7 @@ class FittingRightSidebarLayout(pn.Column):
             css_classes=["background-subtraction-switch"],
         )
         self._fitting_tabs: Optional[pn.Tabs] = None
+        self._elemental_results_view = NLLSResultsView()
 
         # --- Manual tab widgets ------------------------------------------
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
@@ -387,6 +389,11 @@ class FittingRightSidebarLayout(pn.Column):
     def elemental_cancel_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Cancel' button."""
         return self._elemental_cancel_button
+
+    @property
+    def elemental_results_view(self) -> NLLSResultsView:
+        """Access the reactive Elemental NLLS reference-results view."""
+        return self._elemental_results_view
 
     # ------------------------------------------------------------------
     # Layout composition
@@ -893,12 +900,19 @@ class FittingRightSidebarLayout(pn.Column):
         )
 
     def _create_results_tab(self) -> pn.Column:
-        """Build the 'Results' tab. Placeholder pending Elemental NLLS results implementation."""
+        """Build the scrollable Elemental NLLS reference-results tab."""
         results_tab = pn.Column(
-            pn.pane.Markdown("Elemental NLLS results will be shown here once available."),
+            self._elemental_results_view,
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["results-tab"],
             margin=(15, 0, 0, 0),
-            styles={'height': '100%', 'max-width': '100%', 'min-width': '0', 'overflow': 'hidden'},
+            styles={
+                'box-sizing': 'border-box',
+                'height': '100%',
+                'max-width': '100%',
+                'min-width': '0',
+                'overflow-x': 'hidden',
+                'overflow-y': 'auto',
+            },
         )
         return results_tab

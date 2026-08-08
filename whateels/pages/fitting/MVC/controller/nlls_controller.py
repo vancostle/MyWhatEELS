@@ -179,6 +179,7 @@ class NLLSController:
         if self._source_error or self._geometry_error or geometry is None:
             if not initial or self.workspace is not None:
                 self.app_state.clear_nlls_state()
+            self._refresh_results_view()
             self._update_validation_status()
             self._refresh_element_catalog()
             self._refresh_button_states()
@@ -216,6 +217,7 @@ class NLLSController:
         self._refresh_area_controls()
         self._refresh_element_catalog()
         self._refresh_button_states()
+        self._refresh_results_view()
 
     def _update_validation_status(self) -> None:
         background = self.view.elemental_background_status
@@ -453,6 +455,47 @@ class NLLSController:
         self.app_state.nlls_workspace = self.workspace
         self.app_state.nlls_revision += 1
         self.app_state.nlls_results = None
+        self._refresh_results_view()
+
+    def _refresh_results_view(
+        self,
+        preferred_area: str | None = None,
+        *,
+        activate: bool = False,
+    ) -> None:
+        """Render only reference snapshots that still match the active workspace."""
+        results_view = getattr(self.view, "elemental_results_view", None)
+        workspace = self.workspace
+        dataset = self._active_dataset()
+        if (
+            results_view is None
+            or workspace is None
+            or dataset is None
+            or "Eloss" not in getattr(dataset, "coords", {})
+        ):
+            if results_view is not None:
+                results_view.clear()
+            return
+
+        valid_snapshots = {
+            area_id: snapshot
+            for area_id, snapshot in workspace.reference_fits.items()
+            if area_id in workspace.areas and self._reference_is_current(area_id)
+        }
+        labels = {
+            area_id: workspace.areas[area_id].label for area_id in valid_snapshots
+        }
+        eloss = np.asarray(dataset.coords["Eloss"].values, dtype=float)
+        results_view.render(
+            valid_snapshots,
+            labels,
+            eloss,
+            preferred_area=preferred_area,
+        )
+        if activate and valid_snapshots:
+            tabs = getattr(self.view, "fitting_tabs", None)
+            if tabs is not None:
+                tabs.active = 2
 
     @staticmethod
     def _notify(level: str, message: str, duration: int = 5000) -> None:
@@ -692,6 +735,7 @@ class NLLSController:
         try:
             snapshot = self._fit_area(area_id)
             self.app_state.nlls_run_state = "idle"
+            self._refresh_results_view(preferred_area=snapshot.area_id, activate=True)
             self._notify(
                 "success",
                 f"Reference fit converged for {snapshot.area_id}: "
@@ -772,6 +816,14 @@ class NLLSController:
         try:
             successes, failures = self._fit_all_reference_batch()
             self.app_state.nlls_run_state = "error" if failures else "idle"
+            if successes:
+                preferred = (
+                    self.workspace.active_area
+                    if self.workspace is not None
+                    and self.workspace.active_area in successes
+                    else successes[0]
+                )
+                self._refresh_results_view(preferred_area=preferred, activate=True)
             if failures:
                 failure_summary = "; ".join(
                     f"{failure.area_id}: {failure.message}" for failure in failures

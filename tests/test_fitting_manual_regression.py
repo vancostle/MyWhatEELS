@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import panel as pn
 import xarray as xr
+import holoviews as hv
 from bokeh.models import Tooltip
 from whateels.components import SimpleDetails
 from whateels.nlls.cross_sections import OOSCurveSnapshot
@@ -170,6 +171,17 @@ class ManualFittingRegressionTests(unittest.TestCase):
         self.assertNotIn("**OOS status:**", markdown)
         self.assertNotIn("Load Clustering JSON", markdown)
 
+    def test_results_tab_uses_reactive_elemental_results_view(self):
+        layout = FittingRightSidebarLayout(self.model)
+        results = layout.elemental_results_view
+        self.assertTrue(results.area_select.disabled)
+        self.assertEqual(results.area_select.options, {})
+        self.assertFalse(results.plot_pane.visible)
+        self.assertNotIn(
+            "Elemental NLLS results will be shown here once available.",
+            "\n".join(str(pane.object) for pane in layout.select(pn.pane.Markdown)),
+        )
+
 
 class ElementalReferenceControllerTests(unittest.TestCase):
     class FakeProvider:
@@ -281,11 +293,24 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(snapshot.reference_pixel_count, 2)
         self.assertAlmostEqual(self._amplitude(snapshot), 2.0, places=5)
         self.assertTrue(self.controller._reference_is_current("default"))
+        results = self.layout.elemental_results_view
+        self.assertEqual(self.layout.fitting_tabs.active, 2)
+        self.assertEqual(results.area_select.value, "default")
+        self.assertEqual(set(results.area_select.options.values()), {"default"})
+        self.assertTrue(results.plot_pane.visible)
+        self.assertTrue(results.residual_pane.visible)
+        self.assertIsInstance(results.plot_pane.object, hv.Overlay)
+        self.assertIsInstance(results.residual_pane.object, hv.Overlay)
+        self.assertIn("Reduced χ²", results.summary_pane.object)
+        self.assertIn("Current ROI mean", results.summary_pane.object)
+        self.assertIn("Fitted parameters", results.parameter_pane.object)
 
         self.visualizer._region_pairs = [(0, 1), (0, 2)]
         self.controller.on_roi_changed()
         self.assertNotIn("default", self.controller.workspace.reference_fits)
         self.assertTrue(self.controller.workspace.is_area_built("default"))
+        self.assertEqual(results.area_select.options, {})
+        self.assertFalse(results.plot_pane.visible)
 
     def test_central_reference_option_and_reset_area(self):
         self.layout.elemental_input["default_reference_strategy"].value = "central_mean"
@@ -319,6 +344,13 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         )
         self.assertAlmostEqual(self._amplitude(references["cluster_0"]), 2.0, places=5)
         self.assertAlmostEqual(self._amplitude(references["cluster_1"]), 4.0, places=5)
+        results = self.layout.elemental_results_view
+        self.assertEqual(self.layout.fitting_tabs.active, 2)
+        self.assertEqual(results.area_select.value, "cluster_0")
+        self.assertEqual(
+            set(results.area_select.options.values()),
+            {"default", "cluster_0", "cluster_1"},
+        )
 
         self.dataset["ElectronCount"].values[self.labels == 1, :] = np.nan
         self.controller._on_fit_all_references(None)
@@ -326,6 +358,9 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertIn("cluster_0", references)
         self.assertNotIn("cluster_1", references)
         self.assertEqual(self.state.nlls_run_state, "error")
+        self.assertEqual(
+            set(results.area_select.options.values()), {"default", "cluster_0"}
+        )
 
 
 if __name__ == "__main__":

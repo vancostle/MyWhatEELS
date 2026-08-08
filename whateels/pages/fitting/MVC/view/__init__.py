@@ -166,6 +166,10 @@ class FittingView:
     def elemental_onset_readout(self) -> pn.widgets.StaticText:
         """Access the read-only Elemental NLLS edge onset readout."""
         return self._elemental_onset_readout
+    @property
+    def elemental_results_view(self):
+        """Access the Elemental NLLS reference-results view."""
+        return self._elemental_results_view
     @dataset_info.setter
     def dataset_info(self, component: pn.viewable.Viewable):
         """Set the last dataset info component (must be a Panel Viewable)."""
@@ -243,5 +247,6 @@ class FittingView:
         self._elemental_background_status = layout.elemental_background_status
         self._elemental_geometry_status = layout.elemental_geometry_status
         self._elemental_onset_readout = layout.elemental_onset_readout
+        self._elemental_results_view = layout.elemental_results_view
 
         self._fitting_tabs = layout.fitting_tabs

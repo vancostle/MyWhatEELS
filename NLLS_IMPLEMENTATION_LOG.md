@@ -190,3 +190,26 @@ Estado: completada.
 - Integración MVC cubierta: build de `default`, fit ROI con amplitud esperada, invalidación al cambiar ROI, fallback central, reset, clonación a clusters, Fit All con amplitudes distintas y fallo parcial aislado.
 - Dominio cubierto: snapshot portable/inmutable de build, snapshot de referencia inmutable y `fit_many` con una referencia inválida.
 - `compileall` y `git diff --check` correctos.
+
+## Continuación — visualización de resultados de referencia
+
+### T14 — Maquetación reactiva de Results
+
+Estado: completada para `ReferenceFitSnapshot`.
+
+- Sustituido el placeholder de la pestaña `Results` por `NLLSResultsView`, un componente aislado en `view/components/nlls_results_view.py` que consume únicamente snapshots portables; no conserva objetos `ModelResult` ni estado vivo de lmfit.
+- Tras `Fit Current Reference` y `Fit All References`, la barra lateral abre automáticamente `Results` y selecciona el área recién ajustada.
+- La vista muestra referencia original, best fit, componentes individuales y límites del fit range sobre Eloss; debajo muestra el residual `data - best fit` y su línea de cero.
+- Añadido selector de curvas `Reference / Best fit / Components` y selector reactivo de área. Después de clustering se puede recorrer el fit ROI conservado y todos los clusters convergidos sin recalcular.
+- El resumen informa área, `Reduced χ²`, número de píxeles, origen de la referencia, composición, método, rango y mensaje del optimizador.
+- Añadida tabla de parámetros con valor, error estándar, cotas y estado libre/fijo.
+- La maquetación reutiliza la paleta de Fitting (`#ca4bc8` / `#7373da`), tarjetas, sombras, radios y espaciado existentes, y mantiene scroll vertical/contención horizontal en la barra lateral.
+- Cualquier cambio de ROI, fuente, rango, composición, build/reset o clustering vuelve a filtrar los snapshots contra revisión, fuente, máscara y fit range; un resultado stale desaparece de la vista inmediatamente.
+
+### T15 — Verificación de Results
+
+Estado: completada.
+
+- Cobertura MVC añadida para placeholder inicial, apertura automática de la pestaña, overlays de fit/residual, resumen ROI, tabla de parámetros, selector ROI/clusters y retirada visual de clusters fallidos o referencias invalidadas.
+- Suite total actual: 32 pruebas, todas correctas.
+- Smoke de render Panel/Bokeh correcto: tanto el sidebar completo como `NLLSResultsView` generan un root de documento y el gráfico publicado es un `holoviews.Overlay`.
