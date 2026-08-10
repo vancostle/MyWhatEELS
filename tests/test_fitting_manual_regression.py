@@ -12,6 +12,7 @@ import pathlib
 import sys
 import types
 import unittest
+from threading import Event
 from types import SimpleNamespace
 
 import numpy as np
@@ -20,9 +21,11 @@ import xarray as xr
 import holoviews as hv
 from bokeh.models import Tooltip
 from whateels.components import SimpleDetails
+from whateels.nlls.contracts import FitRange, ModelComposition, ReferenceFitSnapshot
 from whateels.nlls.cross_sections import OOSCurveSnapshot
 from whateels.nlls.defaults import OOS_FORMULA_VERSION, OOS_PROVIDER_VERSION, OOS_UNITS
 from whateels.nlls.provenance import publish_power_law_subtracted_dataset
+from whateels.nlls.results import FitStatus
 from whateels.state.app_state import AppState
 
 
@@ -57,6 +60,18 @@ FittingRightSidebarLayout = importlib.import_module(
 SpectrumImageVisualizer = importlib.import_module(
     "whateels.pages.fitting.MVC.view.plots.spectrum_image_plot"
 ).SpectrumImageVisualizer
+NLLSMultifitResultsPlot = importlib.import_module(
+    "whateels.pages.fitting.MVC.view.plots.nlls_multifit_results_plot"
+).NLLSMultifitResultsPlot
+NLLSMultifitControls = importlib.import_module(
+    "whateels.pages.fitting.MVC.view.components.nlls_multifit_controls"
+).NLLSMultifitControls
+NLLSResultsView = importlib.import_module(
+    "whateels.pages.fitting.MVC.view.components.nlls_results_view"
+).NLLSResultsView
+LayoutManager = importlib.import_module(
+    "whateels.pages.fitting.MVC.controller.managers.layout_manager"
+).LayoutManager
 
 
 def _load_nlls_controller():
@@ -80,6 +95,82 @@ def _manual_dataset() -> xr.Dataset:
     return xr.Dataset(
         {"ElectronCount": (("y", "x", "Eloss"), cube)},
         coords={"y": np.arange(2), "x": np.arange(3), "Eloss": eloss},
+    )
+
+
+def _reference_snapshot(area_id: str) -> ReferenceFitSnapshot:
+    eloss = np.linspace(0.0, 3.0, 4)
+    spectrum = eloss + 1.0
+    best_fit = spectrum * 0.95
+    return ReferenceFitSnapshot(
+        area_id=area_id,
+        success=True,
+        message="Converged",
+        method="leastsq",
+        params=({"name": "amp", "value": 1.0, "stderr": 0.1, "vary": True},),
+        redchi=0.02,
+        reference_spectrum=spectrum,
+        reference_strategy="clustering_mean",
+        reference_pixel_count=3,
+        reference_mask_fingerprint="fingerprint",
+        best_fit=best_fit,
+        residual=spectrum - best_fit,
+        components={"h_k1_continuum_": best_fit},
+        dataset_source_revision="plot-test",
+        area_revision=1,
+        model_composition=ModelComposition.CONTINUUM_ONLY,
+        fit_range=FitRange(0.0, 3.0),
+    )
+
+
+def _dense_nlls_result() -> xr.Dataset:
+    eloss = np.linspace(0.0, 4.0, 5)
+    amplitudes = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    original = amplitudes[..., None] * (eloss + 1.0)[None, None, :]
+    best_fit = original * 0.9
+    residual = original - best_fit
+    status = np.array(
+        [
+            [int(FitStatus.SUCCESS), int(FitStatus.SUCCESS), int(FitStatus.FIT_ERROR)],
+            [int(FitStatus.NOT_SELECTED), int(FitStatus.SUCCESS), int(FitStatus.SUCCESS)],
+        ],
+        dtype=np.int8,
+    )
+    unsuccessful = status != int(FitStatus.SUCCESS)
+    best_fit[unsuccessful] = np.nan
+    residual[unsuccessful] = np.nan
+    parameter = amplitudes.copy()
+    parameter[unsuccessful] = np.nan
+    stderr = np.full(amplitudes.shape, 0.05)
+    stderr[unsuccessful] = np.nan
+    return xr.Dataset(
+        {
+            "OriginalData": (("y", "x", "Eloss"), original),
+            "AreaLabel": (
+                ("y", "x"),
+                np.array([[0, 0, 0], [-1, 1, 1]], dtype=np.int32),
+            ),
+            "FitStatus": (("y", "x"), status),
+            "ReducedChiSquare": (
+                ("y", "x"),
+                np.where(status == int(FitStatus.SUCCESS), 0.01, np.nan),
+            ),
+            "BestFit": (("y", "x", "Eloss"), best_fit),
+            "Residuals": (("y", "x", "Eloss"), residual),
+            "h_k1_continuum__component": (("y", "x", "Eloss"), best_fit),
+            "h_k1_cont_A": (("y", "x"), parameter),
+            "h_k1_cont_A__stderr": (("y", "x"), stderr),
+        },
+        coords={"y": np.arange(2), "x": np.arange(3), "Eloss": eloss},
+        attrs={
+            "selected_areas": '["cluster_0", "cluster_1"]',
+            "method": "leastsq",
+            "processed_pixels": 5,
+            "selected_pixels": 5,
+            "complete": 1,
+            "cancelled": 0,
+            "dataset_source_revision": "plot-test",
+        },
     )
 
 
@@ -231,6 +322,39 @@ class ManualFittingRegressionTests(unittest.TestCase):
             "\n".join(str(pane.object) for pane in layout.select(pn.pane.Markdown)),
         )
 
+    def test_results_tab_wraps_both_controls_in_their_own_section(self):
+        layout = FittingRightSidebarLayout(self.model)
+        reference = layout.elemental_results_section
+        elemental = layout.elemental_multifit_section
+        results_tab = layout.fitting_tabs[2]
+
+        self.assertEqual(results_tab.objects, [reference, elemental])
+        for section in (reference, elemental):
+            self.assertIsInstance(section, SimpleDetails)
+            self.assertTrue(section.expanded)
+            self.assertFalse(section.locked)
+        self.assertIn(layout.elemental_results_view, reference.select(NLLSResultsView))
+        self.assertIn(
+            layout.elemental_multifit_controls,
+            elemental.select(NLLSMultifitControls),
+        )
+        # The multifit controls start empty: no run has been published yet.
+        self.assertEqual(layout.elemental_multifit_controls.runs, ())
+        self.assertFalse(layout.elemental_multifit_controls.run_select.visible)
+
+    def test_reference_summary_drops_the_repeated_area_title(self):
+        view = NLLSResultsView()
+        snapshot = _reference_snapshot("cluster_0")
+        view.render({"cluster_0": snapshot}, {"cluster_0": "Cluster 0"}, np.arange(4.0))
+
+        summary = view.summary_pane.object
+        self.assertIn("Reduced χ²", summary)
+        self.assertIn("Cluster mean", summary)
+        # The selector above already names the area, so neither the label nor the
+        # magenta title band may come back into the card.
+        self.assertNotIn("Cluster 0", summary)
+        self.assertNotIn("background:#ca4bc8", summary.replace(" ", ""))
+
     def test_elemental_actions_use_a_full_height_scroll_layout(self):
         layout = FittingRightSidebarLayout(self.model)
         self.assertEqual(layout.sizing_mode, "stretch_both")
@@ -252,6 +376,8 @@ class ManualFittingRegressionTests(unittest.TestCase):
         self.assertEqual(input_container.styles.get("overflow-y"), "auto")
         self.assertEqual(action_container.styles.get("flex-shrink"), "0")
         self.assertEqual(action_container.styles.get("padding"), "10px")
+        self.assertIn(layout.elemental_run_progress, action_container.objects)
+        self.assertFalse(layout.elemental_run_progress.visible)
 
     def test_main_panels_switch_from_image_and_roi_to_clustering_and_result(self):
         visualizer = SpectrumImageVisualizer(self.model, self.dataset)
@@ -287,6 +413,142 @@ class ManualFittingRegressionTests(unittest.TestCase):
             self.assertIsNotNone(visualizer.create_plots().get_root())
         finally:
             visualizer.cleanup()
+
+
+class NLLSMultifitResultsPlotTests(unittest.TestCase):
+    def test_result_view_switches_maps_and_pixel_spectra(self):
+        view = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=3)
+        try:
+            self.assertEqual(view.selected_pixel, (0, 0))
+            self.assertIn("Reduced χ²", view.map_select.options)
+            self.assertIn("Fit status", view.map_select.options)
+            self.assertIn("Parameter — h k1 cont A", view.map_select.options)
+            self.assertIn("Std. error — h k1 cont A", view.map_select.options)
+            self.assertIsInstance(view.map_pane.object, hv.Overlay)
+            self.assertIsNotNone(
+                view.spectrum_pane.object.get(("Curve", "Best_fit"))
+            )
+
+            view.map_select.value = "FitStatus"
+            view._on_pixel_tapped(x=2, y=1)
+            self.assertEqual(view.selected_pixel, (1, 2))
+            self.assertIn("y=1, x=2", view.pixel_summary.object)
+            view.layer_selector.value = ["Residual"]
+            self.assertIsNotNone(
+                view.spectrum_pane.object.get(("Curve", "Residual"))
+            )
+            self.assertIsNotNone(view.get_root())
+        finally:
+            view.cleanup()
+
+    def test_result_view_keeps_its_widgets_out_of_the_plot_block(self):
+        view = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=2)
+        try:
+            # The block is a plain Column now: no collapsible card, no header band.
+            self.assertNotIsInstance(view, pn.Card)
+            self.assertEqual(view.controls[0], view.map_select)
+            self.assertIn(view.layer_selector, view.controls)
+            self.assertIn(view.pixel_summary, view.controls)
+            for widget in view.controls:
+                self.assertNotIn(widget, view.select())
+            self.assertEqual(view.run_number, 2)
+            self.assertIn("Run 2", view.run_label)
+            self.assertIn("cluster_0", view.run_label)
+            # Without the card header the run number has to survive in the plots.
+            image = next(
+                element
+                for element in view.map_pane.object
+                if isinstance(element, hv.Image)
+            )
+            self.assertIn("Run 2", image.opts.get().kwargs["title"])
+            self.assertIn(
+                "Run 2", view.spectrum_pane.object.opts.get().kwargs["title"]
+            )
+        finally:
+            view.cleanup()
+
+    def test_multifit_controls_mount_the_selected_run_below_the_map(self):
+        controls = NLLSMultifitControls()
+        first = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=1)
+        second = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=2)
+        try:
+            self.assertFalse(controls.run_select.visible)
+
+            controls.register(first)
+            self.assertEqual(controls.runs, (first,))
+            self.assertIs(controls.active_run, first)
+            # A single run needs no selector, and the map stays the top control.
+            self.assertFalse(controls.run_select.visible)
+            self.assertTrue(controls.run_select.disabled)
+            self.assertEqual(controls._controls_slot.objects[0], first.map_select)
+
+            controls.register(second)
+            self.assertEqual(controls.runs, (second, first))
+            self.assertIs(controls.active_run, second)
+            self.assertTrue(controls.run_select.visible)
+            self.assertFalse(controls.run_select.disabled)
+            mounted = controls._controls_slot.objects
+            self.assertEqual(mounted[0], second.map_select)
+            self.assertEqual(mounted[1], controls.run_select)
+            self.assertNotIn(first.map_select, mounted)
+
+            controls.run_select.value = first
+            mounted = controls._controls_slot.objects
+            self.assertEqual(mounted[0], first.map_select)
+            self.assertEqual(mounted[1], controls.run_select)
+            self.assertNotIn(second.map_select, mounted)
+            self.assertIsNotNone(controls.get_root())
+
+            controls.unregister(first)
+            self.assertEqual(controls.runs, (second,))
+            self.assertIs(controls.active_run, second)
+            controls.clear_runs()
+            self.assertEqual(controls.runs, ())
+            self.assertIsNone(controls.active_run)
+            self.assertEqual(controls._controls_slot.objects, [])
+        finally:
+            first.cleanup()
+            second.cleanup()
+
+    def test_layout_manager_publishes_run_controls_to_the_results_tab(self):
+        layout = FittingRightSidebarLayout(FittingModel())
+        controls = layout.elemental_multifit_controls
+        manager = LayoutManager(
+            SimpleNamespace(elemental_multifit_controls=controls),
+            SimpleNamespace(),
+            FittingModel(),
+        )
+        manager._plot_stacks = [pn.Column(pn.pane.Markdown("Original plots"))]
+        manager._nlls_result_views = [[]]
+        manager._plots_tab = SimpleNamespace(active=0)
+
+        first = manager.add_nlls_result_plot(_dense_nlls_result())
+        second = manager.add_nlls_result_plot(_dense_nlls_result())
+        self.assertEqual(controls.runs, (second, first))
+        self.assertIs(controls.active_run, second)
+
+        manager.clear_nlls_result_plots()
+        self.assertEqual(controls.runs, ())
+        self.assertIsNone(controls.active_run)
+
+    def test_layout_manager_prepends_runs_without_replacing_older_plots(self):
+        manager = LayoutManager(SimpleNamespace(), SimpleNamespace(), FittingModel())
+        source_plot = pn.pane.Markdown("Original plots")
+        stack = pn.Column(source_plot)
+        manager._plot_stacks = [stack]
+        manager._nlls_result_views = [[]]
+        manager._plots_tab = SimpleNamespace(active=0)
+        first = manager.add_nlls_result_plot(_dense_nlls_result())
+        second = manager.add_nlls_result_plot(_dense_nlls_result())
+        try:
+            self.assertEqual(stack.objects, [second, first, source_plot])
+            self.assertEqual(manager.nlls_result_views, (second, first))
+            self.assertEqual(first._run_number, 1)
+            self.assertEqual(second._run_number, 2)
+            self.assertIsNotNone(stack.get_root())
+        finally:
+            manager.clear_nlls_result_plots()
+        self.assertEqual(stack.objects, [source_plot])
 
 
 class ElementalReferenceControllerTests(unittest.TestCase):
@@ -389,8 +651,12 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.visualizer.clear_nlls_clustering = (
             lambda: setattr(self.visualizer, "clustering_payload", None)
         )
+        self.published_multifit_results = []
         parent = SimpleNamespace(
-            layout=SimpleNamespace(_chosen_visualizers=[self.visualizer])
+            layout=SimpleNamespace(
+                _chosen_visualizers=[self.visualizer],
+                add_nlls_result_plot=self.published_multifit_results.append,
+            )
         )
         self.controller = NLLSController(
             parent, self.layout, self.state, provider=self.FakeProvider()
@@ -467,6 +733,108 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(snapshot.reference_strategy, "roi_mean")
         self.assertEqual(snapshot.fit_range.minimum, float(np.min(self.eloss)))
         self.assertEqual(snapshot.fit_range.maximum, float(np.max(self.eloss)))
+
+    def test_run_elemental_nlls_commits_dense_result_and_updates_progress(self):
+        self.controller._on_fit(None)
+        self.assertFalse(self.layout.elemental_run_nlls_button.disabled)
+
+        self.controller._on_run_elemental_nlls(None)
+        self.assertEqual(self.state.nlls_run_state, "running")
+        self.assertTrue(self.layout.elemental_run_progress.visible)
+        self.assertFalse(self.layout.elemental_cancel_button.disabled)
+        thread = self.controller._run_thread
+        self.assertIsNotNone(thread)
+        thread.join(timeout=10.0)
+        self.assertFalse(thread.is_alive())
+        self.controller._drain_run_events()
+
+        result = self.state.nlls_results
+        self.assertIsInstance(result, xr.Dataset)
+        self.assertEqual(len(self.published_multifit_results), 1)
+        self.assertIs(self.published_multifit_results[0], result)
+        self.assertEqual(self.state.nlls_run_state, "complete")
+        self.assertEqual(result.attrs["complete"], 1)
+        self.assertEqual(result.attrs["cancelled"], 0)
+        self.assertEqual(result["BestFit"].dims, ("y", "x", "Eloss"))
+        amplitude_name = next(
+            name
+            for name in result.data_vars
+            if name.endswith("_A") and not name.endswith("__stderr")
+        )
+        np.testing.assert_allclose(
+            result[amplitude_name],
+            np.where(self.labels == 0, 2.0, 4.0),
+            rtol=1e-5,
+        )
+        self.assertEqual(self.layout.elemental_run_progress.value, 100)
+        self.assertFalse(self.layout.elemental_run_progress.active)
+        self.assertTrue(self.layout.elemental_cancel_button.disabled)
+        self.assertFalse(self.layout.elemental_run_nlls_button.disabled)
+
+    def test_run_uses_selected_cluster_areas_only(self):
+        self.controller._on_fit(None)
+        self.controller._on_use_current_clustering(None)
+        self.controller._on_fit(None)
+        self.layout.elemental_fit_areas_input.value = ["cluster_1"]
+        self.assertFalse(self.layout.elemental_run_nlls_button.disabled)
+
+        self.controller._on_run_elemental_nlls(None)
+        thread = self.controller._run_thread
+        thread.join(timeout=10.0)
+        self.assertFalse(thread.is_alive())
+        self.controller._drain_run_events()
+        result = self.state.nlls_results
+        np.testing.assert_array_equal(
+            result["FitStatus"].values[self.labels == 0],
+            np.full(4, int(FitStatus.NOT_SELECTED)),
+        )
+        np.testing.assert_array_equal(
+            result["FitStatus"].values[self.labels == 1],
+            np.full(2, int(FitStatus.SUCCESS)),
+        )
+
+    def test_cancelled_run_preserves_previous_complete_result(self):
+        self.controller._on_fit(None)
+        self.controller._on_run_elemental_nlls(None)
+        thread = self.controller._run_thread
+        thread.join(timeout=10.0)
+        self.controller._drain_run_events()
+        previous = self.state.nlls_results
+
+        request, *_ = self.controller._freeze_run_inputs()
+        partial = previous.copy(deep=True)
+        partial.attrs.update(complete=0, cancelled=1, processed_pixels=1)
+        self.controller._active_run_request = request
+        self.controller._run_cancel_event = Event()
+        self.controller._run_cancel_event.set()
+        self.controller._prior_complete_results = previous
+        self.state.nlls_run_state = "cancelling"
+        self.controller._commit_run_result(request, partial)
+
+        self.assertIs(self.state.nlls_results, previous)
+        self.assertEqual(self.state.nlls_run_state, "idle")
+        self.assertIn("cancelled", self.layout.elemental_run_progress.name.lower())
+
+    def test_stale_worker_result_cannot_replace_previous_complete_result(self):
+        self.controller._on_fit(None)
+        self.controller._on_run_elemental_nlls(None)
+        thread = self.controller._run_thread
+        thread.join(timeout=10.0)
+        self.controller._drain_run_events()
+        previous = self.state.nlls_results
+
+        request, *_ = self.controller._freeze_run_inputs()
+        stale_result = previous.copy(deep=True)
+        self.controller._active_run_request = request
+        self.controller._run_cancel_event = Event()
+        self.controller._prior_complete_results = previous
+        self.controller.workspace.dirty_revision += 1
+        self.state.nlls_run_state = "running"
+        self.controller._commit_run_result(request, stale_result)
+
+        self.assertIs(self.state.nlls_results, previous)
+        self.assertEqual(self.state.nlls_run_state, "error")
+        self.assertIn("discarded", self.layout.elemental_run_progress.name.lower())
 
     def test_clustering_settings_are_disabled_without_a_compatible_result(self):
         self.state.last_clustering_result = None

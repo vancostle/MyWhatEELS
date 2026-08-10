@@ -7,6 +7,7 @@ from whateels.helpers.constants import HTML_ROOT
 from ..visualizer_factory import VisualizerFactory
 from whateels.state import CacheManager
 from ...view.components.component_item_view import ComponentItemView
+from ...view.plots.nlls_multifit_results_plot import NLLSMultifitResultsPlot
 
 if TYPE_CHECKING:
     from ...view import FittingView
@@ -43,6 +44,9 @@ class LayoutManager:
         self._max_energy_range = [float('inf'), float('-inf')]
         self._plots_tab = None
         self._chosen_visualizers: list = []
+        self._plot_stacks: list[pn.Column] = []
+        self._nlls_result_views: list[list[NLLSMultifitResultsPlot]] = []
+        self._nlls_run_sequence = 0
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
@@ -90,6 +94,9 @@ class LayoutManager:
         app_state = CacheManager.get_cached_app_state()
 
         try:
+            self.clear_nlls_result_plots()
+            self._plot_stacks.clear()
+            self._nlls_result_views.clear()
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
             
@@ -105,8 +112,38 @@ class LayoutManager:
                 if chosen_visualizer is None:
                     return
                 visualizer_plots = chosen_visualizer.create_plots()
-                
-                self._plots_tab.append((image_name, visualizer_plots))
+                base_plot_wrapper = pn.Column(
+                    visualizer_plots,
+                    sizing_mode=STRETCH_BOTH,
+                    min_height=600,
+                    margin=0,
+                    css_classes=["fitting-source-plots"],
+                    styles={
+                        "box-sizing": "border-box",
+                        "flex": "1 0 100%",
+                        "height": "100%",
+                        "min-width": "0",
+                    },
+                )
+                plot_stack = pn.Column(
+                    base_plot_wrapper,
+                    sizing_mode=STRETCH_BOTH,
+                    margin=0,
+                    scroll=True,
+                    css_classes=["fitting-additive-plots"],
+                    styles={
+                        "box-sizing": "border-box",
+                        "height": "100%",
+                        "min-height": "0",
+                        "min-width": "0",
+                        "overflow-x": "hidden",
+                        "overflow-y": "auto",
+                        "padding": "0 8px 8px 8px",
+                    },
+                )
+                self._plot_stacks.append(plot_stack)
+                self._nlls_result_views.append([])
+                self._plots_tab.append((image_name, plot_stack))
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
                 
@@ -120,6 +157,71 @@ class LayoutManager:
 
         except Exception as e:
             raise DMPlotCreationError(e)
+
+    @property
+    def nlls_result_views(self) -> tuple[NLLSMultifitResultsPlot, ...]:
+        """Return all currently rendered NLLS runs in visual top-to-bottom order."""
+        return tuple(
+            view
+            for views in self._nlls_result_views
+            for view in reversed(views)
+        )
+
+    def add_nlls_result_plot(
+        self,
+        results,
+        *,
+        dataset_index: int | None = None,
+    ) -> NLLSMultifitResultsPlot:
+        """Prepend a new run while retaining older results and the source plots."""
+        if not self._plot_stacks:
+            raise DMPlotCreationError("No Fitting plot stack is available for NLLS results.")
+        if dataset_index is None:
+            dataset_index = int(getattr(self._plots_tab, "active", 0) or 0)
+        if not 0 <= int(dataset_index) < len(self._plot_stacks):
+            raise DMPlotCreationError(
+                f"Invalid Fitting dataset index for NLLS results: {dataset_index}"
+            )
+
+        self._nlls_run_sequence += 1
+        result_view = NLLSMultifitResultsPlot(
+            results,
+            run_number=self._nlls_run_sequence,
+        )
+        index = int(dataset_index)
+        stack = self._plot_stacks[index]
+        stack.insert(0, result_view)
+        stack.scroll_position = 0
+        self._nlls_result_views[index].append(result_view)
+        controls = self._multifit_controls()
+        if controls is not None:
+            controls.register(result_view)
+        return result_view
+
+    def _multifit_controls(self):
+        """Return the Results-tab block that hosts the run controls, if it exists."""
+        return getattr(self._view, "elemental_multifit_controls", None)
+
+    def clear_nlls_result_plots(self, dataset_index: int | None = None) -> None:
+        """Remove interactive run views and release their HoloViews streams."""
+        if dataset_index is None:
+            indices = range(len(self._nlls_result_views))
+        elif 0 <= int(dataset_index) < len(self._nlls_result_views):
+            indices = (int(dataset_index),)
+        else:
+            return
+        controls = self._multifit_controls()
+        for index in indices:
+            stack = self._plot_stacks[index] if index < len(self._plot_stacks) else None
+            for result_view in tuple(self._nlls_result_views[index]):
+                result_view.cleanup()
+                if controls is not None:
+                    controls.unregister(result_view)
+                if stack is not None and result_view in stack.objects:
+                    stack.remove(result_view)
+            self._nlls_result_views[index].clear()
+        if dataset_index is None:
+            self._nlls_run_sequence = 0
     def get_energy_range(self) -> list[float]:
         """Get the maximum energy range across all datasets."""
         state = CacheManager.get_cached_app_state()
@@ -344,6 +446,7 @@ class LayoutManager:
     def reset_for_data_source_change(self):
         """Hard-reset derived fitting outputs after switching raw/preprocessed source."""
         self.remove_best_fit_component_from_sidebar()
+        self.clear_nlls_result_plots()
         if not self._chosen_visualizers:
             return
 

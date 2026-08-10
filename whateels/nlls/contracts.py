@@ -308,3 +308,69 @@ class NLLSRunRequest:
     parallel: bool = False
     workers: int = 1
     rerun_from: str | None = None
+    dataset_source_revision: str = ""
+    workspace_revision: int = 0
+    area_revisions: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        selected = tuple(str(area_id) for area_id in self.selected_areas)
+        if not selected or any(not area_id for area_id in selected):
+            raise ValueError("an NLLS run must select at least one area")
+        if len(set(selected)) != len(selected):
+            raise ValueError("NLLS run areas must be unique")
+        if "default" in selected and len(selected) > 1:
+            raise ValueError("default cannot run together with clustered areas")
+        method = str(self.method).strip()
+        if not method:
+            raise ValueError("NLLS run method cannot be empty")
+        workers = int(self.workers)
+        if workers < 1:
+            raise ValueError("NLLS run workers must be at least one")
+        compositions = tuple(
+            (str(area_id), ModelComposition.parse(composition))
+            for area_id, composition in self.model_composition_by_area
+        )
+        composition_ids = tuple(area_id for area_id, _ in compositions)
+        if len(set(composition_ids)) != len(composition_ids):
+            raise ValueError("model composition area identifiers must be unique")
+        missing = set(selected).difference(composition_ids)
+        if missing:
+            raise ValueError(
+                "model composition is missing selected areas: "
+                + ", ".join(sorted(missing))
+            )
+        extra = set(composition_ids).difference(selected)
+        if extra:
+            raise ValueError(
+                "model composition contains unselected areas: "
+                + ", ".join(sorted(extra))
+            )
+        area_revisions = tuple(
+            (str(area_id), int(revision))
+            for area_id, revision in self.area_revisions
+        )
+        if area_revisions:
+            revision_ids = tuple(area_id for area_id, _ in area_revisions)
+            if len(set(revision_ids)) != len(revision_ids):
+                raise ValueError("area revision identifiers must be unique")
+            missing_revisions = set(selected).difference(revision_ids)
+            if missing_revisions:
+                raise ValueError(
+                    "area revisions are missing selected areas: "
+                    + ", ".join(sorted(missing_revisions))
+                )
+            extra_revisions = set(revision_ids).difference(selected)
+            if extra_revisions:
+                raise ValueError(
+                    "area revisions contain unselected areas: "
+                    + ", ".join(sorted(extra_revisions))
+                )
+            if any(revision < 0 for _, revision in area_revisions):
+                raise ValueError("area revisions cannot be negative")
+        object.__setattr__(self, "selected_areas", selected)
+        object.__setattr__(self, "method", method)
+        object.__setattr__(self, "workers", workers)
+        object.__setattr__(self, "model_composition_by_area", compositions)
+        object.__setattr__(self, "dataset_source_revision", str(self.dataset_source_revision))
+        object.__setattr__(self, "workspace_revision", int(self.workspace_revision))
+        object.__setattr__(self, "area_revisions", area_revisions)

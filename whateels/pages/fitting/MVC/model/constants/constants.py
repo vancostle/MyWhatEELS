@@ -93,6 +93,10 @@ class Constants:
     SECTION_ELEMENTAL_MODEL = "Model Setup"
     SECTION_ELEMENTAL_AREAS = "Areas"
     SECTION_ELEMENTAL_RUN_SETUP = "Run Setup"
+
+    # Results tab section titles
+    SECTION_RESULTS_REFERENCE = "Reference Fit"
+    SECTION_RESULTS_ELEMENTAL = "Elemental NLLS"
     # SECTION_ELEMENTAL_MODEL_IO removed: Save/Load Model (NLLS_TODO 5.1:287 and 12.1)
     # returns in the serialization phase.
 

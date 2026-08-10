@@ -288,3 +288,60 @@ Estado: completada.
 - Añadido un watcher de `AppState.all_datasets`: la tarjeta compartida `Dataset Information` escribe E0/alpha/beta en `dataset.attrs` y republica esa lista, que era la única señal disponible. Sin él, corregir la geometría desde la tarjeta dejaba las secciones bloqueadas hasta conmutar la fuente raw/preprocessed.
 - Nuevas propiedades `elemental_edge_section` / `elemental_model_section` en `FittingRightSidebarLayout` y en `FittingView`, con el mismo patrón de alias ya usado por el resto de widgets Elemental.
 - Verificación: 38 pruebas correctas. Nueva cobertura de layout (secciones bloqueadas y cerradas de inicio, cabecera deshabilitada, `toggle()` sin efecto y orden `background → geometry → edge → model` en el contenedor) y de controlador (fuente válida sin avisos y con ambas secciones abiertas, plegado manual conservado, geometría bloqueada vía `all_datasets`, recuperación de la geometría y pérdida de la procedencia power-law). Smoke de render Panel/Bokeh correcto con secciones bloqueadas, desbloqueadas y con los avisos ocultos; `compileall` y `git diff --check` correctos.
+
+### T22 — Run Elemental NLLS: propagación y multifit serial
+
+Estado: completada para la primera ejecución multipíxel serial (Fase 4 del TODO).
+
+- Ampliado `NLLSRunRequest` como contrato inmutable y cerrado: áreas seleccionadas, rango/método, composición por área, revisión de fuente/workspace/áreas, modo serial, workers y futuro origen de rerun. Rechaza áreas duplicadas, `default` combinado con clusters, configuraciones incompletas o sobrantes, revisiones inválidas y solicitudes stale.
+- Añadido `ElementalMultifitService` sin dependencias de Panel. Reconstruye el modelo exactamente una vez por área y cada píxel recibe una copia nueva de los parámetros convergidos de `ReferenceFitSnapshot`; nunca hereda el resultado del píxel anterior. Cada cluster usa exclusivamente su propia referencia.
+- La selección espacial sigue las máscaras congeladas del workspace. En modo clustering se ajustan únicamente los clusters seleccionados en el modal; las máscaras solapadas fallan antes del primer fit. En modo `default`, conforme al contrato actual de `NLLS_TODO.md`, la ROI define el espectro de referencia y la máscara de ejecución cubre la imagen completa.
+- El bucle usa `method="leastsq"`, aplica el rango finito, aísla errores por píxel y distingue `not_selected`, `pending`, `success`, `insufficient_data`, `fit_error` y `cancelled`. Un píxel inválido no detiene el resto.
+- Añadidos `NLLSResultsAccumulator` y `NLLSResultsAssembler`. El resultado es un `xr.Dataset` numérico denso con `OriginalData`, `AreaLabel`, `FitStatus`, `ReducedChiSquare`, `BestFit`, `Residuals`, curvas por componente y mapas de valor/stderr por parámetro. Los esquemas de componentes/parámetros se materializan aunque todos sus píxeles fallen; no se guarda ningún `ModelResult` ni array `dtype=object`.
+- El dataset persiste identidad/revisión de fuente, geometría, método, composiciones, procedencia de background, convención de chemical shift, metadatos/checksums OOS, configuración/áreas, timestamp, estado complete/cancelled, conteos y versiones. Se verificó round-trip NetCDF.
+- `Run Elemental NLLS` se habilita sólo si todas las áreas seleccionadas conservan build y referencia vigentes. Al arrancar congela dataset/specs/referencias, bloquea los controles mutables y ejecuta el servicio serial en un hilo daemon; el worker sólo publica eventos en una cola y nunca escribe Panel/AppState.
+- Añadido indicador de progreso por chunks al bloque inferior de acciones. El hilo del documento drena la cola mediante callback periódico, actualiza el progreso y realiza el único commit de `app_state.nlls_results`.
+- Añadida cancelación cooperativa entre píxeles. Si se cancela, los pendientes quedan marcados y el resultado parcial sólo se conserva cuando no existía uno completo; un resultado completo anterior permanece intacto. Cambiar ROI, fuente o geometría durante un run solicita cancelación.
+- El commit es atómico y revalida fuente, workspace, selección, rango, composición, revisiones y referencias. Un resultado de worker stale se descarta sin reemplazar el último resultado completo.
+- Cobertura nueva: iniciales independientes frente a convergencias extremas, referencias distintas por área, invariancia al orden de áreas/píxeles, selección parcial de clusters, errores aislados, máscaras solapadas, cancelación, preservación del resultado anterior, descarte stale, arrays numéricos y round-trip NetCDF.
+- Verificación actual: 48 pruebas correctas; `compileall` y `git diff --check` correctos.
+
+Pendiente según el orden del TODO:
+
+- Fase 5: visualización de mapas `ReducedChiSquare`/`FitStatus`, selección de píxel, mapas de parámetros/stderr, overlays/filtros y descarga NetCDF/CSV.
+- El rerun desde los parámetros previos del mismo píxel, `Lock All` y componentes modificadas pertenecen a la Fase 6; la ruta inicial los rechaza explícitamente para no mezclar semánticas.
+- La paralelización y `fit_chunk_worker` pertenecen a la Fase 7 y permanecen desactivados hasta validar paridad con esta ruta serial.
+
+### T23 — Plots multipíxel aditivos en el área principal
+
+Estado: completada la primera parte visual de la Fase 5.
+
+- Añadido `NLLSMultifitResultsPlot`, un bloque principal interactivo que consume directamente el `xr.Dataset` portable del run y no reconstruye ni conserva objetos lmfit.
+- El panel izquierdo permite visualizar `ReducedChiSquare`, `FitStatus`, `AreaLabel`, todos los mapas de parámetros y sus mapas `stderr`. Los estados usan colores discretos y una colorbar con sus nombres; el píxel activo queda marcado sobre el mapa.
+- Al pulsar un píxel del mapa, el panel derecho actualiza sus curvas `Original`, `Best fit`, componentes y `Residual`. Las cuatro capas son combinables mediante el mismo grid 2×2 empleado en los resultados de referencia. También se muestran área, status y χ² reducido del píxel.
+- `LayoutManager` envuelve el plot fuente de Fitting en un stack vertical con scroll. Cada nuevo run se inserta en la posición superior, conservando debajo todos los runs anteriores y, al final, el mapa/espectro original. Es el mismo patrón aditivo y `move-to-top` conceptual de Adv. Clustering; ningún resultado nuevo sustituye los plots ya visibles.
+- Cada resultado se presenta en una tarjeta plegable titulada con número de run, áreas y estado complete/incomplete. Al añadirlo, el scroll vuelve arriba para que sea visible inmediatamente.
+- El commit numérico continúa siendo atómico y ocurre antes del render. Si la construcción del plot falla, `app_state.nlls_results` permanece guardado y sólo se muestra un aviso. Los resultados existentes de la fuente activa se restauran al volver a crear el controlador/página.
+- Cambiar la fuente raw/preprocessed elimina los bloques visuales derivados y ejecuta `cleanup()` sobre watchers/streams; editar el modelo o lanzar otro run no elimina el histórico visual de la misma fuente.
+- Nueva cobertura para selector de mapas, selección de píxel, capas espectrales, render Panel/Bokeh, inserción de dos runs en orden `nuevo → anterior → fuente`, limpieza y publicación desde el commit.
+- Verificación actual: 50 pruebas correctas; el nuevo componente y el stack aditivo renderizan correctamente con Panel/Bokeh.
+
+Pendiente de la Fase 5:
+
+- Overlay explícito de límites/áreas y filtros de status.
+- Descarga de resultados completos en NetCDF y exportación tabular CSV.
+
+### T24 — Todos los controles de resultados en la pestaña Results
+
+Estado: completada.
+
+- La pestaña `Results` deja de ser un único bloque y pasa a contener exactamente dos `SimpleDetails` abiertos: `Reference Fit` y `Elemental NLLS`. Ambos son sólo controles; sus figuras viven siempre en el área principal, así que el menú y los gráficos ya no se mezclan.
+- La tarjeta de resumen de `Reference Fit` pierde la banda magenta con el nombre del área (`Cluster #`). El área ya se elige en el selector inmediatamente superior, de modo que el título sólo repetía información. El resto de la tarjeta (métricas, método, rango y mensaje) se conserva intacto.
+- `NLLSMultifitResultsPlot` deja de ser un `pn.Card`: es un `pn.Column` que sólo contiene el `SplitJs` mapa/espectro. Se eliminan cabecera plegable, título de tarjeta y colores de cabecera. Los runs se apilan directamente en el área de plots, igual que los bloques de Adv. Clustering.
+- Sus widgets siguen creándose en el propio run pero se exponen como `controls` (tupla en orden de presentación) y los monta la barra lateral. Un run no renderiza nunca sus propios widgets.
+- Añadido `NLLSMultifitControls`, el bloque de la sección `Elemental NLLS`. Monta un único conjunto de widgets cada vez y coloca el selector `Run` **debajo** de `Result map`, para que el control superior sea el mapa igual que `Reference area` lo es en el bloque de referencia. El selector `Run` sólo es visible y editable con dos o más runs; con uno solo repetiría el título del gráfico.
+- Se conserva el apilado aditivo de T23: registrar un run lo inserta arriba en el stack y lo selecciona en el menú, sin retirar los anteriores. `clear_nlls_result_plots` desregistra además los controles, de modo que cambiar de fuente raw/preprocessed vacía menú y plots a la vez.
+- Como ya no hay cabecera de tarjeta, cada figura lleva el número de run en su propio título (`Run 2 · Reduced χ²`, `Run 2 · Pixel y=1, x=2 — success`); en un stack de varios runs seguían siendo indistinguibles.
+- Un run recién publicado trae la pestaña `Results` al frente, igual que ya hacía un ajuste de referencia. Restaurar un resultado previo al reconstruir la página no roba la pestaña (`activate=False`).
+- Ambos bloques pierden su padding horizontal propio: el `SimpleDetails` anfitrión ya inserta 10 px por lado y se duplicaba.
+- Verificación actual: 55 pruebas correctas. Nueva cobertura de las dos secciones del tab y su contenido, ausencia del título de área en el resumen de referencia, widgets fuera del bloque de plots, orden `Result map → Run → capas` al montar, conmutación entre runs, visibilidad del selector según el número de runs y registro/desregistro desde `LayoutManager`. Smoke de render Panel/Bokeh correcto para sidebar, stack de dos runs y conmutación de run/píxel/mapa; `compileall` y `git diff --check` correctos.

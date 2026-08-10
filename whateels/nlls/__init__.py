@@ -22,6 +22,8 @@ from .contracts import (
 )
 from .areas import AreaDefinition, ClusteringAreaAdapter
 from .workspace import NLLSWorkspace
+from .multifit import ElementalMultifitService, PixelFitSnapshot
+from .results import FitStatus, NLLSResultsAccumulator, NLLSResultsAssembler
 
 __all__ = [
     "AreaModelSpec",
@@ -38,6 +40,11 @@ __all__ = [
     "ModelBuildSnapshot",
     "NLLSRunRequest",
     "NLLSWorkspace",
+    "ElementalMultifitService",
+    "PixelFitSnapshot",
+    "FitStatus",
+    "NLLSResultsAccumulator",
+    "NLLSResultsAssembler",
     "ParameterSpec",
     "ReferenceFitSnapshot",
     "ReferenceFitBatchResult",

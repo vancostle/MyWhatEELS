@@ -3,6 +3,7 @@ import panel as pn
 from bokeh.models import Tooltip
 from whateels.components import ToggleButton, SimpleDetails
 from ..components.nlls_fit_areas_modal import NLLSFitAreasModal
+from ..components.nlls_multifit_controls import NLLSMultifitControls
 from ..components.nlls_results_view import NLLSResultsView
 from typing import TYPE_CHECKING, Optional
 
@@ -121,6 +122,7 @@ class FittingRightSidebarLayout(pn.Column):
         )
         self._fitting_tabs: Optional[pn.Tabs] = None
         self._elemental_results_view = NLLSResultsView()
+        self._elemental_multifit_controls = NLLSMultifitControls()
 
         # --- Manual tab widgets ------------------------------------------
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
@@ -246,6 +248,16 @@ class FittingRightSidebarLayout(pn.Column):
             width=110,
             sizing_mode='fixed',
             disabled=True,
+        )
+        self._elemental_run_progress = pn.indicators.Progress(
+            name="Elemental NLLS progress",
+            value=0,
+            max=100,
+            active=False,
+            bar_color="success",
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+            visible=False,
         )
 
         super().__init__(
@@ -448,9 +460,29 @@ class FittingRightSidebarLayout(pn.Column):
         return self._elemental_cancel_button
 
     @property
+    def elemental_run_progress(self) -> pn.indicators.Progress:
+        """Access the progress indicator for the active multipixel run."""
+        return self._elemental_run_progress
+
+    @property
     def elemental_results_view(self) -> NLLSResultsView:
         """Access the reactive Elemental NLLS reference-results view."""
         return self._elemental_results_view
+
+    @property
+    def elemental_multifit_controls(self) -> NLLSMultifitControls:
+        """Access the sidebar controls of the dense Elemental NLLS runs."""
+        return self._elemental_multifit_controls
+
+    @property
+    def elemental_results_section(self) -> SimpleDetails:
+        """Access the collapsible 'Reference Fit' section of the Results tab."""
+        return self._elemental_results_section
+
+    @property
+    def elemental_multifit_section(self) -> SimpleDetails:
+        """Access the collapsible 'Elemental NLLS' section of the Results tab."""
+        return self._elemental_multifit_section
 
     # ------------------------------------------------------------------
     # Layout composition
@@ -724,6 +756,7 @@ class FittingRightSidebarLayout(pn.Column):
             ),
             # Action stack, sibling of the scroll container so it stays visible.
             pn.Column(
+                self._elemental_run_progress,
                 pn.Row(
                     self._elemental_fit_button,
                     self._elemental_fit_area_settings_button,
@@ -893,9 +926,33 @@ class FittingRightSidebarLayout(pn.Column):
         )
 
     def _create_results_tab(self) -> pn.Column:
-        """Build the scrollable Elemental NLLS reference-results tab."""
+        """Build the scrollable Results tab: one section per kind of NLLS result.
+
+        Both blocks are controls only. Their plots are published to the main area, so
+        the tab never mixes a menu with the figures it drives.
+        """
+        constants = self._model.constants
+
+        self._elemental_results_section = SimpleDetails(
+            title=constants.SECTION_RESULTS_REFERENCE,
+            content=self._elemental_results_view,
+            expanded=True,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+            styles=dict(self._SECTION_CONTAINED),
+        )
+        self._elemental_multifit_section = SimpleDetails(
+            title=constants.SECTION_RESULTS_ELEMENTAL,
+            content=self._elemental_multifit_controls,
+            expanded=True,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+            styles=dict(self._SECTION_CONTAINED),
+        )
+
         results_tab = pn.Column(
-            self._elemental_results_view,
+            self._elemental_results_section,
+            self._elemental_multifit_section,
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["results-tab"],
             margin=(15, 0, 0, 0),

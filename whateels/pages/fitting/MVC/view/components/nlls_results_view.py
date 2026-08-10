@@ -123,7 +123,9 @@ class NLLSResultsView(pn.Column):
                 "max-width": "100%",
                 "min-width": "0",
                 "overflow-x": "hidden",
-                "padding": "0 10px 12px 10px",
+                # No horizontal padding: the hosting SimpleDetails already insets its
+                # content by 10 px on each side, and doubling it squeezes the widgets.
+                "padding": "0 0 2px 0",
             },
         )
 
@@ -415,7 +417,8 @@ class NLLSResultsView(pn.Column):
         )
 
     def _summary_html(self, snapshot: ReferenceFitSnapshot) -> str:
-        label = escape(self._area_labels.get(snapshot.area_id, snapshot.area_id))
+        # No area title here on purpose: the area is already chosen in the selector
+        # right above this card, so repeating it only adds noise.
         strategy = {
             "roi_mean": "Current ROI mean",
             "central_mean": "Central window mean",
@@ -429,8 +432,6 @@ class NLLSResultsView(pn.Column):
         return f"""
         <div style="box-sizing:border-box;max-width:100%;border-radius:4px;
                     box-shadow:0 0 5px #d8d8d8;background:#f7f7f7;overflow:hidden;">
-          <div style="background:{self._FIT_COLOR};color:white;padding:8px 10px;
-                      font-weight:600;text-align:center;">{label}</div>
           <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
                       gap:7px;padding:10px;">
             {self._metric_html("Reduced χ²", self._format_number(snapshot.redchi))}

@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 
 import numpy as np
 import xarray as xr
@@ -20,6 +21,7 @@ from whateels.nlls.contracts import (
     FineStructureSpec,
     FitRange,
     ModelComposition,
+    NLLSRunRequest,
 )
 from whateels.nlls.cross_sections import (
     OOSContinuumProvider,
@@ -38,10 +40,12 @@ from whateels.nlls.defaults import (
 from whateels.nlls.errors import (
     InvalidClusteringError,
     InvalidOOSDataError,
+    InvalidRunRequestError,
     InvalidSourceError,
     MissingOOSTableError,
 )
 from whateels.nlls.model_builder import NLLSModelBuilder
+from whateels.nlls.multifit import ElementalMultifitService
 from whateels.nlls.provenance import (
     publish_power_law_subtracted_dataset,
     validate_background_subtracted,
@@ -52,6 +56,7 @@ from whateels.nlls.references import (
     ReferenceSpectrumSelection,
     ReferenceSpectrumService,
 )
+from whateels.nlls.results import FitStatus
 
 
 def _write_table(directory: Path, atomic_number: int = 10) -> None:
@@ -537,6 +542,336 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(batch.successful_area_ids, ("cluster_0",))
         self.assertEqual(batch.failed_area_ids, ("cluster_1",))
         self.assertEqual(batch.failures[0].error_type, "InsufficientReferenceDataError")
+
+
+class ElementalMultifitTests(unittest.TestCase):
+    def setUp(self) -> None:
+        fixture = BuilderTests("test_continuum_only_excludes_elnes_parameters")
+        fixture.setUp()
+        self.builder = fixture.builder
+        self.area = replace(
+            fixture.area,
+            model_composition=ModelComposition.CONTINUUM_ONLY,
+            fine_structure_specs=(),
+        )
+        self.geometry = ExperimentalGeometry(200.0, 20.0, 0.0)
+        self.eloss = np.linspace(0.0, 2.0, 17)
+        self.fit_range = FitRange(0.0, 2.0)
+
+    def _source(self, amplitudes: np.ndarray, *, invalid=None):
+        amplitudes = np.asarray(amplitudes, dtype=float)
+        built = self.builder.build(
+            self.area, self.geometry, self.eloss, self.fit_range
+        )
+        unit = built.params.copy()
+        unit["ts_l23_cont_A"].value = 1.0
+        shape = np.asarray(built.model.eval(params=unit, x=self.eloss), dtype=float)
+        cube = amplitudes[..., None] * shape[None, None, :]
+        if invalid is not None:
+            cube[invalid] = np.nan
+        raw = xr.Dataset(
+            {"ElectronCount": (("y", "x", "Eloss"), cube)},
+            coords={
+                "y": np.arange(cube.shape[0]),
+                "x": np.arange(cube.shape[1]),
+                "Eloss": self.eloss,
+            },
+            attrs={
+                "original_name": "multifit.dm4",
+                "image_name": "multifit",
+                "beam_energy": 200.0,
+                "collection_angle": 20.0,
+                "convergence_angle": 0.0,
+            },
+        )
+        source = publish_power_law_subtracted_dataset(
+            raw, raw["ElectronCount"], fit_range_eV=(0.0, 0.25)
+        )
+        history = validate_background_subtracted(source)
+        identity = DatasetIdentity.from_dataset(
+            source,
+            tab_index=0,
+            source_kind="preprocessed",
+            preprocessing_history=history,
+            background_subtracted=True,
+        )
+        return source, identity, shape
+
+    def _reference(self, area, identity, amplitude):
+        built = self.builder.build(area, self.geometry, self.eloss, self.fit_range)
+        params = built.params.copy()
+        params["ts_l23_cont_A"].value = float(amplitude)
+        spectrum = built.model.eval(params=params, x=self.eloss)
+        return ReferenceFitService(self.builder).fit_area(
+            area,
+            self.geometry,
+            identity,
+            spectrum,
+            self.eloss,
+            self.fit_range,
+        )
+
+    def _request(self, *areas):
+        return NLLSRunRequest(
+            selected_areas=tuple(area.area_id for area in areas),
+            fit_range=self.fit_range,
+            method="leastsq",
+            model_composition_by_area=tuple(
+                (area.area_id, area.model_composition) for area in areas
+            ),
+            dataset_source_revision=self.identity.source_revision,
+            workspace_revision=11,
+            area_revisions=tuple(
+                (area.area_id, area.revision) for area in areas
+            ),
+        )
+
+    def test_run_request_rejects_overlap_between_default_and_clusters(self):
+        with self.assertRaises(ValueError):
+            NLLSRunRequest(
+                selected_areas=("default", "cluster_0"),
+                fit_range=self.fit_range,
+                method="leastsq",
+                model_composition_by_area=(
+                    ("default", ModelComposition.CONTINUUM_ONLY),
+                    ("cluster_0", ModelComposition.CONTINUUM_ONLY),
+                ),
+            )
+
+    def test_serial_run_produces_dense_numeric_reproducible_dataset(self):
+        source, self.identity, _ = self._source(
+            np.array([[1.5, 3.0], [5.0, 8.0]])
+        )
+        reference = self._reference(self.area, self.identity, 3.0)
+        request = self._request(self.area)
+        service = ElementalMultifitService(self.builder, progress_chunk_size=2)
+        first = service.fit_areas(
+            request,
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+        )
+        second = service.fit_areas(
+            request,
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+        )
+
+        required = {
+            "OriginalData",
+            "AreaLabel",
+            "FitStatus",
+            "ReducedChiSquare",
+            "BestFit",
+            "Residuals",
+            "ts_l23_continuum__component",
+            "ts_l23_cont_A",
+            "ts_l23_cont_A__stderr",
+        }
+        self.assertTrue(required.issubset(first.data_vars))
+        self.assertEqual(first["BestFit"].dims, ("y", "x", "Eloss"))
+        self.assertTrue(
+            all(variable.dtype != object for variable in first.variables.values())
+        )
+        np.testing.assert_allclose(first["OriginalData"], source["ElectronCount"])
+        np.testing.assert_allclose(
+            first["ts_l23_cont_A"], np.array([[1.5, 3.0], [5.0, 8.0]]), rtol=1e-5
+        )
+        np.testing.assert_array_equal(
+            first["FitStatus"], np.full((2, 2), int(FitStatus.SUCCESS))
+        )
+        self.assertEqual(first.attrs["complete"], 1)
+        self.assertEqual(first.attrs["cancelled"], 0)
+        for name in first.data_vars:
+            np.testing.assert_allclose(first[name], second[name], equal_nan=True)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "elemental-nlls.nc"
+            first.to_netcdf(path)
+            restored = xr.load_dataset(path)
+            try:
+                self.assertEqual(set(restored.data_vars), set(first.data_vars))
+                self.assertTrue(
+                    all(variable.dtype != object for variable in restored.variables.values())
+                )
+            finally:
+                restored.close()
+
+    def test_every_pixel_receives_an_independent_reference_parameter_copy(self):
+        source, self.identity, _ = self._source(np.array([[40.0, 1.25]]))
+        reference = self._reference(self.area, self.identity, 4.0)
+        request = self._request(self.area)
+
+        class RecordingService(ElementalMultifitService):
+            def __init__(inner_self, builder):
+                super().__init__(builder, progress_chunk_size=1)
+                inner_self.initial_amplitudes = []
+
+            def _fit_pixel(inner_self, built, area, snapshot, *args, **kwargs):
+                initial = inner_self._initial_params_for_pixel(built, snapshot)
+                inner_self.initial_amplitudes.append(
+                    float(initial["ts_l23_cont_A"].value)
+                )
+                initial["ts_l23_cont_A"].value = 123.0
+                return super()._fit_pixel(built, area, snapshot, *args, **kwargs)
+
+        service = RecordingService(self.builder)
+        result = service.fit_areas(
+            request,
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+        )
+        self.assertEqual(len(service.initial_amplitudes), 2)
+        np.testing.assert_allclose(service.initial_amplitudes, [4.0, 4.0], rtol=1e-6)
+        np.testing.assert_allclose(result["ts_l23_cont_A"], [[40.0, 1.25]], rtol=1e-5)
+
+    def test_each_area_uses_its_own_reference_and_order_is_irrelevant(self):
+        source, self.identity, _ = self._source(
+            np.array([[2.0, 2.5], [7.0, 7.5]])
+        )
+        top = np.array([[True, True], [False, False]])
+        bottom = ~top
+        first_area = replace(
+            self.area,
+            area_id="cluster_0",
+            label="Cluster 0",
+            mask=top,
+            mask_fingerprint="top",
+            clustering_label=0,
+            reference_strategy="clustering_mean",
+        )
+        second_area = replace(
+            self.area,
+            area_id="cluster_1",
+            label="Cluster 1",
+            mask=bottom,
+            mask_fingerprint="bottom",
+            clustering_label=1,
+            reference_strategy="clustering_mean",
+        )
+        references = {
+            "cluster_0": self._reference(first_area, self.identity, 2.25),
+            "cluster_1": self._reference(second_area, self.identity, 7.25),
+        }
+        areas = {"cluster_0": first_area, "cluster_1": second_area}
+        forward = ElementalMultifitService(self.builder).fit_areas(
+            self._request(first_area, second_area),
+            source,
+            self.geometry,
+            self.identity,
+            areas,
+            references,
+        )
+
+        class ReversePixelService(ElementalMultifitService):
+            @staticmethod
+            def _selected_coordinates(mask):
+                return ElementalMultifitService._selected_coordinates(mask)[::-1]
+
+        reverse = ReversePixelService(self.builder).fit_areas(
+            self._request(second_area, first_area),
+            source,
+            self.geometry,
+            self.identity,
+            areas,
+            references,
+        )
+        np.testing.assert_allclose(
+            forward["ts_l23_cont_A"],
+            np.array([[2.0, 2.5], [7.0, 7.5]]),
+            rtol=1e-5,
+        )
+        for name in forward.data_vars:
+            np.testing.assert_allclose(forward[name], reverse[name], equal_nan=True)
+
+    def test_pixel_error_is_isolated_and_overlapping_masks_fail_before_fit(self):
+        source, self.identity, _ = self._source(
+            np.array([[2.0, 3.0]]), invalid=(0, 1)
+        )
+        reference = self._reference(self.area, self.identity, 2.0)
+        result = ElementalMultifitService(self.builder).fit_areas(
+            self._request(self.area),
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+        )
+        np.testing.assert_array_equal(
+            result["FitStatus"],
+            [[int(FitStatus.SUCCESS), int(FitStatus.INSUFFICIENT_DATA)]],
+        )
+        self.assertTrue(np.isnan(result["BestFit"].values[0, 1]).all())
+
+        mask = np.array([[True, False]])
+        first_area = replace(
+            self.area,
+            area_id="cluster_0",
+            mask=mask,
+            clustering_label=0,
+        )
+        second_area = replace(
+            self.area,
+            area_id="cluster_1",
+            mask=mask.copy(),
+            clustering_label=1,
+        )
+        with self.assertRaises(InvalidRunRequestError):
+            ElementalMultifitService(self.builder).fit_areas(
+                self._request(first_area, second_area),
+                source,
+                self.geometry,
+                self.identity,
+                {"cluster_0": first_area, "cluster_1": second_area},
+                {
+                    "cluster_0": self._reference(first_area, self.identity, 2.0),
+                    "cluster_1": self._reference(second_area, self.identity, 2.0),
+                },
+            )
+
+    def test_cancellation_marks_pending_pixels_and_returns_incomplete_result(self):
+        source, self.identity, _ = self._source(np.array([[1.0, 2.0, 3.0, 4.0]]))
+        reference = self._reference(self.area, self.identity, 2.0)
+        cancelled = Event()
+        progress = []
+
+        def on_progress(done, total):
+            progress.append((done, total))
+            if done == 1:
+                cancelled.set()
+
+        result = ElementalMultifitService(
+            self.builder, progress_chunk_size=1
+        ).fit_areas(
+            self._request(self.area),
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+            cancel_event=cancelled,
+            progress_callback=on_progress,
+        )
+        self.assertEqual(progress[:2], [(0, 4), (1, 4)])
+        self.assertEqual(result.attrs["complete"], 0)
+        self.assertEqual(result.attrs["cancelled"], 1)
+        self.assertEqual(result.attrs["processed_pixels"], 1)
+        np.testing.assert_array_equal(
+            result["FitStatus"],
+            [[
+                int(FitStatus.SUCCESS),
+                int(FitStatus.CANCELLED),
+                int(FitStatus.CANCELLED),
+                int(FitStatus.CANCELLED),
+            ]],
+        )
 
 
 if __name__ == "__main__":

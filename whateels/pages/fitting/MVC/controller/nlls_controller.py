@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+from queue import Empty, SimpleQueue
+from threading import Event, Thread
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import panel as pn
+import xarray as xr
 
 from whateels.nlls.areas import AreaDefinition, ClusteringAreaAdapter
 from whateels.nlls.contracts import (
@@ -17,6 +21,7 @@ from whateels.nlls.contracts import (
     FineStructureSpec,
     FitRange,
     ModelComposition,
+    NLLSRunRequest,
     ReferenceFitFailure,
 )
 from whateels.nlls.cross_sections import OOSContinuumProvider
@@ -31,6 +36,7 @@ from whateels.nlls.defaults import (
 )
 from whateels.nlls.errors import NLLSError
 from whateels.nlls.model_builder import NLLSModelBuilder
+from whateels.nlls.multifit import ElementalMultifitService
 from whateels.nlls.provenance import validate_background_subtracted
 from whateels.nlls.references import (
     ReferenceFitService,
@@ -38,6 +44,7 @@ from whateels.nlls.references import (
     ReferenceSpectrumService,
 )
 from whateels.nlls.workspace import NLLSWorkspace
+from whateels.nlls.results import FitStatus
 
 if TYPE_CHECKING:
     from ..view import FittingView
@@ -61,14 +68,23 @@ class NLLSController:
         self.provider = provider or OOSContinuumProvider()
         self.builder = NLLSModelBuilder(self.provider)
         self.reference_service = ReferenceFitService(self.builder)
+        self.multifit_service = ElementalMultifitService(self.builder)
         self._source_error: str | None = None
         self._geometry_error: str | None = None
         self._validated_geometry: ExperimentalGeometry | None = None
         # None until the first validation pass, so that pass always applies the gate.
         self._sections_unlocked: bool | None = None
         self._watchers: list[Any] = []
+        self._run_cancel_event: Event | None = None
+        self._run_thread: Thread | None = None
+        self._run_events: SimpleQueue[tuple[Any, ...]] = SimpleQueue()
+        self._run_poll_callback: Any | None = None
+        self._active_run_request: NLLSRunRequest | None = None
+        self._prior_complete_results: xr.Dataset | None = None
+        self._published_result_ids: set[int] = set()
         self.bind()
         self.on_source_changed(initial=True)
+        self._restore_existing_multifit_result()
 
     @property
     def workspace(self) -> NLLSWorkspace | None:
@@ -95,6 +111,12 @@ class NLLSController:
         self.view.elemental_add_edge_button.on_click(self._on_add_edge)
         self.view.elemental_build_model_button.on_click(self._on_build_model)
         self.view.elemental_fit_button.on_click(self._on_fit)
+        self.view.elemental_run_nlls_button.on_click(
+            self._on_run_elemental_nlls
+        )
+        self.view.elemental_cancel_button.on_click(
+            self._on_cancel_elemental_nlls
+        )
         self.view.elemental_select_all_fit_areas_button.on_click(
             self._on_select_all_fit_areas
         )
@@ -114,6 +136,9 @@ class NLLSController:
         )
 
     def cleanup(self) -> None:
+        if self._run_cancel_event is not None:
+            self._run_cancel_event.set()
+        self._stop_run_polling()
         results_view = getattr(self.view, "elemental_results_view", None)
         if results_view is not None:
             results_view.set_main_plot_callback(None)
@@ -167,6 +192,8 @@ class NLLSController:
             self._validated_geometry = None
 
         if self._source_error or self._geometry_error or geometry is None:
+            if self._active_run_request is not None:
+                self._request_run_cancellation(notify=False)
             if not initial or self.workspace is not None:
                 self.app_state.clear_nlls_state()
             self._refresh_results_view()
@@ -183,6 +210,14 @@ class NLLSController:
             preprocessing_history=history,
             background_subtracted=True,
         )
+
+        active_request = self._active_run_request
+        if active_request is not None and (
+            identity.source_revision != active_request.dataset_source_revision
+            or self.workspace is None
+            or self.workspace.geometry != geometry
+        ):
+            self._request_run_cancellation(notify=False)
 
         workspace = self.workspace
         workspace_replaced = workspace is None or workspace.dataset_identity != identity
@@ -448,6 +483,7 @@ class NLLSController:
 
     def _refresh_button_states(self) -> None:
         workspace = self.workspace
+        run_active = self._active_run_request is not None
         selected_valid = False
         if workspace is not None:
             try:
@@ -455,7 +491,7 @@ class NLLSController:
                 selected_valid = True
             except (NLLSError, ValueError):
                 selected_valid = False
-        self.view.elemental_add_edge_button.disabled = not selected_valid
+        self.view.elemental_add_edge_button.disabled = run_active or not selected_valid
 
         clustering_definitions: tuple[AreaDefinition, ...] = ()
         if workspace is not None and self.app_state.last_clustering_result is not None:
@@ -470,11 +506,13 @@ class NLLSController:
             "Use Preprocessed Data" if clustering_active else "Use Current Clustering"
         )
         clustering_button.button_type = "warning" if clustering_active else "primary"
-        clustering_button.disabled = not (clustering_active or clustering_valid)
+        clustering_button.disabled = run_active or not (
+            clustering_active or clustering_valid
+        )
 
         area = workspace.areas.get("default") if workspace is not None else None
         has_continuum = bool(area and area.continuum_specs)
-        self.view.elemental_build_model_button.disabled = not has_continuum
+        self.view.elemental_build_model_button.disabled = run_active or not has_continuum
 
         fit_areas = self.view.elemental_fit_areas_input
         if clustering_active and workspace is not None:
@@ -499,12 +537,12 @@ class NLLSController:
             if selected != list(fit_areas.value):
                 fit_areas.value = selected
         clustering_settings_available = clustering_active or clustering_valid
-        fit_areas.disabled = not clustering_settings_available
-        self.view.elemental_fit_area_settings_button.disabled = not (
-            clustering_settings_available
+        fit_areas.disabled = run_active or not clustering_settings_available
+        self.view.elemental_fit_area_settings_button.disabled = (
+            run_active or not clustering_settings_available
         )
-        self.view.elemental_select_all_fit_areas_button.disabled = not (
-            clustering_settings_available
+        self.view.elemental_select_all_fit_areas_button.disabled = (
+            run_active or not clustering_settings_available
         )
 
         target_ids = tuple(fit_areas.value) if clustering_active else ("default",)
@@ -518,10 +556,27 @@ class NLLSController:
             except (NLLSError, ValueError, TypeError):
                 targets_available = False
                 break
-        self.view.elemental_fit_button.disabled = not targets_available
-        # Multipixel propagation/results are a later phase; never advertise a runnable action yet.
-        self.view.elemental_run_nlls_button.disabled = True
-        self.view.elemental_cancel_button.disabled = True
+        self.view.elemental_fit_button.disabled = run_active or not targets_available
+
+        run_ready = targets_available
+        if run_ready:
+            for area_id in target_ids:
+                if not self._reference_is_current(area_id):
+                    run_ready = False
+                    break
+        self.view.elemental_run_nlls_button.disabled = run_active or not run_ready
+        cancel_requested = bool(
+            self._run_cancel_event is not None and self._run_cancel_event.is_set()
+        )
+        self.view.elemental_cancel_button.disabled = not run_active or cancel_requested
+
+        # A run owns an immutable configuration snapshot. Lock all inputs that could
+        # otherwise make the request stale while the worker is fitting pixels.
+        for key, widget in self.view.elemental_input.items():
+            if key == "subshells":
+                widget.disabled = run_active or not bool(widget.options)
+            else:
+                widget.disabled = run_active
 
     def _publish_workspace(self) -> None:
         self.app_state.nlls_workspace = self.workspace
@@ -565,9 +620,12 @@ class NLLSController:
             preferred_area=preferred_area,
         )
         if activate and valid_snapshots:
-            tabs = getattr(self.view, "fitting_tabs", None)
-            if tabs is not None:
-                tabs.active = 2
+            self._activate_results_tab()
+
+    def _activate_results_tab(self) -> None:
+        tabs = getattr(self.view, "fitting_tabs", None)
+        if tabs is not None:
+            tabs.active = 2
 
     @staticmethod
     def _notify(level: str, message: str, duration: int = 5000) -> None:
@@ -575,6 +633,389 @@ class NLLSController:
             getattr(pn.state.notifications, level)(message, duration=duration)
         except Exception:
             pass
+
+    def _selected_run_area_ids(self) -> tuple[str, ...]:
+        workspace = self.workspace
+        if workspace is None:
+            return ()
+        if workspace.clustering_active:
+            return tuple(str(value) for value in self.view.elemental_fit_areas_input.value)
+        return ("default",)
+
+    def _freeze_run_inputs(self):
+        """Build a closed request and detach every worker input from mutable GUI state."""
+        if self._active_run_request is not None:
+            raise ValueError("an Elemental NLLS run is already active")
+        workspace = self.workspace
+        source = self._active_dataset()
+        if workspace is None or source is None:
+            raise ValueError("no valid Elemental NLLS source")
+        selected = self._selected_run_area_ids()
+        if not selected:
+            raise ValueError("select at least one area to run")
+        for area_id in selected:
+            if area_id not in workspace.areas:
+                raise ValueError(f"unknown NLLS area: {area_id}")
+            if not self._reference_is_current(area_id):
+                raise ValueError(
+                    f"area {area_id} needs a current converged reference fit"
+                )
+
+        request = NLLSRunRequest(
+            selected_areas=selected,
+            fit_range=self._current_fit_range(),
+            method="leastsq",
+            model_composition_by_area=tuple(
+                (area_id, workspace.areas[area_id].model_composition)
+                for area_id in selected
+            ),
+            parallel=False,
+            workers=1,
+            dataset_source_revision=workspace.dataset_identity.source_revision,
+            workspace_revision=workspace.dirty_revision,
+            area_revisions=tuple(
+                (area_id, workspace.areas[area_id].revision)
+                for area_id in selected
+            ),
+        )
+        frozen_source = source.copy(deep=True)
+        frozen_areas = {
+            area_id: deepcopy(workspace.areas[area_id]) for area_id in selected
+        }
+        frozen_references = {
+            area_id: deepcopy(workspace.reference_fits[area_id])
+            for area_id in selected
+        }
+        return (
+            request,
+            frozen_source,
+            deepcopy(workspace.geometry),
+            deepcopy(workspace.dataset_identity),
+            frozen_areas,
+            frozen_references,
+        )
+
+    def _run_request_is_current(self, request: NLLSRunRequest) -> bool:
+        """Revalidate the optimistic-lock fields before committing worker output."""
+        workspace = self.workspace
+        if workspace is None:
+            return False
+        if workspace.dataset_identity.source_revision != request.dataset_source_revision:
+            return False
+        if workspace.dirty_revision != request.workspace_revision:
+            return False
+        if self._selected_run_area_ids() != request.selected_areas:
+            return False
+        try:
+            if self._current_fit_range() != request.fit_range:
+                return False
+        except (NLLSError, ValueError, TypeError):
+            return False
+        compositions = dict(request.model_composition_by_area)
+        revisions = dict(request.area_revisions)
+        for area_id in request.selected_areas:
+            area = workspace.areas.get(area_id)
+            if area is None:
+                return False
+            if area.model_composition != compositions[area_id]:
+                return False
+            if revisions and area.revision != revisions[area_id]:
+                return False
+            if not self._reference_is_current(area_id):
+                return False
+        return True
+
+    def _start_run_polling(self) -> None:
+        self._stop_run_polling()
+        if pn.state.curdoc is None:
+            return
+        self._run_poll_callback = pn.state.add_periodic_callback(
+            self._drain_run_events,
+            period=100,
+            start=True,
+        )
+
+    def _stop_run_polling(self) -> None:
+        callback = self._run_poll_callback
+        self._run_poll_callback = None
+        if callback is not None:
+            try:
+                callback.stop()
+            except Exception:
+                pass
+
+    def _finish_run(self) -> None:
+        self._stop_run_polling()
+        self._active_run_request = None
+        self._run_cancel_event = None
+        self._run_thread = None
+        self._prior_complete_results = None
+        self.view.elemental_run_nlls_button.loading = False
+        self.view.elemental_cancel_button.loading = False
+        self._refresh_button_states()
+
+    def _publish_multifit_result_plot(
+        self,
+        result: xr.Dataset,
+        *,
+        activate: bool = True,
+    ) -> None:
+        """Add a committed run above the existing main plots without replacing them."""
+        result_id = id(result)
+        if result_id in self._published_result_ids:
+            return
+        layout = getattr(self.parent, "layout", None)
+        add_result = getattr(layout, "add_nlls_result_plot", None)
+        if add_result is None:
+            return
+        try:
+            add_result(result)
+            self._published_result_ids.add(result_id)
+            # The run controls live in Results now, so a finished run has to bring
+            # that tab forward exactly like a reference fit does. Restoring an older
+            # result when the page is rebuilt must not steal the tab, though.
+            if activate:
+                self._activate_results_tab()
+        except Exception as exc:
+            # Plot publication is deliberately downstream from the atomic data commit.
+            self._notify(
+                "warning",
+                f"The NLLS result was saved, but its plots could not be added: {exc}",
+                9000,
+            )
+
+    def _restore_existing_multifit_result(self) -> None:
+        result = self.app_state.nlls_results
+        workspace = self.workspace
+        if not isinstance(result, xr.Dataset) or workspace is None:
+            return
+        if (
+            str(result.attrs.get("dataset_source_revision", ""))
+            != workspace.dataset_identity.source_revision
+        ):
+            return
+        self._publish_multifit_result_plot(result, activate=False)
+
+    def _request_run_cancellation(self, *, notify: bool = True) -> None:
+        if self._active_run_request is None or self._run_cancel_event is None:
+            return
+        if self._run_cancel_event.is_set():
+            return
+        self._run_cancel_event.set()
+        self.app_state.nlls_run_state = "cancelling"
+        progress = self.view.elemental_run_progress
+        progress.name = "Cancelling after the active pixel..."
+        progress.active = True
+        self.view.elemental_cancel_button.loading = True
+        self._refresh_button_states()
+        if notify:
+            self._notify(
+                "warning",
+                "Cancellation requested. The current pixel will finish first.",
+            )
+
+    def _on_cancel_elemental_nlls(self, event) -> None:
+        self._request_run_cancellation()
+
+    def _run_worker(
+        self,
+        request: NLLSRunRequest,
+        source: xr.Dataset,
+        geometry: ExperimentalGeometry,
+        identity: DatasetIdentity,
+        areas: dict[str, Any],
+        references: dict[str, Any],
+        cancel_event: Event,
+    ) -> None:
+        """Worker entrypoint: calculate and enqueue data, never mutate the GUI."""
+        try:
+            result = self.multifit_service.fit_areas(
+                request,
+                source,
+                geometry,
+                identity,
+                areas,
+                references,
+                cancel_event=cancel_event,
+                progress_callback=lambda done, total: self._run_events.put(
+                    ("progress", request, int(done), int(total))
+                ),
+            )
+            self._run_events.put(("result", request, result))
+        except Exception as exc:
+            self._run_events.put(
+                ("error", request, type(exc).__name__, str(exc))
+            )
+
+    def _on_run_elemental_nlls(self, event) -> None:
+        try:
+            (
+                request,
+                source,
+                geometry,
+                identity,
+                areas,
+                references,
+            ) = self._freeze_run_inputs()
+            cancel_event = Event()
+            previous = self.app_state.nlls_results
+            self._prior_complete_results = (
+                previous
+                if isinstance(previous, xr.Dataset)
+                and bool(previous.attrs.get("complete", False))
+                else None
+            )
+            self._active_run_request = request
+            self._run_cancel_event = cancel_event
+            self.app_state.nlls_run_state = "running"
+            progress = self.view.elemental_run_progress
+            progress.param.update(
+                name="Elemental NLLS: 0 / 0 pixels",
+                value=0,
+                active=True,
+                bar_color="success",
+                visible=True,
+            )
+            self.view.elemental_run_nlls_button.loading = True
+            self._refresh_button_states()
+            thread = Thread(
+                target=self._run_worker,
+                args=(
+                    request,
+                    source,
+                    geometry,
+                    identity,
+                    areas,
+                    references,
+                    cancel_event,
+                ),
+                name="elemental-nlls-serial",
+                daemon=True,
+            )
+            self._run_thread = thread
+            self._start_run_polling()
+            thread.start()
+        except Exception as exc:
+            self.app_state.nlls_run_state = "error"
+            self._notify("error", f"Cannot run Elemental NLLS: {exc}", 10000)
+            self._finish_run()
+
+    def _commit_run_result(
+        self,
+        request: NLLSRunRequest,
+        result: xr.Dataset,
+    ) -> None:
+        progress = self.view.elemental_run_progress
+        current = self._run_request_is_current(request)
+        cancelled = bool(result.attrs.get("cancelled", False))
+        if not current:
+            self.app_state.nlls_run_state = "idle" if cancelled else "error"
+            progress.param.update(
+                name="Elemental NLLS result discarded: configuration changed",
+                active=False,
+                bar_color="warning",
+            )
+            self._notify(
+                "warning",
+                "The Elemental NLLS result was discarded because its source or model changed.",
+                9000,
+            )
+            self._finish_run()
+            return
+
+        if cancelled:
+            if self._prior_complete_results is None:
+                self.app_state.nlls_results = result
+                self.app_state.nlls_revision += 1
+                self._publish_multifit_result_plot(result)
+            self.app_state.nlls_run_state = "idle"
+            processed = int(result.attrs.get("processed_pixels", 0))
+            selected = int(result.attrs.get("selected_pixels", 0))
+            progress.param.update(
+                name=f"Elemental NLLS cancelled: {processed} / {selected} pixels",
+                active=False,
+                bar_color="warning",
+            )
+            self._notify(
+                "warning",
+                "Elemental NLLS cancelled; the previous complete result was preserved."
+                if self._prior_complete_results is not None
+                else "Elemental NLLS cancelled; the partial result was marked incomplete.",
+                8000,
+            )
+            self._finish_run()
+            return
+
+        self.app_state.nlls_results = result
+        self.app_state.nlls_run_state = "complete"
+        self.app_state.nlls_revision += 1
+        self._publish_multifit_result_plot(result)
+        statuses, counts = np.unique(
+            np.asarray(result["FitStatus"].values, dtype=np.int8),
+            return_counts=True,
+        )
+        status_counts = {
+            int(status): int(count) for status, count in zip(statuses, counts)
+        }
+        success_count = status_counts.get(int(FitStatus.SUCCESS), 0)
+        error_count = status_counts.get(int(FitStatus.INSUFFICIENT_DATA), 0)
+        error_count += status_counts.get(int(FitStatus.FIT_ERROR), 0)
+        selected = int(result.attrs.get("selected_pixels", success_count + error_count))
+        progress.param.update(
+            name=f"Elemental NLLS complete: {success_count} / {selected} fitted",
+            value=100,
+            active=False,
+            bar_color="success" if error_count == 0 else "warning",
+        )
+        if error_count:
+            self._notify(
+                "warning",
+                f"Elemental NLLS completed with {success_count} successful and "
+                f"{error_count} failed pixels.",
+                9000,
+            )
+        else:
+            self._notify(
+                "success",
+                f"Elemental NLLS completed for {success_count} pixels.",
+            )
+        self._finish_run()
+
+    def _drain_run_events(self) -> None:
+        """Consume worker messages on the Panel document thread."""
+        while True:
+            try:
+                payload = self._run_events.get_nowait()
+            except Empty:
+                return
+            kind, request, *values = payload
+            if request != self._active_run_request:
+                continue
+            if kind == "progress":
+                done, total = values
+                percentage = int(round(100.0 * done / total)) if total else 0
+                self.view.elemental_run_progress.param.update(
+                    name=f"Elemental NLLS: {done} / {total} pixels",
+                    value=max(0, min(100, percentage)),
+                )
+            elif kind == "result":
+                self._commit_run_result(request, values[0])
+                return
+            elif kind == "error":
+                error_type, message = values
+                self.app_state.nlls_run_state = "error"
+                self.view.elemental_run_progress.param.update(
+                    name="Elemental NLLS failed",
+                    active=False,
+                    bar_color="danger",
+                )
+                self._notify(
+                    "error",
+                    f"Elemental NLLS failed ({error_type}): {message}",
+                    10000,
+                )
+                self._finish_run()
+                return
 
     def _on_element_changed(self, event) -> None:
         self._refresh_element_catalog()
@@ -644,6 +1085,8 @@ class NLLSController:
 
     def on_roi_changed(self) -> None:
         """Invalidate only the default reference when its committed ROI changes."""
+        if self._active_run_request is not None:
+            self._request_run_cancellation(notify=False)
         workspace = self.workspace
         if workspace is None or "default" not in workspace.areas:
             return

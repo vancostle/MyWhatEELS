@@ -39,3 +39,11 @@ class ReferenceFitError(NLLSError):
 
 class InvalidClusteringError(NLLSError):
     """The clustering result cannot define areas for the active dataset."""
+
+
+class InvalidRunRequestError(NLLSError):
+    """A multipixel request is stale, inconsistent, or unsafe to execute."""
+
+
+class PixelFitError(NLLSError):
+    """A single pixel did not produce a finite successful lmfit result."""
