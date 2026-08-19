@@ -1,16 +1,13 @@
-"""Color utilities for Plotly discrete colorscales.
+"""Color utilities for categorical cluster colormaps.
 
-Provides helpers to sample n distinct colors from a Matplotlib colormap,
-convert colors to Plotly strings and construct stepped (discrete) Plotly
-colorscales suitable for heatmaps with categorical integer labels.
+Samples n distinct colors from a Matplotlib colormap for heatmaps with
+categorical integer labels.
 """
 from __future__ import annotations
 
-from typing import Iterable, List, Sequence, Tuple, Union
+from typing import List, Sequence, Tuple
 import numpy as np
 from matplotlib import colormaps
-
-ColorLike = Union[str, Tuple[float, float, float], Tuple[float, float, float, float]]
 
 
 def get_nclusters_cmap(
@@ -98,47 +95,3 @@ def get_nclusters_cmap(
         else:
             result.append((float(color[0]), float(color[1]), float(color[2]), float(color[3])))
     return result
-
-
-def to_plotly_color(color: ColorLike) -> str:
-    """Convert a color specification to a Plotly-compatible color string.
-
-    Accepts:
-    - 'rgb(r,g,b)' strings, hex strings or named colors -> returned unchanged
-    - matplotlib-style RGB/RGBA tuples (values 0..1) -> 'rgb(r,g,b)'
-    - other objects -> str(color)
-    """
-    if isinstance(color, str):
-        return color
-    if isinstance(color, (list, tuple)) and len(color) >= 3:
-        try:
-            r = int(float(color[0]) * 255)
-            g = int(float(color[1]) * 255)
-            b = int(float(color[2]) * 255)
-            return f'rgb({r},{g},{b})'
-        except Exception:
-            return str(color)
-    return str(color)
-
-
-def build_discrete_colorscale(colors: Sequence[ColorLike]) -> List[List[Union[float, str]]]:
-    """Build a stepped Plotly colorscale (list of [pos, color]) from an
-    iterable of colors.
-
-    The function creates duplicate boundaries for each color so Plotly renders
-    hard steps (blocks) instead of smoothing between colors.
-
-    Input ``colors`` can contain color strings or RGB(A) tuples. Returned
-    colorscale is suitable for passing directly to ``go.Heatmap(colorscale=...)``.
-    """
-    n = len(colors)
-    if n == 0:
-        return []
-    discrete = []
-    for i, c in enumerate(colors):
-        color_str = to_plotly_color(c)
-        start = i / float(n)
-        end = (i + 1) / float(n)
-        discrete.append([start, color_str])
-        discrete.append([end, color_str])
-    return discrete

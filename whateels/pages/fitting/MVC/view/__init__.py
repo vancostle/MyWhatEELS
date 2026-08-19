@@ -1,6 +1,5 @@
 import panel as pn
 
-from whateels.helpers import CSS_ROOT
 from whateels.components import ModalManager, UploadedFile, ToggleButton
 from panel.viewable import Viewable
 from panel.pane import HTML
@@ -18,9 +17,6 @@ class FittingView:
 
     _STRETCH_WIDTH = 'stretch_width'
     _STRETCH_BOTH = 'stretch_both'
-    _STRETCH_HEIGHT = 'stretch_height'
-
-    ELEMENT_EAXIS_THRESHOLD = 50
 
     def __init__(
         self,

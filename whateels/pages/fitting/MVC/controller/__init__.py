@@ -123,7 +123,6 @@ class FittingController(BaseController):
         """Recenter the editable energy window whenever the center value changes."""
         self.view.component_input["energy_range"].start = event.new - self.COMPONENT_EAXIS_THRESHOLD
         self.view.component_input["energy_range"].end = event.new + self.COMPONENT_EAXIS_THRESHOLD
-        self.view.component_input["energy_range"].value = (event.new - self.COMPONENT_EAXIS_THRESHOLD, event.new + self.COMPONENT_EAXIS_THRESHOLD_VALUE)
         self.view.component_input["energy_range"].value = (event.new - self.COMPONENT_EAXIS_THRESHOLD_VALUE, event.new + self.COMPONENT_EAXIS_THRESHOLD_VALUE)
 
     def _model_select_watcher(self, event):
@@ -150,10 +149,6 @@ class FittingController(BaseController):
         # After adding a component, update the plot
         self.update_plot(self._model.ref_results if hasattr(self._model, 'ref_results') else None)
         
-    def _test(self, event):
-        """Internal helper kept for manual testing of model creation."""
-        self._model._create_model(self._model.dataset, name_area='default', flex='medium')
-    
     def show_nlls_config_popup(self, event):
         """Show the NLLS configuration popup."""
         #self._layout.show_nlls_config_popup(event)
