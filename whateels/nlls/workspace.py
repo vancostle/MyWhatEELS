@@ -103,18 +103,6 @@ class NLLSWorkspace:
             return area
         return self._replace_area(replace(area, model_composition=parsed))
 
-    def set_reference_strategy(self, area_id: str, strategy: str) -> AreaModelSpec:
-        if strategy not in {"roi_mean", "central_mean", "clustering_mean"}:
-            raise ValueError(f"unsupported reference strategy: {strategy}")
-        area = self.areas[area_id]
-        if area.reference_strategy == strategy:
-            return area
-        updated = replace(area, reference_strategy=strategy)
-        self.areas[area_id] = updated
-        self.reference_fits.pop(area_id, None)
-        self.dirty_revision += 1
-        return updated
-
     def clone_area(self, source_area: str, area_id: str, label: str) -> AreaModelSpec:
         if area_id in self.areas:
             raise ValueError(f"area already exists: {area_id}")

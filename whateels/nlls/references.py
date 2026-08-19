@@ -107,34 +107,6 @@ class ReferenceSpectrumService:
     def from_mask(cls, cube: np.ndarray, mask: np.ndarray) -> np.ndarray:
         return cls.select_from_mask(cube, mask, "mask_mean").spectrum
 
-    @classmethod
-    def select_from_roi(
-        cls, cube: np.ndarray, pairs: Iterable[tuple[int, int]]
-    ) -> ReferenceSpectrumSelection:
-        data = np.asarray(cube, dtype=float)
-        if data.ndim != 3:
-            raise ValueError("reference source must have dimensions (y, x, Eloss)")
-        return cls.select_from_mask(
-            data, cls.roi_mask(data.shape[:2], pairs), "roi_mean"
-        )
-
-    @classmethod
-    def from_roi(cls, cube: np.ndarray, pairs: Iterable[tuple[int, int]]) -> np.ndarray:
-        return cls.select_from_roi(cube, pairs).spectrum
-
-    @classmethod
-    def select_default_central(cls, cube: np.ndarray) -> ReferenceSpectrumSelection:
-        data = np.asarray(cube, dtype=float)
-        if data.ndim != 3:
-            raise ValueError("reference source must have dimensions (y, x, Eloss)")
-        return cls.select_from_mask(
-            data, cls.central_mask(data.shape[:2]), "central_mean"
-        )
-
-    @classmethod
-    def default_central(cls, cube: np.ndarray) -> np.ndarray:
-        return cls.select_default_central(cube).spectrum
-
 
 class ReferenceFitService:
     def __init__(self, model_builder: NLLSModelBuilder):

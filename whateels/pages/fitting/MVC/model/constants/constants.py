@@ -31,22 +31,15 @@ class Constants:
     TAB_ELEMENTAL = "Elemental"
     TAB_RESULTS = "Results"
 
-    # TODO (NLLS_TODO 5.5:663): migrate the elemental defaults below - and the
-    # CHEMICAL_SHIFT_TOOLTIP text - to whateels/nlls/defaults.py once that module
-    # exists, and share them with the quantification view (NLLS_TODO 5.4.2:478)
-    # so the domain phase does not create a third copy of these values.
-    # Elemental NLLS defaults
+    # Elemental NLLS defaults. The values themselves live in whateels/nlls/defaults.py
+    # and are imported above, so the domain phase keeps a single source of truth.
+    # TODO (NLLS_TODO 5.4.2:478): share them with the quantification view as well.
+    # The reference strategy is chosen by NLLSController._reference_selection_for_area
+    # from the committed ROI, so it has no user-facing option list here.
     AVAILABLE_ELEMENTAL_MODELS = list(NLLS_SUPPORTED_ELNES_SHAPES)
     DEFAULT_ELEMENTAL_MODEL = NLLS_DEFAULT_ELNES_SHAPE
     DEFAULT_ELEMENTAL_FLEXIBILITY = NLLS_DEFAULT_FLEXIBILITY
     AVAILABLE_ELEMENTAL_FLEXIBILITIES = ["Low", "Medium", "High", "Maximum"]
-    AVAILABLE_ELEMENTAL_AREAS = ["default"]
-    DEFAULT_ELEMENTAL_AREA = "default"
-    AVAILABLE_ELEMENTAL_REFERENCE_STRATEGIES = {
-        "Current ROI": "roi_mean",
-        "Central window": "central_mean",
-    }
-    DEFAULT_ELEMENTAL_REFERENCE_STRATEGY = "roi_mean"
 
     # Elemental NLLS - OOS controls (NLLS_TODO 5.1)
     # Model composition
@@ -88,11 +81,10 @@ class Constants:
     )
     ELEMENTAL_ONSET_READOUT_PLACEHOLDER = "Onset (eV): -"
 
-    # Elemental tab section titles
+    # Elemental tab section titles. Area selection lives in NLLSFitAreasModal,
+    # so the tab itself has no "Areas"/"Run Setup" sections.
     SECTION_ELEMENTAL_EDGE = "Edge Definition"
     SECTION_ELEMENTAL_MODEL = "Model Setup"
-    SECTION_ELEMENTAL_AREAS = "Areas"
-    SECTION_ELEMENTAL_RUN_SETUP = "Run Setup"
 
     # Results tab section titles
     SECTION_RESULTS_REFERENCE = "Reference Fit"
@@ -103,12 +95,6 @@ class Constants:
     # Elemental tab tooltips
     TOOLTIP_ELEMENTAL_SUBSHELLS = (
         "Subshell options come from the OOS catalogue and are filled in once an element is selected."
-    )
-    TOOLTIP_ELEMENTAL_FIT_AREAS = "Areas become selectable once their reference fit has converged."
-    TOOLTIP_ELEMENTAL_FIT_RANGE = "The fit range is initialised from the dataset energy-loss axis."
-    TOOLTIP_ELEMENTAL_REFERENCE_STRATEGY = (
-        "Current ROI uses the mean of the committed lasso selection for the default area. "
-        "Central window uses the central 2/5–3/5 region when no ROI reference is wanted."
     )
     TOOLTIP_ELEMENTAL_SOFTEN = (
         "Soften strength is expressed in eV, never in samples: it is converted to channels with "

@@ -25,7 +25,6 @@ from whateels.nlls.contracts import (
     ExperimentalGeometry,
     FineStructureSpec,
     FitRange,
-    ModelComposition,
     NLLSRunRequest,
     ReferenceFitFailure,
 )
@@ -1326,12 +1325,6 @@ class NLLSController:
         finally:
             self.view.elemental_build_model_button.loading = False
             self._refresh_button_states()
-
-    def _reference_for_active_area(self) -> np.ndarray:
-        workspace = self.workspace
-        if workspace is None:
-            raise ValueError("no valid NLLS workspace")
-        return self._reference_selection_for_area(workspace.active_area).spectrum
 
     def _fit_area(self, area_id: str):
         workspace = self.workspace

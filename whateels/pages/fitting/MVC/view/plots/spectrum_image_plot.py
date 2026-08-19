@@ -8,7 +8,6 @@ fit-curve overlay, energy map display, and multifit ROI extraction.
 import panel as pn
 import numpy as np
 import time
-import xarray as xr
 import holoviews as hv
 from matplotlib.colors import LinearSegmentedColormap, to_hex
 

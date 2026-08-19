@@ -68,9 +68,6 @@ class NLLSDerivedResultsControlsModal(pn.Column):
         self._controls_slot.objects = objects
         self._empty_state.visible = not bool(objects)
 
-    def clear_controls(self) -> None:
-        self.mount(())
-
     def _close(self, event) -> None:
         self.visible = False
         if self._custom_page is not None:

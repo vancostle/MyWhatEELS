@@ -21,8 +21,6 @@ class FittingView:
     _STRETCH_HEIGHT = 'stretch_height'
 
     ELEMENT_EAXIS_THRESHOLD = 50
-    COMPONENT_EAXIS_THRESHOLD = 4
-    COMPONENT_EAXIS_THRESHOLD_VALUE = 50
 
     def __init__(
         self,

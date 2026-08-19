@@ -132,17 +132,6 @@ class WhiteLineService:
     AUTO_FWHM_FACTOR = 2.5625
 
     @staticmethod
-    def available_components(results: xr.Dataset) -> tuple[str, ...]:
-        _validate_results(results)
-        return tuple(
-            name.removesuffix("__component")
-            for name, variable in results.data_vars.items()
-            if variable.dims == ("y", "x", "Eloss")
-            and name.endswith("__component")
-            and "elnes" in name.lower()
-        )
-
-    @staticmethod
     def _variable_name(results: xr.Dataset, component: str) -> str:
         name = component if component.endswith("__component") else f"{component}__component"
         if name not in results or results[name].dims != ("y", "x", "Eloss"):
