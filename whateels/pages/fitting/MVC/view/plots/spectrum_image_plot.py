@@ -14,7 +14,7 @@ from matplotlib.colors import LinearSegmentedColormap, to_hex
 
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
-from whateels.components import create_dataset_info_card
+from whateels.components import create_dataset_info_card, DragGutter
 from whateels.helpers.bokeh_geometry import square_pixel_plot_hook
 from whateels.helpers.colormaps import get_nclusters_cmap
 from whateels.state import CacheManager
@@ -155,6 +155,8 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self._hover_gate_widget,
             sizing_mode='stretch_both',
             margin=0,
+            css_classes=[DragGutter.PANE_CSS_CLASS],
+            styles={'min-width': '0', 'min-height': '0'},
         )
         right_column = pn.Column(
             self.paneB,
@@ -164,18 +166,20 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self.range_slider_row if hasattr(self, 'range_slider_row') else self.range_slider,
             sizing_mode='stretch_both',
             margin=0,
+            css_classes=[DragGutter.PANE_CSS_CLASS],
+            styles={'min-width': '0', 'min-height': '0'},
         )
+        # A native Row keeps both plots inside the layout tree Bokeh solves.
+        # The separator is draggable but owns nothing: it only writes flex on
+        # its two siblings from the browser, so an additive result published
+        # further up the stack cannot detach axes or colour bars.
         self._plots_layout = pn.Row(
             left_column,
-            pn.Spacer(
-                width=10,
-                sizing_mode='fixed',
-                margin=0,
-                styles={'background': '#eeeeee'},
-            ),
+            DragGutter(),
             right_column,
             sizing_mode='stretch_both',
             margin=0,
+            css_classes=[DragGutter.ROW_CSS_CLASS],
         )
         return self._plots_layout
 

@@ -21,7 +21,7 @@ import xarray as xr
 import holoviews as hv
 from bokeh.document import Document
 from bokeh.models import DataRange1d, LayoutDOM, Tooltip
-from whateels.components import ModalManager, SimpleDetails, SplitJs
+from whateels.components import DragGutter, ModalManager, SimpleDetails, SplitJs
 from whateels.nlls.contracts import FitRange, ModelComposition, ReferenceFitSnapshot
 from whateels.nlls.cross_sections import OOSCurveSnapshot
 from whateels.nlls.defaults import OOS_FORMULA_VERSION, OOS_PROVIDER_VERSION, OOS_UNITS
@@ -459,13 +459,19 @@ class ManualFittingRegressionTests(unittest.TestCase):
             self.assertEqual(len(plots_layout.objects), 3)
             left_column, gutter, right_column = plots_layout.objects
             self.assertIsInstance(left_column, pn.Column)
-            self.assertIsInstance(gutter, pn.Spacer)
+            self.assertIsInstance(gutter, DragGutter)
             self.assertIsInstance(right_column, pn.Column)
             self.assertEqual(gutter.width, 10)
-            self.assertEqual(gutter.sizing_mode, "fixed")
-            self.assertEqual(gutter.styles.get("background"), "#eeeeee")
+            self.assertEqual(gutter.sizing_mode, "stretch_height")
             self.assertEqual(left_column.sizing_mode, "stretch_both")
             self.assertEqual(right_column.sizing_mode, "stretch_both")
+            # The gutter locates the row and its panes by marker class; without
+            # them dragging silently does nothing.
+            self.assertIn(DragGutter.ROW_CSS_CLASS, plots_layout.css_classes)
+            self.assertIn(DragGutter.PANE_CSS_CLASS, left_column.css_classes)
+            self.assertIn(DragGutter.PANE_CSS_CLASS, right_column.css_classes)
+            for pane in (left_column, right_column):
+                self.assertEqual(pane.styles.get("min-width"), "0")
             self.assertFalse(plots_layout.select(SplitJs))
             self.assertEqual(visualizer.paneA.sizing_mode, "stretch_both")
             self.assertFalse(hasattr(visualizer.paneA, "_splitjs_xy_ratio"))
@@ -1488,13 +1494,15 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             self.assertEqual(len(run.split.objects), 3)
             left_column, gutter, right_column = run.split.objects
             self.assertIsInstance(left_column, pn.Column)
-            self.assertIsInstance(gutter, pn.Spacer)
+            self.assertIsInstance(gutter, DragGutter)
             self.assertIsInstance(right_column, pn.Column)
             self.assertEqual(gutter.width, 10)
-            self.assertEqual(gutter.sizing_mode, "fixed")
-            self.assertEqual(gutter.styles.get("background"), "#eeeeee")
+            self.assertEqual(gutter.sizing_mode, "stretch_height")
             self.assertEqual(left_column.sizing_mode, "stretch_both")
             self.assertEqual(right_column.sizing_mode, "stretch_both")
+            self.assertIn(DragGutter.ROW_CSS_CLASS, run.split.css_classes)
+            self.assertIn(DragGutter.PANE_CSS_CLASS, left_column.css_classes)
+            self.assertIn(DragGutter.PANE_CSS_CLASS, right_column.css_classes)
             self.assertFalse(run.split.select(SplitJs))
             # Fitting must keep both plots in the native Panel/Bokeh layout
             # tree. A DOM-reparenting SplitJs caused axes and colour bars to
@@ -1530,6 +1538,64 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         self.assertIn("overflowX = 'hidden'", SplitJs._JS_FILE)
         self.assertNotIn("style.overflow = 'hidden'", SplitJs._JS_FILE)
         self.assertNotIn("window.dispatchEvent", SplitJs._JS_FILE)
+
+    def test_drag_gutter_never_reparents_panes_or_reports_to_python(self):
+        """The gutter may resize the panes but must never own or measure them.
+
+        Reparenting is what detached axes and colour bars from their canvas in
+        Fitting: Bokeh kept solving the original hierarchy while the browser
+        painted another one. A server round trip or a synthetic window resize
+        would equally reintroduce a full relayout on every drag frame.
+        """
+        source = DragGutter._JS_FILE
+        for forbidden in (
+            "get_child",       # would make the panes children of this component
+            "appendChild",     # would move them out of the Bokeh layout tree
+            "removeChild",
+            "insertBefore",
+            "send_msg",        # would let Python write geometry on drag
+            "dispatchEvent",   # would relayout every unrelated responsive plot
+            "ResizeObserver",
+        ):
+            self.assertNotIn(forbidden, source)
+
+        # Panel names its own container div after the class; a second element
+        # with that class would be styled as the bar as well.
+        self.assertNotIn("'drag-gutter'", source)
+        self.assertIn("whateels-drag-gutter", source)
+        self.assertIn(DragGutter.ROW_CSS_CLASS, source)
+        self.assertIn(DragGutter.PANE_CSS_CLASS, source)
+        # Panel renders each layout child inside its own shadow root, so the
+        # row is only reachable by stepping out through the shadow hosts.
+        self.assertIn("current.host", source)
+
+        gutter = DragGutter()
+        self.assertEqual(gutter.width, 10)
+        self.assertEqual(gutter.sizing_mode, "stretch_height")
+        self.assertEqual(gutter.margin, 0)
+        self.assertEqual(gutter.min_pane_size, 160)
+        # No Child parameters at all: the component cannot hold a pane.
+        self.assertFalse([
+            name for name, parameter in gutter.param.objects().items()
+            if type(parameter).__name__ == "Child"
+        ])
+
+        row = pn.Row(
+            pn.Column(css_classes=[DragGutter.PANE_CSS_CLASS]),
+            gutter,
+            pn.Column(css_classes=[DragGutter.PANE_CSS_CLASS]),
+            css_classes=[DragGutter.ROW_CSS_CLASS],
+        )
+        root = row.get_root(Document())
+        left_model, gutter_model, right_model = root.children
+        self.assertEqual(root.css_classes, [DragGutter.ROW_CSS_CLASS])
+        self.assertEqual(left_model.css_classes, [DragGutter.PANE_CSS_CLASS])
+        self.assertEqual(right_model.css_classes, [DragGutter.PANE_CSS_CLASS])
+        self.assertEqual(gutter_model.width, 10)
+        self.assertEqual(gutter_model.class_name, "DragGutter")
+        # Custom params travel on the inner data model, which is what the ESM
+        # proxy reads; a plain attribute on the outer model would stay unset.
+        self.assertEqual(gutter_model.data.min_pane_size, 160)
 
     def test_layout_manager_publishes_run_controls_to_the_results_tab(self):
         layout = FittingRightSidebarLayout(FittingModel())
@@ -1590,6 +1656,20 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             self.assertEqual(first._run_number, 1)
             self.assertEqual(second._run_number, 2)
             self.assertIsNotNone(stack.get_root())
+            # Each run owns its gutter and its marked row, so dragging one run's
+            # separator cannot reach the panes of another run or of the source.
+            gutters = [run.split.objects[1] for run in (first, second)]
+            self.assertTrue(all(isinstance(g, DragGutter) for g in gutters))
+            self.assertIsNot(gutters[0], gutters[1])
+            for run in (first, second):
+                self.assertIn(DragGutter.ROW_CSS_CLASS, run.split.css_classes)
+                self.assertEqual(
+                    [
+                        pane.css_classes
+                        for pane in (run.split.objects[0], run.split.objects[2])
+                    ],
+                    [[DragGutter.PANE_CSS_CLASS], [DragGutter.PANE_CSS_CLASS]],
+                )
         finally:
             manager.clear_nlls_result_plots()
         self.assertEqual(stack.objects, [source_plot])

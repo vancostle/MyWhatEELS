@@ -11,6 +11,7 @@ import numpy as np
 import panel as pn
 import xarray as xr
 
+from whateels.components import DragGutter
 from whateels.helpers.bokeh_geometry import square_pixel_plot_hook
 from whateels.nlls.results import FIT_STATUS_LABELS, FitStatus
 
@@ -197,25 +198,26 @@ class NLLSMultifitResultsPlot(pn.Column):
             self._map_pane,
             sizing_mode=self._STRETCH_BOTH,
             margin=0,
+            css_classes=[DragGutter.PANE_CSS_CLASS],
             styles={"min-height": "0", "min-width": "0"},
         )
         right_column = pn.Column(
             self._spectrum_pane,
             sizing_mode=self._STRETCH_BOTH,
             margin=0,
+            css_classes=[DragGutter.PANE_CSS_CLASS],
             styles={"min-height": "0", "min-width": "0"},
         )
+        # Every run owns its own row and its own gutter. The gutter resolves the
+        # panes by walking up to its nearest marked row ancestor, so a stack of
+        # runs never lets one separator move another run's plots.
         split = pn.Row(
             left_column,
-            pn.Spacer(
-                width=10,
-                sizing_mode="fixed",
-                margin=0,
-                styles={"background": "#eeeeee"},
-            ),
+            DragGutter(),
             right_column,
             sizing_mode=self._STRETCH_BOTH,
             margin=0,
+            css_classes=[DragGutter.ROW_CSS_CLASS],
         )
         self._split = split
 
