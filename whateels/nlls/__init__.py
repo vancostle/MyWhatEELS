@@ -21,9 +21,18 @@ from .contracts import (
     ReferenceFitFailure,
 )
 from .areas import AreaDefinition, ClusteringAreaAdapter
+from .analysis import (
+    CenterAnalysisService,
+    WhiteLineRequest,
+    WhiteLineService,
+)
 from .workspace import NLLSWorkspace
-from .multifit import ElementalMultifitService, PixelFitSnapshot
-from .results import FitStatus, NLLSResultsAccumulator, NLLSResultsAssembler
+from .multifit import ElementalMultifitService, PixelFitSnapshot, fit_chunk_worker
+from .results import (
+    FitStatus,
+    NLLSResultsAccumulator,
+    NLLSResultsAssembler,
+)
 
 __all__ = [
     "AreaModelSpec",
@@ -31,6 +40,7 @@ __all__ = [
     "BroadeningSpec",
     "ContinuumSpec",
     "ClusteringAreaAdapter",
+    "CenterAnalysisService",
     "DatasetIdentity",
     "EdgeSpec",
     "ExperimentalGeometry",
@@ -42,6 +52,7 @@ __all__ = [
     "NLLSWorkspace",
     "ElementalMultifitService",
     "PixelFitSnapshot",
+    "fit_chunk_worker",
     "FitStatus",
     "NLLSResultsAccumulator",
     "NLLSResultsAssembler",
@@ -49,4 +60,6 @@ __all__ = [
     "ReferenceFitSnapshot",
     "ReferenceFitBatchResult",
     "ReferenceFitFailure",
+    "WhiteLineRequest",
+    "WhiteLineService",
 ]

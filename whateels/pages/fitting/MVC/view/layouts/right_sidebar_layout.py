@@ -1,3 +1,5 @@
+import os
+
 import panel as pn
 
 from bokeh.models import Tooltip
@@ -122,7 +124,10 @@ class FittingRightSidebarLayout(pn.Column):
         )
         self._fitting_tabs: Optional[pn.Tabs] = None
         self._elemental_results_view = NLLSResultsView()
-        self._elemental_multifit_controls = NLLSMultifitControls()
+        self._elemental_multifit_controls = NLLSMultifitControls(
+            custom_page=custom_page,
+            modal_manager=modal_manager,
+        )
 
         # --- Manual tab widgets ------------------------------------------
         self._component_model_input: dict[str, pn.widgets.Widget] = {}
@@ -898,6 +903,23 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
         )
+        self._elemental_input["execution_mode"] = pn.widgets.Select(
+            name="Execution mode",
+            options={"Serial": False, "Parallel": True},
+            value=False,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+        )
+        cpu_count = max(1, int(os.cpu_count() or 1))
+        self._elemental_input["workers"] = pn.widgets.IntInput(
+            name="Parallel workers",
+            value=max(1, cpu_count - 1),
+            start=1,
+            end=cpu_count,
+            disabled=True,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+        )
 
         content = pn.Column(
             self._elemental_input["model_composition"],
@@ -911,6 +933,8 @@ class FittingRightSidebarLayout(pn.Column):
                 sizing_mode=self._STRETCH_WIDTH,
                 styles=self._fluid_row_styles(gap='10px'),
             ),
+            self._elemental_input["execution_mode"],
+            self._elemental_input["workers"],
             self._elemental_build_model_button,
             sizing_mode=self._STRETCH_WIDTH,
         )

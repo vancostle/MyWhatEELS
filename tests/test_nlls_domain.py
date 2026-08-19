@@ -11,6 +11,11 @@ import numpy as np
 import xarray as xr
 
 from whateels.nlls.areas import ClusteringAreaAdapter
+from whateels.nlls.analysis import (
+    CenterAnalysisService,
+    WhiteLineRequest,
+    WhiteLineService,
+)
 from whateels.nlls.contracts import (
     AreaModelSpec,
     BroadeningSpec,
@@ -544,6 +549,116 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(batch.failures[0].error_type, "InsufficientReferenceDataError")
 
 
+class DerivedAnalysisTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.eloss = np.linspace(0.0, 10.0, 101)
+        shape_a = np.exp(-0.5 * ((self.eloss - 3.0) / 0.5) ** 2)
+        shape_b = np.exp(-0.5 * ((self.eloss - 7.0) / 0.7) ** 2)
+        amplitudes_a = np.array([[2.0, 3.0], [4.0, 5.0]])
+        amplitudes_b = np.array([[1.0, 2.0], [3.0, 4.0]])
+        component_a = amplitudes_a[..., None] * shape_a
+        component_b = amplitudes_b[..., None] * shape_b
+        status = np.array(
+            [
+                [int(FitStatus.SUCCESS), int(FitStatus.SUCCESS)],
+                [int(FitStatus.SUCCESS), int(FitStatus.FIT_ERROR)],
+            ],
+            dtype=np.int8,
+        )
+        for values in (component_a, component_b):
+            values[1, 1, :] = np.nan
+        centers_a = np.array([[3.0, 3.1], [3.2, np.nan]])
+        centers_b = np.array([[7.0, 7.2], [7.4, np.nan]])
+        self.results = xr.Dataset(
+            {
+                "OriginalData": (
+                    ("y", "x", "Eloss"),
+                    np.nan_to_num(component_a) + np.nan_to_num(component_b),
+                ),
+                "AreaLabel": (
+                    ("y", "x"),
+                    np.array([[0, 0], [1, 1]], dtype=np.int32),
+                ),
+                "FitStatus": (("y", "x"), status),
+                "a_elnes__component": (("y", "x", "Eloss"), component_a),
+                "b_elnes__component": (("y", "x", "Eloss"), component_b),
+                "a_elnes_center": (("y", "x"), centers_a),
+                "a_elnes_center__stderr": (
+                    ("y", "x"),
+                    np.full((2, 2), 0.1),
+                ),
+                "b_elnes_center": (("y", "x"), centers_b),
+                "b_elnes_center__stderr": (
+                    ("y", "x"),
+                    np.full((2, 2), 0.1),
+                ),
+            },
+            coords={"y": [0, 1], "x": [0, 1], "Eloss": self.eloss},
+            attrs={
+                "run_id": "analysis-parent",
+                "dataset_source_revision": "analysis-source",
+                "geometry": json.dumps(
+                    {
+                        "beam_energy_keV": 200.0,
+                        "collection_angle_mrad": 20.0,
+                        "convergence_angle_mrad": 0.0,
+                        "provenance": "test",
+                    }
+                ),
+            },
+        )
+
+    def test_center_analysis_propagates_fit_status_and_units(self):
+        service = CenterAnalysisService()
+        self.assertEqual(
+            service.available_centers(self.results),
+            ("a_elnes_center", "b_elnes_center"),
+        )
+        derived = service.compute(
+            self.results, "a_elnes_center", "b_elnes_center"
+        )
+        np.testing.assert_allclose(
+            derived["Distances"],
+            np.array([[4.0, 4.1], [4.2, np.nan]]),
+            equal_nan=True,
+        )
+        self.assertEqual(derived["Distances"].attrs["units"], "eV")
+        self.assertEqual(derived.attrs["source_run_id"], "analysis-parent")
+
+    def test_white_lines_use_simpson_for_manual_and_auto_windows(self):
+        service = WhiteLineService()
+        manual = service.compute(
+            self.results,
+            WhiteLineRequest(
+                component_a="a_elnes",
+                component_b="b_elnes",
+                window_mode="manual",
+                window_a=(2.0, 4.0),
+                window_b=(5.5, 8.5),
+            ),
+        )
+        from scipy.integrate import simpson as scipy_simpson
+
+        mask_a = (self.eloss >= 2.0) & (self.eloss <= 4.0)
+        expected = scipy_simpson(
+            self.results["a_elnes__component"].values[0, 0, mask_a],
+            x=self.eloss[mask_a],
+        )
+        self.assertAlmostEqual(manual["IntensityA"].values[0, 0], expected)
+        self.assertTrue(np.isnan(manual["Ratio"].values[1, 1]))
+        self.assertEqual(manual.attrs["integration"], "scipy.integrate.simpson")
+
+        automatic = service.compute(
+            self.results,
+            WhiteLineRequest("a_elnes", "b_elnes", window_mode="auto"),
+        )
+        self.assertTrue(np.isfinite(automatic["Ratio"].values[0, 0]))
+        self.assertGreater(
+            automatic["WindowMaxA"].values[0, 0]
+            - automatic["WindowMinA"].values[0, 0],
+            0.0,
+        )
+
 class ElementalMultifitTests(unittest.TestCase):
     def setUp(self) -> None:
         fixture = BuilderTests("test_continuum_only_excludes_elnes_parameters")
@@ -701,6 +816,50 @@ class ElementalMultifitTests(unittest.TestCase):
             finally:
                 restored.close()
 
+    def test_parallel_worker_matches_serial_numeric_outputs(self):
+        source, self.identity, _ = self._source(
+            np.array([[1.5, 3.0], [5.0, 8.0]])
+        )
+        reference = self._reference(self.area, self.identity, 3.0)
+        serial_request = self._request(self.area)
+        parallel_request = replace(serial_request, parallel=True, workers=2)
+        service = ElementalMultifitService(
+            self.builder,
+            progress_chunk_size=1,
+            parallel_chunk_size=1,
+        )
+        serial = service.fit_areas(
+            serial_request,
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+        )
+        parallel = service.fit_areas(
+            parallel_request,
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+        )
+        self.assertEqual(parallel.attrs["execution_mode"], "parallel")
+        self.assertEqual(parallel.attrs["workers"], 2)
+        for name in serial.data_vars:
+            np.testing.assert_allclose(
+                parallel[name], serial[name], rtol=1e-10, atol=1e-12, equal_nan=True
+            )
+
+        for removed_attr in (
+            "modified_areas",
+            "parent_run_id",
+            "run_kind",
+            "run_version",
+        ):
+            self.assertNotIn(removed_attr, serial.attrs)
+            self.assertNotIn(removed_attr, parallel.attrs)
+
     def test_every_pixel_receives_an_independent_reference_parameter_copy(self):
         source, self.identity, _ = self._source(np.array([[40.0, 1.25]]))
         reference = self._reference(self.area, self.identity, 4.0)
@@ -769,7 +928,6 @@ class ElementalMultifitTests(unittest.TestCase):
             areas,
             references,
         )
-
         class ReversePixelService(ElementalMultifitService):
             @staticmethod
             def _selected_coordinates(mask):
@@ -873,6 +1031,39 @@ class ElementalMultifitTests(unittest.TestCase):
             ]],
         )
 
+    def test_parallel_cancellation_stops_submitting_new_chunks(self):
+        source, self.identity, _ = self._source(
+            np.array([[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]])
+        )
+        reference = self._reference(self.area, self.identity, 2.0)
+        request = replace(self._request(self.area), parallel=True, workers=2)
+        cancelled = Event()
+
+        def on_progress(done, total):
+            if done >= 1:
+                cancelled.set()
+
+        result = ElementalMultifitService(
+            self.builder,
+            progress_chunk_size=1,
+            parallel_chunk_size=1,
+        ).fit_areas(
+            request,
+            source,
+            self.geometry,
+            self.identity,
+            {"default": self.area},
+            {"default": reference},
+            cancel_event=cancelled,
+            progress_callback=on_progress,
+        )
+        self.assertEqual(result.attrs["complete"], 0)
+        self.assertEqual(result.attrs["cancelled"], 1)
+        self.assertLess(result.attrs["processed_pixels"], 8)
+        self.assertGreater(
+            int(np.count_nonzero(result["FitStatus"] == int(FitStatus.CANCELLED))),
+            0,
+        )
 
 if __name__ == "__main__":
     unittest.main()

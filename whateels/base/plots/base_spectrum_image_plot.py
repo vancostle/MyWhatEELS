@@ -47,6 +47,12 @@ class BaseSpectrumImagePlot(IPlot):
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
     _ROI_CHUNK_PIXELS = 4096
 
+    #: Whether SplitJs may size paneA from the image aspect. That only works
+    #: while paneA is a bare image, where its figure box and its data frame are
+    #: the same thing. Subclasses whose paneA can also show a title and a colour
+    #: bar keep their own responsive box and letterbox their ranges instead.
+    _SPLITJS_SIZES_PANEA = True
+
     def __init__(self, dataset: "Dataset", eloss_name: str = 'Eloss', paneA_select_tools=['lasso_select', 'box_select']):
         """
         Initialize spectrum image visualizer.
@@ -113,8 +119,10 @@ class BaseSpectrumImagePlot(IPlot):
         self._debounce_pc = None
         self._double_tap_stream = None  # type: ignore
 
-        # Image width — used for index → (row, col) mapping in _on_paneA_selected
+        # Image shape — width maps a flat Selection1D index to (row, col), and
+        # both are needed to keep paneA's data pixels square.
         self._nx = 0
+        self._ny = 0
 
         # Pane / stream placeholders
         self.paneA = None   # HoloViews heatmap pane
@@ -126,6 +134,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._rangexy_stream = None
         self._paneB_pipe = None     # Pipe stream for efficient paneB updates
         self._paneB_dmap = None     # DynamicMap backed by _paneB_pipe
+        self._paneB_structure = None
 
         # Selection-change hook — set by external consumers (e.g. controller)
         # Signature: on_selection_change(has_selection: bool) -> None
@@ -203,6 +212,29 @@ class BaseSpectrumImagePlot(IPlot):
             margin=0,
         )
         
+    # --- paneA aspect handling ---
+
+    def _paneA_aspect_options(self, nx: int, ny: int) -> dict:
+        """Return the options that keep paneA's data pixels square.
+
+        Pinning the figure's *outer* box to the image aspect is what
+        ``aspect='equal'`` does, and it is correct only while that box holds
+        nothing but the image. As soon as paneA also shows a title or a colour
+        bar, whatever they need is taken out of the data frame instead: the
+        image comes out stretched and every change in their metrics moves it.
+        Subclasses in that situation override this to letterbox their ranges.
+        """
+        return {'aspect': 'equal'}
+
+    def _paneA_overlay_options(self) -> dict:
+        """Return the options applied to the recomposed paneA overlay."""
+        return dict(
+            responsive=True,
+            shared_axes=False,
+            hooks=[self._client_hover_gate_hook],
+            **self._paneA_aspect_options(self._nx, self._ny),
+        )
+
     def _get_display_data(self):
         """Return the electron count data cube to use for display (can be overridden by subclasses)."""
         if self._electron_count_data is None:
@@ -230,6 +262,7 @@ class BaseSpectrumImagePlot(IPlot):
 
         ny, nx = m_image.shape
         self._nx = nx
+        self._ny = ny
 
         # Energy axis
         try:
@@ -251,9 +284,9 @@ class BaseSpectrumImagePlot(IPlot):
             xaxis=None,
             yaxis=None,
             invert_yaxis=True,
-            aspect='equal',
             responsive=True,
             shared_axes=False,
+            **self._paneA_aspect_options(nx, ny),
         )
 
         # Invisible Points layer — carries lasso/box select tools
@@ -269,12 +302,7 @@ class BaseSpectrumImagePlot(IPlot):
 
         # Overlay: heatmap + selection layer
         overlay = (img * self._selectors).opts( # type: ignore
-            hv.opts.Overlay(
-                responsive=True,
-                aspect='equal',
-                shared_axes=False,
-                hooks=[self._client_hover_gate_hook],
-            )
+            hv.opts.Overlay(**self._paneA_overlay_options())
         )
 
         # Use the heatmap itself as the hover source to avoid hit-testing the
@@ -287,7 +315,8 @@ class BaseSpectrumImagePlot(IPlot):
             styles={'margin': 'auto'},
         )
 
-        self.paneA._splitjs_xy_ratio = float(nx) / float(ny) if ny else 1.0 # type: ignore
+        if self._SPLITJS_SIZES_PANEA:
+            self.paneA._splitjs_xy_ratio = float(nx) / float(ny) if ny else 1.0 # type: ignore
 
         # Capture base overlay for selection overlay recomposition
         self._paneA_base_overlay = overlay
@@ -303,7 +332,9 @@ class BaseSpectrumImagePlot(IPlot):
         )
         # Seed with origin pixel so chart is immediately visible
         # Always wrap in Overlay for consistent DynamicMap type
-        self._paneB_pipe.send(hv.Overlay([self._figB_hover({"x": 0, "y": 0})]))
+        initial_spectrum = hv.Overlay([self._figB_hover({"x": 0, "y": 0})])
+        self._paneB_pipe.send(initial_spectrum)
+        self._paneB_structure = self._paneB_fig_signature(initial_spectrum)
 
     def _setup_callbacks(self):
         """Wire HoloViews streams to interaction handlers."""
@@ -532,12 +563,68 @@ class BaseSpectrumImagePlot(IPlot):
 
     # --- paneB update ---
 
+    @staticmethod
+    def _paneB_fig_signature(fig):
+        """Describe the renderer composition of a spectrum overlay."""
+        try:
+            elements = list(fig.values()) if isinstance(fig, hv.Overlay) else [fig]
+            return tuple(
+                (
+                    type(element).__name__,
+                    str(getattr(element, 'group', '')),
+                    str(getattr(element, 'label', '')),
+                )
+                for element in elements
+            )
+        except Exception:
+            return None
+
+    def _rebuild_paneB_pipe(self, fig, signature) -> None:
+        """Build the renderer tree required by a structurally different overlay."""
+        if self._rangexy_stream is not None:
+            try:
+                # ``subscribers`` is a defensive copy in this HoloViews version;
+                # mutating it cannot detach anything and a while/remove loop is
+                # therefore infinite. Filter the stream's owned registrations.
+                self._rangexy_stream._subscribers = [
+                    (precedence, callback)
+                    for precedence, callback in self._rangexy_stream._subscribers
+                    if callback != self._on_paneB_range_changed
+                ]
+            except Exception:
+                pass
+            try:
+                self._rangexy_stream.clear()
+            except Exception:
+                pass
+
+        self._paneB_pipe = hv_streams.Pipe(data=None)
+        self._paneB_dmap = hv.DynamicMap(
+            lambda data: data,
+            streams=[self._paneB_pipe],
+        )
+        self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+        self._paneB_structure = signature
+        self._rangexy_stream = hv_streams.RangeXY(source=self._paneB_dmap)
+        self._rangexy_stream.add_subscriber(self._on_paneB_range_changed)
+        if self.paneB is not None:
+            self.paneB.object = self._paneB_dmap
+
     def _update_paneB(self, fig):
-        """Push a new figure through the pipe. Always wraps in hv.Overlay for type consistency."""
-        if self._paneB_pipe is not None:
-            if fig is not None and not isinstance(fig, hv.Overlay):
-                fig = hv.Overlay([fig])
+        """Update spectrum data, rebuilding only when its renderer structure changes."""
+        if fig is None:
+            return
+        if not isinstance(fig, hv.Overlay):
+            fig = hv.Overlay([fig])
+        signature = self._paneB_fig_signature(fig)
+        if (
+            self._paneB_pipe is not None
+            and signature is not None
+            and signature == self._paneB_structure
+        ):
             self._paneB_pipe.send(self._set_ranges_and_convert(fig))
+            return
+        self._rebuild_paneB_pipe(fig, signature)
 
     def _client_hover_gate_hook(self, plot, element):
         """Install a browser-side mousemove gate that only syncs true pixel changes."""
@@ -769,12 +856,7 @@ class BaseSpectrumImagePlot(IPlot):
             self.paneA.object = (
                 self._paneA_base_overlay * self._selection_overlay # type: ignore
             ).opts(
-                hv.opts.Overlay(
-                    responsive=True, 
-                    aspect='equal', 
-                    shared_axes=False,
-                    hooks=[self._client_hover_gate_hook]
-                )
+                hv.opts.Overlay(**self._paneA_overlay_options())
             )
 
     def _on_paneA_hover(self, x=None, y=None):
@@ -1095,6 +1177,7 @@ class BaseSpectrumImagePlot(IPlot):
         self._rangexy_stream = None
         self._paneB_pipe = None
         self._paneB_dmap = None
+        self._paneB_structure = None
         self._plots_layout = None
         self._paneA_base_overlay = None
         self._hover_source = None

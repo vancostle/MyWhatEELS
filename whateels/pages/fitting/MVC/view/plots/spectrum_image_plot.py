@@ -14,7 +14,8 @@ from matplotlib.colors import LinearSegmentedColormap, to_hex
 
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
-from whateels.components import SplitJs, create_dataset_info_card
+from whateels.components import create_dataset_info_card
+from whateels.helpers.bokeh_geometry import square_pixel_plot_hook
 from whateels.helpers.colormaps import get_nclusters_cmap
 from whateels.state import CacheManager
 
@@ -37,6 +38,25 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     # Axis titles for spectrum plot
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
+    # Fitting switches paneA between a plain image and maps that carry a title
+    # and colorbar. The raw-data ratio cannot be imposed on the outer Bokeh box
+    # because that box also contains this plot furniture.
+    _SPLITJS_SIZES_PANEA = False
+
+    @override
+    def _paneA_aspect_options(self, nx: int, ny: int) -> dict:
+        """Let the responsive Fitting box contain all paneA child panels."""
+        return {}
+
+    @override
+    def _paneA_overlay_options(self) -> dict:
+        """Letterbox spatial data inside paneA's responsive Bokeh frame."""
+        options = super()._paneA_overlay_options()
+        options["hooks"] = [
+            *options.get("hooks", []),
+            square_pixel_plot_hook,
+        ]
+        return options
 
     def __init__(self, model: "FittingModel", dataset: "Dataset"):
         """Initialize visual state, interactive panes, and callback wiring."""
@@ -62,6 +82,19 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         # _setup_plots() + _setup_callbacks() internally.
         super().__init__(dataset, eloss_name=model.constants.ELOSS)
 
+        # Base pages center a bare paneA at a fixed image ratio. Fitting's paneA
+        # may contain a title/colorbar, so it fills the split and does not retain
+        # the inherited auto margin or any fixed min/max dimensions.
+        self.paneA.sizing_mode = 'stretch_both'
+        self.paneA.align = 'start'
+        self.paneA.width = None
+        self.paneA.height = None
+        self.paneA.min_width = None
+        self.paneA.max_width = None
+        self.paneA.min_height = None
+        self.paneA.max_height = None
+        self.paneA.styles = {'min-width': '0', 'min-height': '0'}
+
         # Wire DoubleTap was moved to base _setup_callbacks — no manual wiring needed.
 
         # Periodic callback for inactivity logic (stopped initially)
@@ -72,6 +105,20 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     def get_e_axis(self):
         """Return the 1D energy axis associated with the current datacube."""
         return self._e_axis
+
+    def _inside_spatial_map(self, x, y) -> bool:
+        """Reject pointer events that fall in aspect-preserving letterboxing."""
+        try:
+            x_value = float(x)
+            y_value = float(y)
+        except (TypeError, ValueError):
+            return False
+        return bool(
+            np.isfinite(x_value)
+            and np.isfinite(y_value)
+            and -0.5 <= x_value < self._nx - 0.5
+            and -0.5 <= y_value < self._ny - 0.5
+        )
 
     @override
     def _get_display_data(self):
@@ -118,12 +165,19 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             sizing_mode='stretch_both',
             margin=0,
         )
-        return SplitJs(
-            left_column=left_column,
-            right_column=right_column,
+        self._plots_layout = pn.Row(
+            left_column,
+            pn.Spacer(
+                width=10,
+                sizing_mode='fixed',
+                margin=0,
+                styles={'background': '#eeeeee'},
+            ),
+            right_column,
             sizing_mode='stretch_both',
             margin=0,
         )
+        return self._plots_layout
 
     # --- Multifit-aware _figB_region override ---
 
@@ -244,7 +298,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         ]
 
         ny, nx = label_values.shape
-        label_plot = hv.Image(
+        label_image = hv.Image(
             (np.arange(nx), np.arange(ny), label_values.astype(float)),
             kdims=["x", "y"],
             vdims=["Cluster"],
@@ -258,9 +312,22 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             title=f"Current Clustering — {unique_labels.size} clusters",
             responsive=True,
             shared_axes=False,
-            aspect="equal",
             framewise=True,
             tools=["hover", "reset"],
+        )
+        # Keep the mounted root type identical to every other spatial result
+        # shown in Fitting.  Replacing paneA's initial Overlay with a bare Image
+        # made Current Clustering the sole topology change in this pane; putting
+        # the aspect hook on a one-layer Overlay keeps the live Bokeh figure on
+        # the same rendering path without adding the area-boundary layers used
+        # by NLLS result maps.
+        label_plot = hv.Overlay([label_image]).opts(
+            hv.opts.Overlay(
+                responsive=True,
+                shared_axes=False,
+                framewise=True,
+                hooks=[square_pixel_plot_hook],
+            )
         )
 
         x_axis = np.asarray(energy, dtype=float).reshape(-1)
@@ -310,7 +377,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._nlls_clustering_active = True
         self._nlls_clustering_label_plot = label_plot
         self._nlls_clustering_spectra_plot = spectra_plot
-        self.paneA._splitjs_xy_ratio = float(nx) / float(ny) if ny else 1.0
+        self._nx, self._ny = nx, ny
         self.paneA.object = label_plot
         self._show_nlls_main_plot(spectra_plot)
 
@@ -339,16 +406,16 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             raise ValueError(f"Expected 2D integrated image, got shape={m_image.shape}")
 
         ny, nx = m_image.shape
+        self._nx, self._ny = nx, ny
         img = hv.Image(
             (np.arange(nx), np.arange(ny), m_image),
             kdims=['x', 'y'], vdims=['Intensity'],
         ).opts(
             cmap='Greys_r', colorbar=False,
             xaxis=None, yaxis=None,
-            invert_yaxis=True, aspect='equal',
+            invert_yaxis=True,
             responsive=True, shared_axes=False,
         )
-        self._nx = nx
         self._paneA_base_overlay = img * self._selectors
         self._update_selection_overlay(self._region_pairs)
 
@@ -387,14 +454,16 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             cmap=_energy_map_cmap,
             colorbar=True,
             xaxis=None, yaxis=None,
-            invert_yaxis=True, aspect='equal',
+            invert_yaxis=True,
             responsive=True, shared_axes=False,
             title='Energy Map',
         )
+        self._nx, self._ny = nx, ny
         self._paneA_base_overlay = img * self._selectors
+        overlay_options = self._paneA_overlay_options()
+        overlay_options["active_tools"] = ["lasso_select"]
         self.paneA.object = self._paneA_base_overlay.opts(
-            hv.opts.Overlay(responsive=True, aspect='equal', shared_axes=False,
-                            active_tools=['lasso_select'])
+            hv.opts.Overlay(**overlay_options)
         )
 
     def reset_for_data_source_change(self):
@@ -474,11 +543,13 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     @override
     def _on_paneA_hover(self, x=None, y=None):
-        if x is None or y is None:
+        if not self._inside_spatial_map(x, y):
             return
         self._queue_hover(x, y)
 
     def _handle_hover_render(self, point):
+        if not self._inside_spatial_map(point.get("x"), point.get("y")):
+            return
         if self._hover_blocked or self._nlls_result_active or self._nlls_clustering_active:
             return
         if not self._region_pairs and self._try_fast_hover_update(point):
@@ -493,7 +564,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     @override
     def _on_paneA_click(self, x=None, y=None):
-        if x is None or y is None:
+        if not self._inside_spatial_map(x, y):
             return
         if self._nlls_result_active or self._nlls_clustering_active:
             return

@@ -12,6 +12,11 @@ import panel as pn
 import xarray as xr
 
 from whateels.nlls.areas import AreaDefinition, ClusteringAreaAdapter
+from whateels.nlls.analysis import (
+    CenterAnalysisService,
+    WhiteLineRequest,
+    WhiteLineService,
+)
 from whateels.nlls.contracts import (
     BroadeningSpec,
     ContinuumSpec,
@@ -69,6 +74,8 @@ class NLLSController:
         self.builder = NLLSModelBuilder(self.provider)
         self.reference_service = ReferenceFitService(self.builder)
         self.multifit_service = ElementalMultifitService(self.builder)
+        self.center_analysis_service = CenterAnalysisService()
+        self.white_line_service = WhiteLineService()
         self._source_error: str | None = None
         self._geometry_error: str | None = None
         self._validated_geometry: ExperimentalGeometry | None = None
@@ -103,6 +110,9 @@ class NLLSController:
                 inputs["model_composition"].param.watch(
                     self._on_model_composition_changed, "value"
                 ),
+                inputs["execution_mode"].param.watch(
+                    self._on_execution_mode_changed, "value"
+                ),
                 self.view.elemental_fit_areas_input.param.watch(
                     self._on_fit_area_selection_changed, "value"
                 ),
@@ -123,6 +133,10 @@ class NLLSController:
         self.view.elemental_use_current_clustering_button.on_click(
             self._on_use_current_clustering
         )
+        multifit_controls = getattr(self.view, "elemental_multifit_controls", None)
+        if multifit_controls is not None:
+            multifit_controls.center_button.on_click(self._on_compute_center_analysis)
+            multifit_controls.white_button.on_click(self._on_compute_white_lines)
         self._watchers.append(
             self.app_state.param.watch(
                 self._on_current_clustering_changed, "last_clustering_result"
@@ -545,20 +559,30 @@ class NLLSController:
             run_active or not clustering_settings_available
         )
 
-        target_ids = tuple(fit_areas.value) if clustering_active else ("default",)
+        target_ids = (
+            tuple(fit_areas.value) if clustering_active else ("default",)
+        )
         targets_available = bool(target_ids and workspace is not None)
         for area_id in target_ids:
             try:
-                if workspace is None or not workspace.is_area_built(area_id):
+                if workspace is None or area_id not in workspace.areas:
+                    targets_available = False
+                    break
+                if not workspace.is_area_built(area_id):
                     targets_available = False
                     break
                 self._reference_mask_for_area(area_id)
             except (NLLSError, ValueError, TypeError):
                 targets_available = False
                 break
-        self.view.elemental_fit_button.disabled = run_active or not targets_available
+        self.view.elemental_fit_button.disabled = (
+            run_active or not targets_available
+        )
 
-        run_ready = targets_available
+        run_ready = targets_available and all(
+            workspace is not None and workspace.is_area_built(area_id)
+            for area_id in target_ids
+        )
         if run_ready:
             for area_id in target_ids:
                 if not self._reference_is_current(area_id):
@@ -577,6 +601,9 @@ class NLLSController:
                 widget.disabled = run_active or not bool(widget.options)
             else:
                 widget.disabled = run_active
+        self.view.elemental_input["workers"].disabled = bool(
+            run_active or not self.view.elemental_input["execution_mode"].value
+        )
 
     def _publish_workspace(self) -> None:
         self.app_state.nlls_workspace = self.workspace
@@ -642,6 +669,68 @@ class NLLSController:
             return tuple(str(value) for value in self.view.elemental_fit_areas_input.value)
         return ("default",)
 
+    def _active_analysis_result(self) -> xr.Dataset:
+        controls = getattr(self.view, "elemental_multifit_controls", None)
+        active_view = getattr(controls, "active_run", None)
+        result = getattr(active_view, "results", None)
+        if not isinstance(result, xr.Dataset):
+            raise ValueError("select an Elemental NLLS run")
+        return result
+
+    def _publish_derived_analysis(self, result: xr.Dataset) -> None:
+        layout = getattr(self.parent, "layout", None)
+        add_result = getattr(layout, "add_nlls_derived_result_plot", None)
+        if add_result is None:
+            raise ValueError("the Fitting plot stack cannot publish derived analyses")
+        add_result(result)
+        self._activate_results_tab()
+
+    def _on_compute_center_analysis(self, event) -> None:
+        controls = getattr(self.view, "elemental_multifit_controls", None)
+        try:
+            if controls is None:
+                raise ValueError("Center Analysis controls are unavailable")
+            result = self.center_analysis_service.compute(
+                self._active_analysis_result(),
+                str(controls.center_a.value),
+                str(controls.center_b.value),
+            )
+            self._publish_derived_analysis(result)
+            self._notify("success", "Center Analysis distance map added above the runs.")
+        except Exception as exc:
+            self._notify("error", f"Center Analysis failed: {exc}", 9000)
+
+    def _on_compute_white_lines(self, event) -> None:
+        controls = getattr(self.view, "elemental_multifit_controls", None)
+        try:
+            if controls is None:
+                raise ValueError("White Lines controls are unavailable")
+            manual = controls.white_mode.value == "manual"
+            request = WhiteLineRequest(
+                component_a=str(controls.white_a.value),
+                component_b=str(controls.white_b.value),
+                source=str(controls.white_source.value),
+                window_mode=str(controls.white_mode.value),
+                window_a=(
+                    tuple(float(value) for value in controls.white_window_a.value)
+                    if manual
+                    else None
+                ),
+                window_b=(
+                    tuple(float(value) for value in controls.white_window_b.value)
+                    if manual
+                    else None
+                ),
+                invert_ratio=bool(controls.white_invert.value),
+            )
+            result = self.white_line_service.compute(
+                self._active_analysis_result(), request
+            )
+            self._publish_derived_analysis(result)
+            self._notify("success", "White Lines ratio map added above the runs.")
+        except Exception as exc:
+            self._notify("error", f"White Lines analysis failed: {exc}", 9000)
+
     def _freeze_run_inputs(self):
         """Build a closed request and detach every worker input from mutable GUI state."""
         if self._active_run_request is not None:
@@ -661,6 +750,8 @@ class NLLSController:
                     f"area {area_id} needs a current converged reference fit"
                 )
 
+        parallel = bool(self.view.elemental_input["execution_mode"].value)
+        workers = int(self.view.elemental_input["workers"].value) if parallel else 1
         request = NLLSRunRequest(
             selected_areas=selected,
             fit_range=self._current_fit_range(),
@@ -669,8 +760,8 @@ class NLLSController:
                 (area_id, workspace.areas[area_id].model_composition)
                 for area_id in selected
             ),
-            parallel=False,
-            workers=1,
+            parallel=parallel,
+            workers=workers,
             dataset_source_revision=workspace.dataset_identity.source_revision,
             workspace_revision=workspace.dirty_revision,
             area_revisions=tuple(
@@ -685,6 +776,7 @@ class NLLSController:
         frozen_references = {
             area_id: deepcopy(workspace.reference_fits[area_id])
             for area_id in selected
+            if area_id in workspace.reference_fits
         }
         return (
             request,
@@ -710,6 +802,16 @@ class NLLSController:
             if self._current_fit_range() != request.fit_range:
                 return False
         except (NLLSError, ValueError, TypeError):
+            return False
+        current_parallel = bool(
+            self.view.elemental_input["execution_mode"].value
+        )
+        current_workers = (
+            int(self.view.elemental_input["workers"].value)
+            if current_parallel
+            else 1
+        )
+        if request.parallel != current_parallel or request.workers != current_workers:
             return False
         compositions = dict(request.model_composition_by_area)
         revisions = dict(request.area_revisions)
@@ -889,7 +991,11 @@ class NLLSController:
                     references,
                     cancel_event,
                 ),
-                name="elemental-nlls-serial",
+                name=(
+                    "elemental-nlls-parallel"
+                    if request.parallel
+                    else "elemental-nlls-serial"
+                ),
                 daemon=True,
             )
             self._run_thread = thread
@@ -1069,6 +1175,9 @@ class NLLSController:
     def _on_fit_area_selection_changed(self, event) -> None:
         self._refresh_button_states()
 
+    def _on_execution_mode_changed(self, event) -> None:
+        self._refresh_button_states()
+
     def _on_select_all_fit_areas(self, event) -> None:
         selector = self.view.elemental_fit_areas_input
         options = selector.options
@@ -1107,6 +1216,7 @@ class NLLSController:
             amplitude_spec, shift_spec = continuum_parameter_specs(chemical_shift)
             shape = str(self.view.elemental_input["elnes_shape"].value)
             fwhm_eV = fwhm_from_attrs(self._active_dataset().attrs)
+            target_area_ids = ("default",)
 
             added: list[str] = []
             for group, snapshot in zip(groups, snapshots):
@@ -1152,12 +1262,13 @@ class NLLSController:
                             amplitude=amplitude,
                         )
                     )
-                workspace.add_edge(
-                    "default",
-                    edge,
-                    continuum,
-                    tuple(fine_structures),
-                )
+                for area_id in target_area_ids:
+                    workspace.add_edge(
+                        area_id,
+                        edge,
+                        continuum,
+                        tuple(fine_structures),
+                    )
                 added.append(f"{edge.symbol} {'+'.join(group)}")
             workspace.refresh_clustering_from_template()
             self._publish_workspace()
@@ -1193,7 +1304,9 @@ class NLLSController:
             workspace = self.workspace
             if workspace is None:
                 raise ValueError("no valid NLLS workspace")
-            built, snapshot = self._build_area("default")
+            target_area_ids = ("default",)
+            builds = tuple(self._build_area(area_id) for area_id in target_area_ids)
+            built, snapshot = builds[0]
             workspace.refresh_clustering_from_template()
             self._publish_workspace()
             normalizations = ", ".join(
@@ -1203,7 +1316,7 @@ class NLLSController:
             self.app_state.nlls_run_state = "idle"
             self._notify(
                 "success",
-                f"Elemental model built for {snapshot.area_id}: "
+                f"Elemental model built for {', '.join(target_area_ids)}: "
                 f"{len(snapshot.component_ids)} components ({normalizations}).",
                 7000,
             )

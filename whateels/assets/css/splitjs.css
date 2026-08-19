@@ -11,6 +11,8 @@
 
 #left_column, #right_column {
     height: 100%;
+    min-width: 0;
+    min-height: 0;
     overflow: auto;
     box-sizing: border-box;
 }

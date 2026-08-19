@@ -19,8 +19,9 @@ import numpy as np
 import panel as pn
 import xarray as xr
 import holoviews as hv
-from bokeh.models import Tooltip
-from whateels.components import SimpleDetails
+from bokeh.document import Document
+from bokeh.models import DataRange1d, LayoutDOM, Tooltip
+from whateels.components import ModalManager, SimpleDetails, SplitJs
 from whateels.nlls.contracts import FitRange, ModelComposition, ReferenceFitSnapshot
 from whateels.nlls.cross_sections import OOSCurveSnapshot
 from whateels.nlls.defaults import OOS_FORMULA_VERSION, OOS_PROVIDER_VERSION, OOS_UNITS
@@ -63,15 +64,20 @@ SpectrumImageVisualizer = importlib.import_module(
 NLLSMultifitResultsPlot = importlib.import_module(
     "whateels.pages.fitting.MVC.view.plots.nlls_multifit_results_plot"
 ).NLLSMultifitResultsPlot
+NLLSDerivedResultsPlot = importlib.import_module(
+    "whateels.pages.fitting.MVC.view.plots.nlls_derived_results_plot"
+).NLLSDerivedResultsPlot
 NLLSMultifitControls = importlib.import_module(
     "whateels.pages.fitting.MVC.view.components.nlls_multifit_controls"
 ).NLLSMultifitControls
 NLLSResultsView = importlib.import_module(
     "whateels.pages.fitting.MVC.view.components.nlls_results_view"
 ).NLLSResultsView
-LayoutManager = importlib.import_module(
+_layout_manager_module = importlib.import_module(
     "whateels.pages.fitting.MVC.controller.managers.layout_manager"
-).LayoutManager
+)
+LayoutManager = _layout_manager_module.LayoutManager
+StableAdditiveColumn = _layout_manager_module._StableAdditiveColumn
 
 
 def _load_nlls_controller():
@@ -143,7 +149,7 @@ def _dense_nlls_result() -> xr.Dataset:
     parameter[unsuccessful] = np.nan
     stderr = np.full(amplitudes.shape, 0.05)
     stderr[unsuccessful] = np.nan
-    return xr.Dataset(
+    dataset = xr.Dataset(
         {
             "OriginalData": (("y", "x", "Eloss"), original),
             "AreaLabel": (
@@ -153,7 +159,9 @@ def _dense_nlls_result() -> xr.Dataset:
             "FitStatus": (("y", "x"), status),
             "ReducedChiSquare": (
                 ("y", "x"),
-                np.where(status == int(FitStatus.SUCCESS), 0.01, np.nan),
+                np.where(
+                    status == int(FitStatus.SUCCESS), amplitudes * 0.01, np.nan
+                ),
             ),
             "BestFit": (("y", "x", "Eloss"), best_fit),
             "Residuals": (("y", "x", "Eloss"), residual),
@@ -172,6 +180,43 @@ def _dense_nlls_result() -> xr.Dataset:
             "dataset_source_revision": "plot-test",
         },
     )
+    dataset["AreaLabel"].attrs["area_ids_by_label"] = (
+        '{"0": "cluster_0", "1": "cluster_1"}'
+    )
+    return dataset
+
+
+def _derived_nlls_result() -> xr.Dataset:
+    return xr.Dataset(
+        {
+            "Distances": (("y", "x"), np.array([[1.0, 2.0], [3.0, np.nan]])),
+            "FitStatus": (
+                ("y", "x"),
+                np.array(
+                    [
+                        [int(FitStatus.SUCCESS), int(FitStatus.SUCCESS)],
+                        [int(FitStatus.SUCCESS), int(FitStatus.FIT_ERROR)],
+                    ],
+                    dtype=np.int8,
+                ),
+            ),
+            "AreaLabel": (
+                ("y", "x"), np.array([[0, 0], [1, 1]], dtype=np.int32)
+            ),
+        },
+        coords={"y": [0, 1], "x": [0, 1]},
+        attrs={"analysis_type": "center_distance", "source_run_id": "parent"},
+    )
+
+
+def _current_map(view):
+    current = getattr(view, "current_map_plot", None)
+    return current if current is not None else view.map_pane.object
+
+
+def _current_spectrum(view):
+    current = getattr(view, "current_spectrum_plot", None)
+    return current if current is not None else view.spectrum_pane.object
 
 
 class ManualFittingRegressionTests(unittest.TestCase):
@@ -381,7 +426,52 @@ class ManualFittingRegressionTests(unittest.TestCase):
 
     def test_main_panels_switch_from_image_and_roi_to_clustering_and_result(self):
         visualizer = SpectrumImageVisualizer(self.model, self.dataset)
+
+        def spatial_figure():
+            # Inspect the model mounted by ``plots_layout``.  Calling
+            # ``paneA.get_root()`` here would create a fresh document after
+            # every object swap and could not catch a transition-only loss of
+            # geometry hooks.
+            return next(iter(visualizer.paneA._models.values()))[0]
+
+        def assert_square_frame(figure, *, has_colorbar):
+            self.assertEqual(figure.sizing_mode, "stretch_both")
+            self.assertIsNone(figure.aspect_ratio)
+            self.assertTrue(figure.match_aspect)
+            self.assertEqual(figure.aspect_scale, 1)
+            self.assertIsInstance(figure.x_range, DataRange1d)
+            self.assertIsInstance(figure.y_range, DataRange1d)
+            self.assertEqual(figure.x_range.range_padding, 0)
+            self.assertEqual(figure.y_range.range_padding, 0)
+            self.assertFalse(figure.x_range.flipped)
+            self.assertTrue(figure.y_range.flipped)
+            colorbars = [
+                panel for panel in figure.right
+                if type(panel).__name__ == "ColorBar"
+            ]
+            self.assertEqual(bool(colorbars), has_colorbar)
+            self.assertTrue(all(colorbar.visible for colorbar in colorbars))
+
         try:
+            plots_layout = visualizer.create_plots()
+            self.assertIsNotNone(plots_layout.get_root())
+            self.assertIsInstance(plots_layout, pn.Row)
+            self.assertEqual(len(plots_layout.objects), 3)
+            left_column, gutter, right_column = plots_layout.objects
+            self.assertIsInstance(left_column, pn.Column)
+            self.assertIsInstance(gutter, pn.Spacer)
+            self.assertIsInstance(right_column, pn.Column)
+            self.assertEqual(gutter.width, 10)
+            self.assertEqual(gutter.sizing_mode, "fixed")
+            self.assertEqual(gutter.styles.get("background"), "#eeeeee")
+            self.assertEqual(left_column.sizing_mode, "stretch_both")
+            self.assertEqual(right_column.sizing_mode, "stretch_both")
+            self.assertFalse(plots_layout.select(SplitJs))
+            self.assertEqual(visualizer.paneA.sizing_mode, "stretch_both")
+            self.assertFalse(hasattr(visualizer.paneA, "_splitjs_xy_ratio"))
+            self.assertNotEqual(visualizer.paneA.styles.get("overflow"), "hidden")
+            self.assertNotEqual(visualizer.paneA.styles.get("margin"), "auto")
+            assert_square_frame(spatial_figure(), has_colorbar=False)
             labels = np.array([[0, 0, 1], [0, 1, 1]], dtype=int)
             energy = np.asarray(self.dataset.coords["Eloss"], dtype=float)
             cube = np.asarray(self.dataset["ElectronCount"], dtype=float)
@@ -390,19 +480,81 @@ class ManualFittingRegressionTests(unittest.TestCase):
                 (1, "Cluster 1", cube[labels == 1].mean(axis=0)),
             )
             visualizer.show_nlls_clustering(labels, energy, spectra)
+            clustering_renderer = visualizer.paneB.object
             self.assertTrue(visualizer.nlls_clustering_active)
             self.assertIs(visualizer.paneA.object, visualizer._nlls_clustering_label_plot)
+            self.assertIsInstance(visualizer.paneA.object, hv.Overlay)
+            clustering_images = tuple(
+                element
+                for element in visualizer.paneA.object
+                if isinstance(element, hv.Image)
+            )
+            self.assertEqual(len(clustering_images), 1)
+            self.assertFalse(
+                any(
+                    isinstance(element, hv.Segments)
+                    for element in visualizer.paneA.object
+                )
+            )
+            np.testing.assert_array_equal(
+                clustering_images[0].dimension_values("Cluster", flat=False),
+                labels,
+            )
+            self.assertEqual(
+                tuple(float(value) for value in clustering_images[0].bounds.lbrt()),
+                (-0.5, -0.5, 2.5, 1.5),
+            )
             self.assertIs(
                 visualizer._paneB_pipe.data,
                 visualizer._nlls_clustering_spectra_plot,
             )
+            cluster_figure = spatial_figure()
+            self.assertTrue(cluster_figure.right)
+            self.assertTrue(cluster_figure.right[0].visible)
+            assert_square_frame(cluster_figure, has_colorbar=True)
 
             fit_plot = hv.Overlay(
                 [hv.Curve((energy, spectra[0][2]), label="Reference")]
+            ).opts(
+                hv.opts.Overlay(
+                    xlabel="Energy loss (eV)",
+                    ylabel="Electron count",
+                    responsive=True,
+                    shared_axes=False,
+                )
             )
             visualizer.show_nlls_reference_result(fit_plot)
+            reference_renderer = visualizer.paneB.object
             self.assertTrue(visualizer.nlls_result_active)
             self.assertIs(visualizer._paneB_pipe.data, fit_plot)
+            self.assertIsNot(reference_renderer, clustering_renderer)
+            reference_figure = next(
+                model
+                for model in visualizer.paneB.get_root().select({"type": LayoutDOM})
+                if type(model).__name__ == "figure"
+            )
+            energy_axis = reference_figure.xaxis[0]
+            self.assertIn(energy_axis, reference_figure.below)
+            self.assertTrue(energy_axis.visible)
+            self.assertEqual(energy_axis.axis_label, "Energy loss (eV)")
+
+            # Data-only changes retain the figure; changing the visible curve
+            # composition (as the Reference/Best fit/Components/Residual buttons
+            # do) creates the renderer tree required by the new overlay.
+            updated_fit_plot = hv.Overlay(
+                [hv.Curve((energy, spectra[1][2]), label="Reference")]
+            )
+            visualizer.show_nlls_reference_result(updated_fit_plot)
+            self.assertIs(visualizer.paneB.object, reference_renderer)
+            fit_with_best = hv.Overlay(
+                [
+                    hv.Curve((energy, spectra[0][2]), label="Reference"),
+                    hv.Curve((energy, spectra[1][2]), label="Best fit"),
+                ]
+            )
+            visualizer.show_nlls_reference_result(fit_with_best)
+            self.assertIsNot(visualizer.paneB.object, reference_renderer)
+            self.assertIs(visualizer._paneB_pipe.data, fit_with_best)
 
             visualizer.clear_nlls_reference_result()
             self.assertFalse(visualizer.nlls_result_active)
@@ -410,7 +562,8 @@ class ManualFittingRegressionTests(unittest.TestCase):
                 visualizer._paneB_pipe.data,
                 visualizer._nlls_clustering_spectra_plot,
             )
-            self.assertIsNotNone(visualizer.create_plots().get_root())
+            visualizer.plot_energy_map(np.arange(labels.size).reshape(labels.shape))
+            assert_square_frame(spatial_figure(), has_colorbar=True)
         finally:
             visualizer.cleanup()
 
@@ -424,20 +577,174 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             self.assertIn("Fit status", view.map_select.options)
             self.assertIn("Parameter — h k1 cont A", view.map_select.options)
             self.assertIn("Std. error — h k1 cont A", view.map_select.options)
-            self.assertIsInstance(view.map_pane.object, hv.Overlay)
+            self.assertIsInstance(_current_map(view), hv.Overlay)
             self.assertIsNotNone(
-                view.spectrum_pane.object.get(("Curve", "Best_fit"))
+                _current_spectrum(view).get(("Curve", "Best_fit"))
+            )
+            rendered_root = view.get_root()
+            map_model = view.map_pane.object
+            spectrum_model = view.spectrum_pane.object
+            map_bokeh_models = tuple(
+                id(value[0]) for value in view.map_pane._models.values()
+            )
+            spectrum_bokeh_models = tuple(
+                id(value[0]) for value in view.spectrum_pane._models.values()
             )
 
+            map_figure = next(
+                model
+                for model in rendered_root.select({"type": LayoutDOM})
+                if type(model).__name__ == "figure"
+                and str(model.title.text).startswith("Run 3")
+                and "Pixel" not in str(model.title.text)
+            )
+            self.assertIn("tap", map_figure._event_callbacks)
+            self.assertIs(view._tap_stream.source, view.map_pane.object)
+
             view.map_select.value = "FitStatus"
-            view._on_pixel_tapped(x=2, y=1)
+            view._tap_stream.event(x=2, y=1)
             self.assertEqual(view.selected_pixel, (1, 2))
             self.assertIn("y=1, x=2", view.pixel_summary.object)
+            # Aspect-preserving ranges can create blank padding around the
+            # image. A tap there must not be clipped onto an edge pixel.
+            view._tap_stream.event(x=-1, y=1)
+            self.assertEqual(view.selected_pixel, (1, 2))
+            view._tap_stream.event(x=2, y=2)
+            self.assertEqual(view.selected_pixel, (1, 2))
+            self.assertIs(view.map_pane.object, map_model)
+            self.assertIs(view.spectrum_pane.object, spectrum_model)
+            self.assertEqual(
+                tuple(id(value[0]) for value in view.map_pane._models.values()),
+                map_bokeh_models,
+            )
+            self.assertEqual(
+                tuple(id(value[0]) for value in view.spectrum_pane._models.values()),
+                spectrum_bokeh_models,
+            )
             view.layer_selector.value = ["Residual"]
             self.assertIsNotNone(
-                view.spectrum_pane.object.get(("Curve", "Residual"))
+                _current_spectrum(view).get(("Curve", "Residual"))
             )
-            self.assertIsNotNone(view.get_root())
+            self.assertIsNotNone(rendered_root)
+        finally:
+            view.cleanup()
+
+    def test_area_overlay_draws_fill_and_explicit_cluster_boundaries(self):
+        view = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=1)
+        try:
+            self.assertTrue(view.area_fill_button.value)
+            self.assertTrue(view.area_boundaries_button.value)
+            self.assertEqual(view.area_fill_button.name, "Fill")
+            self.assertEqual(view.area_boundaries_button.name, "Boundaries")
+            self.assertIsNot(view.area_fill_button, view.area_boundaries_button)
+            self.assertEqual(
+                view.area_overlay_controls.objects,
+                [view.area_fill_button, view.area_boundaries_button],
+            )
+            expected_segments = len(view._area_boundary_segments())
+            self.assertGreater(expected_segments, 4)
+            self.assertGreaterEqual(
+                sum(isinstance(element, hv.Image) for element in _current_map(view)),
+                2,
+            )
+            boundary_layers = tuple(
+                element
+                for element in _current_map(view)
+                if isinstance(element, hv.Segments)
+            )
+            self.assertEqual(len(boundary_layers), 2)
+            self.assertTrue(
+                all(len(layer.dimension_values("x0")) == expected_segments
+                    for layer in boundary_layers)
+            )
+            self.assertIn("cluster_0", view._pixel_summary_html(0, 0))
+
+            view.area_boundaries_button.value = False
+            self.assertEqual(
+                sum(
+                    isinstance(element, hv.Segments)
+                    for element in _current_map(view)
+                ),
+                0,
+            )
+
+            view.area_fill_button.value = False
+            view.area_boundaries_button.value = True
+            self.assertEqual(
+                sum(isinstance(element, hv.Image) for element in _current_map(view)),
+                1,
+            )
+            self.assertEqual(
+                sum(
+                    isinstance(element, hv.Segments)
+                    for element in _current_map(view)
+                ),
+                2,
+            )
+
+            rendered = hv.render(_current_map(view), backend="bokeh")
+            rendered_segments = [
+                renderer
+                for renderer in rendered.renderers
+                if type(getattr(renderer, "glyph", None)).__name__ == "Segment"
+            ]
+            self.assertEqual(len(rendered_segments), 2)
+            self.assertTrue(
+                all(
+                    len(renderer.data_source.data["x0"]) == expected_segments
+                    for renderer in rendered_segments
+                )
+            )
+        finally:
+            view.cleanup()
+
+    def test_status_redchi_and_relative_error_share_one_pixel_mask(self):
+        view = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=1)
+        try:
+            view.status_filter.value = [int(FitStatus.FIT_ERROR)]
+            self.assertEqual(int(np.count_nonzero(view.visible_pixel_mask)), 1)
+            self.assertEqual(view.selected_pixel, (0, 2))
+            view._on_pixel_tapped(x=0, y=0)
+            self.assertEqual(view.selected_pixel, (0, 2))
+
+            view.status_filter.value = [int(FitStatus.SUCCESS)]
+            view.max_redchi_input.value = 0.015
+            self.assertEqual(int(np.count_nonzero(view.visible_pixel_mask)), 1)
+            self.assertEqual(view.selected_pixel, (0, 0))
+
+            view.max_redchi_input.value = None
+            view.map_select.value = "h_k1_cont_A"
+            self.assertFalse(view.max_relative_error_input.disabled)
+            view.max_relative_error_input.value = 0.02
+            self.assertEqual(int(np.count_nonzero(view.visible_pixel_mask)), 2)
+            self.assertEqual(view.selected_pixel, (1, 1))
+            self.assertIn("Relative error", view.pixel_summary.object)
+
+            view.status_filter.value = []
+            self.assertFalse(np.any(view.visible_pixel_mask))
+            self.assertIn("No pixels match", view.pixel_summary.object)
+            self.assertIn(
+                "No pixels match filters",
+                _current_spectrum(view).opts.get().kwargs["title"],
+            )
+        finally:
+            view.cleanup()
+
+    def test_reduced_chi_square_supports_log_view_and_robust_limits(self):
+        view = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=1)
+        try:
+            self.assertFalse(view._log_redchi.disabled)
+            view._log_redchi.value = True
+            image = next(
+                element
+                for element in _current_map(view)
+                if isinstance(element, hv.Image)
+            )
+            self.assertTrue(image.vdims[0].name.startswith("log10"))
+            self.assertIn("clim", image.opts.get().kwargs)
+
+            view.map_select.value = "FitStatus"
+            self.assertTrue(view._log_redchi.disabled)
         finally:
             view.cleanup()
 
@@ -449,7 +756,20 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             self.assertEqual(view.controls[0], view.map_select)
             self.assertIn(view.layer_selector, view.controls)
             self.assertIn(view.pixel_summary, view.controls)
+            self.assertFalse(hasattr(view, "_run_summary"))
+            self.assertFalse(
+                any(
+                    isinstance(control, pn.pane.HTML)
+                    and "pixels · method=" in str(control.object)
+                    for control in view.controls
+                )
+            )
+            self.assertNotIn("AreaLabel", view.map_select.options.values())
+            self.assertNotIn(view.status_filter, view.controls)
+            self.assertIn(view.status_filter, view.filter_controls)
             for widget in view.controls:
+                self.assertNotIn(widget, view.select())
+            for widget in view.filter_controls:
                 self.assertNotIn(widget, view.select())
             self.assertEqual(view.run_number, 2)
             self.assertIn("Run 2", view.run_label)
@@ -457,12 +777,12 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             # Without the card header the run number has to survive in the plots.
             image = next(
                 element
-                for element in view.map_pane.object
+                for element in _current_map(view)
                 if isinstance(element, hv.Image)
             )
             self.assertIn("Run 2", image.opts.get().kwargs["title"])
             self.assertIn(
-                "Run 2", view.spectrum_pane.object.opts.get().kwargs["title"]
+                "Run 2", _current_spectrum(view).opts.get().kwargs["title"]
             )
         finally:
             view.cleanup()
@@ -480,7 +800,24 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             # A single run needs no selector, and the map stays the top control.
             self.assertFalse(controls.run_select.visible)
             self.assertTrue(controls.run_select.disabled)
-            self.assertEqual(controls._controls_slot.objects[0], first.map_select)
+            mounted = controls._controls_slot.objects
+            self.assertEqual(mounted[0], first.map_select)
+            self.assertEqual(mounted[1], controls.run_select)
+            self.assertEqual(mounted[2], first.controls[1])
+            self.assertEqual(mounted[3], first.area_overlay_controls)
+            self.assertEqual(mounted[4], controls.filters_button)
+            self.assertIsInstance(controls.filters_button, pn.widgets.Button)
+            self.assertEqual(controls.filters_button.name, "Filters")
+            self.assertEqual(controls.filters_button.button_type, "default")
+            self.assertEqual(controls.filters_button.sizing_mode, "stretch_width")
+            self.assertEqual(
+                controls.filters_button.height,
+                first.area_fill_button.height,
+            )
+            self.assertEqual(
+                controls.filters_modal.controls_slot.objects,
+                list(first.filter_controls),
+            )
 
             controls.register(second)
             self.assertEqual(controls.runs, (second, first))
@@ -490,13 +827,33 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             mounted = controls._controls_slot.objects
             self.assertEqual(mounted[0], second.map_select)
             self.assertEqual(mounted[1], controls.run_select)
+            self.assertEqual(mounted[3], second.area_overlay_controls)
+            self.assertEqual(mounted[4], controls.filters_button)
             self.assertNotIn(first.map_select, mounted)
+            self.assertEqual(
+                controls.filters_modal.controls_slot.objects,
+                list(second.filter_controls),
+            )
+
+            controls._open_filters(None)
+            self.assertTrue(controls.filters_modal.visible)
+            second.status_filter.value = [int(FitStatus.SUCCESS)]
+            self.assertEqual(
+                controls.filters_modal.controls_slot.objects[0].value,
+                [int(FitStatus.SUCCESS)],
+            )
 
             controls.run_select.value = first
             mounted = controls._controls_slot.objects
             self.assertEqual(mounted[0], first.map_select)
             self.assertEqual(mounted[1], controls.run_select)
+            self.assertEqual(mounted[3], first.area_overlay_controls)
+            self.assertEqual(mounted[4], controls.filters_button)
             self.assertNotIn(second.map_select, mounted)
+            self.assertEqual(
+                controls.filters_modal.controls_slot.objects,
+                list(first.filter_controls),
+            )
             self.assertIsNotNone(controls.get_root())
 
             controls.unregister(first)
@@ -506,9 +863,673 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             self.assertEqual(controls.runs, ())
             self.assertIsNone(controls.active_run)
             self.assertEqual(controls._controls_slot.objects, [])
+            self.assertEqual(controls.filters_modal.controls_slot.objects, [])
         finally:
             first.cleanup()
             second.cleanup()
+
+    def test_result_filters_open_in_the_registered_fitting_modal(self):
+        class PageStub:
+            def __init__(self):
+                self.modal = pn.Column()
+                self.opened = False
+                self.closed = False
+
+            def open_modal(self):
+                self.opened = True
+
+            def close_modal(self):
+                self.closed = True
+
+        page = PageStub()
+        modal_manager = ModalManager(page)
+        layout = FittingRightSidebarLayout(
+            FittingModel(),
+            custom_page=page,
+            modal_manager=modal_manager,
+        )
+        controls = layout.elemental_multifit_controls
+        run = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=1)
+        derived = NLLSDerivedResultsPlot(_derived_nlls_result(), sequence=1)
+        try:
+            self.assertTrue(controls.derived_results_button.visible)
+            self.assertTrue(controls.derived_results_button.disabled)
+            self.assertFalse(controls.derived_results_modal.visible)
+            controls.register(run)
+            controls._open_filters(None)
+            self.assertTrue(page.opened)
+            self.assertIn(controls.filters_modal, page.modal.objects)
+            self.assertTrue(controls.filters_modal.visible)
+            self.assertEqual(
+                controls.filters_modal.controls_slot.objects,
+                list(run.filter_controls),
+            )
+            self.assertNotIn(run.status_filter, controls._controls_slot.select())
+
+            controls._open_derived_analyses(None)
+            self.assertIn(controls.derived_analyses_modal, page.modal.objects)
+            self.assertTrue(controls.derived_analyses_modal.visible)
+            self.assertFalse(controls.filters_modal.visible)
+            self.assertIn(
+                controls.center_a,
+                controls.derived_analyses_modal.controls_slot.select(),
+            )
+
+            controls.register_derived(derived)
+            controls._open_derived_results(None)
+            self.assertIn(controls.derived_results_modal, page.modal.objects)
+            self.assertTrue(controls.derived_results_modal.visible)
+            self.assertFalse(controls.filters_modal.visible)
+            self.assertFalse(controls.derived_analyses_modal.visible)
+            self.assertIn(
+                derived.map_select,
+                controls.derived_results_modal.controls_slot.objects,
+            )
+            self.assertIsNotNone(pn.Row(layout, page.modal).get_root())
+        finally:
+            controls.unregister_derived(derived)
+            derived.cleanup()
+            run.cleanup()
+
+    def test_multifit_controls_do_not_expose_modified_model_editor(self):
+        controls = NLLSMultifitControls()
+        run = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=1)
+        try:
+            controls.register(run)
+            self.assertFalse(hasattr(controls, "begin_modified_button"))
+            self.assertFalse(hasattr(controls, "rerun_area_select"))
+            widget_names = {
+                str(widget.name)
+                for widget in controls.select(pn.widgets.Widget)
+                if getattr(widget, "name", None)
+            }
+            self.assertNotIn("Begin Modified Model", widget_names)
+            self.assertNotIn("Lock All", widget_names)
+            self.assertNotIn("Unlock All", widget_names)
+        finally:
+            run.cleanup()
+
+    def test_derived_analysis_controls_and_plot_follow_the_results_layout(self):
+        result = _dense_nlls_result()
+        shape = result["FitStatus"].shape
+        result["a_elnes_center"] = (("y", "x"), np.full(shape, 1.0))
+        result["b_elnes_center"] = (("y", "x"), np.full(shape, 2.0))
+        result["a_elnes__component"] = result["BestFit"].copy()
+        result["b_elnes__component"] = result["BestFit"].copy() * 0.5
+        run = NLLSMultifitResultsPlot(result, run_number=1)
+        controls = NLLSMultifitControls()
+        derived = NLLSDerivedResultsPlot(_derived_nlls_result(), sequence=1)
+        try:
+            controls.register(run)
+            self.assertTrue(controls.derived_analyses_button.visible)
+            self.assertFalse(controls.derived_analyses_button.disabled)
+            self.assertEqual(controls.derived_analyses_button.button_type, "default")
+            self.assertEqual(
+                controls.derived_analyses_button.height,
+                controls.derived_results_button.height,
+            )
+            self.assertNotIn(controls._analysis_controls, controls.objects)
+            self.assertFalse(controls.center_button.disabled)
+            self.assertFalse(controls.white_button.disabled)
+            self.assertNotEqual(controls.center_a.value, controls.center_b.value)
+            self.assertNotEqual(controls.white_a.value, controls.white_b.value)
+
+            controls._open_derived_analyses(None)
+            self.assertTrue(controls.derived_analyses_modal.visible)
+            self.assertEqual(
+                controls.derived_analyses_modal.controls_slot.objects,
+                [controls._analysis_controls],
+            )
+            self.assertIn(
+                controls.center_a,
+                controls.derived_analyses_modal.controls_slot.select(),
+            )
+
+            controls.white_mode.value = "manual"
+            self.assertTrue(controls.white_window_a.visible)
+            self.assertTrue(controls.white_window_b.visible)
+            controls.register_derived(derived)
+            # Publication must not rebuild a hidden modal: doing so invalidates
+            # the same document while the new Bokeh plot is being mounted.
+            self.assertEqual(controls._derived_controls_slot.objects, [])
+            self.assertTrue(controls.derived_results_button.visible)
+            self.assertFalse(controls.derived_results_button.disabled)
+            self.assertNotIn(
+                derived.map_select,
+                controls.derived_analyses_modal.controls_slot.select(),
+            )
+            controls._open_derived_results(None)
+            self.assertTrue(controls.derived_results_modal.visible)
+            self.assertIn(
+                derived.map_select,
+                controls.derived_results_modal.controls_slot.objects,
+            )
+            self.assertIsInstance(_current_map(derived), hv.Overlay)
+            derived_boundaries = tuple(
+                element
+                for element in _current_map(derived)
+                if isinstance(element, hv.Segments)
+            )
+            self.assertEqual(len(derived_boundaries), 1)
+            self.assertGreater(len(derived_boundaries[0].dimension_values("x0")), 4)
+            self.assertIsNotNone(derived.get_root())
+        finally:
+            controls.unregister_derived(derived)
+            self.assertTrue(controls.derived_results_button.visible)
+            self.assertTrue(controls.derived_results_button.disabled)
+            self.assertEqual(
+                controls.derived_results_modal.controls_slot.objects,
+                [],
+            )
+            derived.cleanup()
+            run.cleanup()
+
+    def test_boundaries_toggle_is_shared_by_runs_and_derived_results(self):
+        controls = NLLSMultifitControls()
+        first_run = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=1)
+        second_run = NLLSMultifitResultsPlot(_dense_nlls_result(), run_number=2)
+        first_derived = NLLSDerivedResultsPlot(_derived_nlls_result(), sequence=1)
+        later_derived = None
+        try:
+            controls.register(first_run)
+            controls.register(second_run)
+            controls.register_derived(first_derived)
+
+            second_run.area_boundaries_button.value = False
+            self.assertFalse(first_run.area_boundaries_button.value)
+            self.assertFalse(second_run.area_boundaries_button.value)
+            self.assertFalse(first_derived.boundaries_visible)
+            self.assertFalse(
+                any(isinstance(layer, hv.Segments) for layer in _current_map(first_derived))
+            )
+
+            # A derived result published after the toggle inherits the same
+            # state instead of falling back to always-on boundaries.
+            later_derived = NLLSDerivedResultsPlot(_derived_nlls_result(), sequence=2)
+            controls.register_derived(later_derived)
+            self.assertFalse(later_derived.boundaries_visible)
+            self.assertFalse(
+                any(isinstance(layer, hv.Segments) for layer in _current_map(later_derived))
+            )
+
+            first_run.area_boundaries_button.value = True
+            self.assertTrue(first_run.area_boundaries_button.value)
+            self.assertTrue(second_run.area_boundaries_button.value)
+            self.assertTrue(first_derived.boundaries_visible)
+            self.assertTrue(later_derived.boundaries_visible)
+            self.assertTrue(
+                any(isinstance(layer, hv.Segments) for layer in _current_map(first_derived))
+            )
+            self.assertTrue(
+                any(isinstance(layer, hv.Segments) for layer in _current_map(later_derived))
+            )
+        finally:
+            if later_derived is not None:
+                controls.unregister_derived(later_derived)
+                later_derived.cleanup()
+            controls.unregister_derived(first_derived)
+            controls.unregister(second_run)
+            controls.unregister(first_run)
+            first_derived.cleanup()
+            second_run.cleanup()
+            first_run.cleanup()
+
+    def test_layout_manager_appends_physically_and_orders_results_visually(self):
+        controls = NLLSMultifitControls()
+        manager = LayoutManager(
+            SimpleNamespace(elemental_multifit_controls=controls),
+            SimpleNamespace(),
+            FittingModel(),
+        )
+        source_plot = pn.pane.Markdown(
+            "Original plots",
+            styles={"order": str(LayoutManager._SOURCE_VISUAL_ORDER)},
+        )
+        stack = StableAdditiveColumn(
+            source_plot,
+            sizing_mode="stretch_both",
+            min_height=0,
+            styles=dict(LayoutManager._ADDITIVE_STACK_STYLES),
+        )
+        manager._plot_stacks = [stack]
+        manager._nlls_result_views = [[]]
+        manager._nlls_derived_views = [[]]
+        manager._plots_tab = SimpleNamespace(active=0)
+        run = manager.add_nlls_result_plot(_dense_nlls_result())
+        derived = manager.add_nlls_derived_result_plot(_derived_nlls_result())
+        try:
+            # Existing DOM children remain a physical prefix. CSS order gives
+            # the requested newest-derived -> newest-run -> source display.
+            self.assertEqual(stack.objects, [source_plot, run, derived])
+            self.assertEqual(
+                sorted(stack.objects, key=lambda view: int(view.styles["order"])),
+                [derived, run, source_plot],
+            )
+            self.assertEqual(controls._derived_controls_slot.objects, [])
+            controls._open_derived_results(None)
+            self.assertIn(
+                derived.map_select,
+                controls._derived_controls_slot.objects,
+            )
+        finally:
+            manager.clear_nlls_result_plots()
+        self.assertEqual(stack.objects, [source_plot])
+
+    def test_additive_plots_keep_existing_geometry_titles_and_scales(self):
+        controls = NLLSMultifitControls()
+        manager = LayoutManager(
+            SimpleNamespace(elemental_multifit_controls=controls),
+            SimpleNamespace(),
+            FittingModel(),
+        )
+        reference_plot = hv.Curve(([0.0, 1.0], [2.0, 3.0])).opts(
+            title="Reference fit", xlim=(0.0, 1.0), ylim=(2.0, 3.0)
+        )
+        source_pane = pn.pane.HoloViews(reference_plot, sizing_mode="stretch_both")
+        source_plot = pn.Column(
+            source_pane,
+            min_height=600,
+            sizing_mode="stretch_both",
+            styles={"order": str(LayoutManager._SOURCE_VISUAL_ORDER)},
+        )
+        stack = StableAdditiveColumn(
+            source_plot,
+            sizing_mode="stretch_both",
+            min_height=0,
+            styles=dict(LayoutManager._ADDITIVE_STACK_STYLES),
+        )
+        manager._plot_stacks = [stack]
+        manager._nlls_result_views = [[]]
+        manager._nlls_derived_views = [[]]
+        manager._plots_tab = SimpleNamespace(active=0)
+
+        run = manager.add_nlls_result_plot(_dense_nlls_result())
+        run_map_model = run.map_pane.object
+        run_spectrum_model = run.spectrum_pane.object
+        run_map = _current_map(run)
+        run_spectrum = _current_spectrum(run)
+        reference_options = dict(reference_plot.opts.get().kwargs)
+        run_map_options = dict(run_map.opts.get().kwargs)
+        run_spectrum_options = dict(run_spectrum.opts.get().kwargs)
+        document = Document()
+        rendered_stack = stack.get_root(document)
+        document.add_root(rendered_stack)
+        document_events = []
+        document.on_change(document_events.append)
+        run_map_models = tuple(
+            id(model_and_parent[0]) for model_and_parent in run.map_pane._models.values()
+        )
+        run_spectrum_models = tuple(
+            id(model_and_parent[0]) for model_and_parent in run.spectrum_pane._models.values()
+        )
+        source_models = tuple(
+            id(model_and_parent[0]) for model_and_parent in source_pane._models.values()
+        )
+        outer_children = tuple(stack.objects)
+        outer_model_children = tuple(rendered_stack.children)
+
+        first_analysis = manager.add_nlls_derived_result_plot(_derived_nlls_result())
+        second_analysis = manager.add_nlls_derived_result_plot(_derived_nlls_result())
+        try:
+            self.assertIsNotNone(rendered_stack)
+            self.assertIs(source_pane.object, reference_plot)
+            self.assertIs(run.map_pane.object, run_map_model)
+            self.assertIs(run.spectrum_pane.object, run_spectrum_model)
+            self.assertEqual(reference_plot.opts.get().kwargs, reference_options)
+            self.assertEqual(run_map.opts.get().kwargs, run_map_options)
+            self.assertEqual(run_spectrum.opts.get().kwargs, run_spectrum_options)
+            self.assertEqual(
+                tuple(id(value[0]) for value in run.map_pane._models.values()),
+                run_map_models,
+            )
+            self.assertEqual(
+                tuple(id(value[0]) for value in run.spectrum_pane._models.values()),
+                run_spectrum_models,
+            )
+            self.assertEqual(
+                tuple(id(value[0]) for value in source_pane._models.values()),
+                source_models,
+            )
+            self.assertEqual(tuple(stack.objects[: len(outer_children)]), outer_children)
+            self.assertEqual(
+                stack.objects,
+                [source_plot, run, first_analysis, second_analysis],
+            )
+            self.assertEqual(
+                tuple(rendered_stack.children[: len(outer_model_children)]),
+                outer_model_children,
+            )
+            self.assertEqual(
+                sorted(stack.objects, key=lambda view: int(view.styles["order"])),
+                [second_analysis, first_analysis, run, source_plot],
+            )
+            outer_event_attrs = [
+                event.attr
+                for event in document_events
+                if getattr(event, "model", None) is rendered_stack
+                and hasattr(event, "attr")
+            ]
+            self.assertEqual(outer_event_attrs, ["children", "children"])
+            self.assertEqual(rendered_stack.sizing_mode, "stretch_both")
+            self.assertEqual(rendered_stack.min_height, 0)
+            self.assertEqual(stack.styles["overflow-y"], "scroll")
+            self.assertEqual(stack.styles["scrollbar-gutter"], "stable")
+            self.assertEqual(stack.styles["overflow-anchor"], "none")
+            self.assertEqual((run.height, run.min_height, run.max_height), (620, 620, 620))
+            self.assertEqual(
+                (first_analysis.height, first_analysis.min_height, first_analysis.max_height),
+                (560, 560, 560),
+            )
+            self.assertEqual(second_analysis.styles["flex"], "0 0 560px")
+
+            # Publishing derived maps must not detach the live callbacks of the
+            # already-rendered NLLS block.
+            run.map_select.value = "FitStatus"
+            run._tap_stream.event(x=2, y=1)
+            self.assertEqual(run.selected_pixel, (1, 2))
+            self.assertIn("y=1, x=2", run.pixel_summary.object)
+            self.assertIs(run.map_pane.object, run_map_model)
+            self.assertIs(run.spectrum_pane.object, run_spectrum_model)
+            self.assertEqual(
+                tuple(id(value[0]) for value in run.map_pane._models.values()),
+                run_map_models,
+            )
+            self.assertEqual(
+                tuple(id(value[0]) for value in run.spectrum_pane._models.values()),
+                run_spectrum_models,
+            )
+        finally:
+            manager.clear_nlls_result_plots()
+        self.assertEqual(stack.objects, [source_plot])
+
+    def test_one_to_three_derived_registrations_preserve_existing_live_blocks(self):
+        """Derived publication is append-only for already rendered live plots.
+
+        This deliberately exercises the sequence that exposed the browser
+        regression: a Reference DynamicMap and an NLLS run are rendered first,
+        then three derived maps are registered one at a time.  Existing Panel
+        and Bokeh models, logical child order, overflow policy, and stream
+        subscriptions must survive every registration.
+        """
+        reference_frames = []
+
+        def reference_frame(x=None, y=None):
+            reference_frames.append((x, y))
+            offset = 0.0 if x is None else float(x)
+            return hv.Curve(([0.0, 1.0], [offset, offset + 1.0])).opts(
+                title="Reference fit"
+            )
+
+        reference_tap = hv.streams.Tap(x=None, y=None)
+        reference_dmap = hv.DynamicMap(
+            reference_frame,
+            streams=[reference_tap],
+        )
+        reference_pane = pn.pane.HoloViews(
+            reference_dmap,
+            sizing_mode="stretch_both",
+        )
+        reference_block = pn.Column(
+            reference_pane,
+            min_height=600,
+            sizing_mode="stretch_both",
+            styles={"order": str(LayoutManager._SOURCE_VISUAL_ORDER)},
+        )
+        stack = StableAdditiveColumn(
+            reference_block,
+            sizing_mode="stretch_both",
+            min_height=0,
+            styles=dict(LayoutManager._ADDITIVE_STACK_STYLES),
+        )
+        controls = NLLSMultifitControls()
+        manager = LayoutManager(
+            SimpleNamespace(elemental_multifit_controls=controls),
+            SimpleNamespace(),
+            FittingModel(),
+        )
+        manager._plot_stacks = [stack]
+        manager._nlls_result_views = [[]]
+        manager._nlls_derived_views = [[]]
+        manager._plots_tab = SimpleNamespace(active=0)
+        run = manager.add_nlls_result_plot(_dense_nlls_result())
+
+        document = Document()
+        stack_model = stack.get_root(document)
+        document.add_root(stack_model)
+
+        initial_objects = tuple(stack.objects)
+        initial_model_children = tuple(stack_model.children)
+        initial_run_children = tuple(run.objects)
+        initial_reference_children = tuple(reference_block.objects)
+        initial_run_tree = tuple(run.select())
+        initial_reference_tree = tuple(reference_block.select())
+        initial_run_styles = tuple(
+            (id(view), dict(getattr(view, "styles", {}) or {}))
+            for view in initial_run_tree
+        )
+        initial_reference_styles = tuple(
+            (id(view), dict(getattr(view, "styles", {}) or {}))
+            for view in initial_reference_tree
+        )
+        reference_models = tuple(
+            id(model_and_parent[0])
+            for model_and_parent in reference_pane._models.values()
+        )
+        run_map_models = tuple(
+            id(model_and_parent[0]) for model_and_parent in run.map_pane._models.values()
+        )
+        run_spectrum_models = tuple(
+            id(model_and_parent[0])
+            for model_and_parent in run.spectrum_pane._models.values()
+        )
+        reference_subscribers = tuple(id(item) for item in reference_tap.subscribers)
+        run_subscribers = tuple(id(item) for item in run._tap_stream.subscribers)
+        map_dmap = run._map_dmap
+        map_pipe = run._map_pipe
+        tap_stream = run._tap_stream
+        spectrum_dmap = run._spectrum_dmap
+        spectrum_pipe = run._spectrum_pipe
+
+        def assert_no_internal_scroll(viewables):
+            for view in viewables:
+                styles = getattr(view, "styles", {}) or {}
+                for key in ("overflow", "overflow-x", "overflow-y"):
+                    self.assertNotEqual(
+                        str(styles.get(key, "")).lower(),
+                        "scroll",
+                        f"{type(view).__name__} acquired {key}=scroll",
+                    )
+
+        derived_views = []
+        click_targets = ((1, 0), (1, 1), (0, 0))
+        try:
+            self.assertEqual(initial_objects, (reference_block, run))
+            self.assertIs(reference_pane.object, reference_dmap)
+            self.assertIs(run.map_pane.object, map_dmap)
+            self.assertIs(run.spectrum_pane.object, spectrum_dmap)
+            self.assertIn(map_pipe, map_dmap.streams)
+            self.assertIn(tap_stream, map_dmap.streams)
+            self.assertIn(spectrum_pipe, spectrum_dmap.streams)
+            assert_no_internal_scroll(initial_reference_tree)
+            assert_no_internal_scroll(initial_run_tree)
+
+            for count, (column, row) in enumerate(click_targets, start=1):
+                with self.subTest(derived_count=count):
+                    derived_views.append(
+                        manager.add_nlls_derived_result_plot(_derived_nlls_result())
+                    )
+
+                    # Registration may only append.  It must not reorder or
+                    # replace any previously published logical/Bokeh child.
+                    self.assertEqual(
+                        tuple(stack.objects),
+                        initial_objects + tuple(derived_views),
+                    )
+                    self.assertEqual(
+                        tuple(stack_model.children[: len(initial_model_children)]),
+                        initial_model_children,
+                    )
+                    self.assertEqual(tuple(run.objects), initial_run_children)
+                    self.assertEqual(
+                        tuple(reference_block.objects), initial_reference_children
+                    )
+                    self.assertEqual(tuple(run.select()), initial_run_tree)
+                    self.assertEqual(
+                        tuple(reference_block.select()), initial_reference_tree
+                    )
+                    self.assertEqual(
+                        tuple(
+                            (id(view), dict(getattr(view, "styles", {}) or {}))
+                            for view in run.select()
+                        ),
+                        initial_run_styles,
+                    )
+                    self.assertEqual(
+                        tuple(
+                            (id(view), dict(getattr(view, "styles", {}) or {}))
+                            for view in reference_block.select()
+                        ),
+                        initial_reference_styles,
+                    )
+                    assert_no_internal_scroll(run.select())
+                    assert_no_internal_scroll(reference_block.select())
+
+                    self.assertIs(reference_pane.object, reference_dmap)
+                    self.assertIs(run.map_pane.object, map_dmap)
+                    self.assertIs(run.spectrum_pane.object, spectrum_dmap)
+                    self.assertIs(run._map_pipe, map_pipe)
+                    self.assertIs(run._tap_stream, tap_stream)
+                    self.assertIs(run._spectrum_pipe, spectrum_pipe)
+                    self.assertEqual(
+                        tuple(
+                            id(model_and_parent[0])
+                            for model_and_parent in reference_pane._models.values()
+                        ),
+                        reference_models,
+                    )
+                    self.assertEqual(
+                        tuple(
+                            id(model_and_parent[0])
+                            for model_and_parent in run.map_pane._models.values()
+                        ),
+                        run_map_models,
+                    )
+                    self.assertEqual(
+                        tuple(
+                            id(model_and_parent[0])
+                            for model_and_parent in run.spectrum_pane._models.values()
+                        ),
+                        run_spectrum_models,
+                    )
+                    self.assertEqual(
+                        tuple(id(item) for item in reference_tap.subscribers),
+                        reference_subscribers,
+                    )
+                    self.assertEqual(
+                        tuple(id(item) for item in tap_stream.subscribers),
+                        run_subscribers,
+                    )
+
+                    # Both the Reference DynamicMap and the NLLS Tap stream
+                    # must still react after each additive publication.
+                    reference_tap.event(x=count / 10.0, y=count / 20.0)
+                    self.assertEqual(
+                        reference_frames[-1],
+                        (count / 10.0, count / 20.0),
+                    )
+                    tap_stream.event(x=column, y=row)
+                    self.assertEqual(run.selected_pixel, (row, column))
+                    self.assertIn(f"y={row}, x={column}", run.pixel_summary.object)
+                    self.assertIs(run._map_dmap, map_dmap)
+                    self.assertIs(run._spectrum_dmap, spectrum_dmap)
+        finally:
+            manager.clear_nlls_result_plots()
+            reference_tap.clear()
+
+        self.assertEqual(stack.objects, [reference_block])
+
+    def test_tall_and_wide_maps_remain_contained_in_their_result_blocks(self):
+        tall_run_result = _dense_nlls_result().isel(
+            y=np.resize(np.arange(2), 20)
+        ).assign_coords(y=np.arange(20))
+        run = NLLSMultifitResultsPlot(tall_run_result, run_number=1)
+        tall_derived_result = _derived_nlls_result().isel(
+            y=np.resize(np.arange(2), 20)
+        ).assign_coords(y=np.arange(20))
+        tall_derived = NLLSDerivedResultsPlot(tall_derived_result, sequence=1)
+        wide_derived_result = _derived_nlls_result().isel(
+            x=np.resize(np.arange(2), 20)
+        ).assign_coords(x=np.arange(20))
+        wide_derived = NLLSDerivedResultsPlot(wide_derived_result, sequence=2)
+        def _figure(pane):
+            return next(
+                model
+                for model in pane.get_root().select({"type": LayoutDOM})
+                if type(model).__name__ == "figure"
+            )
+
+        def _assert_square_frame(figure):
+            self.assertEqual(figure.sizing_mode, "stretch_both")
+            self.assertNotEqual(figure.sizing_mode, "scale_both")
+            self.assertIsNone(figure.aspect_ratio)
+            self.assertTrue(figure.match_aspect)
+            self.assertEqual(figure.aspect_scale, 1)
+            self.assertIsInstance(figure.x_range, DataRange1d)
+            self.assertIsInstance(figure.y_range, DataRange1d)
+            self.assertEqual(figure.x_range.range_padding, 0)
+            self.assertEqual(figure.y_range.range_padding, 0)
+            self.assertFalse(figure.x_range.flipped)
+            self.assertTrue(figure.y_range.flipped)
+
+        try:
+            self.assertEqual(run.map_pane.sizing_mode, "stretch_both")
+            self.assertFalse(hasattr(run.map_pane, "_splitjs_xy_ratio"))
+            self.assertIsInstance(run.split, pn.Row)
+            self.assertEqual(len(run.split.objects), 3)
+            left_column, gutter, right_column = run.split.objects
+            self.assertIsInstance(left_column, pn.Column)
+            self.assertIsInstance(gutter, pn.Spacer)
+            self.assertIsInstance(right_column, pn.Column)
+            self.assertEqual(gutter.width, 10)
+            self.assertEqual(gutter.sizing_mode, "fixed")
+            self.assertEqual(gutter.styles.get("background"), "#eeeeee")
+            self.assertEqual(left_column.sizing_mode, "stretch_both")
+            self.assertEqual(right_column.sizing_mode, "stretch_both")
+            self.assertFalse(run.split.select(SplitJs))
+            # Fitting must keep both plots in the native Panel/Bokeh layout
+            # tree. A DOM-reparenting SplitJs caused axes and colour bars to
+            # detach whenever an additive derived result invalidated the root.
+            self.assertEqual(run.map_pane.sizing_mode, "stretch_both")
+            self.assertIsNone(run.map_pane.width)
+            self.assertIsNone(run.map_pane.height)
+            run_figure = _figure(run.map_pane)
+            _assert_square_frame(run_figure)
+            self.assertIn("Run 1", run_figure.title.text)
+            self.assertTrue(run_figure.right)
+            self.assertTrue(run_figure.right[0].visible)
+            self.assertNotIn("aspect", _current_map(run).opts.get().kwargs)
+
+            for view, expected_title in (
+                (tall_derived, "Analysis"),
+                (wide_derived, "Analysis"),
+            ):
+                self.assertEqual(view.map_pane.sizing_mode, "stretch_both")
+                figure = _figure(view.map_pane)
+                _assert_square_frame(figure)
+                self.assertIn(expected_title, figure.title.text)
+                self.assertTrue(figure.right)  # colour bar owns its own panel
+                self.assertTrue(figure.right[0].visible)
+                self.assertNotIn("aspect", _current_map(view).opts.get().kwargs)
+        finally:
+            wide_derived.cleanup()
+            tall_derived.cleanup()
+            run.cleanup()
+
+    def test_global_splitjs_contract_remains_available_for_other_pages(self):
+        self.assertIn("overflow: auto", SplitJs._CSS_FILE)
+        self.assertIn("overflowX = 'hidden'", SplitJs._JS_FILE)
+        self.assertNotIn("style.overflow = 'hidden'", SplitJs._JS_FILE)
+        self.assertNotIn("window.dispatchEvent", SplitJs._JS_FILE)
 
     def test_layout_manager_publishes_run_controls_to_the_results_tab(self):
         layout = FittingRightSidebarLayout(FittingModel())
@@ -518,8 +1539,19 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             SimpleNamespace(),
             FittingModel(),
         )
-        manager._plot_stacks = [pn.Column(pn.pane.Markdown("Original plots"))]
+        source_plot = pn.pane.Markdown(
+            "Original plots",
+            styles={"order": str(LayoutManager._SOURCE_VISUAL_ORDER)},
+        )
+        manager._plot_stacks = [
+            StableAdditiveColumn(
+                source_plot,
+                sizing_mode="stretch_both",
+                min_height=0,
+            )
+        ]
         manager._nlls_result_views = [[]]
+        manager._nlls_derived_views = [[]]
         manager._plots_tab = SimpleNamespace(active=0)
 
         first = manager.add_nlls_result_plot(_dense_nlls_result())
@@ -531,17 +1563,29 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         self.assertEqual(controls.runs, ())
         self.assertIsNone(controls.active_run)
 
-    def test_layout_manager_prepends_runs_without_replacing_older_plots(self):
+    def test_layout_manager_appends_runs_without_replacing_older_plots(self):
         manager = LayoutManager(SimpleNamespace(), SimpleNamespace(), FittingModel())
-        source_plot = pn.pane.Markdown("Original plots")
-        stack = pn.Column(source_plot)
+        source_plot = pn.pane.Markdown(
+            "Original plots",
+            styles={"order": str(LayoutManager._SOURCE_VISUAL_ORDER)},
+        )
+        stack = StableAdditiveColumn(
+            source_plot,
+            sizing_mode="stretch_both",
+            min_height=0,
+        )
         manager._plot_stacks = [stack]
         manager._nlls_result_views = [[]]
+        manager._nlls_derived_views = [[]]
         manager._plots_tab = SimpleNamespace(active=0)
         first = manager.add_nlls_result_plot(_dense_nlls_result())
         second = manager.add_nlls_result_plot(_dense_nlls_result())
         try:
-            self.assertEqual(stack.objects, [second, first, source_plot])
+            self.assertEqual(stack.objects, [source_plot, first, second])
+            self.assertEqual(
+                sorted(stack.objects, key=lambda view: int(view.styles["order"])),
+                [second, first, source_plot],
+            )
             self.assertEqual(manager.nlls_result_views, (second, first))
             self.assertEqual(first._run_number, 1)
             self.assertEqual(second._run_number, 2)
@@ -652,10 +1696,12 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             lambda: setattr(self.visualizer, "clustering_payload", None)
         )
         self.published_multifit_results = []
+        self.published_derived_results = []
         parent = SimpleNamespace(
             layout=SimpleNamespace(
                 _chosen_visualizers=[self.visualizer],
                 add_nlls_result_plot=self.published_multifit_results.append,
+                add_nlls_derived_result_plot=self.published_derived_results.append,
             )
         )
         self.controller = NLLSController(
@@ -770,6 +1816,99 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertFalse(self.layout.elemental_run_progress.active)
         self.assertTrue(self.layout.elemental_cancel_button.disabled)
         self.assertFalse(self.layout.elemental_run_nlls_button.disabled)
+
+    def test_parallel_selector_freezes_workers_and_commits_parallel_result(self):
+        self.controller._on_fit(None)
+        execution = self.layout.elemental_input["execution_mode"]
+        workers = self.layout.elemental_input["workers"]
+        self.assertFalse(execution.value)
+        self.assertTrue(workers.disabled)
+        execution.value = True
+        workers.value = min(2, int(workers.end))
+        self.controller.multifit_service.parallel_chunk_size = 1
+        self.assertFalse(workers.disabled)
+
+        request, *_ = self.controller._freeze_run_inputs()
+        self.assertTrue(request.parallel)
+        self.assertEqual(request.workers, workers.value)
+        self.controller._on_run_elemental_nlls(None)
+        thread = self.controller._run_thread
+        thread.join(timeout=30.0)
+        self.assertFalse(thread.is_alive())
+        self.controller._drain_run_events()
+        result = self.state.nlls_results
+        self.assertEqual(result.attrs["execution_mode"], "parallel")
+        self.assertEqual(result.attrs["workers"], workers.value)
+        self.assertFalse(workers.disabled)
+
+    def test_center_and_white_line_callbacks_publish_additive_derived_datasets(self):
+        result = _dense_nlls_result()
+        eloss = np.asarray(result.coords["Eloss"].values, dtype=float)
+        shape_a = np.exp(-0.5 * ((eloss - 1.0) / 1.0) ** 2)
+        shape_b = np.exp(-0.5 * ((eloss - 3.0) / 1.0) ** 2)
+        spatial = result["FitStatus"].shape
+        result["a_elnes_center"] = (("y", "x"), np.full(spatial, 1.0))
+        result["b_elnes_center"] = (("y", "x"), np.full(spatial, 3.0))
+        result["a_elnes__component"] = (
+            ("y", "x", "Eloss"),
+            np.broadcast_to(shape_a, (*spatial, eloss.size)).copy(),
+        )
+        result["b_elnes__component"] = (
+            ("y", "x", "Eloss"),
+            np.broadcast_to(shape_b, (*spatial, eloss.size)).copy(),
+        )
+        failed = result["FitStatus"].values != int(FitStatus.SUCCESS)
+        result["a_elnes__component"].values[failed, :] = np.nan
+        result["b_elnes__component"].values[failed, :] = np.nan
+
+        controls = self.layout.elemental_multifit_controls
+        run_view = NLLSMultifitResultsPlot(result, run_number=1)
+        controls.register(run_view)
+        try:
+            self.controller._on_compute_center_analysis(None)
+            self.controller._on_compute_white_lines(None)
+            self.assertEqual(len(self.published_derived_results), 2)
+            center, white_lines = self.published_derived_results
+            self.assertEqual(center.attrs["analysis_type"], "center_distance")
+            np.testing.assert_allclose(
+                center["Distances"].values[0, :2], [2.0, 2.0]
+            )
+            self.assertEqual(white_lines.attrs["analysis_type"], "white_lines")
+            self.assertEqual(
+                white_lines.attrs["integration"], "scipy.integrate.simpson"
+            )
+            self.assertTrue(np.isfinite(white_lines["Ratio"].values[0, 0]))
+        finally:
+            controls.clear_runs()
+            run_view.cleanup()
+
+    def test_consecutive_runs_commit_as_independent_additive_results(self):
+        self.controller._on_fit(None)
+        self.controller._on_run_elemental_nlls(None)
+        thread = self.controller._run_thread
+        thread.join(timeout=10.0)
+        self.controller._drain_run_events()
+        parent = self.state.nlls_results
+
+        self.assertFalse(self.layout.elemental_run_nlls_button.disabled)
+        self.controller._on_run_elemental_nlls(None)
+        thread = self.controller._run_thread
+        thread.join(timeout=10.0)
+        self.assertFalse(thread.is_alive())
+        self.controller._drain_run_events()
+
+        second = self.state.nlls_results
+        self.assertIsNot(second, parent)
+        self.assertNotEqual(second.attrs["run_id"], parent.attrs["run_id"])
+        self.assertEqual(len(self.published_multifit_results), 2)
+        self.assertIs(self.published_multifit_results[-1], second)
+        for removed_attr in (
+            "modified_areas",
+            "parent_run_id",
+            "run_kind",
+            "run_version",
+        ):
+            self.assertNotIn(removed_attr, second.attrs)
 
     def test_run_uses_selected_cluster_areas_only(self):
         self.controller._on_fit(None)

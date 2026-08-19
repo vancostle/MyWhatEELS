@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from collections.abc import Callable, Mapping
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from importlib import metadata
 from typing import Any
+from uuid import uuid4
 
 import lmfit
 import numpy as np
@@ -27,13 +30,18 @@ from .defaults import (
     OOS_PROVIDER_VERSION,
     SCHEMA_VERSION,
 )
+from .cross_sections import OOSCurveSnapshot
 from .errors import (
     InsufficientReferenceDataError,
     InvalidRunRequestError,
     PixelFitError,
 )
 from .model_builder import BuiltAreaModel, NLLSModelBuilder
-from .results import FitStatus, NLLSResultsAccumulator, NLLSResultsAssembler
+from .results import (
+    FitStatus,
+    NLLSResultsAccumulator,
+    NLLSResultsAssembler,
+)
 
 
 ProgressCallback = Callable[[int, int], None]
@@ -48,6 +56,103 @@ class PixelFitSnapshot:
     parameters: dict[str, tuple[float, float | None]]
 
 
+class _SampledOOSProvider:
+    """Worker-local provider backed only by already sampled portable curves."""
+
+    def __init__(self, snapshots: tuple[OOSCurveSnapshot, ...]):
+        self._snapshots = {
+            (int(snapshot.atomic_number), tuple(snapshot.shells)): snapshot
+            for snapshot in snapshots
+        }
+
+    def curve(
+        self,
+        atomic_number,
+        shells,
+        geometry,
+        eloss,
+        broadening,
+        fit_range,
+    ) -> OOSCurveSnapshot:
+        try:
+            snapshot = self._snapshots[(int(atomic_number), tuple(shells))]
+        except KeyError as exc:
+            raise InvalidRunRequestError(
+                f"parallel worker has no sampled OOS curve for Z={atomic_number}, shells={tuple(shells)}"
+            ) from exc
+        return snapshot
+
+
+def _pixel_snapshot_payload(snapshot: PixelFitSnapshot) -> dict[str, Any]:
+    return {
+        "redchi": float(snapshot.redchi),
+        "best_fit": np.asarray(snapshot.best_fit, dtype=float),
+        "residual": np.asarray(snapshot.residual, dtype=float),
+        "components": {
+            str(name): np.asarray(values, dtype=float)
+            for name, values in snapshot.components.items()
+        },
+        "parameters": {
+            str(name): (float(value), None if stderr is None else float(stderr))
+            for name, (value, stderr) in snapshot.parameters.items()
+        },
+    }
+
+
+def fit_chunk_worker(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Spawn-safe worker: rebuild a model and return numeric pixel DTOs only."""
+    signals = np.asarray(payload["signals"], dtype=float)
+    coordinates = np.asarray(payload["coordinates"], dtype=np.int64)
+    eloss = np.asarray(payload["eloss"], dtype=float)
+    area: AreaModelSpec = payload["area"]
+    geometry: ExperimentalGeometry = payload["geometry"]
+    request: NLLSRunRequest = payload["request"]
+    reference: ReferenceFitSnapshot | None = payload.get("reference")
+    snapshots = tuple(payload["curve_snapshots"])
+
+    builder = NLLSModelBuilder(_SampledOOSProvider(snapshots))
+    service = ElementalMultifitService(builder)
+    built = builder.build(area, geometry, eloss, request.fit_range)
+    output: list[dict[str, Any]] = []
+    for (y, x), signal in zip(coordinates, signals):
+        try:
+            snapshot = service._fit_pixel(
+                built,
+                area,
+                reference,
+                signal,
+                eloss,
+                request,
+            )
+            output.append(
+                {
+                    "y": int(y),
+                    "x": int(x),
+                    "status": int(FitStatus.SUCCESS),
+                    "result": _pixel_snapshot_payload(snapshot),
+                }
+            )
+        except InsufficientReferenceDataError:
+            output.append(
+                {
+                    "y": int(y),
+                    "x": int(x),
+                    "status": int(FitStatus.INSUFFICIENT_DATA),
+                    "result": None,
+                }
+            )
+        except Exception:
+            output.append(
+                {
+                    "y": int(y),
+                    "x": int(x),
+                    "status": int(FitStatus.FIT_ERROR),
+                    "result": None,
+                }
+            )
+    return output
+
+
 def _package_version(distribution: str) -> str:
     try:
         return metadata.version(distribution)
@@ -58,9 +163,20 @@ def _package_version(distribution: str) -> str:
 class ElementalMultifitService:
     """Fit selected masks serially, isolating every pixel failure."""
 
-    def __init__(self, model_builder: NLLSModelBuilder, *, progress_chunk_size: int = 16):
+    def __init__(
+        self,
+        model_builder: NLLSModelBuilder,
+        *,
+        progress_chunk_size: int = 16,
+        parallel_chunk_size: int | None = None,
+    ):
         self.model_builder = model_builder
         self.progress_chunk_size = max(1, int(progress_chunk_size))
+        self.parallel_chunk_size = (
+            None
+            if parallel_chunk_size is None
+            else max(1, int(parallel_chunk_size))
+        )
 
     @staticmethod
     def _is_cancelled(cancel_event: Any | None) -> bool:
@@ -85,12 +201,6 @@ class ElementalMultifitService:
         areas: Mapping[str, AreaModelSpec],
         reference_fits: Mapping[str, ReferenceFitSnapshot],
     ) -> None:
-        if request.parallel:
-            raise InvalidRunRequestError(
-                "parallel NLLS is unavailable until serial parity is validated"
-            )
-        if request.rerun_from is not None:
-            raise InvalidRunRequestError("modified-model reruns belong to the rerun phase")
         if request.dataset_source_revision and (
             request.dataset_source_revision != dataset_identity.source_revision
         ):
@@ -104,11 +214,6 @@ class ElementalMultifitService:
             if area_id not in areas:
                 raise InvalidRunRequestError(f"unknown NLLS area: {area_id}")
             area = areas[area_id]
-            reference = reference_fits.get(area_id)
-            if reference is None or not reference.success:
-                raise InvalidRunRequestError(
-                    f"area {area_id} has no converged reference fit"
-                )
             if compositions[area_id] != area.model_composition:
                 raise InvalidRunRequestError(
                     f"area {area_id} model composition changed after request creation"
@@ -116,6 +221,11 @@ class ElementalMultifitService:
             if revisions and revisions[area_id] != area.revision:
                 raise InvalidRunRequestError(
                     f"area {area_id} revision changed after request creation"
+                )
+            reference = reference_fits.get(area_id)
+            if reference is None or not reference.success:
+                raise InvalidRunRequestError(
+                    f"area {area_id} has no converged reference fit"
                 )
             if reference.dataset_source_revision != dataset_identity.source_revision:
                 raise InvalidRunRequestError(f"area {area_id} reference uses another source")
@@ -160,12 +270,9 @@ class ElementalMultifitService:
         cls,
         built: BuiltAreaModel,
         reference: ReferenceFitSnapshot,
-        rerun_from: Mapping[str, Mapping[str, float]] | None = None,
     ):
         """Return an independent parameter copy for exactly one pixel."""
         params = cls._parameters_from_reference(built, reference)
-        if rerun_from is not None:
-            raise InvalidRunRequestError("rerun propagation is not part of the first run")
         return params.copy()
 
     @staticmethod
@@ -188,11 +295,28 @@ class ElementalMultifitService:
         """Return a deterministic traversal that tests may safely permute."""
         return np.argwhere(np.asarray(mask, dtype=bool))
 
+    def _parallel_plan(
+        self,
+        pixel_count: int,
+        requested_workers: int,
+    ) -> tuple[int, int, int]:
+        pixels = max(0, int(pixel_count))
+        workers = min(max(1, int(requested_workers)), max(1, pixels))
+        if self.parallel_chunk_size is None:
+            chunk_size = max(
+                8,
+                min(128, int(math.ceil(pixels / max(1, workers * 4)))),
+            )
+        else:
+            chunk_size = self.parallel_chunk_size
+        chunks = int(math.ceil(pixels / chunk_size)) if pixels else 0
+        return min(workers, max(1, chunks)), int(chunk_size), chunks
+
     def _fit_pixel(
         self,
         built: BuiltAreaModel,
         area: AreaModelSpec,
-        reference: ReferenceFitSnapshot,
+        reference: ReferenceFitSnapshot | None,
         signal: np.ndarray,
         eloss: np.ndarray,
         request: NLLSRunRequest,
@@ -209,6 +333,8 @@ class ElementalMultifitService:
             raise InsufficientReferenceDataError(
                 "pixel has too few finite samples for its varying parameters"
             )
+        if reference is None:
+            raise InvalidRunRequestError("an area reference is required")
         initial = self._initial_params_for_pixel(built, reference)
         result = built.model.fit(
             pixel[finite],
@@ -264,7 +390,7 @@ class ElementalMultifitService:
         self,
         request: NLLSRunRequest,
         area: AreaModelSpec,
-        reference: ReferenceFitSnapshot,
+        reference: ReferenceFitSnapshot | None,
         source_cube: np.ndarray,
         eloss: np.ndarray,
         mask: np.ndarray,
@@ -280,6 +406,8 @@ class ElementalMultifitService:
                 area, geometry, eloss, request.fit_range
             )
         # Validate once before entering the hot loop. Every pixel still receives a copy.
+        if reference is None:
+            raise InvalidRunRequestError("an area reference is required")
         self._parameters_from_reference(built, reference)
         for y, x in self._selected_coordinates(mask):
             if self._is_cancelled(cancel_event):
@@ -312,6 +440,142 @@ class ElementalMultifitService:
                 if on_pixel_done is not None:
                     on_pixel_done()
 
+    @staticmethod
+    def _store_parallel_pixel(
+        accumulator: NLLSResultsAccumulator,
+        payload: Mapping[str, Any],
+    ) -> None:
+        y, x = int(payload["y"]), int(payload["x"])
+        status = FitStatus(int(payload["status"]))
+        if status is not FitStatus.SUCCESS:
+            accumulator.store_error(y, x, status)
+            return
+        result = payload.get("result")
+        if not isinstance(result, Mapping):
+            accumulator.store_error(y, x, FitStatus.FIT_ERROR)
+            return
+        accumulator.store_success(
+            y,
+            x,
+            redchi=float(result["redchi"]),
+            best_fit=np.asarray(result["best_fit"], dtype=float),
+            residual=np.asarray(result["residual"], dtype=float),
+            components={
+                str(name): np.asarray(values, dtype=float)
+                for name, values in result["components"].items()
+            },
+            parameters={
+                str(name): (
+                    float(values[0]),
+                    None if values[1] is None else float(values[1]),
+                )
+                for name, values in result["parameters"].items()
+            },
+        )
+
+    def fit_area_parallel(
+        self,
+        request: NLLSRunRequest,
+        area: AreaModelSpec,
+        reference: ReferenceFitSnapshot | None,
+        source_cube: np.ndarray,
+        eloss: np.ndarray,
+        mask: np.ndarray,
+        accumulator: NLLSResultsAccumulator,
+        *,
+        geometry: ExperimentalGeometry,
+        built: BuiltAreaModel,
+        cancel_event: Any | None = None,
+        on_pixel_done: Callable[[], None] | None = None,
+    ) -> None:
+        """Fit bounded chunks in spawn-safe processes and merge numeric DTOs."""
+        coordinates = self._selected_coordinates(mask)
+        if coordinates.size == 0:
+            return
+        worker_count, chunk_size, _ = self._parallel_plan(
+            int(coordinates.shape[0]), request.workers
+        )
+        if worker_count <= 1:
+            self.fit_area_serial(
+                request,
+                area,
+                reference,
+                source_cube,
+                eloss,
+                mask,
+                accumulator,
+                geometry=geometry,
+                built=built,
+                cancel_event=cancel_event,
+                on_pixel_done=on_pixel_done,
+            )
+            return
+
+        chunks = tuple(
+            coordinates[start : start + chunk_size]
+            for start in range(0, coordinates.shape[0], chunk_size)
+        )
+
+        def payload_for(chunk: np.ndarray) -> dict[str, Any]:
+            signals = np.asarray(
+                [source_cube[int(y), int(x), :] for y, x in chunk],
+                dtype=float,
+            )
+            return {
+                "signals": signals,
+                "coordinates": np.asarray(chunk, dtype=np.int64),
+                "eloss": np.asarray(eloss, dtype=float),
+                "area": area,
+                "geometry": geometry,
+                "request": request,
+                "reference": reference,
+                "curve_snapshots": tuple(built.curve_snapshots.values()),
+            }
+
+        executor = ProcessPoolExecutor(max_workers=worker_count)
+        pending: dict[Any, np.ndarray] = {}
+        next_chunk = 0
+        try:
+            while next_chunk < len(chunks) and len(pending) < worker_count:
+                chunk = chunks[next_chunk]
+                pending[executor.submit(fit_chunk_worker, payload_for(chunk))] = chunk
+                next_chunk += 1
+
+            while pending:
+                completed_futures, _ = wait(
+                    tuple(pending), return_when=FIRST_COMPLETED
+                )
+                for future in completed_futures:
+                    chunk = pending.pop(future)
+                    if self._is_cancelled(cancel_event):
+                        continue
+                    try:
+                        pixel_payloads = future.result()
+                        if len(pixel_payloads) != len(chunk):
+                            raise PixelFitError("parallel worker returned a short chunk")
+                        for pixel_payload in pixel_payloads:
+                            self._store_parallel_pixel(accumulator, pixel_payload)
+                            if on_pixel_done is not None:
+                                on_pixel_done()
+                    except Exception:
+                        for y, x in chunk:
+                            accumulator.store_error(
+                                int(y), int(x), FitStatus.FIT_ERROR
+                            )
+                            if on_pixel_done is not None:
+                                on_pixel_done()
+
+                if self._is_cancelled(cancel_event):
+                    for future in pending:
+                        future.cancel()
+                    break
+                while next_chunk < len(chunks) and len(pending) < worker_count:
+                    chunk = chunks[next_chunk]
+                    pending[executor.submit(fit_chunk_worker, payload_for(chunk))] = chunk
+                    next_chunk += 1
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
+
     def fit_areas(
         self,
         request: NLLSRunRequest,
@@ -325,7 +589,11 @@ class ElementalMultifitService:
         progress_callback: ProgressCallback | None = None,
     ) -> xr.Dataset:
         self._validate_request(
-            request, source, dataset_identity, areas, reference_fits
+            request,
+            source,
+            dataset_identity,
+            areas,
+            reference_fits,
         )
         accumulator = NLLSResultsAccumulator.create(source)
         cube = accumulator.original_data
@@ -349,9 +617,14 @@ class ElementalMultifitService:
             built_models[area_id] = built
             for component_id in built.component_ids:
                 accumulator.register_component(component_id)
-            for parameter in reference_fits[area_id].params:
-                accumulator.register_parameter(str(parameter["name"]))
+            for parameter_name in built.params:
+                accumulator.register_parameter(str(parameter_name))
             for component_id, curve in built.curve_snapshots.items():
+                continuum_spec = next(
+                    spec
+                    for spec in area.continuum_specs
+                    if spec.id == component_id
+                )
                 curve_metadata.append(
                     {
                         "area_id": area_id,
@@ -359,8 +632,44 @@ class ElementalMultifitService:
                         "provider_version": curve.provider_version,
                         "formula_version": curve.formula_version,
                         "table_checksums": tuple(curve.table_checksums),
+                        "atomic_number": int(curve.atomic_number),
+                        "symbol": str(curve.symbol),
+                        "shells": tuple(curve.shells),
+                        "onsets_eV": tuple(float(value) for value in curve.onsets_eV),
+                        "normalization_factor": float(curve.normalization_factor),
+                        "units": str(curve.units),
+                        "edge_id": str(continuum_spec.edge_id),
+                        "elnes_component_ids": tuple(
+                            fine.id
+                            for fine in area.fine_structure_specs
+                            if fine.enabled
+                            and fine.edge_id == continuum_spec.edge_id
+                            and area.model_composition.value
+                            == "continuum_plus_elnes"
+                        ),
                     }
                 )
+
+        parallel_plan: dict[str, dict[str, int]] = {}
+        if request.parallel:
+            for area_id in request.selected_areas:
+                pixel_count = int(np.count_nonzero(masks[area_id]))
+                effective_workers, chunk_size, chunk_count = self._parallel_plan(
+                    pixel_count, request.workers
+                )
+                bytes_per_pixel = int(eloss.size * np.dtype(float).itemsize)
+                bytes_per_pixel += 2 * np.dtype(np.int64).itemsize
+                parallel_plan[area_id] = {
+                    "pixels": pixel_count,
+                    "workers": effective_workers,
+                    "chunk_size": chunk_size,
+                    "chunks": chunk_count,
+                    "estimated_inflight_payload_bytes": int(
+                        effective_workers
+                        * min(chunk_size, max(1, pixel_count))
+                        * bytes_per_pixel
+                    ),
+                }
 
         total = sum(int(np.count_nonzero(mask)) for mask in masks.values())
         completed = 0
@@ -382,10 +691,13 @@ class ElementalMultifitService:
             if self._is_cancelled(cancel_event):
                 break
             area = areas[area_id]
-            self.fit_area_serial(
+            fit_method = (
+                self.fit_area_parallel if request.parallel else self.fit_area_serial
+            )
+            fit_method(
                 request,
                 area,
-                reference_fits[area_id],
+                reference_fits.get(area_id),
                 cube,
                 eloss,
                 masks[area_id],
@@ -422,6 +734,21 @@ class ElementalMultifitService:
             }
             for area_id in request.selected_areas
         }
+        parameter_schema = {
+            area_id: [
+                {
+                    "name": str(name),
+                    "value": float(parameter.value),
+                    "min": float(parameter.min),
+                    "max": float(parameter.max),
+                    "vary": bool(parameter.vary),
+                    "expr": parameter.expr,
+                    "brute_step": parameter.brute_step,
+                }
+                for name, parameter in built_models[area_id].params.items()
+            ]
+            for area_id in request.selected_areas
+        }
         request_payload = {
             **asdict(request),
             "fit_range": asdict(request.fit_range),
@@ -437,6 +764,16 @@ class ElementalMultifitService:
             "source_kind": dataset_identity.source_kind,
             "geometry": json.dumps(asdict(geometry), sort_keys=True),
             "method": request.method,
+            "execution_mode": "parallel" if request.parallel else "serial",
+            "workers": int(request.workers if request.parallel else 1),
+            "effective_workers": int(
+                max(
+                    (plan["workers"] for plan in parallel_plan.values()),
+                    default=1,
+                )
+            ),
+            "parallel_chunk_size": int(self.parallel_chunk_size or 0),
+            "parallel_plan": json.dumps(parallel_plan, sort_keys=True),
             "model_composition_by_area": json.dumps(
                 {
                     area_id: composition.value
@@ -453,8 +790,12 @@ class ElementalMultifitService:
             "oos_formula_version": OOS_FORMULA_VERSION,
             "oos_curve_metadata": json.dumps(curve_metadata, sort_keys=True),
             "configuration": json.dumps(configuration, sort_keys=True),
+            "parameter_schema_by_area": json.dumps(
+                parameter_schema, sort_keys=True, default=str
+            ),
             "selected_areas": json.dumps(request.selected_areas),
             "run_request": json.dumps(request_payload, sort_keys=True, default=str),
+            "run_id": uuid4().hex,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "complete": int(not cancelled),
             "cancelled": int(cancelled),

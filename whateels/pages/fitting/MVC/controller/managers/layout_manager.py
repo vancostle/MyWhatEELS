@@ -8,12 +8,32 @@ from ..visualizer_factory import VisualizerFactory
 from whateels.state import CacheManager
 from ...view.components.component_item_view import ComponentItemView
 from ...view.plots.nlls_multifit_results_plot import NLLSMultifitResultsPlot
+from ...view.plots.nlls_derived_results_plot import NLLSDerivedResultsPlot
 
 if TYPE_CHECKING:
     from ...view import FittingView
     from ...model import FittingModel
     from ...controller import FittingController
     from xarray import Dataset
+
+
+class _StableAdditiveColumn(pn.Column):
+    """Keep the scroll viewport stable while direct children are appended.
+
+    Panel normally infers ``min_height`` by summing fixed-height children every
+    time ``objects`` changes.  That is useful for ordinary columns, but it makes
+    a scroll viewport grow and invalidates every responsive Bokeh plot already
+    mounted inside it.  This column deliberately keeps the explicit viewport
+    sizing mode and lets CSS overflow handle the additive content height.
+    """
+
+    def _compute_sizing_mode(self, children, props):
+        computed = super()._compute_sizing_mode(children, props)
+        computed.pop("min_height", None)
+        if self.sizing_mode is not None:
+            computed["sizing_mode"] = self.sizing_mode
+        return computed
+
 
 class LayoutManager:
     """
@@ -27,6 +47,29 @@ class LayoutManager:
     By separating layout concerns from the main Controller, we achieve better
     code organization and single responsibility principle.
     """
+
+    _ADDITIVE_STACK_STYLES = {
+        "box-sizing": "border-box",
+        "display": "flex",
+        "flex-direction": "column",
+        "height": "100%",
+        "min-height": "0",
+        "min-width": "0",
+        "overflow-x": "hidden",
+        # Keep the scrollbar lane present before the first overflow. Responsive
+        # Bokeh plots retain the same width when analyses are prepended.
+        "overflow-y": "scroll",
+        "scrollbar-gutter": "stable",
+        "padding": "0 8px 8px 8px",
+        "align-items": "stretch",
+        "position": "relative",
+        # Adding a result at the visual top must not let the browser's scroll
+        # anchoring move the already visible Bokeh canvases.
+        "overflow-anchor": "none",
+    }
+    _DERIVED_VISUAL_ORDER_BASE = -2_000_000
+    _NLLS_VISUAL_ORDER_BASE = -1_000_000
+    _SOURCE_VISUAL_ORDER = 0
     
     def __init__(self, view: "FittingView", controller: "FittingController", model: "FittingModel"):
         """
@@ -46,7 +89,9 @@ class LayoutManager:
         self._chosen_visualizers: list = []
         self._plot_stacks: list[pn.Column] = []
         self._nlls_result_views: list[list[NLLSMultifitResultsPlot]] = []
+        self._nlls_derived_views: list[list[NLLSDerivedResultsPlot]] = []
         self._nlls_run_sequence = 0
+        self._nlls_analysis_sequence = 0
         
     def add_component_to_sidebar_layout(self, component: pn.viewable.Viewable):
         """Add a component to the sidebar and track it as the last dataset info component."""
@@ -95,8 +140,10 @@ class LayoutManager:
 
         try:
             self.clear_nlls_result_plots()
+            self._chosen_visualizers.clear()
             self._plot_stacks.clear()
             self._nlls_result_views.clear()
+            self._nlls_derived_views.clear()
             # Clear previous dataset info panels to prevent caching old data
             self._all_dataset_info.clear()
             
@@ -120,29 +167,32 @@ class LayoutManager:
                     css_classes=["fitting-source-plots"],
                     styles={
                         "box-sizing": "border-box",
-                        "flex": "1 0 100%",
+                        "flex": "0 0 100%",
                         "height": "100%",
+                        "max-height": "100%",
                         "min-width": "0",
+                        # The Bokeh axes/colorbar are child panels of the figure.
+                        # Paint containment clipped them when the responsive
+                        # frame needed a few extra pixels after a stack move.
+                        "contain": "layout",
+                        "isolation": "isolate",
+                        "order": str(self._SOURCE_VISUAL_ORDER),
                     },
                 )
-                plot_stack = pn.Column(
+                # Keep one append-only physical child list. CSS order changes
+                # presentation without replacing live plot models/callbacks.
+                plot_stack = _StableAdditiveColumn(
                     base_plot_wrapper,
                     sizing_mode=STRETCH_BOTH,
+                    min_height=0,
                     margin=0,
                     scroll=True,
                     css_classes=["fitting-additive-plots"],
-                    styles={
-                        "box-sizing": "border-box",
-                        "height": "100%",
-                        "min-height": "0",
-                        "min-width": "0",
-                        "overflow-x": "hidden",
-                        "overflow-y": "auto",
-                        "padding": "0 8px 8px 8px",
-                    },
+                    styles=dict(self._ADDITIVE_STACK_STYLES),
                 )
                 self._plot_stacks.append(plot_stack)
                 self._nlls_result_views.append([])
+                self._nlls_derived_views.append([])
                 self._plots_tab.append((image_name, plot_stack))
                 
                 self._all_dataset_info.append(chosen_visualizer.create_dataset_info())
@@ -173,7 +223,7 @@ class LayoutManager:
         *,
         dataset_index: int | None = None,
     ) -> NLLSMultifitResultsPlot:
-        """Prepend a new run while retaining older results and the source plots."""
+        """Publish a new run without remounting older results/source plots."""
         if not self._plot_stacks:
             raise DMPlotCreationError("No Fitting plot stack is available for NLLS results.")
         if dataset_index is None:
@@ -189,14 +239,77 @@ class LayoutManager:
             run_number=self._nlls_run_sequence,
         )
         index = int(dataset_index)
-        stack = self._plot_stacks[index]
-        stack.insert(0, result_view)
-        stack.scroll_position = 0
         self._nlls_result_views[index].append(result_view)
         controls = self._multifit_controls()
-        if controls is not None:
-            controls.register(result_view)
+        try:
+            # Apply shared state before the view obtains a Bokeh model.  The
+            # append is then the only document mutation seen by existing plots.
+            if controls is not None:
+                controls.register(result_view)
+            self._append_additive_view(
+                self._plot_stacks[index],
+                result_view,
+                order=self._NLLS_VISUAL_ORDER_BASE - self._nlls_run_sequence,
+            )
+        except Exception:
+            if controls is not None:
+                controls.unregister(result_view)
+            self._nlls_result_views[index].remove(result_view)
+            result_view.cleanup()
+            raise
         return result_view
+
+    def add_nlls_derived_result_plot(
+        self,
+        results,
+        *,
+        dataset_index: int | None = None,
+    ) -> NLLSDerivedResultsPlot:
+        """Publish a derived map without remounting runs/source plots."""
+        if not self._plot_stacks:
+            raise DMPlotCreationError("No Fitting plot stack is available for NLLS analysis.")
+        if dataset_index is None:
+            dataset_index = int(getattr(self._plots_tab, "active", 0) or 0)
+        index = int(dataset_index)
+        if not 0 <= index < len(self._plot_stacks):
+            raise DMPlotCreationError(f"Invalid Fitting dataset index: {dataset_index}")
+        self._nlls_analysis_sequence += 1
+        view = NLLSDerivedResultsPlot(
+            results,
+            sequence=self._nlls_analysis_sequence,
+        )
+        self._nlls_derived_views[index].append(view)
+        controls = self._multifit_controls()
+        try:
+            if controls is not None:
+                controls.register_derived(view)
+            self._append_additive_view(
+                self._plot_stacks[index],
+                view,
+                order=(
+                    self._DERIVED_VISUAL_ORDER_BASE
+                    - self._nlls_analysis_sequence
+                ),
+            )
+        except Exception:
+            if controls is not None:
+                controls.unregister_derived(view)
+            self._nlls_derived_views[index].remove(view)
+            view.cleanup()
+            raise
+        return view
+
+    @staticmethod
+    def _append_additive_view(
+        stack: pn.Column,
+        view: pn.viewable.Viewable,
+        *,
+        order: int,
+    ) -> None:
+        """Append physically while presenting the new fixed block first."""
+        view.styles = {**(view.styles or {}), "order": str(int(order))}
+        stack.append(view)
+        stack.scroll_position = 0
 
     def _multifit_controls(self):
         """Return the Results-tab block that hosts the run controls, if it exists."""
@@ -212,16 +325,31 @@ class LayoutManager:
             return
         controls = self._multifit_controls()
         for index in indices:
-            stack = self._plot_stacks[index] if index < len(self._plot_stacks) else None
+            plot_stack = (
+                self._plot_stacks[index]
+                if index < len(self._plot_stacks)
+                else None
+            )
             for result_view in tuple(self._nlls_result_views[index]):
-                result_view.cleanup()
+                if plot_stack is not None and result_view in plot_stack.objects:
+                    plot_stack.remove(result_view)
                 if controls is not None:
                     controls.unregister(result_view)
-                if stack is not None and result_view in stack.objects:
-                    stack.remove(result_view)
+                result_view.cleanup()
             self._nlls_result_views[index].clear()
+            if index < len(self._nlls_derived_views):
+                for derived_view in tuple(self._nlls_derived_views[index]):
+                    if plot_stack is not None and derived_view in plot_stack.objects:
+                        plot_stack.remove(derived_view)
+                    if controls is not None:
+                        controls.unregister_derived(derived_view)
+                    derived_view.cleanup()
+                self._nlls_derived_views[index].clear()
+            if plot_stack is not None:
+                plot_stack.scroll_position = 0
         if dataset_index is None:
             self._nlls_run_sequence = 0
+            self._nlls_analysis_sequence = 0
     def get_energy_range(self) -> list[float]:
         """Get the maximum energy range across all datasets."""
         state = CacheManager.get_cached_app_state()

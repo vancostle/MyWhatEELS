@@ -172,7 +172,7 @@ Crear dataclasses inmutables o de mutación controlada:
 | AreaModelSpec | area_id, label, mask, reference_strategy, model_composition, component_specs, deleted_component_ids | Mantener configuración independiente por área. `model_composition` sólo admite `continuum_only` o `continuum_plus_elnes`. |
 | ReferenceFitSnapshot | area_id, success, message, method, params, redchi, best_fit, residual, components | Persistir el ajuste de referencia sin serializar ModelResult. |
 | NLLSWorkspace | schema_version, DatasetIdentity, geometry, areas, active_area, reference_fits, dirty_revision | Estado editable y reproducible del constructor. |
-| NLLSRunRequest | selected_areas, fit_range, method, model_composition_by_area, parallel, workers, rerun_from | Entrada cerrada e inmutable de una ejecución. |
+| NLLSRunRequest | selected_areas, fit_range, method, model_composition_by_area, parallel, workers | Entrada cerrada e inmutable de una ejecución. |
 
 ### 3.2. Estado reactivo
 
@@ -254,8 +254,8 @@ El agente debe crear primero contratos y servicios puros; sólo después conecta
 | 3. Constructor | NLLSModelBuilder, OOSContinuumProvider, ParameterDefaults | Elemental NLLS > Add Edge; Build Elemental Model | AreaModelSpec materializado y preview de componentes |
 | 4. Áreas | ClusteringAreaAdapter, ReferenceSpectrumService | Use Current Clustering; Load Clustering JSON; selector de área | Máscaras y referencia media por área |
 | 5. Referencias | ReferenceFitService.fit_one/fit_many | Fit Current Reference; Fit All References | ReferenceFitSnapshot por área |
-| 6. Propagación | ElementalMultifitService._initial_params_for_pixel | Implícita dentro de Run Elemental NLLS | Copia de parámetros convergidos de la referencia o del mismo píxel en rerun |
-| 7. Multifit | ElementalMultifitService.fit_areas; fit_chunk_worker | Run Elemental NLLS; Cancel; Run Modified Fit | xr.Dataset de resultados y estados por píxel |
+| 6. Propagación | ElementalMultifitService._initial_params_for_pixel | Implícita dentro de Run Elemental NLLS | Copia independiente de parámetros convergidos de la referencia |
+| 7. Multifit | ElementalMultifitService.fit_areas; fit_chunk_worker | Run Elemental NLLS; Cancel | xr.Dataset nuevo de resultados y estados por píxel |
 | 8. Análisis | NLLSResultsAssembler, CenterAnalysisService, WhiteLineService, EgertonQuantificationService | Results; Center Analysis; White Lines; Elemental Quantification | Mapas, ratios y datasets derivados |
 | 9. Bethe/GOS periférico | Fuera de alcance | Sin entrada GUI | No implementado: MyWhatEELS sólo dispone de OOS |
 | 10. Guardado | NLLSConfigSerializer, NLLSResultExporter | Save Model; Save Configuration; Download References; Download Results | JSON con esquema + NetCDF, CSV e imágenes opcionales |
@@ -842,7 +842,7 @@ Fit All debe seguir ajustando las demás áreas si una falla, pero devolver un r
 Función objetivo propuesta:
 
     whateels/nlls/multifit.py
-    ElementalMultifitService._initial_params_for_pixel(area_id, pixel, rerun_from)
+    ElementalMultifitService._initial_params_for_pixel(area_id, reference_snapshot)
 
 Semántica:
 
@@ -863,28 +863,21 @@ La copia por píxel es obligatoria: todos los píxeles del área parten del mism
 
 Esto reproduce la ruta GUI antigua: ref_results[area].params se pasa a cada Model.fit y la asignación paramet = res.params está comentada, ../whatEELS/MAPEO_DETALLADO_CALLBACKS_PUNTOS_3_A_10.md:288-318.
 
-### 8.2. Rerun
+### 8.2. Ejecuciones sucesivas
 
-Para un rerun, cada píxel parte de su propio snapshot anterior:
-
-    previous = first_run.pixel_parameters(y, x)
-    pixel_params = merge(previous, new_components, area_locks)
-    result = modified_model.fit(pixel, params=pixel_params, ...)
-
-No partir de la referencia, del último píxel visitado ni de otro área. Aplicar:
-
-    parameter.vary = not lock_spec.locked
-
-El comportamiento antiguo equivalente está en ../whatEELS/MAPEO_DETALLADO_CALLBACKS_PUNTOS_3_A_10.md:320-333.
+Decisión de producto: se elimina `Modified model / rerun`. Cada pulsación de Run
+Elemental NLLS crea una ejecución nueva e independiente y parte otra vez del
+snapshot convergido de referencia de cada área. Los runs siguen publicándose de
+forma aditiva, pero no heredan parámetros, áreas ni metadatos de parentesco de un
+resultado anterior.
 
 ### 8.3. Pruebas obligatorias de propagación
 
 - Dos píxeles del mismo área reciben valores iniciales idénticos aunque el primero converja a valores extremos.
 - Dos áreas reciben sus propios parámetros de referencia.
 - Cambiar el orden de iteración no cambia las iniciales del primer fit ni los resultados dentro de tolerancia.
-- En rerun, cada píxel recibe sus parámetros previos exactos.
-- Lock All fija vary=False sólo en el área indicada.
-- Añadir una componente en rerun no modifica los parámetros previos de otras áreas.
+- Dos ejecuciones sucesivas generan identificadores independientes y no contienen
+  campos de rerun/versionado.
 
 ## 9. Etapa 7: multifit elemental
 
@@ -1136,9 +1129,6 @@ Añadir un smoke test del ejecutable congelado:
 | Multifit | Areas to fit | _on_fit_areas_changed | snapshots | draft request | nada |
 | Multifit | Run Elemental NLLS | _on_run_elemental_nlls | request/workspace/data | nlls_results/run_state | resultado previo sólo al commit |
 | Multifit | Cancel | _on_cancel_elemental_nlls | run handle | run_state | no borra complete previo |
-| Rerun | Begin Modified Model | _on_begin_rerun | primer resultado | specs rerun/locks | rerun previo |
-| Rerun | Lock All/Unlock All | _on_set_all_locks | área/componente | ParameterSpec.vary | rerun |
-| Rerun | Run Modified Fit | _on_run_modified_nlls | parámetros por píxel | nuevo resultado versionado | análisis derivado |
 | Resultados | Results | _on_show_results | nlls_results | vista | nada |
 | Resultados | Center Analysis | _on_open_center_analysis | mapas center | dataset derivado | nada |
 | Resultados | White Lines | _on_open_white_lines | componentes/FWHM | dataset derivado | nada |
@@ -1157,8 +1147,6 @@ Añadir un smoke test del ejecutable congelado:
 | Fit All References | todas las áreas seleccionadas tienen referencia y modelo |
 | Run Elemental NLLS | hay áreas seleccionadas, referencias convergidas, ninguna configuración dirty y cada área conserva la validación de background, OOS y composición |
 | Cancel | run_state es running o fitting_references |
-| Begin Modified Model | existe un resultado complete |
-| Run Modified Fit | hay componentes/bloqueos modificados y parámetros previos disponibles |
 | Results | existe nlls_results complete o partial reconocido |
 | Center Analysis | existen al menos dos mapas center/onset compatibles |
 | White Lines | existe un doblete con componentes ajustadas |
@@ -1247,15 +1235,17 @@ Criterio de salida: dos ejecuciones con el mismo input producen parámetros/mapa
 
 Criterio de salida: ningún análisis necesita ModelResult persistido.
 
-### Fase 6 — Modelo modificado y rerun
+### Fase 6 — Retirada de modelo modificado y rerun
 
-- [ ] Crear snapshots por píxel recuperables desde el dataset.
-- [ ] UI de nuevos componentes y locks.
-- [ ] Propagación local desde el mismo píxel.
-- [ ] Resultados first/modified versionados, sin sobrescribir.
-- [ ] Tests de Lock All/Unlock All y áreas no modificadas.
+Decisión de producto posterior al plan original:
 
-Criterio de salida: un rerun parcial conserva exactamente los resultados de las áreas no seleccionadas.
+- [x] Eliminar la UI `Modified model / rerun`, selección de áreas y locks globales.
+- [x] Eliminar `rerun_from`, snapshots de parámetros previos y clonación parcial de resultados.
+- [x] Eliminar versionado/parentesco de runs modificados.
+- [x] Mantener ejecuciones normales independientes y plots aditivos.
+
+Criterio de salida: no existe ninguna ruta de ejecución o control capaz de reutilizar
+un resultado anterior como inicialización de un fit nuevo.
 
 ### Fase 7 — Paralelización
 
@@ -1413,7 +1403,7 @@ La migración estará terminada cuando:
 - clustering en memoria o JSON genere máscaras y referencias medias correctas;
 - Fit References persista snapshots por área;
 - el primer píxel y todos los siguientes partan de la referencia de su área;
-- el rerun parta del resultado previo del mismo píxel;
+- cada nueva ejecución parta de la referencia vigente de su área y no de un run anterior;
 - el multifit serial y paralelo produzcan resultados equivalentes;
 - ReducedChiSquare, centers, white lines y cuantificación sean reproducibles;
 - los resultados se descarguen y recarguen sin pickle;

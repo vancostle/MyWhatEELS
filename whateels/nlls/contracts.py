@@ -307,7 +307,6 @@ class NLLSRunRequest:
     model_composition_by_area: tuple[tuple[str, ModelComposition], ...]
     parallel: bool = False
     workers: int = 1
-    rerun_from: str | None = None
     dataset_source_revision: str = ""
     workspace_revision: int = 0
     area_revisions: tuple[tuple[str, int], ...] = ()

@@ -35,6 +35,18 @@ class SplitJs(JSComponent):
         self._left_column_hv : pn.pane.HoloViews = self._find_first_holoviews_pane(self.left_column)
         self._right_column_hv : pn.pane.HoloViews = self._find_first_holoviews_pane(self.right_column)
 
+        # Before the first browser ResizeObserver message, size an equal-aspect
+        # image from the available height. Width-driven ``scale_both`` is unsafe
+        # for tall spectrum images because it can grow beyond the split viewport.
+        if hasattr(self._left_column_hv, "_splitjs_xy_ratio"):
+            self._left_column_hv.sizing_mode = "scale_height"
+            self._left_column_hv.align = "center"
+            self._left_column_hv.styles = {
+                **(self._left_column_hv.styles or {}),
+                "max-width": "100%",
+                "max-height": "100%",
+            }
+
     def _find_first_holoviews_pane(self, column) -> "pn.pane.HoloViews":
         """Find the first HoloViews pane in a given column, if any."""
         if column is None:
@@ -100,8 +112,17 @@ class SplitJs(JSComponent):
         """Resize paneA by fitting width/height simultaneously while preserving X/Y ratio."""
         left_column : pn.pane.HoloViews = self._left_column_hv
 
+        # A pane without a declared ratio keeps its own responsive box. Forcing
+        # an outer X/Y ratio only works for a bare image: on a figure that also
+        # carries a title, a toolbar and a colour bar the forced box is taken
+        # out of the data frame, so the image comes out stretched and that
+        # furniture is pushed around. Such panes letterbox their own ranges.
+        declared_ratio = getattr(left_column, '_splitjs_xy_ratio', None)
+        if declared_ratio is None:
+            return
+
         try:
-            ratio = float(getattr(left_column, '_splitjs_xy_ratio', 1.0))
+            ratio = float(declared_ratio)
         except (ValueError, TypeError):
             ratio = 1.0
 
@@ -130,3 +151,7 @@ class SplitJs(JSComponent):
         left_column.sizing_mode = 'fixed'
         left_column.width = new_w
         left_column.height = new_h
+        left_column.min_width = new_w
+        left_column.max_width = new_w
+        left_column.min_height = new_h
+        left_column.max_height = new_h
