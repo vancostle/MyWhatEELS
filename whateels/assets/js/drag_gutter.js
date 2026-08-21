@@ -41,6 +41,52 @@ export const render = ({ model }) => {
         context.right.style.flex = (1 - ratio) + ' 1 0px';
         context.left.style.minWidth = '0';
         context.right.style.minWidth = '0';
+        request_relayout();
+    };
+
+    // Changing flex is a pure CSS change, and a plot that sizes its own box
+    // (any scale_* mode) keeps the geometry of its first solve: its observed
+    // element never changed, only the parent that clips it. The map then stays
+    // frozen at the old size - visibly wrong once it holds an aspect ratio -
+    // until an unrelated window resize happens to wake the whole page.
+    //
+    // So the two panes are asked to solve again, and only those two. A global
+    // resize event would do it as well, which is exactly why it is not used
+    // here: it relayouts every responsive plot in the page, including the ones
+    // stacked above this split.
+    let relayout_frame = null;
+    const request_relayout = () => {
+        if (relayout_frame !== null || context === null) {
+            return;
+        }
+        relayout_frame = requestAnimationFrame(() => {
+            relayout_frame = null;
+            for (const pane of [context.left, context.right]) {
+                for (const view of views_inside(pane)) {
+                    solve_again(view);
+                }
+            }
+        });
+    };
+
+    // Report the left pane's box so Python can size the ratio pane from it.
+    //
+    // The fit deliberately does NOT happen here. The pane is a Bokeh-managed
+    // element, so under any responsive sizing mode Bokeh rewrites its inline
+    // width/height on the next layout solve and any size written from here is
+    // lost. Setting the model in Python is the only instruction Bokeh keeps.
+    //
+    // Sent on release and on window resize, never per drag frame: one message
+    // per gesture, not sixty.
+    const report_geometry = () => {
+        if (context === null || !model.pane_ratio) {
+            return;
+        }
+        const rect = context.left.getBoundingClientRect();
+        if (!(rect.width > 0) || !(rect.height > 0)) {
+            return;
+        }
+        model.send_msg({ width: rect.width, height: rect.height });
     };
 
     const stop_drag = (event) => {
@@ -56,6 +102,10 @@ export const render = ({ model }) => {
         }
         if (context !== null) {
             context.row.style.userSelect = '';
+            // Once the flex has settled: re-measure for the ratio pane, and
+            // solve again so neither pane keeps the last intermediate frame.
+            report_geometry();
+            request_relayout();
         }
     };
 
@@ -112,9 +162,110 @@ export const render = ({ model }) => {
         }
         ctx.left.style.flex = '';
         ctx.right.style.flex = '';
+        report_geometry();
+        request_relayout();
+    });
+
+    // render() returns before this element is in the document, so the panes
+    // cannot be measured yet. Retry for a bounded number of frames rather than
+    // spinning forever on a gutter that never gets mounted.
+    let attempts = 0;
+    const initial_fit = () => {
+        if (resolve_context() === null) {
+            if (++attempts < 120) {
+                requestAnimationFrame(initial_fit);
+            }
+            return;
+        }
+        report_geometry();
+        request_relayout();
+    };
+    requestAnimationFrame(initial_fit);
+
+    // A window resize changes the panes without ever touching the gutter, so
+    // the ratio pane has to be re-measured for it too.
+    window.addEventListener('resize', () => {
+        report_geometry();
+        request_relayout();
     });
 
     return gutter;
+}
+
+// Bokeh keeps its view tree in `Bokeh.index`. Its exact shape has changed
+// across 3.x releases, so every known form is accepted and an unknown one
+// simply yields no roots: the drag still resizes, it just stops correcting the
+// plots instead of throwing on every pointer move.
+const root_views = () => {
+    const bokeh = window.Bokeh;
+    const index = bokeh && bokeh.index;
+    if (!index) {
+        return [];
+    }
+    if (typeof index[Symbol.iterator] === 'function') {
+        return Array.from(index);
+    }
+    if (Array.isArray(index.roots)) {
+        return index.roots;
+    }
+    if (typeof index.get_all === 'function') {
+        return Array.from(index.get_all());
+    }
+    return Object.keys(index).map((key) => index[key]);
+}
+
+// The outermost view that already sits inside the pane is the one to solve:
+// solving it cascades to its children, and stopping there keeps every plot
+// outside this split untouched. Roots themselves are usually template-level and
+// contain both panes, so they are descended into rather than solved.
+const views_inside = (pane) => {
+    const found = [];
+    const visit = (view) => {
+        if (!view) {
+            return;
+        }
+        const el = view.el;
+        if (el && is_inside(el, pane)) {
+            found.push(view);
+            return;
+        }
+        const children = view.child_views;
+        if (children) {
+            for (const child of children) {
+                visit(child);
+            }
+        }
+    };
+    for (const root of root_views()) {
+        visit(root);
+    }
+    return found;
+}
+
+const solve_again = (view) => {
+    try {
+        if (typeof view.invalidate_layout === 'function') {
+            view.invalidate_layout();
+        } else if (typeof view.compute_layout === 'function') {
+            view.compute_layout();
+        }
+    } catch (error) {
+        // A view detached between the frame request and this callback. The next
+        // drag frame picks up whatever replaced it.
+    }
+}
+
+// `contains` does not cross shadow boundaries, and Panel puts every layout
+// child in its own shadow root.
+const is_inside = (node, ancestor) => {
+    let current = node;
+    while (current) {
+        if (current === ancestor) {
+            return true;
+        }
+        current = current.parentNode || current.host || null;
+    }
+    return false;
 }
 
 const min_pane_size = (model) => {

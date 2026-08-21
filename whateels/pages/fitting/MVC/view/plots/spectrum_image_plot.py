@@ -14,7 +14,6 @@ from matplotlib.colors import LinearSegmentedColormap, to_hex
 from whateels.base.plots import BaseSpectrumImagePlot
 from typing import override, TYPE_CHECKING
 from whateels.components import create_dataset_info_card, DragGutter
-from whateels.helpers.bokeh_geometry import square_pixel_plot_hook
 from whateels.helpers.colormaps import get_nclusters_cmap
 from whateels.state import CacheManager
 
@@ -37,25 +36,15 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     # Axis titles for spectrum plot
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
-    # Fitting switches paneA between a plain image and maps that carry a title
-    # and colorbar. The raw-data ratio cannot be imposed on the outer Bokeh box
-    # because that box also contains this plot furniture.
-    _SPLITJS_SIZES_PANEA = False
-
-    @override
-    def _paneA_aspect_options(self, nx: int, ny: int) -> dict:
-        """Let the responsive Fitting box contain all paneA child panels."""
-        return {}
-
-    @override
-    def _paneA_overlay_options(self) -> dict:
-        """Letterbox spatial data inside paneA's responsive Bokeh frame."""
-        options = super()._paneA_overlay_options()
-        options["hooks"] = [
-            *options.get("hooks", []),
-            square_pixel_plot_hook,
-        ]
-        return options
+    # paneA is left exactly as Home, Clustering and Quantification have it: the
+    # inherited _SPLITJS_SIZES_PANEA, _paneA_aspect_options ('aspect': 'equal')
+    # and _paneA_overlay_options are what keep the spectrum image in its own
+    # proportions, and overriding any of them here is what distorted the map.
+    #
+    # 'aspect' puts nx/ny on the figure's aspect_ratio under a scale_* sizing
+    # mode, and Bokeh then fits the map inside the pane. Do NOT force
+    # paneA.sizing_mode to 'stretch_both' and do NOT add square_pixel_plot_hook:
+    # either one drops that aspect_ratio and the image fills the pane instead.
 
     def __init__(self, model: "FittingModel", dataset: "Dataset"):
         """Initialize visual state, interactive panes, and callback wiring."""
@@ -81,18 +70,29 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         # _setup_plots() + _setup_callbacks() internally.
         super().__init__(dataset, eloss_name=model.constants.ELOSS)
 
-        # Base pages center a bare paneA at a fixed image ratio. Fitting's paneA
-        # may contain a title/colorbar, so it fills the split and does not retain
-        # the inherited auto margin or any fixed min/max dimensions.
+        # paneA is sized by the gutter, which measures the pane in the browser
+        # and hands the box to DragGutter._apply_pane_ratio - the same fit
+        # SplitJs runs for Home, Clustering and Quantification:
+        #
+        #     w = min(available_width, available_height * ratio),  h = w / ratio
+        #
+        # so the image fills the height while the pane is wide enough, and gives
+        # height back as soon as the width becomes the binding side.
+        #
+        # It has to be done on the model, from Python. Two other layers were
+        # tried and neither can hold: Panel's 'scale_height' measures the parent
+        # once and this block lives inside _StableAdditiveColumn, a scroll
+        # viewport, where that measurement is zero and paneA vanishes; and a
+        # size written from JavaScript is erased by Bokeh's next layout solve,
+        # because paneA is a Bokeh-managed element.
+        #
+        # match_aspect (inherited with aspect='equal') is a separate job: it
+        # keeps the DATA pixels square inside that box, absorbing whatever the
+        # title and colour bar take.
         self.paneA.sizing_mode = 'stretch_both'
-        self.paneA.align = 'start'
-        self.paneA.width = None
-        self.paneA.height = None
-        self.paneA.min_width = None
-        self.paneA.max_width = None
-        self.paneA.min_height = None
-        self.paneA.max_height = None
-        self.paneA.styles = {'min-width': '0', 'min-height': '0'}
+        # _setup_plots() has just filled _nx/_ny; publish the ratio so the gutter
+        # built later in create_plots() starts with it.
+        self._sync_paneA_aspect_css()
 
         # Wire DoubleTap was moved to base _setup_callbacks — no manual wiring needed.
 
@@ -100,6 +100,23 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._pc = pn.state.add_periodic_callback(
             self._check_inactivity, period=250, start=False
         )
+
+    def _sync_paneA_aspect_css(self) -> None:
+        """Publish the current spatial ratio to the gutter that sizes paneA.
+
+        Must run again whenever ``_nx``/``_ny`` change: the energy map and the
+        clustering map can carry a different spatial shape than the source cube,
+        and a stale ratio would size them to the wrong box. Setting it re-fits
+        immediately from the last box the browser reported, so switching maps
+        does not have to wait for the next drag.
+        """
+        if not self._nx or not self._ny:
+            return
+        ratio = float(self._nx) / float(self._ny)
+        self._paneA_ratio = ratio
+        gutter = getattr(self, '_plots_gutter', None)
+        if gutter is not None:
+            gutter.pane_ratio = ratio
 
     def get_e_axis(self):
         """Return the 1D energy axis associated with the current datacube."""
@@ -149,6 +166,10 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     @override
     def create_plots(self):
         """Build the two-pane split layout with image on the left and spectra on the right."""
+        # No ``align`` here. Panel maps it to align-self, which on a Row is the
+        # VERTICAL axis: it drops the column to content height and leaves paneA
+        # with no height to scale from. paneA centres itself with its own
+        # ``margin: auto`` instead.
         left_column = pn.Column(
             self.paneA,
             self._hover_gate_widget,
@@ -169,12 +190,17 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             styles={'min-width': '0', 'min-height': '0'},
         )
         # A native Row keeps both plots inside the layout tree Bokeh solves.
-        # The separator is draggable but owns nothing: it only writes flex on
-        # its two siblings from the browser, so an additive result published
-        # further up the stack cannot detach axes or colour bars.
+        # The separator is draggable but owns nothing: ``ratio_pane`` is a plain
+        # Python reference, not a Child parameter, so paneA stays exactly where
+        # Panel mounted it. Reparenting is what detached axes and colour bars
+        # from their canvas when an additive result invalidated the root.
+        self._plots_gutter = DragGutter(
+            ratio_pane=self.paneA,
+            pane_ratio=getattr(self, '_paneA_ratio', 0.0),
+        )
         self._plots_layout = pn.Row(
             left_column,
-            DragGutter(),
+            self._plots_gutter,
             right_column,
             sizing_mode='stretch_both',
             margin=0,
@@ -317,20 +343,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             shared_axes=False,
             framewise=True,
             tools=["hover", "reset"],
-        )
-        # Keep the mounted root type identical to every other spatial result
-        # shown in Fitting.  Replacing paneA's initial Overlay with a bare Image
-        # made Current Clustering the sole topology change in this pane; putting
-        # the aspect hook on a one-layer Overlay keeps the live Bokeh figure on
-        # the same rendering path without adding the area-boundary layers used
-        # by NLLS result maps.
-        label_plot = hv.Overlay([label_image]).opts(
-            hv.opts.Overlay(
-                responsive=True,
-                shared_axes=False,
-                framewise=True,
-                hooks=[square_pixel_plot_hook],
-            )
+            **self._paneA_aspect_options(nx, ny),
         )
 
         x_axis = np.asarray(energy, dtype=float).reshape(-1)
@@ -378,10 +391,19 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
         self._nlls_result_active = False
         self._nlls_clustering_active = True
-        self._nlls_clustering_label_plot = label_plot
         self._nlls_clustering_spectra_plot = spectra_plot
         self._nx, self._ny = nx, ny
-        self.paneA.object = label_plot
+        self._sync_paneA_aspect_css()
+        # Publish the cluster map exactly the way the Clustering page does
+        # (ClusteringSpectrumImagePlot._update_clustering_plots): overlay it with
+        # the selection layer, point the hover source at the image and let
+        # _update_selection_overlay() recompose through _paneA_overlay_options().
+        # Assigning paneA.object directly, as this method used to, skipped those
+        # shared options - which is how the map lost its aspect and its hover gate.
+        self._paneA_base_overlay = label_image * self._selectors  # type: ignore
+        self._hover_source = label_image
+        self._update_selection_overlay([])
+        self._nlls_clustering_label_plot = self.paneA.object
         self._show_nlls_main_plot(spectra_plot)
 
     def clear_nlls_clustering(self) -> None:
@@ -410,6 +432,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
         ny, nx = m_image.shape
         self._nx, self._ny = nx, ny
+        self._sync_paneA_aspect_css()
         img = hv.Image(
             (np.arange(nx), np.arange(ny), m_image),
             kdims=['x', 'y'], vdims=['Intensity'],
@@ -462,6 +485,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             title='Energy Map',
         )
         self._nx, self._ny = nx, ny
+        self._sync_paneA_aspect_css()
         self._paneA_base_overlay = img * self._selectors
         overlay_options = self._paneA_overlay_options()
         overlay_options["active_tools"] = ["lasso_select"]

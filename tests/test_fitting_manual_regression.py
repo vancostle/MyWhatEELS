@@ -20,7 +20,7 @@ import panel as pn
 import xarray as xr
 import holoviews as hv
 from bokeh.document import Document
-from bokeh.models import DataRange1d, LayoutDOM, Tooltip
+from bokeh.models import DataRange1d, LayoutDOM, Range1d, Tooltip
 from whateels.components import DragGutter, ModalManager, SimpleDetails, SplitJs
 from whateels.nlls.contracts import FitRange, ModelComposition, ReferenceFitSnapshot
 from whateels.nlls.cross_sections import OOSCurveSnapshot
@@ -435,16 +435,38 @@ class ManualFittingRegressionTests(unittest.TestCase):
             return next(iter(visualizer.paneA._models.values()))[0]
 
         def assert_square_frame(figure, *, has_colorbar):
+            """paneA splits the geometry into two jobs that must not overlap.
+
+            The CSS container fills the height and derives the width from the
+            image ratio; the figure then fills that container and only has to
+            keep the DATA pixels square inside whatever the title and the colour
+            bar leave over. Moving the outer shape onto the figure instead - via
+            a scale_* mode, or via square_pixel_plot_hook - is what stretched the
+            map, overflowed the split or made paneA vanish, depending on which
+            one was tried.
+            """
+            # The figure fills the box CSS gave it. Under 'stretch_both' Bokeh
+            # ignores aspect_ratio, which is deliberate: the shape comes from
+            # the container, and this is the mode that re-solves when the pane
+            # changes size.
             self.assertEqual(figure.sizing_mode, "stretch_both")
-            self.assertIsNone(figure.aspect_ratio)
+            # Re-checked in every paneA state: the energy map and the cluster
+            # map may carry a different spatial shape than the source cube, and
+            # a stale ratio would size them to the wrong box.
+            self.assertAlmostEqual(
+                visualizer._plots_gutter.pane_ratio,
+                visualizer._nx / visualizer._ny,
+            )
+            # match_aspect is what keeps the data pixels square inside the box.
             self.assertTrue(figure.match_aspect)
             self.assertEqual(figure.aspect_scale, 1)
-            self.assertIsInstance(figure.x_range, DataRange1d)
-            self.assertIsInstance(figure.y_range, DataRange1d)
-            self.assertEqual(figure.x_range.range_padding, 0)
-            self.assertEqual(figure.y_range.range_padding, 0)
-            self.assertFalse(figure.x_range.flipped)
-            self.assertTrue(figure.y_range.flipped)
+            # 'aspect' pins the ranges to the real data bounds, so they are
+            # Range1d rather than the auto-ranging DataRange1d.
+            self.assertIsInstance(figure.x_range, Range1d)
+            self.assertIsInstance(figure.y_range, Range1d)
+            self.assertLess(figure.x_range.start, figure.x_range.end)
+            # invert_yaxis=True: rows run top to bottom.
+            self.assertGreater(figure.y_range.start, figure.y_range.end)
             colorbars = [
                 panel for panel in figure.right
                 if type(panel).__name__ == "ColorBar"
@@ -465,6 +487,11 @@ class ManualFittingRegressionTests(unittest.TestCase):
             self.assertEqual(gutter.sizing_mode, "stretch_height")
             self.assertEqual(left_column.sizing_mode, "stretch_both")
             self.assertEqual(right_column.sizing_mode, "stretch_both")
+            # Centring belongs on paneA, never on the column that holds it.
+            # Panel maps align to align-self, which on a Row is the vertical
+            # axis: it drops the column to content height, and a height-driven
+            # paneA then has nothing to measure and collapses to zero.
+            self.assertNotEqual(left_column.align, "center")
             # The gutter locates the row and its panes by marker class; without
             # them dragging silently does nothing.
             self.assertIn(DragGutter.ROW_CSS_CLASS, plots_layout.css_classes)
@@ -473,10 +500,18 @@ class ManualFittingRegressionTests(unittest.TestCase):
             for pane in (left_column, right_column):
                 self.assertEqual(pane.styles.get("min-width"), "0")
             self.assertFalse(plots_layout.select(SplitJs))
-            self.assertEqual(visualizer.paneA.sizing_mode, "stretch_both")
-            self.assertFalse(hasattr(visualizer.paneA, "_splitjs_xy_ratio"))
+            # paneA is left exactly as the base builds it for Home, Clustering
+            # and Quantification: auto margins, so once the gutter has sized
+            # paneA the leftover space becomes an even margin on both sides.
+            # The gutter holds paneA by plain reference and sizes it from the
+            # box the browser reports, running SplitJs' fit on the model.
+            self.assertIs(visualizer._plots_gutter._ratio_pane, visualizer.paneA)
+            self.assertEqual(visualizer.paneA.styles.get("margin"), "auto")
             self.assertNotEqual(visualizer.paneA.styles.get("overflow"), "hidden")
-            self.assertNotEqual(visualizer.paneA.styles.get("margin"), "auto")
+            # Nothing may pin paneA before the browser has reported a box: the
+            # first measurement is what establishes the fitted size.
+            self.assertIsNone(visualizer.paneA.width)
+            self.assertIsNone(visualizer.paneA.height)
             assert_square_frame(spatial_figure(), has_colorbar=False)
             labels = np.array([[0, 0, 1], [0, 1, 1]], dtype=int)
             energy = np.asarray(self.dataset.coords["Eloss"], dtype=float)
@@ -1539,13 +1574,14 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         self.assertNotIn("style.overflow = 'hidden'", SplitJs._JS_FILE)
         self.assertNotIn("window.dispatchEvent", SplitJs._JS_FILE)
 
-    def test_drag_gutter_never_reparents_panes_or_reports_to_python(self):
-        """The gutter may resize the panes but must never own or measure them.
+    def test_drag_gutter_never_reparents_panes(self):
+        """The gutter may resize the panes but must never own them.
 
         Reparenting is what detached axes and colour bars from their canvas in
         Fitting: Bokeh kept solving the original hierarchy while the browser
-        painted another one. A server round trip or a synthetic window resize
-        would equally reintroduce a full relayout on every drag frame.
+        painted another one. Note it was the reparenting, not the messaging:
+        the gutter does report the pane box to Python (see the ratio test), and
+        that is safe precisely because the panes stay where Panel mounted them.
         """
         source = DragGutter._JS_FILE
         for forbidden in (
@@ -1553,11 +1589,12 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             "appendChild",     # would move them out of the Bokeh layout tree
             "removeChild",
             "insertBefore",
-            "send_msg",        # would let Python write geometry on drag
             "dispatchEvent",   # would relayout every unrelated responsive plot
             "ResizeObserver",
         ):
             self.assertNotIn(forbidden, source)
+        # A plain Python reference, never a Child parameter.
+        self.assertNotIn("ratio_pane", DragGutter.param)
 
         # Panel names its own container div after the class; a second element
         # with that class would be styled as the bar as well.
@@ -1568,6 +1605,68 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         # Panel renders each layout child inside its own shadow root, so the
         # row is only reachable by stepping out through the shadow hosts.
         self.assertIn("current.host", source)
+
+    def test_drag_gutter_resolves_the_stale_layout_it_leaves_behind(self):
+        """Changing flex is invisible to a plot that sizes its own box.
+
+        A scale_* figure keeps the geometry of its first solve because its own
+        observed element never changed - only the parent that clips it. The map
+        then stays frozen at the old size until an unrelated window resize wakes
+        the page, which is the bug this guards. The gutter therefore asks the
+        two panes to solve again, throttled to one animation frame, and reaches
+        them without a server round trip or a global resize event.
+        """
+        source = DragGutter._JS_FILE
+        self.assertIn("invalidate_layout", source)
+        self.assertIn("requestAnimationFrame", source)
+        # Scoped: only views contained in this gutter's own two panes.
+        self.assertIn("views_inside", source)
+        self.assertIn("is_inside", source)
+        # The cheap global alternative stays banned - it would relayout every
+        # responsive plot stacked above this split.
+        self.assertNotIn("dispatchEvent", source)
+
+    def test_drag_gutter_keeps_the_ratio_by_giving_height_back(self):
+        """Fill the height, then trade height for ratio once width binds.
+
+        The fit is SplitJs._apply_left_plot_pixel_ratio's, and it has to run on
+        the *model* from Python. Two cheaper layers were tried and neither
+        holds: Panel's 'scale_height' measures the parent once and reads zero
+        inside the scrolling additive column, and a size written from JavaScript
+        is erased by Bokeh's next layout solve because the pane is a
+        Bokeh-managed element.
+        """
+        pane = pn.pane.HoloViews(hv.Curve([]))
+        gutter = DragGutter(ratio_pane=pane, pane_ratio=0.6)
+
+        # Wide pane: height is the binding side, so the height is taken whole.
+        gutter._handle_msg({"width": 800, "height": 600})
+        self.assertEqual(pane.height, 592)               # 600 minus the margin
+        self.assertAlmostEqual(pane.width / pane.height, 0.6, places=2)
+        self.assertEqual(pane.sizing_mode, "fixed")
+
+        # Dragging the gutter left makes width the binding side. The height
+        # must shrink; keeping it would squash the map, which is the bug.
+        gutter._handle_msg({"width": 200, "height": 600})
+        self.assertLess(pane.height, 592)
+        self.assertAlmostEqual(pane.width / pane.height, 0.6, places=2)
+        self.assertLessEqual(pane.width, 200)
+        self.assertLessEqual(pane.height, 600)
+
+        # A different map shape re-fits without waiting for the next drag.
+        gutter.pane_ratio = 2.0
+        gutter._handle_msg({"width": 800, "height": 600})
+        self.assertAlmostEqual(pane.width / pane.height, 2.0, places=2)
+
+        # Zero ratio disables the sizing entirely: plain flex, as before.
+        untouched = pn.pane.HoloViews(hv.Curve([]))
+        DragGutter(ratio_pane=untouched)._handle_msg({"width": 800, "height": 600})
+        self.assertIsNone(untouched.width)
+
+        source = DragGutter._JS_FILE
+        # One message per gesture, not one per drag frame.
+        self.assertIn("report_geometry", source)
+        self.assertNotIn("report_geometry()", source.split("pointermove")[-1].split("}")[0])
 
         gutter = DragGutter()
         self.assertEqual(gutter.width, 10)
