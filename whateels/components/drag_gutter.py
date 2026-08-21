@@ -58,10 +58,25 @@ class DragGutter(JSComponent):
         # where Panel mounted it and this component never becomes its parent.
         # Reparenting is what detached axes and colour bars from their canvas.
         self._ratio_pane = params.pop('ratio_pane', None)
+        #: Last box the browser reported, so a later ``pane_ratio`` change can
+        #: re-fit at once instead of waiting for the next drag or window resize.
+        self._last_box: tuple[float, float] | None = None
         params.setdefault('width', self._DEFAULT_WIDTH)
         params.setdefault('sizing_mode', 'stretch_height')
         params.setdefault('margin', 0)
         super().__init__(**params)
+        self.param.watch(self._on_pane_ratio_changed, 'pane_ratio')
+
+    def _on_pane_ratio_changed(self, event) -> None:
+        """Re-fit when the spatial shape changes under a pane already measured.
+
+        Switching to the energy map or to a clustering map with a different
+        shape only changes the ratio; without this the pane would keep the box
+        computed for the previous shape until the user happened to drag again.
+        """
+        if self._last_box is None:
+            return
+        self._apply_pane_ratio(*self._last_box)
 
     def _handle_msg(self, data):
         """Size ``ratio_pane`` from the box the browser just measured.
@@ -80,6 +95,8 @@ class DragGutter(JSComponent):
             height = float(data.get('height') or 0.0)
         except (TypeError, ValueError):
             return
+        if width > 0 and height > 0:
+            self._last_box = (width, height)
         self._apply_pane_ratio(width, height)
 
     def _apply_pane_ratio(self, width: float, height: float) -> None:

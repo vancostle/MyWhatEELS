@@ -36,15 +36,15 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     # Axis titles for spectrum plot
     _X_AXIS_SPECTRUM_TITLE = 'Energy Loss (eV)'
     _Y_AXIS_SPECTRUM_TITLE = 'Intensity (a.u.)'
-    # paneA is left exactly as Home, Clustering and Quantification have it: the
-    # inherited _SPLITJS_SIZES_PANEA, _paneA_aspect_options ('aspect': 'equal')
-    # and _paneA_overlay_options are what keep the spectrum image in its own
-    # proportions, and overriding any of them here is what distorted the map.
+    # None of the paneA hooks are overridden here, exactly as in Home,
+    # Clustering and Quantification. The inherited aspect='equal' is what turns
+    # on match_aspect, and match_aspect is what keeps the DATA pixels square
+    # inside the pane. Adding square_pixel_plot_hook on top of it does the
+    # opposite of what its name suggests: it nulls aspect_ratio and hands the
+    # frame to Bokeh, which then stretches the map across the pane.
     #
-    # 'aspect' puts nx/ny on the figure's aspect_ratio under a scale_* sizing
-    # mode, and Bokeh then fits the map inside the pane. Do NOT force
-    # paneA.sizing_mode to 'stretch_both' and do NOT add square_pixel_plot_hook:
-    # either one drops that aspect_ratio and the image fills the pane instead.
+    # The OUTER box is not decided here at all - DragGutter measures the pane
+    # and sizes paneA from Python. See __init__.
 
     def __init__(self, model: "FittingModel", dataset: "Dataset"):
         """Initialize visual state, interactive panes, and callback wiring."""
@@ -92,7 +92,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self.paneA.sizing_mode = 'stretch_both'
         # _setup_plots() has just filled _nx/_ny; publish the ratio so the gutter
         # built later in create_plots() starts with it.
-        self._sync_paneA_aspect_css()
+        self._publish_paneA_ratio()
 
         # Wire DoubleTap was moved to base _setup_callbacks — no manual wiring needed.
 
@@ -101,7 +101,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self._check_inactivity, period=250, start=False
         )
 
-    def _sync_paneA_aspect_css(self) -> None:
+    def _publish_paneA_ratio(self) -> None:
         """Publish the current spatial ratio to the gutter that sizes paneA.
 
         Must run again whenever ``_nx``/``_ny`` change: the energy map and the
@@ -401,7 +401,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._nlls_clustering_active = True
         self._nlls_clustering_spectra_plot = spectra_plot
         self._nx, self._ny = nx, ny
-        self._sync_paneA_aspect_css()
+        self._publish_paneA_ratio()
         # Publish the cluster map exactly the way the Clustering page does
         # (ClusteringSpectrumImagePlot._update_clustering_plots): overlay it with
         # the selection layer, point the hover source at the image and let
@@ -440,7 +440,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
         ny, nx = m_image.shape
         self._nx, self._ny = nx, ny
-        self._sync_paneA_aspect_css()
+        self._publish_paneA_ratio()
         img = hv.Image(
             (np.arange(nx), np.arange(ny), m_image),
             kdims=['x', 'y'], vdims=['Intensity'],
@@ -493,7 +493,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             title='Energy Map',
         )
         self._nx, self._ny = nx, ny
-        self._sync_paneA_aspect_css()
+        self._publish_paneA_ratio()
         self._paneA_base_overlay = img * self._selectors
         overlay_options = self._paneA_overlay_options()
         overlay_options["active_tools"] = ["lasso_select"]
