@@ -499,6 +499,9 @@ class ManualFittingRegressionTests(unittest.TestCase):
             self.assertIn(DragGutter.PANE_CSS_CLASS, right_column.css_classes)
             for pane in (left_column, right_column):
                 self.assertEqual(pane.styles.get("min-width"), "0")
+            # Guard for the frames between two drag reports: a 'fixed' paneA
+            # would otherwise paint past the gutter and over the right pane.
+            self.assertEqual(left_column.styles.get("overflow"), "hidden")
             self.assertFalse(plots_layout.select(SplitJs))
             # paneA is left exactly as the base builds it for Home, Clustering
             # and Quantification: auto margins, so once the gutter has sized
@@ -1664,9 +1667,16 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         self.assertIsNone(untouched.width)
 
         source = DragGutter._JS_FILE
-        # One message per gesture, not one per drag frame.
-        self.assertIn("report_geometry", source)
-        self.assertNotIn("report_geometry()", source.split("pointermove")[-1].split("}")[0])
+        # The box must be reported DURING the drag, not only on release: the
+        # ratio pane is sized 'fixed', so between reports it keeps its width
+        # while the pane shrinks around it, spills past the gutter and shows
+        # through wherever the right pane does not paint.
+        drag_handler = source.split("'pointermove'")[-1]
+        self.assertIn("report_geometry()", drag_handler)
+        # Throttled, so a drag costs a handful of messages and not one a frame.
+        self.assertIn("REPORT_INTERVAL_MS", source)
+        # Release, reset, mount and window resize bypass that throttle.
+        self.assertIn("report_geometry(true)", source)
 
         gutter = DragGutter()
         self.assertEqual(gutter.width, 10)

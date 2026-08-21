@@ -176,7 +176,15 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             sizing_mode='stretch_both',
             margin=0,
             css_classes=[DragGutter.PANE_CSS_CLASS],
-            styles={'min-width': '0', 'min-height': '0'},
+            # 'overflow: hidden' is the guard for the frames between two drag
+            # reports: paneA is sized 'fixed', so while the pane shrinks under
+            # it the map would otherwise spill past the gutter and show through
+            # wherever the right pane does not paint.
+            styles={
+                'min-width': '0',
+                'min-height': '0',
+                'overflow': 'hidden',
+            },
         )
         right_column = pn.Column(
             self.paneB,

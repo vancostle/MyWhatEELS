@@ -1,6 +1,8 @@
 const ROW_SELECTOR = '.whateels-split-row';
 const PANE_SELECTOR = '.whateels-split-pane';
 const DEFAULT_MIN_PANE = 160;
+// Mirrors the cadence SplitJs reports at while a drag is in progress.
+const REPORT_INTERVAL_MS = 150;
 const DIV = 'div';
 
 export const render = ({ model }) => {
@@ -76,12 +78,22 @@ export const render = ({ model }) => {
     // width/height on the next layout solve and any size written from here is
     // lost. Setting the model in Python is the only instruction Bokeh keeps.
     //
-    // Sent on release and on window resize, never per drag frame: one message
-    // per gesture, not sixty.
-    const report_geometry = () => {
+    // This has to run DURING the drag, not only on release. The ratio pane is
+    // sized 'fixed', so between two reports it keeps the width it was given
+    // while the pane around it shrinks - it then spills past the gutter and
+    // shows through wherever the right pane does not paint. SplitJs reports on
+    // an interval through the drag for the same reason; the throttle below
+    // keeps that to a handful of messages per gesture instead of one per frame.
+    let last_report = 0;
+    const report_geometry = (force) => {
         if (context === null || !model.pane_ratio) {
             return;
         }
+        const now = performance.now();
+        if (!force && now - last_report < REPORT_INTERVAL_MS) {
+            return;
+        }
+        last_report = now;
         const rect = context.left.getBoundingClientRect();
         if (!(rect.width > 0) || !(rect.height > 0)) {
             return;
@@ -104,7 +116,7 @@ export const render = ({ model }) => {
             context.row.style.userSelect = '';
             // Once the flex has settled: re-measure for the ratio pane, and
             // solve again so neither pane keeps the last intermediate frame.
-            report_geometry();
+            report_geometry(true);
             request_relayout();
         }
     };
@@ -148,6 +160,9 @@ export const render = ({ model }) => {
         const raw = event.clientX - row_rect.left - gutter_width / 2;
         const left_px = Math.max(min_pane, Math.min(available - min_pane, raw));
         apply_ratio(left_px / available);
+        // Throttled: keeps the fixed-size ratio pane following the shrinking
+        // pane instead of overflowing it until the pointer is released.
+        report_geometry();
     });
 
     gutter.addEventListener('pointerup', stop_drag);
@@ -162,7 +177,7 @@ export const render = ({ model }) => {
         }
         ctx.left.style.flex = '';
         ctx.right.style.flex = '';
-        report_geometry();
+        report_geometry(true);
         request_relayout();
     });
 
@@ -177,7 +192,7 @@ export const render = ({ model }) => {
             }
             return;
         }
-        report_geometry();
+        report_geometry(true);
         request_relayout();
     };
     requestAnimationFrame(initial_fit);
@@ -185,7 +200,7 @@ export const render = ({ model }) => {
     // A window resize changes the panes without ever touching the gutter, so
     // the ratio pane has to be re-measured for it too.
     window.addEventListener('resize', () => {
-        report_geometry();
+        report_geometry(true);
         request_relayout();
     });
 
