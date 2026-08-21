@@ -2,7 +2,7 @@ const ROW_SELECTOR = '.whateels-split-row';
 const PANE_SELECTOR = '.whateels-split-pane';
 const DEFAULT_MIN_PANE = 160;
 // Mirrors the cadence SplitJs reports at while a drag is in progress.
-const REPORT_INTERVAL_MS = 150;
+const REPORT_INTERVAL_MS = 200;
 const DIV = 'div';
 
 export const render = ({ model }) => {
