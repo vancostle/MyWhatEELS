@@ -1021,6 +1021,19 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
             self.assertFalse(controls.white_button.disabled)
             self.assertNotEqual(controls.center_a.value, controls.center_b.value)
             self.assertNotEqual(controls.white_a.value, controls.white_b.value)
+            self.assertEqual(
+                controls._center_selectors.objects,
+                [controls.center_a, controls.center_b],
+            )
+            self.assertEqual(
+                controls._white_line_selectors.objects,
+                [controls.white_a, controls.white_b],
+            )
+            self.assertEqual(controls._center_selectors.sizing_mode, "stretch_width")
+            self.assertEqual(
+                controls._white_line_selectors.sizing_mode,
+                "stretch_width",
+            )
 
             controls._open_derived_analyses(None)
             self.assertTrue(controls.derived_analyses_modal.visible)

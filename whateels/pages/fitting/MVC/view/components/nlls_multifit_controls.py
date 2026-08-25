@@ -112,6 +112,13 @@ class NLLSMultifitControls(pn.Column):
         self._center_b = pn.widgets.Select(
             name="Center B", options={}, disabled=True, sizing_mode=self._STRETCH_WIDTH
         )
+        self._center_selectors = pn.Row(
+            self._center_a,
+            self._center_b,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+            styles={"gap": "8px", "min-width": "0", "max-width": "100%"},
+        )
         self._center_button = pn.widgets.Button(
             name="Get Distances",
             button_type="primary",
@@ -124,6 +131,13 @@ class NLLSMultifitControls(pn.Column):
         )
         self._white_b = pn.widgets.Select(
             name="White line B", options={}, disabled=True, sizing_mode=self._STRETCH_WIDTH
+        )
+        self._white_line_selectors = pn.Row(
+            self._white_a,
+            self._white_b,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+            styles={"gap": "8px", "min-width": "0", "max-width": "100%"},
         )
         self._white_source = pn.widgets.Select(
             name="White-line source",
@@ -155,22 +169,13 @@ class NLLSMultifitControls(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
             height=40,
         )
-        self._analysis_status = pn.pane.Alert(
-            "Derived analyses use the selected run and preserve its status/area masks.",
-            alert_type="light",
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 0, 8, 0),
-        )
         # Backwards-compatible alias used by the registration code. The slot is
         # owned by the modal and is never mounted inside the SimpleDetails.
         self._derived_controls_slot = self._derived_results_modal.controls_slot
         self._analysis_controls = pn.Column(
-            self._analysis_status,
-            self._center_a,
-            self._center_b,
+            self._center_selectors,
             self._center_button,
-            self._white_a,
-            self._white_b,
+            self._white_line_selectors,
             self._white_source,
             self._white_mode,
             self._white_window_a,

@@ -40,10 +40,6 @@ class NLLSDerivedAnalysesModal(pn.Column):
 
         super().__init__(
             pn.pane.Markdown("## Derived analyses", margin=0),
-            pn.pane.Markdown(
-                "Compute Center Analysis or White Lines from the selected NLLS run.",
-                margin=(0, 0, 6, 0),
-            ),
             self._controls_slot,
             pn.Spacer(height=8),
             self._close_button,

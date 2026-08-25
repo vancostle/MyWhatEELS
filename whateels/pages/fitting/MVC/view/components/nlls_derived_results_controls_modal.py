@@ -46,10 +46,6 @@ class NLLSDerivedResultsControlsModal(pn.Column):
 
         super().__init__(
             pn.pane.Markdown("## Derived results control", margin=0),
-            pn.pane.Markdown(
-                "Select the map displayed by each additive derived-analysis plot.",
-                margin=(0, 0, 6, 0),
-            ),
             self._empty_state,
             self._controls_slot,
             pn.Spacer(height=8),
