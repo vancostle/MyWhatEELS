@@ -499,16 +499,20 @@ class ManualFittingRegressionTests(unittest.TestCase):
             self.assertIn(DragGutter.PANE_CSS_CLASS, right_column.css_classes)
             for pane in (left_column, right_column):
                 self.assertEqual(pane.styles.get("min-width"), "0")
-            # Guard for the frames between two drag reports: a 'fixed' paneA
+            # Guard for the frames between two local Bokeh solves: a fixed paneA
             # would otherwise paint past the gutter and over the right pane.
             self.assertEqual(left_column.styles.get("overflow"), "hidden")
             self.assertFalse(plots_layout.select(SplitJs))
             # paneA is left exactly as the base builds it for Home, Clustering
             # and Quantification: auto margins, so once the gutter has sized
             # paneA the leftover space becomes an even margin on both sides.
-            # The gutter holds paneA by plain reference and sizes it from the
-            # box the browser reports, running SplitJs' fit on the model.
+            # The gutter holds paneA by plain reference and runs SplitJs' fit on
+            # its Bokeh model locally, persisting only the final box in Python.
             self.assertIs(visualizer._plots_gutter._ratio_pane, visualizer.paneA)
+            self.assertIn(
+                DragGutter.RATIO_PANE_CSS_CLASS,
+                spatial_figure().css_classes,
+            )
             self.assertEqual(visualizer.paneA.styles.get("margin"), "auto")
             self.assertNotEqual(visualizer.paneA.styles.get("overflow"), "hidden")
             # Nothing may pin paneA before the browser has reported a box: the
@@ -1615,16 +1619,60 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         A scale_* figure keeps the geometry of its first solve because its own
         observed element never changed - only the parent that clips it. The map
         then stays frozen at the old size until an unrelated window resize wakes
-        the page, which is the bug this guards. The gutter therefore asks the
-        two panes to solve again, throttled to one animation frame, and reaches
-        them without a server round trip or a global resize event.
+        the page, which is the bug this guards. The gutter therefore invalidates
+        one cached view from the split at a bounded cadence during movement.
+        On release it cancels any intermediate frame and replaces it with one
+        final pass for the last pointer position.
         """
         source = DragGutter._JS_FILE
         self.assertIn("invalidate_layout", source)
         self.assertIn("requestAnimationFrame", source)
-        # Scoped: only views contained in this gutter's own two panes.
+        self.assertIn("const RELAYOUT_INTERVAL_MS = 50", source)
+        # The view-tree walk is lazy and cached across complete gestures.
         self.assertIn("views_inside", source)
         self.assertIn("is_inside", source)
+        self.assertIn("let relayout_view = null", source)
+        self.assertIn("resolve_relayout_view()", source)
+        self.assertNotIn("resolve_relayout_view(false)", source)
+        self.assertIn("solve_again(view)", source)
+        # Exactly one invocation: never one call per pane.
+        self.assertEqual(source.count("solve_again("), 1)
+        self.assertNotIn("for (const view of views_inside", source)
+        # Pointer bursts are reduced to the last position of each paint frame.
+        self.assertIn("schedule_drag", source)
+        drag_handler = source.split("'pointermove'")[-1].split("'pointerup'")[0]
+        self.assertIn("schedule_drag(", drag_handler)
+        self.assertNotIn("getBoundingClientRect", drag_handler)
+        drag_flush = source.split("const flush_drag_frame")[1].split(
+            "const schedule_drag"
+        )[0]
+        self.assertIn("apply_ratio(ratio)", drag_flush)
+        self.assertIn("if (dragging)", drag_flush)
+        self.assertIn("request_relayout(false)", drag_flush)
+        self.assertIn("ratio_box_width = available_width * ratio", drag_flush)
+        self.assertIn("ratio_resize_pending = true", drag_flush)
+        self.assertNotIn("report_geometry", drag_flush)
+        self.assertNotIn("getBoundingClientRect", drag_flush)
+        stop_handler = source.split("const stop_drag")[1].split(
+            "gutter.addEventListener('pointerdown'"
+        )[0]
+        self.assertIn("flush_pending_drag()", stop_handler)
+        self.assertIn("cancel_pending_relayout()", stop_handler)
+        self.assertLess(
+            stop_handler.index("dragging = false"),
+            stop_handler.index("flush_pending_drag()"),
+        )
+        self.assertEqual(stop_handler.count("report_geometry()"), 1)
+        self.assertEqual(stop_handler.count("request_relayout(true)"), 1)
+        self.assertIn("model.on('remove'", source)
+        self.assertIn("removeEventListener('resize'", source)
+        # Elemental NLLS normally keeps overflow visible so axes and colour bars
+        # survive additive publication. Only the active gesture may clip it,
+        # and the original inline value is restored after the final solve.
+        self.assertIn("guard_pane_overflow()", source)
+        self.assertIn("restore_overflow_after_relayout = true", source)
+        self.assertIn("restore_pane_overflow()", source)
+        self.assertIn("style.overflow = 'hidden'", source)
         # The cheap global alternative stays banned - it would relayout every
         # responsive plot stacked above this split.
         self.assertNotIn("dispatchEvent", source)
@@ -1632,21 +1680,32 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
     def test_drag_gutter_keeps_the_ratio_by_giving_height_back(self):
         """Fill the height, then trade height for ratio once width binds.
 
-        The fit is SplitJs._apply_left_plot_pixel_ratio's, and it has to run on
-        the *model* from Python. Two cheaper layers were tried and neither
-        holds: Panel's 'scale_height' measures the parent once and reads zero
-        inside the scrolling additive column, and a size written from JavaScript
-        is erased by Bokeh's next layout solve because the pane is a
-        Bokeh-managed element.
+        The durable fit is SplitJs._apply_left_plot_pixel_ratio's. During the
+        gesture the same fit is applied to the browser-side Bokeh model in one
+        unsynchronised update; release reports the exact box so Python retains
+        the final dimensions. Plain DOM sizing remains invalid because Bokeh's
+        next solve would overwrite it.
         """
         pane = pn.pane.HoloViews(hv.Curve([]))
         gutter = DragGutter(ratio_pane=pane, pane_ratio=0.6)
+        self.assertIn(DragGutter.RATIO_PANE_CSS_CLASS, pane.css_classes)
+        dimension_update_batches = []
+        pane.param.watch(
+            lambda *events: dimension_update_batches.append(events),
+            ["sizing_mode", "width", "height"],
+        )
 
         # Wide pane: height is the binding side, so the height is taken whole.
         gutter._handle_msg({"width": 800, "height": 600})
         self.assertEqual(pane.height, 592)               # 600 minus the margin
         self.assertAlmostEqual(pane.width / pane.height, 0.6, places=2)
         self.assertEqual(pane.sizing_mode, "fixed")
+        self.assertEqual(len(dimension_update_batches), 1)
+        self.assertEqual(len(dimension_update_batches[0]), 3)
+        self.assertIsNone(pane.min_width)
+        self.assertIsNone(pane.max_width)
+        self.assertIsNone(pane.min_height)
+        self.assertIsNone(pane.max_height)
 
         # Dragging the gutter left makes width the binding side. The height
         # must shrink; keeping it would squash the map, which is the bug.
@@ -1655,7 +1714,11 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         self.assertAlmostEqual(pane.width / pane.height, 0.6, places=2)
         self.assertLessEqual(pane.width, 200)
         self.assertLessEqual(pane.height, 600)
-
+        self.assertEqual(len(dimension_update_batches), 2)
+        self.assertEqual(
+            {event.name for event in dimension_update_batches[1]},
+            {"width", "height"},
+        )
         # A different map shape re-fits without waiting for the next drag.
         gutter.pane_ratio = 2.0
         gutter._handle_msg({"width": 800, "height": 600})
@@ -1667,16 +1730,27 @@ class NLLSMultifitResultsPlotTests(unittest.TestCase):
         self.assertIsNone(untouched.width)
 
         source = DragGutter._JS_FILE
-        # The box must be reported DURING the drag, not only on release: the
-        # ratio pane is sized 'fixed', so between reports it keeps its width
-        # while the pane shrinks around it, spills past the gutter and shows
-        # through wherever the right pane does not paint.
-        drag_handler = source.split("'pointermove'")[-1]
-        self.assertIn("report_geometry()", drag_handler)
-        # Throttled, so a drag costs a handful of messages and not one a frame.
-        self.assertIn("REPORT_INTERVAL_MS", source)
-        # Release, reset, mount and window resize bypass that throttle.
-        self.assertIn("report_geometry(true)", source)
+        # Intermediate boxes never cross the websocket. The marked Bokeh model
+        # receives one local setv and release sends the exact final geometry.
+        drag_flush = source.split("const flush_drag_frame")[1].split(
+            "const schedule_drag"
+        )[0]
+        self.assertNotIn("report_geometry", drag_flush)
+        self.assertNotIn("REPORT_INTERVAL_MS", source)
+        self.assertIn("view_with_class_inside", source)
+        self.assertIn("target.setv(", source)
+        self.assertIn("{ sync: false }", source)
+        self.assertIn("const FIT_MARGIN = 8", source)
+        self.assertIn("last_reported_width", source)
+        # Only the exact final box is read from the DOM on release.
+        self.assertNotIn("getBoundingClientRect", drag_flush)
+        stop_handler = source.split("const stop_drag")[1].split(
+            "gutter.addEventListener('pointerdown'"
+        )[0]
+        self.assertLess(
+            stop_handler.index("flush_pending_drag()"),
+            stop_handler.index("report_geometry()"),
+        )
 
         gutter = DragGutter()
         self.assertEqual(gutter.width, 10)

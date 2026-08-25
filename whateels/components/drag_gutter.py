@@ -17,10 +17,15 @@ class DragGutter(JSComponent):
     every additive result that invalidates the root then detaches axes, titles
     and colour bars from their canvas.
 
-    Dragging writes ``flex`` on the two sibling panes from the browser and
-    nothing else. No message travels to Python, no geometry is written from the
-    server and no synthetic resize event is emitted, so publishing a run or a
-    derived analysis stays as cheap as it is today.
+    Dragging writes ``flex`` on the two sibling panes from the browser. Browser
+    movement is grouped per animation frame, with Bokeh invalidated at most
+    every 50 ms. An optional ratio pane is resized directly on its browser-side
+    Bokeh model during the gesture and only its final geometry is reported to
+    Python. On release, pending intermediate frames are discarded and the last
+    pointer position is committed. Pane overflow is clipped only for the
+    gesture, preventing stale canvases from painting across the separator, and
+    restored after the final pass. No pane is reparented and no synthetic
+    resize event is emitted.
 
     The row and its two panes are located through the marker classes below,
     which callers must apply via ``css_classes``.
@@ -30,6 +35,8 @@ class DragGutter(JSComponent):
     ROW_CSS_CLASS = "whateels-split-row"
     #: Applied by the caller to both panes, in visual left-to-right order.
     PANE_CSS_CLASS = "whateels-split-pane"
+    #: Marks the Bokeh model that may be resized locally during a drag.
+    RATIO_PANE_CSS_CLASS = "whateels-ratio-pane"
     pane_ratio = param.Number(default=0.0, bounds=(0, None), doc="""
         X/Y ratio the pane passed as ``ratio_pane`` must keep. Zero disables the
         sizing entirely and the gutter only redistributes flex, as before.""")
@@ -58,6 +65,13 @@ class DragGutter(JSComponent):
         # where Panel mounted it and this component never becomes its parent.
         # Reparenting is what detached axes and colour bars from their canvas.
         self._ratio_pane = params.pop('ratio_pane', None)
+        if self._ratio_pane is not None:
+            css_classes = list(self._ratio_pane.css_classes or [])
+            if self.RATIO_PANE_CSS_CLASS not in css_classes:
+                self._ratio_pane.css_classes = [
+                    *css_classes,
+                    self.RATIO_PANE_CSS_CLASS,
+                ]
         #: Last box the browser reported, so a later ``pane_ratio`` change can
         #: re-fit at once instead of waiting for the next drag or window resize.
         self._last_box: tuple[float, float] | None = None
@@ -79,14 +93,11 @@ class DragGutter(JSComponent):
         self._apply_pane_ratio(*self._last_box)
 
     def _handle_msg(self, data):
-        """Size ``ratio_pane`` from the box the browser just measured.
+        """Persist ``ratio_pane`` from the final box measured by the browser.
 
-        The pane is sized here, in Python, and not from the browser, because the
-        pane is a Bokeh-managed element: under any responsive sizing mode Bokeh
-        rewrites its inline width/height on every layout solve, so styles written
-        from JavaScript are overwritten as soon as the next solve runs. Setting
-        the *model* is the only instruction Bokeh applies and keeps, which is
-        exactly why SplitJs does it this way too.
+        During dragging JavaScript changes the actual browser-side Bokeh model,
+        not disposable DOM styles. This final Python update makes that last size
+        durable for later ratio changes and server-driven plot replacement.
         """
         if not isinstance(data, dict):
             return
@@ -126,10 +137,12 @@ class DragGutter(JSComponent):
         ):
             return
 
-        pane.sizing_mode = 'fixed'
-        pane.width = new_width
-        pane.height = new_height
-        pane.min_width = new_width
-        pane.max_width = new_width
-        pane.min_height = new_height
-        pane.max_height = new_height
+        # In fixed sizing mode Bokeh derives the CSS box directly from width and
+        # height; duplicating them into min/max constraints adds four property
+        # patches without changing the box. Batch the three required values so
+        # Panel also invokes its synchronisation watcher only once.
+        pane.param.update(
+            sizing_mode='fixed',
+            width=new_width,
+            height=new_height,
+        )

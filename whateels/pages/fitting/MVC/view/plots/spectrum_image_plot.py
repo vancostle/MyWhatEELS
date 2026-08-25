@@ -43,8 +43,9 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     # opposite of what its name suggests: it nulls aspect_ratio and hands the
     # frame to Bokeh, which then stretches the map across the pane.
     #
-    # The OUTER box is not decided here at all - DragGutter measures the pane
-    # and sizes paneA from Python. See __init__.
+    # The OUTER box is not decided here at all. DragGutter fits paneA on its
+    # browser-side Bokeh model during a gesture and persists the final size in
+    # Python. See __init__.
 
     def __init__(self, model: "FittingModel", dataset: "Dataset"):
         """Initialize visual state, interactive panes, and callback wiring."""
@@ -70,17 +71,19 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         # _setup_plots() + _setup_callbacks() internally.
         super().__init__(dataset, eloss_name=model.constants.ELOSS)
 
-        # paneA is sized by the gutter, which measures the pane in the browser
-        # and hands the box to DragGutter._apply_pane_ratio - the same fit
-        # SplitJs runs for Home, Clustering and Quantification:
+        # paneA is sized by the gutter with the same fit SplitJs runs for Home,
+        # Clustering and Quantification. It is applied locally during dragging
+        # and the browser hands only the final box to _apply_pane_ratio:
         #
         #     w = min(available_width, available_height * ratio),  h = w / ratio
         #
         # so the image fills the height while the pane is wide enough, and gives
         # height back as soon as the width becomes the binding side.
         #
-        # It has to be done on the model, from Python. Two other layers were
-        # tried and neither can hold: Panel's 'scale_height' measures the parent
+        # It has to be done on the Bokeh model, not on disposable DOM styles.
+        # During a drag that model is updated locally; release persists it in
+        # Python. Two other layers were tried and neither can hold: Panel's
+        # 'scale_height' measures the parent
         # once and this block lives inside _StableAdditiveColumn, a scroll
         # viewport, where that measurement is zero and paneA vanishes; and a
         # size written from JavaScript is erased by Bokeh's next layout solve,
@@ -176,10 +179,9 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             sizing_mode='stretch_both',
             margin=0,
             css_classes=[DragGutter.PANE_CSS_CLASS],
-            # 'overflow: hidden' is the guard for the frames between two drag
-            # reports: paneA is sized 'fixed', so while the pane shrinks under
-            # it the map would otherwise spill past the gutter and show through
-            # wherever the right pane does not paint.
+            # 'overflow: hidden' guards the frames between two throttled Bokeh
+            # solves: paneA is sized 'fixed', so while the pane shrinks under it
+            # the map would otherwise spill past the gutter.
             styles={
                 'min-width': '0',
                 'min-height': '0',
