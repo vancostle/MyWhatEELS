@@ -121,7 +121,7 @@ class SimpleDetails(pn.Column):
                 "max-width": "100%",
                 "min-height": "0",
                 "min-width": "0",
-                "overflow-x": "hidden",
+                "overflow": "visible",
             },
         )
 
@@ -142,7 +142,10 @@ class SimpleDetails(pn.Column):
                 "max-width": "100%",
                 "min-height": "0",
                 "min-width": "0",
-                "overflow-x": "hidden",
+                # Dropdown menus must be allowed to leave the details body.
+                # Using overflow-x:hidden here also makes overflow-y compute to
+                # auto, which clips floating menus even if overflow-y is not set.
+                "overflow": "visible",
                 "transition": "height 0.3s ease",
             },
             visible=expanded,
@@ -158,7 +161,7 @@ class SimpleDetails(pn.Column):
                 "max-width": "100%",
                 "min-height": "0",
                 "min-width": "0",
-                "overflow-x": "hidden",
+                "overflow": "visible",
             },
         )
 
@@ -171,8 +174,7 @@ class SimpleDetails(pn.Column):
             "border-radius": "4px",
             "box-shadow": "0 0 5px #d8d8d8",
             "background-color": "#f7f7f7",
-            "overflow-x": "hidden",
-            "overflow-y": "visible",
+            "overflow": "visible",
         }
         styles.update(params.pop("styles", {}) or {})
 

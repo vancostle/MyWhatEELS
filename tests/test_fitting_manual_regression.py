@@ -424,6 +424,27 @@ class ManualFittingRegressionTests(unittest.TestCase):
         self.assertIn(layout.elemental_run_progress, action_container.objects)
         self.assertFalse(layout.elemental_run_progress.visible)
 
+    def test_elemental_sections_do_not_clip_subshell_dropdown(self):
+        layout = FittingRightSidebarLayout(self.model)
+
+        # The tab-level container remains the vertical scrolling boundary, but
+        # each card must let floating widget menus overlap the following card.
+        for section in (
+            layout.elemental_edge_section,
+            layout.elemental_model_section,
+        ):
+            self.assertEqual(section.styles.get("overflow"), "visible")
+            self.assertNotIn("overflow-x", section.styles)
+            self.assertNotIn("overflow-y", section.styles)
+
+        elemental_tab = layout.fitting_tabs[1]
+        input_container = next(
+            column
+            for column in elemental_tab.select(pn.Column)
+            if "elemental-input-container" in column.css_classes
+        )
+        self.assertEqual(input_container.styles.get("overflow-y"), "auto")
+
     def test_main_panels_switch_from_image_and_roi_to_clustering_and_result(self):
         visualizer = SpectrumImageVisualizer(self.model, self.dataset)
 

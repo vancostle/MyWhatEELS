@@ -66,7 +66,9 @@ class FittingRightSidebarLayout(pn.Column):
         'box-sizing': 'border-box',
         'max-width': '100%',
         'min-width': '0',
-        'overflow-x': 'hidden',
+        # Keep the card width constrained without turning it into a clipping
+        # ancestor. MultiChoice renders its options outside the widget bounds.
+        'overflow': 'visible',
     }
 
     @staticmethod
