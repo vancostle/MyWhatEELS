@@ -68,7 +68,7 @@ class Constants:
     # Edge softening
     DEFAULT_ELEMENTAL_SOFTEN_EDGE = NLLS_DEFAULT_SOFTEN
     DEFAULT_ELEMENTAL_SOFTEN_STRENGTH = NLLS_DEFAULT_SOFTEN_SIGMA_EV
-    ELEMENTAL_SOFTEN_STRENGTH_STEP = 0.1
+    ELEMENTAL_SOFTEN_STRENGTH_STEP = 0.01
 
     ELEMENTAL_BACKGROUND_STATUS_UNKNOWN = (
         "**Background status:** unknown - no validated power-law pre-edge subtraction "

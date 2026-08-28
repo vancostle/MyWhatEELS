@@ -3,7 +3,7 @@ import os
 import panel as pn
 
 from bokeh.models import Tooltip
-from whateels.components import ToggleButton, SimpleDetails
+from whateels.components import PeriodicTableOfElementsModal, SimpleDetails, ToggleButton
 from ..components.nlls_fit_areas_modal import NLLSFitAreasModal
 from ..components.nlls_multifit_controls import NLLSMultifitControls
 from ..components.nlls_results_view import NLLSResultsView
@@ -44,6 +44,23 @@ class FittingRightSidebarLayout(pn.Column):
         'stroke="currentColor"', 'stroke="#b63fb5"'
     )
     _FIT_AREAS_MODAL_ID = "Select Area to run fit"
+    _PERIODIC_TABLE_MODAL_ID = "Periodic Table of Elements"
+    _PERIODIC_TABLE_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="20" rx="2"/>
+          <text x="5" y="8" font-size="4.5" font-family="Arial,sans-serif" fill="currentColor" stroke="none">Z</text>
+          <text x="12" y="16" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor" stroke="none" font-weight="bold">E</text>
+          <text x="12" y="21" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="currentColor" stroke="none">Element</text>
+        </svg>
+    """
+    _PERIODIC_TABLE_ACTIVE_SVG = """
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="20" rx="2"/>
+          <text x="5" y="8" font-size="4.5" font-family="Arial,sans-serif" fill="white" stroke="none">Z</text>
+          <text x="12" y="16" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="white" stroke="none" font-weight="bold">E</text>
+          <text x="12" y="20.5" text-anchor="middle" font-size="3" font-family="Arial,sans-serif" fill="white" stroke="none">Element</text>
+        </svg>
+    """
 
     # --- Anti-overflow style kits -------------------------------------
     # Every Panel/Bokeh layout is a flex container whose children keep `min-width: auto`
@@ -85,6 +102,11 @@ class FittingRightSidebarLayout(pn.Column):
             **params,
         )
 
+    def _open_periodic_table(self, _=None) -> None:
+        """Open the shared periodic-table reference modal when mounted in a page."""
+        if self._modal_manager is not None and self._periodic_table_modal is not None:
+            self._modal_manager.open_modal(self._PERIODIC_TABLE_MODAL_ID)
+
     # Sliders need their own container inside a SimpleDetails (see _in_slider_container).
     _SLIDER_TYPES = (
         pn.widgets.EditableRangeSlider,
@@ -115,6 +137,13 @@ class FittingRightSidebarLayout(pn.Column):
             modal_manager.register_modal(
                 self._FIT_AREAS_MODAL_ID,
                 self._elemental_fit_areas_modal,
+            )
+        self._periodic_table_modal = None
+        if custom_page is not None and modal_manager is not None:
+            self._periodic_table_modal = PeriodicTableOfElementsModal(custom_page)
+            modal_manager.register_modal(
+                self._PERIODIC_TABLE_MODAL_ID,
+                self._periodic_table_modal,
             )
 
         # --- Shared / root widgets ---------------------------------------
@@ -395,6 +424,16 @@ class FittingRightSidebarLayout(pn.Column):
     def elemental_input(self) -> dict[str, pn.widgets.Widget]:
         """Access the Elemental NLLS input widgets."""
         return self._elemental_input
+
+    @property
+    def elemental_periodic_table_button(self) -> pn.widgets.ButtonIcon:
+        """Access the periodic-table modal trigger."""
+        return self._elemental_periodic_table_button
+
+    @property
+    def periodic_table_modal(self) -> PeriodicTableOfElementsModal | None:
+        """Access the shared periodic-table modal when a page owns one."""
+        return self._periodic_table_modal
 
     @property
     def elemental_background_status(self) -> pn.pane.Alert:
@@ -820,6 +859,13 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
         )
+        self._elemental_periodic_table_button = pn.widgets.ButtonIcon(
+            icon=self._PERIODIC_TABLE_SVG,
+            active_icon=self._PERIODIC_TABLE_ACTIVE_SVG,
+            size="3em",
+            margin=(21, 2, 0, 8),
+        )
+        self._elemental_periodic_table_button.on_click(self._open_periodic_table)
         # Options come from the OOS catalogue: the controller populates them.
         self._elemental_input["subshells"] = pn.widgets.MultiChoice(
             name="Subshells",
@@ -838,13 +884,13 @@ class FittingRightSidebarLayout(pn.Column):
         )
 
         content = pn.Column(
-            self._elemental_input["element_atomic_number"],
             pn.Row(
-                self._elemental_input["subshells"],
-                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_SUBSHELLS),
+                self._elemental_input["element_atomic_number"],
+                self._elemental_periodic_table_button,
                 sizing_mode=self._STRETCH_WIDTH,
-                styles=self._fluid_row_styles(),
+                styles=self._fluid_row_styles(**{"flex-wrap": "nowrap"}),
             ),
+            self._elemental_input["subshells"],
             pn.Row(
                 self._elemental_input["chemical_shift"],
                 self._left_tooltip_icon(constants.CHEMICAL_SHIFT_TOOLTIP, width=30),
@@ -891,26 +937,44 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
         )
-        self._elemental_input["soften_edge"] = pn.widgets.Checkbox(
-            name="Soften edge",
+        self._elemental_input["soften_edge"] = pn.widgets.Switch(
             value=constants.DEFAULT_ELEMENTAL_SOFTEN_EDGE,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
+            width=50,
+            margin=0,
+        )
+        self._elemental_soften_label = pn.widgets.StaticText(
+            value="Soften edge",
+            height=24,
+            margin=0,
+            styles={
+                "font-size": "1em",
+                "white-space": "nowrap",
+            },
+        )
+        self._elemental_soften_strength_label = pn.widgets.StaticText(
+            value="Soften strength (eV)",
+            height=24,
+            margin=0,
+            styles={
+                "font-size": "1em",
+                "white-space": "nowrap",
+            },
         )
         self._elemental_input["soften_strength"] = pn.widgets.FloatInput(
-            name="Soften strength (eV)",
+            name="",
             value=constants.DEFAULT_ELEMENTAL_SOFTEN_STRENGTH,
             start=0.0,
             step=constants.ELEMENTAL_SOFTEN_STRENGTH_STEP,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
+            format="0.00",
+            width=90,
+            margin=0,
         )
         self._elemental_input["execution_mode"] = pn.widgets.Select(
             name="Execution mode",
             options={"Serial": False, "Parallel": True},
             value=False,
             sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
+            margin=0,
         )
         cpu_count = max(1, int(os.cpu_count() or 1))
         self._elemental_input["workers"] = pn.widgets.IntInput(
@@ -920,23 +984,110 @@ class FittingRightSidebarLayout(pn.Column):
             end=cpu_count,
             disabled=True,
             sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+        )
+
+        self._elemental_execution_controls = pn.Row(
+            self._elemental_input["execution_mode"],
+            self._elemental_input["workers"],
+            sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
+            styles=self._fluid_row_styles(
+                **{
+                    "box-sizing": "border-box",
+                    "flex-wrap": "nowrap",
+                    "gap": "12px",
+                    "max-width": "100%",
+                    "overflow": "hidden",
+                }
+            ),
+            stylesheets=["""
+                :host {
+                    box-sizing: border-box !important;
+                    max-width: 100% !important;
+                    min-width: 0 !important;
+                }
+                :host > .bk-Row > * {
+                    min-width: 0 !important;
+                }
+            """],
+        )
+
+        soften_edge_control = pn.Column(
+            self._elemental_soften_label,
+            self._elemental_input["soften_edge"],
+            width=104,
+            margin=0,
+            styles={
+                "align-items": "flex-start",
+                "gap": "15px",
+                "min-width": "0",
+            },
+        )
+        soften_tooltip = self._left_tooltip_icon(
+            constants.TOOLTIP_ELEMENTAL_SOFTEN,
+            width=30,
+            margin=0,
+        )
+        soften_strength_row = pn.Row(
+            self._elemental_input["soften_strength"],
+            soften_tooltip,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+            styles=self._fluid_row_styles(
+                **{
+                    "align-items": "center",
+                    "flex-wrap": "nowrap",
+                    "gap": "8px",
+                    "max-width": "100%",
+                    "overflow": "hidden",
+                }
+            ),
+        )
+        soften_strength_control = pn.Column(
+            self._elemental_soften_strength_label,
+            soften_strength_row,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+            styles={
+                "align-items": "flex-start",
+                "gap": "8px",
+                "max-width": "100%",
+                "min-width": "0",
+                "overflow": "hidden",
+            },
+        )
+        self._elemental_soften_controls = pn.Row(
+            soften_edge_control,
+            pn.Spacer(width=12, margin=0),
+            soften_strength_control,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+            styles=self._fluid_row_styles(
+                **{
+                    "box-sizing": "border-box",
+                    "flex-wrap": "nowrap",
+                    "max-width": "100%",
+                    "overflow": "hidden",
+                    "width": "100%",
+                }
+            ),
+            stylesheets=["""
+                :host {
+                    box-sizing: border-box !important;
+                    max-width: 100% !important;
+                    min-width: 0 !important;
+                    width: 100% !important;
+                }
+            """],
         )
 
         content = pn.Column(
             self._elemental_input["model_composition"],
             self._elemental_input["elnes_shape"],
             self._elemental_input["flexibility"],
-            pn.Row(
-                self._elemental_input["soften_edge"],
-                self._elemental_input["soften_strength"],
-                self._left_tooltip_icon(constants.TOOLTIP_ELEMENTAL_SOFTEN),
-                margin=0,
-                sizing_mode=self._STRETCH_WIDTH,
-                styles=self._fluid_row_styles(gap='10px'),
-            ),
-            self._elemental_input["execution_mode"],
-            self._elemental_input["workers"],
+            self._elemental_soften_controls,
+            self._elemental_execution_controls,
             self._elemental_build_model_button,
             sizing_mode=self._STRETCH_WIDTH,
         )

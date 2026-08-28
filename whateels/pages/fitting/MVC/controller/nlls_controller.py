@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from queue import Empty, SimpleQueue
 from threading import Event, Thread
 from typing import TYPE_CHECKING, Any
@@ -58,6 +59,9 @@ if TYPE_CHECKING:
 
 class NLLSController:
     """Bind Elemental widgets without changing the manual fitting callbacks."""
+
+    _SUBSHELL_ONSET_COLOR = "#5f6368"
+    _SUBSHELL_ONSET_HIGHLIGHT_COLOR = "#d1d5db"
 
     def __init__(
         self,
@@ -381,16 +385,74 @@ class NLLSController:
         shells_widget = self.view.elemental_input["subshells"]
         try:
             shells = list(self.provider.available_edges(atomic_number))
+            raw_edges = [self.provider.load_raw(atomic_number, shell) for shell in shells]
             current = [shell for shell in shells_widget.value if shell in shells]
+            shells_widget.stylesheets = [
+                self._subshell_onset_stylesheet(
+                    {raw.shell: raw.onset_eV for raw in raw_edges}
+                )
+            ]
             shells_widget.options = shells
             shells_widget.value = current
             shells_widget.disabled = not bool(shells)
             self._update_selected_onset()
         except NLLSError:
+            shells_widget.stylesheets = []
             shells_widget.options = []
             shells_widget.value = []
             shells_widget.disabled = True
             self.view.elemental_onset_readout.value = "Onset (eV): -"
+
+    @classmethod
+    def _subshell_onset_stylesheet(cls, onsets_eV: dict[str, float]) -> str:
+        """Render catalogue onsets as secondary, right-aligned option text.
+
+        The underlying option values stay as plain subshell names, so the
+        presentation does not leak into selection state or persisted models.
+        """
+        base_rules = (
+            """
+            :host .choices__list--dropdown .choices__item--choice[data-choice-selectable],
+            :host .choices__list[aria-expanded] .choices__item--choice[data-choice-selectable] {
+                align-items: center;
+                column-gap: 1rem;
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) auto;
+                padding-right: 10px !important;
+                word-break: normal;
+            }
+
+            :host .choices__list--dropdown .choices__item--choice[data-choice-selectable]::after,
+            :host .choices__list[aria-expanded] .choices__item--choice[data-choice-selectable]::after {
+                color: __ONSET_COLOR__;
+                content: var(--subshell-onset) !important;
+                font-size: 0.875em;
+                font-variant-numeric: tabular-nums;
+                font-weight: 400;
+                opacity: 1;
+                position: static;
+                text-align: right;
+                transform: none;
+                white-space: nowrap;
+            }
+
+            :host .choices__list--dropdown .choices__item--choice.is-highlighted[data-choice-selectable]::after,
+            :host .choices__list[aria-expanded] .choices__item--choice.is-highlighted[data-choice-selectable]::after {
+                color: __ONSET_HIGHLIGHT_COLOR__ !important;
+            }
+            """
+            .replace("__ONSET_COLOR__", cls._SUBSHELL_ONSET_COLOR)
+            .replace("__ONSET_HIGHLIGHT_COLOR__", cls._SUBSHELL_ONSET_HIGHLIGHT_COLOR)
+        )
+        rules = [base_rules]
+        for shell, onset_eV in onsets_eV.items():
+            shell_literal = json.dumps(str(shell))
+            onset_literal = json.dumps(f"{float(onset_eV):.0f} eV")
+            rules.append(
+                ":host .choices__item--choice[data-choice-selectable]"
+                f"[data-value={shell_literal}] {{ --subshell-onset: {onset_literal}; }}"
+            )
+        return "\n".join(rules)
 
     def _update_selected_onset(self) -> None:
         atomic_number = int(self.view.elemental_input["element_atomic_number"].value)

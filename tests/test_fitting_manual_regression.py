@@ -286,7 +286,9 @@ class ManualFittingRegressionTests(unittest.TestCase):
     def test_fitting_tooltips_open_left_and_clustering_file_input_is_removed(self):
         layout = FittingRightSidebarLayout(self.model)
         tooltips = layout.select(pn.widgets.TooltipIcon)
-        self.assertGreaterEqual(len(tooltips), 4)
+        # Subshells intentionally has no help icon; the remaining help popups
+        # must still open toward the inside of the sidebar.
+        self.assertGreaterEqual(len(tooltips), 3)
         self.assertTrue(
             all(
                 isinstance(icon.value, Tooltip) and icon.value.position == "left"
@@ -444,6 +446,132 @@ class ManualFittingRegressionTests(unittest.TestCase):
             if "elemental-input-container" in column.css_classes
         )
         self.assertEqual(input_container.styles.get("overflow-y"), "auto")
+
+    def test_subshell_onsets_are_styled_as_right_aligned_secondary_text(self):
+        stylesheet = NLLSController._subshell_onset_stylesheet(
+            {"K1": 4940.7229, "L3": 465.18447}
+        )
+
+        self.assertIn('data-value="K1"', stylesheet)
+        self.assertIn('data-value="L3"', stylesheet)
+        self.assertIn('--subshell-onset: "4941 eV"', stylesheet)
+        self.assertIn('--subshell-onset: "465 eV"', stylesheet)
+        self.assertIn("grid-template-columns: minmax(0, 1fr) auto", stylesheet)
+        self.assertIn("text-align: right", stylesheet)
+        self.assertIn(NLLSController._SUBSHELL_ONSET_COLOR, stylesheet)
+        self.assertIn(NLLSController._SUBSHELL_ONSET_HIGHLIGHT_COLOR, stylesheet)
+
+    def test_subshell_control_has_no_help_icon(self):
+        layout = FittingRightSidebarLayout(self.model)
+        subshell = layout.elemental_input["subshells"]
+
+        parent_rows = [row for row in layout.select(pn.Row) if subshell in row.objects]
+        self.assertEqual(parent_rows, [])
+
+    def test_element_atomic_number_has_periodic_table_modal_button(self):
+        class PageStub:
+            def __init__(self):
+                self.modal = pn.Column()
+                self.opened = False
+                self.closed = False
+
+            def open_modal(self):
+                self.opened = True
+
+            def close_modal(self):
+                self.closed = True
+
+        page = PageStub()
+        modal_manager = ModalManager(page)
+        layout = FittingRightSidebarLayout(
+            self.model,
+            custom_page=page,
+            modal_manager=modal_manager,
+        )
+        atomic_number = layout.elemental_input["element_atomic_number"]
+        button = layout.elemental_periodic_table_button
+        parent_rows = [row for row in layout.select(pn.Row) if atomic_number in row.objects]
+
+        self.assertEqual(len(parent_rows), 1)
+        self.assertIn(button, parent_rows[0].objects)
+        self.assertIn(">E</text>", button.icon)
+        self.assertIn(layout.periodic_table_modal, modal_manager.modals)
+
+        layout._open_periodic_table()
+        self.assertTrue(page.opened)
+        self.assertTrue(layout.periodic_table_modal.visible)
+        self.assertIn(layout.periodic_table_modal, page.modal.objects)
+
+        layout.periodic_table_modal._close()
+        self.assertTrue(page.closed)
+        self.assertFalse(layout.periodic_table_modal.visible)
+
+    def test_soften_edge_uses_a_single_line_switch_layout(self):
+        layout = FittingRightSidebarLayout(self.model)
+        soften_switch = layout.elemental_input["soften_edge"]
+        soften_strength = layout.elemental_input["soften_strength"]
+
+        self.assertIsInstance(soften_switch, pn.widgets.Switch)
+        self.assertNotIsInstance(soften_switch, pn.widgets.Checkbox)
+        controls = layout._elemental_soften_controls
+        self.assertIsInstance(controls, pn.Row)
+        self.assertEqual(controls.styles.get("max-width"), "100%")
+        self.assertEqual(controls.styles.get("overflow"), "hidden")
+        self.assertEqual(len(controls.objects), 3)
+        self.assertIsInstance(controls.objects[1], pn.Spacer)
+        self.assertEqual(controls.objects[1].width, 12)
+        strength_control = controls.objects[2]
+        self.assertIsInstance(strength_control, pn.Column)
+        self.assertEqual(soften_strength.width, 90)
+        self.assertEqual(soften_strength.format, "0.00")
+        self.assertEqual(soften_strength.step, 0.01)
+        strength_stylesheet = "\n".join(str(item) for item in soften_strength.stylesheets)
+        self.assertNotIn("translateX", strength_stylesheet)
+        self.assertEqual(soften_strength.name, "")
+        self.assertEqual(layout._elemental_soften_label.value, "Soften edge")
+        self.assertEqual(
+            layout._elemental_soften_strength_label.value,
+            "Soften strength (eV)",
+        )
+        self.assertEqual(
+            strength_control.objects[0],
+            layout._elemental_soften_strength_label,
+        )
+        strength_rows = [
+            row for row in strength_control.select(pn.Row)
+            if soften_strength in row.objects
+        ]
+        self.assertEqual(len(strength_rows), 1)
+        self.assertIs(strength_control.objects[1], strength_rows[0])
+        self.assertIs(strength_rows[0].objects[0], soften_strength)
+        self.assertIsInstance(strength_rows[0].objects[1], pn.widgets.TooltipIcon)
+        self.assertEqual(strength_rows[0].objects[1].width, 30)
+        switch_columns = [
+            column for column in controls.select(pn.Column)
+            if soften_switch in column.objects
+        ]
+        self.assertEqual(len(switch_columns), 1)
+        self.assertEqual(
+            switch_columns[0].objects,
+            [layout._elemental_soften_label, soften_switch],
+        )
+        self.assertEqual(switch_columns[0].styles.get("gap"), "8px")
+        self.assertEqual(strength_control.styles.get("gap"), "8px")
+        self.assertIs(controls.objects[0], switch_columns[0])
+
+    def test_execution_mode_and_parallel_workers_share_one_row(self):
+        layout = FittingRightSidebarLayout(self.model)
+        execution_mode = layout.elemental_input["execution_mode"]
+        workers = layout.elemental_input["workers"]
+        controls = layout._elemental_execution_controls
+
+        self.assertIsInstance(controls, pn.Row)
+        self.assertEqual(controls.objects, [execution_mode, workers])
+        self.assertEqual(controls.styles.get("flex-wrap"), "nowrap")
+        self.assertEqual(controls.styles.get("gap"), "12px")
+        self.assertNotIn("width", controls.styles)
+        self.assertEqual(execution_mode.margin, 0)
+        self.assertEqual(workers.margin, 0)
 
     def test_main_panels_switch_from_image_and_roi_to_clustering_and_result(self):
         visualizer = SpectrumImageVisualizer(self.model, self.dataset)
@@ -2019,6 +2147,15 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             for parameter in snapshot.params
             if str(parameter["name"]).endswith("_A")
         )
+
+    def test_subshell_catalog_keeps_shell_values_and_attaches_onset_labels(self):
+        widget = self.layout.elemental_input["subshells"]
+        stylesheet = "\n".join(str(item) for item in widget.stylesheets)
+
+        self.assertEqual(widget.options, ["K1"])
+        self.assertEqual(widget.value, ["K1"])
+        self.assertIn('data-value="K1"', stylesheet)
+        self.assertIn('--subshell-onset: "2 eV"', stylesheet)
 
     def test_fit_current_uses_committed_roi_as_default_reference(self):
         self.assertFalse(self.layout.elemental_fit_button.disabled)

@@ -1,3 +1,4 @@
 from .color_picker_modal import ColorPickerModal
 from .confirmation_modal import ConfirmationModal
 from .info_modal import InfoModal
+from .periodic_table_of_elements_modal import PeriodicTableOfElementsModal
