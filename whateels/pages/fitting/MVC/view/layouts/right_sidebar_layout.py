@@ -16,65 +16,267 @@ if TYPE_CHECKING:
 
 
 class EdgeAddedModal(pn.Column):
-    """Simple informational modal shown from the Edge Definition action row."""
+    """Live editor for the saved elemental edges in the active NLLS workspace."""
 
     def __init__(
         self,
         custom_page: "GeneralPageTemplate",
+        model: "FittingModel",
         title: str = "Edges Added",
         on_close=None,
         **kwargs,
     ):
         self._custom_page = custom_page
+        self._model = model
         self._title = title
         self._on_close = on_close
+        self._change_callback = None
+        self._editable = True
 
-        close_svg = """
-        <svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
-          <line x1='18' y1='6' x2='6' y2='18'/>
-          <line x1='6' y1='6' x2='18' y2='18'/>
-        </svg>
-        """
-
-        self._close_button = pn.widgets.ButtonIcon(
-            icon=close_svg,
-            width=40,
-            height=40,
-            margin=(8, 8, 0, 0),
-            styles={"background": "#fff", "border": "none"},
+        self._close_button = pn.widgets.Button(
+            name="Okay.",
+            button_type="primary",
+            sizing_mode="stretch_width",
+            margin=0,
         )
         self._close_button.on_click(self._close)
 
-        self._message = pn.pane.Markdown(
-            "edges added",
-            styles={
-                "text-align": "center",
-                "font-size": "1.1rem",
-                "padding": "20px 24px 28px",
-                "color": "#1f2937",
-            },
+        self._title_pane = pn.pane.Markdown(
+            f"## {self._title}",
+            margin=0,
+            styles={"padding": "0"},
+        )
+
+        self._body = pn.Column(
+            sizing_mode="stretch_width",
+            styles={"min-width": "0", "max-width": "100%"},
         )
 
         super().__init__(
-            pn.Row(
-                pn.Spacer(),
-                self._close_button,
-                sizing_mode="stretch_width",
-                styles={"justify-content": "flex-end", "align-items": "flex-start"},
-            ),
-            self._message,
+            self._title_pane,
+            pn.Spacer(height=10),
+            self._body,
+            pn.Spacer(height=10),
+            self._close_button,
             sizing_mode="stretch_both",
             styles={
-                "padding": "8px",
+                "padding": "12px 20px 20px",
                 "background": "rgba(255,255,255,0.98)",
-                "maxWidth": "28vw",
+                "maxWidth": "30vw",
                 "minWidth": "220px",
                 "maxHeight": "40vh",
                 "overflow": "auto",
+                "overflow-x": "hidden",
                 "boxShadow": "0 0 32px 8px #0002",
             },
             **kwargs,
         )
+        self.refresh()
+
+    def set_change_callback(self, callback) -> None:
+        self._change_callback = callback
+
+    def set_editable(self, editable: bool) -> None:
+        """Enable or lock edits while a frozen NLLS run owns the workspace."""
+        editable = bool(editable)
+        if self._editable == editable:
+            return
+        self._editable = editable
+        self.refresh()
+
+    def _emit_change(self) -> None:
+        if self._change_callback is not None:
+            try:
+                self._change_callback()
+            except Exception:
+                pass
+
+    def _edge_entries(self):
+        workspace = getattr(self._model.app_state, "nlls_workspace", None)
+        if workspace is None or "default" not in workspace.areas:
+            return [pn.pane.Markdown("No edges added.", styles={"padding": "12px", "color": "#374151"})]
+
+        area = workspace.areas["default"]
+        if not area.continuum_specs:
+            return [pn.pane.Markdown("No edges added.", styles={"padding": "12px", "color": "#374151"})]
+
+        entries = []
+        for continuum in area.continuum_specs:
+            edge_label = f"{continuum.symbol} {'+'.join(continuum.shells)}"
+            shift_input = pn.widgets.FloatInput(
+                value=float(continuum.chemical_shift.value),
+                start=float(continuum.chemical_shift.minimum),
+                end=float(continuum.chemical_shift.maximum),
+                step=0.1,
+                width=100,
+                min_width=0,
+                max_width=100,
+                margin=(0, 0, 0, 0),
+                visible=True,
+                disabled=not self._editable,
+                styles={
+                    "min-width": "0",
+                    "max-width": "100%",
+                    "box-sizing": "border-box",
+                },
+            )
+
+            def _shift_changed(
+                event,
+                continuum_id=continuum.id,
+                saved_shift=float(continuum.chemical_shift.value),
+            ):
+                if not self._editable:
+                    return
+                workspace = getattr(self._model.app_state, "nlls_workspace", None)
+                if workspace is None:
+                    return
+                persisted_shift = saved_shift
+                try:
+                    persisted_shift = next(
+                        (
+                            float(item.chemical_shift.value)
+                            for item in workspace.areas["default"].continuum_specs
+                            if item.id == continuum_id
+                        ),
+                        saved_shift,
+                    )
+                    previous_revision = workspace.dirty_revision
+                    workspace.set_continuum_chemical_shift(
+                        "default", (continuum_id,), float(event.new)
+                    )
+                    if workspace.dirty_revision == previous_revision:
+                        return
+                    workspace.refresh_clustering_from_template()
+                    self._emit_change()
+                except (TypeError, ValueError):
+                    # Keep the visible input synchronized with the persisted value
+                    # when Panel receives a value outside the ParameterSpec bounds.
+                    if event.obj.value != persisted_shift:
+                        event.obj.value = persisted_shift
+
+            shift_input.param.watch(_shift_changed, "value")
+
+            delete_button = pn.widgets.Button(
+                name="Delete",
+                button_type="danger",
+                width=110,
+                margin=(0, 0, 0, 0),
+                disabled=not self._editable,
+                styles={
+                    "background": "#d65b5b",
+                    "color": "#fff",
+                    "font-weight": "600",
+                    "border-radius": "6px",
+                },
+            )
+
+            def _delete_edge(_event, edge_id=continuum.edge_id):
+                if not self._editable:
+                    return
+                workspace = getattr(self._model.app_state, "nlls_workspace", None)
+                if workspace is None:
+                    return
+                try:
+                    previous_revision = workspace.dirty_revision
+                    workspace.remove_edge("default", edge_id)
+                    if workspace.dirty_revision == previous_revision:
+                        return
+                    workspace.refresh_clustering_from_template()
+                    self.refresh()
+                    self._emit_change()
+                except (TypeError, ValueError):
+                    pass
+
+            delete_button.on_click(_delete_edge)
+
+            toggle_button = ToggleButton(
+                initial_state=True,
+                states={
+                    "on": {
+                        "label": "▲ " + edge_label,
+                        "on_click": (),
+                        "button_type": "default",
+                        "color": "#ca4bc8",
+                        "text_color": "#ffffff",
+                    },
+                    "off": {
+                        "label": "▼ " + edge_label,
+                        "on_click": (),
+                        "button_type": "default",
+                        "color": "#7373da",
+                        "text_color": "#ffffff",
+                    },
+                },
+                sizing_mode="stretch_width",
+                margin=(0, 0, 0, 0),
+            )
+
+            details_row = pn.Row(
+                pn.widgets.StaticText(value="Chemical Shift (eV)", width=120),
+                pn.Spacer(sizing_mode="stretch_width", min_width=0),
+                shift_input,
+                sizing_mode="stretch_width",
+                styles={
+                    "align-items": "center",
+                    "gap": "12px",
+                    "margin": "0",
+                    "min-width": "0",
+                    "max-width": "100%",
+                    "overflow": "hidden",
+                },
+            )
+
+            actions_row = pn.Row(
+                toggle_button,
+                delete_button,
+                sizing_mode="stretch_width",
+                styles={
+                    "align-items": "center",
+                    "gap": "8px",
+                    "margin": "0 0 8px 0",
+                },
+            )
+            card = pn.Column(
+                actions_row,
+                details_row,
+                sizing_mode="stretch_width",
+                margin=(0, 0, 12, 0),
+                styles={
+                    "padding": "0 0 10px 0",
+                    "border-radius": "4px",
+                    "box-shadow": "0 0 5px #d8d8d8",
+                    "background-color": "#f7f7f7",
+                    "overflow": "hidden",
+                    "max-width": "100%",
+                    "min-width": "0",
+                },
+            )
+
+            def _toggle_fields(
+                event,
+                toggle=toggle_button,
+                details=details_row,
+                actions=actions_row,
+                entry=card,
+            ):
+                expanded = toggle.is_on()
+                details.visible = expanded
+                actions.styles = {
+                    **actions.styles,
+                    "margin": "0 0 8px 0" if expanded else "0",
+                }
+                entry.styles = {
+                    **entry.styles,
+                    "padding": "0 0 10px 0" if expanded else "0",
+                }
+
+            toggle_button.on_click(_toggle_fields)
+            entries.append(card)
+        return entries
+
+    def refresh(self) -> None:
+        self._body.objects = self._edge_entries()
 
     def _close(self, *_):
         self.visible = False
@@ -327,6 +529,7 @@ class FittingRightSidebarLayout(pn.Column):
         if self._modal_manager is not None:
             def _open_edges_added_modal(_):
                 self._elemental_edges_added_button.value = True
+                self._edge_added_modal.refresh()
                 self._modal_manager.open_modal(self._EDGE_ADDED_MODAL_ID)
 
             self._elemental_edges_added_button.on_click(_open_edges_added_modal)
@@ -569,6 +772,11 @@ class FittingRightSidebarLayout(pn.Column):
     def elemental_edges_added_button(self) -> pn.widgets.ButtonIcon:
         """Access the Edge Definition info button for the modal."""
         return self._elemental_edges_added_button
+
+    @property
+    def edge_added_modal(self):
+        """Access the live modal used to edit saved elemental edges."""
+        return self._edge_added_modal
 
     @property
     def elemental_build_model_button(self) -> pn.widgets.Button:
@@ -972,6 +1180,7 @@ class FittingRightSidebarLayout(pn.Column):
         )
         self._edge_added_modal = EdgeAddedModal(
             self._custom_page,
+            self._model,
             title=self._EDGE_ADDED_MODAL_ID,
             on_close=lambda: setattr(self._elemental_edges_added_button, "value", False),
         )

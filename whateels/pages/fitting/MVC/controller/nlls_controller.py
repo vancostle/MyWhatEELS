@@ -138,6 +138,8 @@ class NLLSController:
             self._watchers.append(
                 tabs.param.watch(self._on_fitting_tab_changed, "active")
             )
+        if getattr(self.view, "edge_added_modal", None) is not None:
+            self.view.edge_added_modal.set_change_callback(self._on_edge_modal_changed)
         self.view.elemental_add_edge_button.on_click(self._on_add_edge)
         self.view.elemental_build_model_button.on_click(self._on_build_model)
         self.view.elemental_fit_button.on_click(self._on_fit)
@@ -183,6 +185,14 @@ class NLLSController:
             except Exception:
                 pass
         self._watchers.clear()
+
+    def _on_edge_modal_changed(self) -> None:
+        """Persist the modal edit and redraw all downstream Elemental state."""
+        workspace = self.workspace
+        if workspace is not None:
+            self._publish_workspace()
+            self._refresh_edge_preview()
+            self._refresh_button_states()
 
     def _active_dataset(self):
         return self.app_state.plot_dataset
@@ -816,6 +826,9 @@ class NLLSController:
     def _refresh_button_states(self) -> None:
         workspace = self.workspace
         run_active = self._active_run_request is not None
+        edge_modal = getattr(self.view, "edge_added_modal", None)
+        if edge_modal is not None:
+            edge_modal.set_editable(not run_active)
         selected_valid = False
         if workspace is not None:
             try:

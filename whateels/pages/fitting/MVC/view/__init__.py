@@ -132,6 +132,10 @@ class FittingView:
         """Access the Elemental NLLS 'Add Edge' button."""
         return self._elemental_add_edge_button
     @property
+    def edge_added_modal(self):
+        """Access the live modal used to edit saved elemental edges."""
+        return self._edge_added_modal
+    @property
     def elemental_build_model_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Build Elemental Model' button."""
         return self._elemental_build_model_button
@@ -273,6 +277,7 @@ class FittingView:
 
         # Elemental tab.
         self._elemental_input = layout.elemental_input
+        self._edge_added_modal = layout.edge_added_modal
         self._elemental_add_edge_button = layout.elemental_add_edge_button
         self._elemental_build_model_button = layout.elemental_build_model_button
         self._elemental_fit_button = layout.elemental_fit_button

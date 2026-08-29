@@ -95,6 +95,24 @@ class NLLSWorkspace:
             )
         )
 
+    def remove_edge(self, area_id: str, edge_id: str) -> AreaModelSpec:
+        """Delete an entire saved edge, its continuum and all fine-structure specs."""
+        area = self.areas[area_id]
+        target = str(edge_id)
+        edges = tuple(item for item in area.edges if item.id != target)
+        continua = tuple(item for item in area.continuum_specs if item.edge_id != target)
+        fine = tuple(item for item in area.fine_structure_specs if item.edge_id != target)
+        if len(edges) == len(area.edges) and len(continua) == len(area.continuum_specs) and len(fine) == len(area.fine_structure_specs):
+            return area
+        return self._replace_area(
+            replace(
+                area,
+                edges=edges,
+                continuum_specs=continua,
+                fine_structure_specs=fine,
+            )
+        )
+
     def set_continuum_chemical_shift(
         self,
         area_id: str,

@@ -2359,6 +2359,59 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         np.testing.assert_allclose(shifted_x, initial_x)
         self.assertAlmostEqual(shifted_x[np.argmax(shifted_y)], 4.0)
 
+    def test_edges_modal_edits_once_with_matching_shift_bounds(self):
+        # The layout's model normally shares this state through CacheManager.
+        # Use the isolated controller state explicitly in this regression fixture.
+        self.layout._model._app_state = self.state
+        modal = self.layout.edge_added_modal
+        modal.refresh()
+        card = modal._body.objects[0]
+        shift_input = card.objects[1].objects[-1]
+
+        self.assertIn("Edges Added", modal._title_pane.object)
+        self.assertEqual(shift_input.start, -10.0)
+        self.assertEqual(shift_input.end, 10.0)
+        revision = self.state.nlls_revision
+        shift_input.value = 1.0
+
+        self.assertEqual(self.state.nlls_revision, revision + 1)
+        continuum = self.controller.workspace.areas["default"].continuum_specs[0]
+        self.assertEqual(continuum.chemical_shift.value, 1.0)
+
+        shift_input.value = 11.0
+        self.assertEqual(shift_input.value, 1.0)
+        self.assertEqual(self.state.nlls_revision, revision + 1)
+
+    def test_edges_modal_keeps_each_card_toggle_and_edit_controls_independent(self):
+        self.layout._model._app_state = self.state
+        self.layout.elemental_input["element_atomic_number"].value = 2
+        self.controller._on_add_edge(None)
+        modal = self.layout.edge_added_modal
+        modal.refresh()
+
+        self.assertIn("Edges Added", modal._title_pane.object)
+        self.assertEqual(modal._close_button.name, "Okay.")
+        first_card, second_card = modal._body.objects
+        first_toggle = first_card.objects[0].objects[0]
+        first_details = first_card.objects[1]
+        second_details = second_card.objects[1]
+        first_toggle.clicks += 1
+
+        self.assertFalse(first_details.visible)
+        self.assertTrue(second_details.visible)
+        self.assertEqual(first_card.objects[0].styles["margin"], "0")
+        self.assertEqual(first_card.styles["padding"], "0")
+
+        self.controller._active_run_request = object()
+        self.controller._refresh_button_states()
+        try:
+            card = modal._body.objects[0]
+            self.assertTrue(card.objects[0].objects[1].disabled)
+            self.assertTrue(card.objects[1].objects[-1].disabled)
+        finally:
+            self.controller._active_run_request = None
+            self.controller._refresh_button_states()
+
     def test_edge_preview_is_scoped_to_the_elemental_tab(self):
         self.assertIsNotNone(self.visualizer.edge_preview_payload)
 

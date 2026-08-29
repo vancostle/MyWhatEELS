@@ -129,6 +129,54 @@ def _clustering_result(labels, *, file="synthetic.dm4", image="synthetic"):
     }
 
 
+class NLLSWorkspaceEdgeTests(unittest.TestCase):
+    def test_remove_edge_deletes_edge_and_its_saved_parts(self):
+        dataset = _dataset()
+        identity = _identity(dataset)
+        geometry = ExperimentalGeometry(200.0, 20.0, 0.0)
+        workspace = NLLSWorkspace.create(identity, geometry)
+        edge = EdgeSpec(
+            id="ts_l23_edge",
+            atomic_number=10,
+            symbol="Ts",
+            shells=("L2", "L3"),
+            onset_eV=95.0,
+        )
+        continuum = ContinuumSpec(
+            id="ts_l23_continuum",
+            edge_id=edge.id,
+            atomic_number=10,
+            symbol=edge.symbol,
+            shells=edge.shells,
+            prefix="ts_l23_cont_",
+            onset_eV=edge.onset_eV,
+            broadening=BroadeningSpec(enabled=True, sigma_eV=1.5),
+            amplitude=continuum_parameter_specs(0.0)[0],
+            chemical_shift=continuum_parameter_specs(0.5)[1],
+            provider_version=OOS_PROVIDER_VERSION,
+            chemical_shift_convention=CHEMICAL_SHIFT_CONVENTION,
+        )
+        fine = FineStructureSpec(
+            id="ts_l2_elnes",
+            edge_id=edge.id,
+            shell="L2",
+            prefix="ts_l2_elnes_",
+            shape="GaussianModel",
+            center=continuum_parameter_specs(0.0)[0],
+            sigma=continuum_parameter_specs(0.0)[0],
+            amplitude=continuum_parameter_specs(0.0)[0],
+            enabled=True,
+        )
+        workspace.add_edge("default", edge, continuum, (fine,))
+
+        updated = workspace.remove_edge("default", edge.id)
+
+        self.assertEqual(updated.edges, ())
+        self.assertEqual(updated.continuum_specs, ())
+        self.assertEqual(updated.fine_structure_specs, ())
+        self.assertFalse(any(item.id == edge.id for item in workspace.areas["default"].edges))
+
+
 class OOSProviderTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
