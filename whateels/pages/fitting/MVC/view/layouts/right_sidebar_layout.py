@@ -975,6 +975,11 @@ class FittingRightSidebarLayout(pn.Column):
             value=False,
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
+            stylesheets=["""
+                .bk-input-group > label {
+                    margin-bottom: 5px;
+                }
+            """],
         )
         cpu_count = max(1, int(os.cpu_count() or 1))
         self._elemental_input["workers"] = pn.widgets.IntInput(

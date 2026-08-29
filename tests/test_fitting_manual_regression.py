@@ -572,6 +572,10 @@ class ManualFittingRegressionTests(unittest.TestCase):
         self.assertNotIn("width", controls.styles)
         self.assertEqual(execution_mode.margin, 0)
         self.assertEqual(workers.margin, 0)
+        execution_stylesheet = "\n".join(
+            str(item) for item in execution_mode.stylesheets
+        )
+        self.assertIn("margin-bottom: 5px", execution_stylesheet)
 
     def test_main_panels_switch_from_image_and_roi_to_clustering_and_result(self):
         visualizer = SpectrumImageVisualizer(self.model, self.dataset)
