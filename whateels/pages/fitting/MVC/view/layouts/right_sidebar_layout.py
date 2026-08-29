@@ -15,6 +15,74 @@ if TYPE_CHECKING:
     from whateels.templates import GeneralPageTemplate
 
 
+class EdgeAddedModal(pn.Column):
+    """Simple informational modal shown from the Edge Definition action row."""
+
+    def __init__(
+        self,
+        custom_page: "GeneralPageTemplate",
+        title: str = "Edges Added",
+        on_close=None,
+        **kwargs,
+    ):
+        self._custom_page = custom_page
+        self._title = title
+        self._on_close = on_close
+
+        close_svg = """
+        <svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
+          <line x1='18' y1='6' x2='6' y2='18'/>
+          <line x1='6' y1='6' x2='18' y2='18'/>
+        </svg>
+        """
+
+        self._close_button = pn.widgets.ButtonIcon(
+            icon=close_svg,
+            width=40,
+            height=40,
+            margin=(8, 8, 0, 0),
+            styles={"background": "#fff", "border": "none"},
+        )
+        self._close_button.on_click(self._close)
+
+        self._message = pn.pane.Markdown(
+            "edges added",
+            styles={
+                "text-align": "center",
+                "font-size": "1.1rem",
+                "padding": "20px 24px 28px",
+                "color": "#1f2937",
+            },
+        )
+
+        super().__init__(
+            pn.Row(
+                pn.Spacer(),
+                self._close_button,
+                sizing_mode="stretch_width",
+                styles={"justify-content": "flex-end", "align-items": "flex-start"},
+            ),
+            self._message,
+            sizing_mode="stretch_both",
+            styles={
+                "padding": "8px",
+                "background": "rgba(255,255,255,0.98)",
+                "maxWidth": "28vw",
+                "minWidth": "220px",
+                "maxHeight": "40vh",
+                "overflow": "auto",
+                "boxShadow": "0 0 32px 8px #0002",
+            },
+            **kwargs,
+        )
+
+    def _close(self, *_):
+        self.visible = False
+        if self._on_close:
+            self._on_close()
+        self._custom_page.close_modal()
+
+
 class FittingRightSidebarLayout(pn.Column):
     """Right sidebar of the Fitting page: Manual / Elemental / Results tabs."""
 
@@ -45,6 +113,11 @@ class FittingRightSidebarLayout(pn.Column):
     )
     _FIT_AREAS_MODAL_ID = "Select Area to run fit"
     _PERIODIC_TABLE_MODAL_ID = "Periodic Table of Elements"
+    _EDGE_ADDED_MODAL_ID = "Edges Added"
+    _EDGE_ADDED_SVG = """
+    <svg width="215px" height="215px" viewBox="0 0 26 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#000000" stroke-width="0.00024000000000000003"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round" stroke="#CCCCCC" stroke-width="0.288"></g><g id="SVGRepo_iconCarrier" transform="translate(3.5,0)"> <path d="M3 20C2.44772 20 2 20.4477 2 21C2 21.5523 2.44772 22 3 22V20ZM21 22C21.5523 22 22 21.5523 22 21C22 20.4477 21.5523 20 21 20V22ZM7 17C6.44772 17 6 17.4477 6 18C6 18.5523 6.44772 19 7 19V17ZM14 19C14.5523 19 15 18.5523 15 18C15 17.4477 14.5523 17 14 17V19ZM9 14C8.44772 14 8 14.4477 8 15C8 15.5523 8.44772 16 9 16V14ZM12 16C12.5523 16 13 15.5523 13 15C13 14.4477 12.5523 14 12 14V16ZM8 5V4C7.44772 4 7 4.44772 7 5H8ZM13 5H14C14 4.44772 13.5523 4 13 4V5ZM13 12V13C13.5523 13 14 12.5523 14 12H13ZM8 12H7C7 12.5523 7.44772 13 8 13V12ZM9 5V6C9.45887 6 9.85885 5.6877 9.97014 5.24254L9 5ZM11.5 3L12.4701 2.75746C12.3589 2.3123 11.9589 2 11.5 2V3ZM9.5 3V2C9.04113 2 8.64115 2.3123 8.52986 2.75746L9.5 3ZM12 5L11.0299 5.24254C11.1411 5.6877 11.5411 6 12 6V5ZM13 7C12.4477 7 12 7.44772 12 8C12 8.55228 12.4477 9 13 9V7ZM16.0915 20.1435C15.6184 20.4285 15.466 21.0431 15.7511 21.5161C16.0361 21.9892 16.6506 22.1416 17.1237 21.8565L16.0915 20.1435ZM3 22H21V20H3V22ZM7 19H14V17H7V19ZM9 16H12V14H9V16ZM12 5V12H14V5H12ZM13 11H8V13H13V11ZM9 12V5H7V12H9ZM8 6H9V4H8V6ZM9.97014 5.24254L10.4701 3.24254L8.52986 2.75746L8.02986 4.75746L9.97014 5.24254ZM9.5 4H11.5V2H9.5V4ZM10.5299 3.24254L11.0299 5.24254L12.9701 4.75746L12.4701 2.75746L10.5299 3.24254ZM12 6H13V4H12V6ZM13 9C16.3137 9 19 11.6863 19 15H21C21 10.5817 17.4183 7 13 7V9ZM19 15C19 17.1814 17.8365 19.092 16.0915 20.1435L17.1237 21.8565C19.4443 20.4582 21 17.9113 21 15H19Z" fill="#000000"></path> </g></svg>
+    """
+    _EDGE_ADDED_ACTIVE_SVG = _EDGE_ADDED_SVG.replace('#000000', '#b63fb5')
     _PERIODIC_TABLE_SVG = """
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="20" height="20" rx="2"/>
@@ -126,6 +199,7 @@ class FittingRightSidebarLayout(pn.Column):
         modal_manager: "ModalManager | None" = None,
     ):
         self._model = model
+        self._custom_page = custom_page
         self._modal_manager = modal_manager
         constants = model.constants
 
@@ -226,10 +300,36 @@ class FittingRightSidebarLayout(pn.Column):
             name='Add Edge',
             button_type='primary',
             height=55,
-            margin=(10, 0, 0, 0),
-            sizing_mode=self._STRETCH_WIDTH,
+            margin=0,
+            sizing_mode='stretch_both',
             disabled=True,
         )
+        self._elemental_edges_added_button = pn.widgets.ButtonIcon(
+            icon=self._EDGE_ADDED_SVG,
+            active_icon=self._EDGE_ADDED_ACTIVE_SVG,
+            value=False,
+            size='2.2em',
+            # 50px (not 55) so the glyph lands on the same vertical axis as the 3em
+            # periodic-table icon above: the icon is centred in this box together with
+            # the empty .bk-IconLabel and its 5px margin, which pulls it 2.5px left.
+            # The 5px freed here goes to the Add Edge button (flex: 1 0 0px).
+            width=50,
+            height=55,
+            margin=(0, 0, 0, 0), 
+            disabled=False,
+            styles={
+                "cursor": "pointer",
+                "display": "grid",
+                "place-items": "center",
+                "border-radius": "6px",
+            },
+        )
+        if self._modal_manager is not None:
+            def _open_edges_added_modal(_):
+                self._elemental_edges_added_button.value = True
+                self._modal_manager.open_modal(self._EDGE_ADDED_MODAL_ID)
+
+            self._elemental_edges_added_button.on_click(_open_edges_added_modal)
         self._elemental_build_model_button = pn.widgets.Button(
             name='Build Elemental Model',
             button_type='primary',
@@ -464,6 +564,11 @@ class FittingRightSidebarLayout(pn.Column):
     def elemental_add_edge_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS 'Add Edge' button."""
         return self._elemental_add_edge_button
+
+    @property
+    def elemental_edges_added_button(self) -> pn.widgets.ButtonIcon:
+        """Access the Edge Definition info button for the modal."""
+        return self._elemental_edges_added_button
 
     @property
     def elemental_build_model_button(self) -> pn.widgets.Button:
@@ -865,6 +970,16 @@ class FittingRightSidebarLayout(pn.Column):
             size="3em",
             margin=(21, 2, 0, 8),
         )
+        self._edge_added_modal = EdgeAddedModal(
+            self._custom_page,
+            title=self._EDGE_ADDED_MODAL_ID,
+            on_close=lambda: setattr(self._elemental_edges_added_button, "value", False),
+        )
+        if self._modal_manager is not None:
+            self._modal_manager.register_modal(
+                self._EDGE_ADDED_MODAL_ID,
+                self._edge_added_modal,
+            )
         self._elemental_periodic_table_button.on_click(self._open_periodic_table)
         # Options come from the OOS catalogue: the controller populates them.
         self._elemental_input["subshells"] = pn.widgets.MultiChoice(
@@ -900,7 +1015,17 @@ class FittingRightSidebarLayout(pn.Column):
                 styles=self._fluid_row_styles(),
             ),
             self._elemental_onset_readout,
-            self._elemental_add_edge_button,
+            pn.Row(
+                self._elemental_add_edge_button,
+                self._elemental_edges_added_button,
+                sizing_mode=self._STRETCH_WIDTH,
+                styles={
+                    **self._fluid_row_styles(),
+                    "align-items": "center",
+                    "justify-content": "center",
+                    "gap": "6px",
+                },
+            ),
             sizing_mode=self._STRETCH_WIDTH,
         )
 
