@@ -11,6 +11,7 @@ from .areas import AreaDefinition
 
 from .contracts import (
     AreaModelSpec,
+    BroadeningSpec,
     ContinuumSpec,
     DatasetIdentity,
     EdgeSpec,
@@ -92,6 +93,85 @@ class NLLSWorkspace:
                 continuum_specs=continua,
                 fine_structure_specs=fine,
             )
+        )
+
+    def set_continuum_chemical_shift(
+        self,
+        area_id: str,
+        continuum_ids: tuple[str, ...],
+        value: float,
+    ) -> AreaModelSpec:
+        """Update one or more saved continuum shifts in a single revision.
+
+        Edge Definition uses one shift input for the currently selected shell
+        group(s).  Updating all matching continua together keeps doublets and
+        multi-edge selections atomic and invalidates any stale build/reference
+        exactly once.
+        """
+        requested = tuple(dict.fromkeys(str(item) for item in continuum_ids))
+        if not requested:
+            raise ValueError("at least one continuum id is required")
+
+        area = self.areas[area_id]
+        requested_set = set(requested)
+        found: set[str] = set()
+        changed = False
+        continua: list[ContinuumSpec] = []
+        for continuum in area.continuum_specs:
+            if continuum.id not in requested_set:
+                continua.append(continuum)
+                continue
+            found.add(continuum.id)
+            updated_shift = replace(continuum.chemical_shift, value=float(value))
+            updated = replace(continuum, chemical_shift=updated_shift)
+            continua.append(updated)
+            changed = changed or updated != continuum
+
+        missing = requested_set.difference(found)
+        if missing:
+            raise ValueError(
+                "unknown continuum ids: " + ", ".join(sorted(missing))
+            )
+        if not changed:
+            return area
+        return self._replace_area(
+            replace(area, continuum_specs=tuple(continua))
+        )
+
+    def set_continuum_broadening(
+        self,
+        area_id: str,
+        continuum_ids: tuple[str, ...],
+        broadening: BroadeningSpec,
+    ) -> AreaModelSpec:
+        """Update saved OOS broadening atomically for the selected continua."""
+        requested = tuple(dict.fromkeys(str(item) for item in continuum_ids))
+        if not requested:
+            raise ValueError("at least one continuum id is required")
+
+        area = self.areas[area_id]
+        requested_set = set(requested)
+        found: set[str] = set()
+        changed = False
+        continua: list[ContinuumSpec] = []
+        for continuum in area.continuum_specs:
+            if continuum.id not in requested_set:
+                continua.append(continuum)
+                continue
+            found.add(continuum.id)
+            updated = replace(continuum, broadening=broadening)
+            continua.append(updated)
+            changed = changed or updated != continuum
+
+        missing = requested_set.difference(found)
+        if missing:
+            raise ValueError(
+                "unknown continuum ids: " + ", ".join(sorted(missing))
+            )
+        if not changed:
+            return area
+        return self._replace_area(
+            replace(area, continuum_specs=tuple(continua))
         )
 
     def set_model_composition(

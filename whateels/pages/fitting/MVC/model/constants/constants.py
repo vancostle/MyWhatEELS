@@ -62,6 +62,8 @@ class Constants:
 
     # Chemical shift: the only manual correction of the edge position
     DEFAULT_ELEMENTAL_CHEMICAL_SHIFT = 0.0
+    ELEMENTAL_CHEMICAL_SHIFT_MIN = -10.0
+    ELEMENTAL_CHEMICAL_SHIFT_MAX = 10.0
     ELEMENTAL_CHEMICAL_SHIFT_STEP = 0.1
     CHEMICAL_SHIFT_TOOLTIP = NLLS_CHEMICAL_SHIFT_TOOLTIP
 

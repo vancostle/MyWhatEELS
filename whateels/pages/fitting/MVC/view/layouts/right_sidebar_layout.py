@@ -878,6 +878,8 @@ class FittingRightSidebarLayout(pn.Column):
         self._elemental_input["chemical_shift"] = pn.widgets.FloatInput(
             name="Chemical shift (eV)",
             value=constants.DEFAULT_ELEMENTAL_CHEMICAL_SHIFT,
+            start=constants.ELEMENTAL_CHEMICAL_SHIFT_MIN,
+            end=constants.ELEMENTAL_CHEMICAL_SHIFT_MAX,
             step=constants.ELEMENTAL_CHEMICAL_SHIFT_STEP,
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),

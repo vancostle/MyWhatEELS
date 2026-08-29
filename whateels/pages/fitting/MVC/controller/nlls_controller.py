@@ -32,6 +32,8 @@ from whateels.nlls.contracts import (
 from whateels.nlls.cross_sections import OOSContinuumProvider
 from whateels.nlls.defaults import (
     CHEMICAL_SHIFT_CONVENTION,
+    DEFAULT_SOFTEN,
+    DEFAULT_SOFTEN_SIGMA_EV,
     OOS_PROVIDER_VERSION,
     canonical_subshell_groups,
     continuum_parameter_specs,
@@ -92,6 +94,7 @@ class NLLSController:
         self._active_run_request: NLLSRunRequest | None = None
         self._prior_complete_results: xr.Dataset | None = None
         self._published_result_ids: set[int] = set()
+        self._syncing_edge_controls = False
         self.bind()
         self.on_source_changed(initial=True)
         self._restore_existing_multifit_result()
@@ -110,6 +113,15 @@ class NLLSController:
             [
                 inputs["element_atomic_number"].param.watch(self._on_element_changed, "value"),
                 inputs["subshells"].param.watch(self._on_subshell_changed, "value"),
+                inputs["chemical_shift"].param.watch(
+                    self._on_chemical_shift_changed, "value"
+                ),
+                inputs["soften_edge"].param.watch(
+                    self._on_edge_preview_input_changed, "value"
+                ),
+                inputs["soften_strength"].param.watch(
+                    self._on_edge_preview_input_changed, "value"
+                ),
                 inputs["model_composition"].param.watch(
                     self._on_model_composition_changed, "value"
                 ),
@@ -121,6 +133,11 @@ class NLLSController:
                 ),
             ]
         )
+        tabs = getattr(self.view, "fitting_tabs", None)
+        if tabs is not None:
+            self._watchers.append(
+                tabs.param.watch(self._on_fitting_tab_changed, "active")
+            )
         self.view.elemental_add_edge_button.on_click(self._on_add_edge)
         self.view.elemental_build_model_button.on_click(self._on_build_model)
         self.view.elemental_fit_button.on_click(self._on_fit)
@@ -156,6 +173,7 @@ class NLLSController:
         if self._run_cancel_event is not None:
             self._run_cancel_event.set()
         self._stop_run_polling()
+        self._clear_edge_preview()
         results_view = getattr(self.view, "elemental_results_view", None)
         if results_view is not None:
             results_view.set_main_plot_callback(None)
@@ -215,6 +233,7 @@ class NLLSController:
                 self.app_state.clear_nlls_state()
             self._refresh_results_view()
             self._clear_clustering_in_main()
+            self._clear_edge_preview()
             self._update_validation_status()
             self._refresh_element_catalog()
             self._refresh_button_states()
@@ -256,8 +275,10 @@ class NLLSController:
 
         self._update_validation_status()
         self._refresh_element_catalog()
+        self._sync_edge_controls_from_selection()
         self._refresh_button_states()
         self._refresh_results_view()
+        self._refresh_edge_preview()
 
     def _active_visualizer(self):
         visualizers = getattr(getattr(self.parent, "layout", None), "_chosen_visualizers", ())
@@ -474,6 +495,9 @@ class NLLSController:
         groups = canonical_subshell_groups(selected, available)
         if not groups:
             raise ValueError("select at least one OOS subshell")
+        continuum_parameter_specs(
+            float(self.view.elemental_input["chemical_shift"].value)
+        )
         broadening = BroadeningSpec(
             enabled=bool(self.view.elemental_input["soften_edge"].value),
             sigma_eV=float(self.view.elemental_input["soften_strength"].value),
@@ -491,6 +515,222 @@ class NLLSController:
             for group in groups
         )
         return groups, snapshots, broadening
+
+    def _selected_continuum_ids(self) -> tuple[str, ...]:
+        """Return stable IDs for the shell groups selected in Edge Definition."""
+        atomic_number = int(self.view.elemental_input["element_atomic_number"].value)
+        selected = tuple(self.view.elemental_input["subshells"].value)
+        if not selected:
+            return ()
+        available = self.provider.available_edges(atomic_number)
+        groups = canonical_subshell_groups(selected, available)
+        if not groups:
+            return ()
+        _, symbol = self.provider.element_info(atomic_number)
+        return tuple(
+            f"{stable_component_token(symbol or f'z{atomic_number}', group)}_continuum"
+            for group in groups
+        )
+
+    def _sync_edge_controls_from_selection(self) -> None:
+        """Load the saved shift/broadening for an exact edge selection."""
+        if self._syncing_edge_controls:
+            return
+        workspace = self.workspace
+        if workspace is None or "default" not in workspace.areas:
+            return
+        try:
+            continuum_ids = self._selected_continuum_ids()
+        except (NLLSError, ValueError, TypeError):
+            return
+        if not continuum_ids:
+            return
+        by_id = {
+            continuum.id: continuum
+            for continuum in workspace.areas["default"].continuum_specs
+        }
+        broadening = None
+        if any(continuum_id not in by_id for continuum_id in continuum_ids):
+            shift_value = 0.0
+            broadening = BroadeningSpec(
+                enabled=DEFAULT_SOFTEN,
+                sigma_eV=DEFAULT_SOFTEN_SIGMA_EV,
+            )
+        else:
+            shifts = {
+                float(by_id[continuum_id].chemical_shift.value)
+                for continuum_id in continuum_ids
+            }
+            shift_value = shifts.pop() if len(shifts) == 1 else None
+            broadenings = {
+                by_id[continuum_id].broadening
+                for continuum_id in continuum_ids
+            }
+            if len(broadenings) == 1:
+                broadening = broadenings.pop()
+
+        shift_widget = self.view.elemental_input["chemical_shift"]
+        soften_widget = self.view.elemental_input["soften_edge"]
+        strength_widget = self.view.elemental_input["soften_strength"]
+        self._syncing_edge_controls = True
+        try:
+            if (
+                shift_value is not None
+                and float(shift_widget.value) != shift_value
+            ):
+                shift_widget.value = shift_value
+            if broadening is not None:
+                if bool(soften_widget.value) != bool(broadening.enabled):
+                    soften_widget.value = bool(broadening.enabled)
+                if float(strength_widget.value) != float(broadening.sigma_eV):
+                    strength_widget.value = float(broadening.sigma_eV)
+        finally:
+            self._syncing_edge_controls = False
+
+    def _edge_definition_tab_active(self) -> bool:
+        """Return whether the Elemental tab owns the shared spectrum pane."""
+        tabs = getattr(self.view, "fitting_tabs", None)
+        if tabs is None:
+            return True
+        try:
+            return int(tabs.active) == 1
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _shifted_oos_preview(snapshot, eloss: np.ndarray, chemical_shift: float) -> np.ndarray:
+        """Evaluate an OOS snapshot with the same sign convention as the model."""
+        axis = np.asarray(eloss, dtype=float)
+        return np.interp(
+            axis + float(chemical_shift),
+            np.asarray(snapshot.energy_eV, dtype=float),
+            np.asarray(snapshot.normalized_shape, dtype=float),
+            left=0.0,
+            right=0.0,
+        )
+
+    def _edge_preview_reference(self):
+        """Return a stable mean spectrum for positioning Edge Definition curves."""
+        dataset = self._active_dataset()
+        cube = np.asarray(dataset["ElectronCount"].values, dtype=float)
+        if cube.ndim != 3:
+            raise ValueError("active NLLS source must be a spectrum image")
+        pairs = self._roi_pairs()
+        if pairs:
+            try:
+                mask = ReferenceSpectrumService.roi_mask(cube.shape[:2], pairs)
+                selection = ReferenceSpectrumService.select_from_mask(
+                    cube, mask, "roi_mean"
+                )
+                return selection, f"ROI mean ({selection.pixel_count} pixels)"
+            except (NLLSError, ValueError, TypeError):
+                pass
+        mask = ReferenceSpectrumService.central_mask(cube.shape[:2])
+        selection = ReferenceSpectrumService.select_from_mask(
+            cube, mask, "central_mean"
+        )
+        return selection, f"Central-window mean ({selection.pixel_count} pixels)"
+
+    def _clear_edge_preview(self) -> None:
+        visualizer = self._active_visualizer()
+        clear = getattr(visualizer, "clear_nlls_edge_preview", None)
+        if clear is not None:
+            try:
+                clear()
+            except Exception:
+                pass
+
+    def _refresh_edge_preview(self) -> None:
+        """Plot saved OOS continua plus the current candidate selection.
+
+        The candidate is included before ``Add Edge`` so the shift can be aligned
+        interactively.  Once an edge exists, the shift watcher updates its saved
+        ``ContinuumSpec`` and this same route redraws the committed definition.
+        """
+        if not self._edge_definition_tab_active():
+            self._clear_edge_preview()
+            return
+        workspace = self.workspace
+        visualizer = self._active_visualizer()
+        show = getattr(visualizer, "show_nlls_edge_preview", None)
+        if workspace is None or visualizer is None or show is None:
+            return
+        dataset = self._active_dataset()
+        if dataset is None or "Eloss" not in getattr(dataset, "coords", {}):
+            self._clear_edge_preview()
+            return
+
+        try:
+            eloss = np.asarray(dataset.coords["Eloss"].values, dtype=float)
+            fit_range = self._current_fit_range()
+            entries: dict[str, tuple[str, np.ndarray, np.ndarray]] = {}
+            candidate_entries: dict[str, tuple[str, np.ndarray, np.ndarray]] = {}
+            try:
+                groups, snapshots, _broadening = self._validate_selected_curves()
+                atomic_number = int(
+                    self.view.elemental_input["element_atomic_number"].value
+                )
+                _, symbol = self.provider.element_info(atomic_number)
+                shift = float(self.view.elemental_input["chemical_shift"].value)
+                for group, snapshot in zip(groups, snapshots):
+                    token = stable_component_token(
+                        symbol or f"z{atomic_number}", group
+                    )
+                    label = (
+                        f"{symbol or f'Z{atomic_number}'} {'+'.join(group)} OOS "
+                        f"(shift {shift:+g} eV)"
+                    )
+                    candidate_entries[f"{token}_continuum"] = (
+                        label,
+                        eloss,
+                        self._shifted_oos_preview(snapshot, eloss, shift),
+                    )
+            except (NLLSError, ValueError, TypeError):
+                pass
+
+            area = workspace.areas["default"]
+            for continuum in area.continuum_specs:
+                # A saved continuum is always rendered from its committed
+                # definition. Candidate controls update that definition before
+                # this method is called, so preview and Build cannot diverge.
+                candidate_entries.pop(continuum.id, None)
+                snapshot = self.provider.curve(
+                    continuum.atomic_number,
+                    continuum.shells,
+                    workspace.geometry,
+                    eloss,
+                    continuum.broadening,
+                    fit_range,
+                )
+                shift = float(continuum.chemical_shift.value)
+                label = (
+                    f"{continuum.symbol} {'+'.join(continuum.shells)} OOS "
+                    f"(shift {shift:+g} eV)"
+                )
+                entries[continuum.id] = (
+                    label,
+                    eloss,
+                    self._shifted_oos_preview(snapshot, eloss, shift),
+                )
+            entries.update(candidate_entries)
+
+            if not entries:
+                self._clear_edge_preview()
+                return
+            selection, spectrum_label = self._edge_preview_reference()
+            try:
+                show(
+                    eloss,
+                    selection.spectrum,
+                    tuple(entries.values()),
+                    spectrum_label=spectrum_label,
+                )
+            except Exception:
+                # Preview rendering is advisory and must never roll back a
+                # valid edge definition or break a widget callback.
+                self._clear_edge_preview()
+        except (NLLSError, ValueError, TypeError, KeyError, AttributeError):
+            self._clear_edge_preview()
 
     def _current_clustering_definitions(self) -> tuple[AreaDefinition, ...]:
         workspace = self.workspace
@@ -1186,6 +1426,8 @@ class NLLSController:
 
     def _on_element_changed(self, event) -> None:
         self._refresh_element_catalog()
+        self._sync_edge_controls_from_selection()
+        self._refresh_edge_preview()
         self._refresh_button_states()
 
     def _on_subshell_changed(self, event) -> None:
@@ -1194,6 +1436,84 @@ class NLLSController:
         except NLLSError as exc:
             self.view.elemental_onset_readout.value = "Onset (eV): -"
             self._notify("error", f"Cannot read the selected OOS edge: {exc}", 7000)
+        self._sync_edge_controls_from_selection()
+        self._refresh_edge_preview()
+        self._refresh_button_states()
+
+    def _on_chemical_shift_changed(self, event) -> None:
+        if self._syncing_edge_controls:
+            return
+        workspace = self.workspace
+        try:
+            shift = float(event.new)
+            continuum_parameter_specs(shift)
+            continuum_ids = self._selected_continuum_ids()
+            if workspace is not None and continuum_ids:
+                saved_ids = {
+                    continuum.id
+                    for continuum in workspace.areas["default"].continuum_specs
+                }
+                matching = tuple(
+                    continuum_id
+                    for continuum_id in continuum_ids
+                    if continuum_id in saved_ids
+                )
+                if matching:
+                    previous_revision = workspace.dirty_revision
+                    workspace.set_continuum_chemical_shift(
+                        "default", matching, shift
+                    )
+                    if workspace.dirty_revision != previous_revision:
+                        workspace.refresh_clustering_from_template()
+                        self._publish_workspace()
+        except (NLLSError, ValueError, TypeError):
+            pass
+        self._refresh_edge_preview()
+        self._refresh_button_states()
+
+    def _on_edge_preview_input_changed(self, event) -> None:
+        """Persist saved OOS broadening, then redraw the visual preview."""
+        if self._syncing_edge_controls:
+            return
+        workspace = self.workspace
+        try:
+            broadening = BroadeningSpec(
+                enabled=bool(self.view.elemental_input["soften_edge"].value),
+                sigma_eV=float(
+                    self.view.elemental_input["soften_strength"].value
+                ),
+            )
+            continuum_ids = self._selected_continuum_ids()
+            if workspace is not None and continuum_ids:
+                saved_ids = {
+                    continuum.id
+                    for continuum in workspace.areas["default"].continuum_specs
+                }
+                matching = tuple(
+                    continuum_id
+                    for continuum_id in continuum_ids
+                    if continuum_id in saved_ids
+                )
+                if matching:
+                    previous_revision = workspace.dirty_revision
+                    workspace.set_continuum_broadening(
+                        "default", matching, broadening
+                    )
+                    if workspace.dirty_revision != previous_revision:
+                        workspace.refresh_clustering_from_template()
+                        self._publish_workspace()
+        except (NLLSError, ValueError, TypeError):
+            pass
+        self._refresh_edge_preview()
+        self._refresh_button_states()
+
+    def _on_fitting_tab_changed(self, event) -> None:
+        """Scope the shared-pane OOS preview to the Elemental tab."""
+        if int(event.new) == 1:
+            self._sync_edge_controls_from_selection()
+            self._refresh_edge_preview()
+        else:
+            self._clear_edge_preview()
         self._refresh_button_states()
 
     def _on_current_clustering_changed(self, event) -> None:
@@ -1263,6 +1583,7 @@ class NLLSController:
         if workspace.areas["default"].reference_strategy == "roi_mean":
             workspace.discard_reference("default")
             self._publish_workspace()
+        self._refresh_edge_preview()
         self._refresh_button_states()
 
     def _on_add_edge(self, event) -> None:
@@ -1333,10 +1654,12 @@ class NLLSController:
                 added.append(f"{edge.symbol} {'+'.join(group)}")
             workspace.refresh_clustering_from_template()
             self._publish_workspace()
+            self._refresh_edge_preview()
             self._refresh_button_states()
             self._notify("success", f"Elemental edge added: {', '.join(added)}")
         except (NLLSError, ValueError) as exc:
             self._notify("error", f"Cannot add Elemental edge: {exc}", 7000)
+            self._refresh_edge_preview()
             self._refresh_button_states()
 
     def _build_area(self, area_id: str):

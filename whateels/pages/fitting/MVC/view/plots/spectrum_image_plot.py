@@ -9,6 +9,7 @@ import panel as pn
 import numpy as np
 import time
 import holoviews as hv
+import bokeh.palettes as palettes
 from matplotlib.colors import LinearSegmentedColormap, to_hex
 
 from whateels.base.plots import BaseSpectrumImagePlot
@@ -66,6 +67,11 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._nlls_clustering_active = False
         self._nlls_clustering_label_plot = None
         self._nlls_clustering_spectra_plot = None
+        self._nlls_edge_preview_active = False
+        self._nlls_edge_preview_plot = None
+        self._nlls_edge_preview_previous_plot = None
+        self._nlls_edge_preview_previous_result_active = False
+        self._nlls_edge_preview_previous_ranges = None
 
         # BaseSpectrumImagePlot.__init__ expects (dataset, eloss_name) and calls
         # _setup_plots() + _setup_callbacks() internally.
@@ -243,6 +249,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def plot_fitting(self, x, y_fit):
         """Overlay the fitted spectrum as a magenta filled area on paneB."""
+        self._reset_nlls_edge_preview_state()
         CacheManager.get_cached_app_state().fitting_results = y_fit
         roi_curve = self._figB_region(self._region_pairs) if self._region_pairs else self._figB_hover({"x": 0, "y": 0})
         fit_area = hv.Area(
@@ -259,6 +266,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def update_plot(self):
         """Refresh paneB based on ROI state (clears fit overlay)."""
+        self._reset_nlls_edge_preview_state()
         self._nlls_result_active = False
         if self._region_pairs:
             self._update_paneB(self._figB_region(self._region_pairs))
@@ -272,6 +280,252 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     @property
     def nlls_clustering_active(self) -> bool:
         return self._nlls_clustering_active
+
+    @property
+    def nlls_edge_preview_active(self) -> bool:
+        """Whether paneB is currently showing an Edge Definition OOS preview."""
+        return self._nlls_edge_preview_active
+
+    def _reset_nlls_edge_preview_state(self) -> None:
+        """Forget the Edge Definition preview without changing the visible plot."""
+        self._nlls_edge_preview_active = False
+        self._nlls_edge_preview_plot = None
+        self._nlls_edge_preview_previous_plot = None
+        self._nlls_edge_preview_previous_result_active = False
+        self._nlls_edge_preview_previous_ranges = None
+
+    @staticmethod
+    def _nlls_edge_preview_scale(
+        energy: np.ndarray,
+        spectrum: np.ndarray,
+        curve_x: np.ndarray,
+        curve_y: np.ndarray,
+    ) -> float:
+        """Return a positive visual scale for an OOS curve.
+
+        The primary estimate is the non-negative one-parameter least-squares
+        solution on the energy interval shared by the experimental spectrum and
+        the OOS curve.  A percentile ratio is used when that fit is degenerate
+        (for example, an all-zero curve or a non-positive correlation).
+        """
+        energy_order = np.argsort(energy, kind="stable")
+        reference_x = energy[energy_order]
+        reference_y = spectrum[energy_order]
+        curve_order = np.argsort(curve_x, kind="stable")
+        sorted_curve_x = curve_x[curve_order]
+        sorted_curve_y = curve_y[curve_order]
+
+        # np.interp expects an increasing x axis. Keep one finite sample per
+        # coordinate so duplicated acquisition channels cannot destabilize it.
+        reference_x, reference_indices = np.unique(reference_x, return_index=True)
+        reference_y = reference_y[reference_indices]
+        sorted_curve_x, curve_indices = np.unique(
+            sorted_curve_x, return_index=True
+        )
+        sorted_curve_y = sorted_curve_y[curve_indices]
+
+        overlap = (
+            (reference_x >= sorted_curve_x[0])
+            & (reference_x <= sorted_curve_x[-1])
+        )
+        overlap_reference = reference_y[overlap]
+        if np.count_nonzero(overlap) >= 2:
+            overlap_curve = np.interp(
+                reference_x[overlap], sorted_curve_x, sorted_curve_y
+            )
+            finite = np.isfinite(overlap_reference) & np.isfinite(overlap_curve)
+            overlap_reference = overlap_reference[finite]
+            overlap_curve = overlap_curve[finite]
+            if overlap_curve.size:
+                denominator = float(np.dot(overlap_curve, overlap_curve))
+                numerator = float(np.dot(overlap_curve, overlap_reference))
+                if denominator > 0.0 and np.isfinite(denominator):
+                    scale = numerator / denominator
+                    if np.isfinite(scale) and scale > 0.0:
+                        return float(scale)
+        else:
+            overlap_curve = np.array([], dtype=float)
+
+        # The 95th percentile is insensitive to an isolated hot channel while
+        # still placing the normalized OOS close to the experimental signal.
+        reference_for_fallback = (
+            overlap_reference if overlap_reference.size else reference_y
+        )
+        curve_for_fallback = (
+            overlap_curve if overlap_curve.size else sorted_curve_y
+        )
+        reference_level = float(
+            np.nanpercentile(np.abs(reference_for_fallback), 95.0)
+        )
+        curve_level = float(np.nanpercentile(np.abs(curve_for_fallback), 95.0))
+        if (
+            np.isfinite(reference_level)
+            and np.isfinite(curve_level)
+            and reference_level > 0.0
+            and curve_level > 0.0
+        ):
+            return reference_level / curve_level
+        return 1.0
+
+    def show_nlls_edge_preview(
+        self,
+        energy,
+        spectrum,
+        curves,
+        spectrum_label: str = "Spectrum",
+    ) -> None:
+        """Show the spectrum together with shifted, visually scaled OOS curves.
+
+        ``curves`` is an iterable of ``(label, x, y)`` tuples.  Its ``y`` values
+        remain model-independent: scaling is applied only to the HoloViews
+        objects used for this preview.
+        """
+        energy_values = np.asarray(energy, dtype=float).reshape(-1)
+        spectrum_values = np.asarray(spectrum, dtype=float).reshape(-1)
+        spectrum_size = min(energy_values.size, spectrum_values.size)
+        spectrum_finite = (
+            np.isfinite(energy_values[:spectrum_size])
+            & np.isfinite(spectrum_values[:spectrum_size])
+        )
+        if np.count_nonzero(spectrum_finite) < 2:
+            raise ValueError(
+                "Edge preview needs at least two finite spectrum samples"
+            )
+
+        spectrum_x = energy_values[:spectrum_size][spectrum_finite]
+        spectrum_y = spectrum_values[:spectrum_size][spectrum_finite]
+        spectrum_order = np.argsort(spectrum_x, kind="stable")
+        spectrum_x = spectrum_x[spectrum_order]
+        spectrum_y = spectrum_y[spectrum_order]
+
+        preview_elements = [
+            hv.Curve(
+                (spectrum_x, spectrum_y),
+                kdims=["x"],
+                vdims=["y"],
+                label=str(spectrum_label or "Spectrum"),
+            ).opts(
+                color="black",
+                line_width=1.75,
+            )
+        ]
+
+        for curve_index, curve in enumerate(curves):
+            try:
+                label, x_values, y_values = curve
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "Each Edge preview curve must be a (label, x, y) tuple"
+                ) from exc
+
+            curve_x = np.asarray(x_values, dtype=float).reshape(-1)
+            curve_y = np.asarray(y_values, dtype=float).reshape(-1)
+            curve_size = min(curve_x.size, curve_y.size)
+            curve_finite = (
+                np.isfinite(curve_x[:curve_size])
+                & np.isfinite(curve_y[:curve_size])
+            )
+            if np.count_nonzero(curve_finite) < 2:
+                continue
+
+            finite_x = curve_x[:curve_size][curve_finite]
+            finite_y = curve_y[:curve_size][curve_finite]
+            scale = self._nlls_edge_preview_scale(
+                spectrum_x, spectrum_y, finite_x, finite_y
+            )
+            scaled_y = finite_y * scale
+            if np.any(~np.isfinite(scaled_y)):
+                continue
+
+            curve_label = str(label).strip() if label is not None else ""
+            if not curve_label:
+                curve_label = f"OOS {curve_index + 1}"
+            preview_elements.append(
+                hv.Curve(
+                    (finite_x, scaled_y),
+                    kdims=["x"],
+                    vdims=["y"],
+                    label=curve_label,
+                ).opts(
+                    color=palettes.Category10[10][curve_index % 10],
+                    line_width=2.25,
+                )
+            )
+
+        preview_plot = hv.Overlay(preview_elements).opts(
+            hv.opts.Overlay(
+                title="Edge Definition - OOS preview (visual scale)",
+                xlabel=self._X_AXIS_SPECTRUM_TITLE,
+                ylabel=self._Y_AXIS_SPECTRUM_TITLE,
+                legend_position="top_right",
+                responsive=True,
+                shared_axes=False,
+                framewise=True,
+                show_legend=True,
+                tools=["hover", "wheel_zoom", "pan", "reset"],
+                active_tools=["wheel_zoom"],
+            )
+        )
+
+        entering_preview = not self._nlls_edge_preview_active
+        if entering_preview:
+            self._nlls_edge_preview_previous_plot = (
+                self._paneB_pipe.data if self._paneB_pipe is not None else None
+            )
+            self._nlls_edge_preview_previous_result_active = (
+                self._nlls_result_active
+            )
+            self._nlls_edge_preview_previous_ranges = (
+                self._current_x_range,
+                self._current_y_range,
+                self._current_x_autorange,
+                self._current_y_autorange,
+            )
+        self._nlls_result_active = False
+        self._nlls_edge_preview_active = True
+        self._nlls_edge_preview_plot = preview_plot
+        if self._pc and self._pc.running:
+            self._pc.stop()
+        self._last_hover_ts = None
+        if entering_preview:
+            self._show_nlls_main_plot(preview_plot)
+        else:
+            # Shift is adjusted in small increments. Keep the current zoom so
+            # the edge onset stays under the user's cursor while it moves.
+            self._update_paneB(preview_plot)
+
+    def clear_nlls_edge_preview(self) -> None:
+        """Clear the Edge Definition preview and restore the underlying view."""
+        if not self._nlls_edge_preview_active:
+            return
+        previous_plot = self._nlls_edge_preview_previous_plot
+        previous_result_active = self._nlls_edge_preview_previous_result_active
+        previous_ranges = self._nlls_edge_preview_previous_ranges
+        self._reset_nlls_edge_preview_state()
+        if self._pc and self._pc.running:
+            self._pc.stop()
+        self._last_hover_ts = None
+        if previous_plot is not None:
+            self._nlls_result_active = previous_result_active
+            if previous_ranges is not None:
+                (
+                    self._current_x_range,
+                    self._current_y_range,
+                    self._current_x_autorange,
+                    self._current_y_autorange,
+                ) = previous_ranges
+            self._update_paneB(previous_plot)
+        elif (
+            self._nlls_clustering_active
+            and self._nlls_clustering_spectra_plot is not None
+        ):
+            self._show_nlls_main_plot(self._nlls_clustering_spectra_plot)
+        elif self._region_pairs:
+            self._show_nlls_main_plot(self._figB_region(self._region_pairs))
+        else:
+            self._show_nlls_main_plot(
+                self._figB_hover(self._last_hover_point or {"x": 0, "y": 0})
+            )
 
     def _reset_spectrum_ranges(self) -> None:
         """Let a newly selected NLLS plot determine its complete visible ranges."""
@@ -289,6 +543,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         if plot is None:
             self.clear_nlls_reference_result()
             return
+        self._reset_nlls_edge_preview_state()
         self._nlls_result_active = True
         if self._pc and self._pc.running:
             self._pc.stop()
@@ -400,6 +655,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         )
 
         self._nlls_result_active = False
+        self._reset_nlls_edge_preview_state()
         self._nlls_clustering_active = True
         self._nlls_clustering_spectra_plot = spectra_plot
         self._nx, self._ny = nx, ny
@@ -424,6 +680,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def plot_image(self):
         """Re-render the integrated intensity heatmap and reset fit/spectra shared state."""
+        self._reset_nlls_edge_preview_state()
         self._nlls_result_active = False
         self._nlls_clustering_active = False
         self._nlls_clustering_label_plot = None
@@ -471,6 +728,9 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     def plot_energy_map(self, energy_map):
         """Render a model-computed 2D energy map on paneA."""
+        # This method only replaces paneA. Restore paneB before dropping the
+        # preview flag so a hidden OOS overlay cannot outlive its mode.
+        self.clear_nlls_edge_preview()
         self._nlls_result_active = False
         self._nlls_clustering_active = False
         self._nlls_clustering_label_plot = None
@@ -569,7 +829,12 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             return
         if self._now_ms() - self._last_hover_ts >= self._INACTIVITY_MS:
             app_state = CacheManager.get_cached_app_state()
-            if app_state.fitting_results is not None:
+            if (
+                self._nlls_edge_preview_active
+                and self._nlls_edge_preview_plot is not None
+            ):
+                self._update_paneB(self._nlls_edge_preview_plot)
+            elif app_state.fitting_results is not None:
                 self.plot_fitting(self._energy, app_state.fitting_results)
             else:
                 self._update_paneB(self._figB_region(self._region_pairs))
@@ -587,7 +852,12 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     def _handle_hover_render(self, point):
         if not self._inside_spatial_map(point.get("x"), point.get("y")):
             return
-        if self._hover_blocked or self._nlls_result_active or self._nlls_clustering_active:
+        if (
+            self._hover_blocked
+            or self._nlls_result_active
+            or self._nlls_clustering_active
+            or self._nlls_edge_preview_active
+        ):
             return
         if not self._region_pairs and self._try_fast_hover_update(point):
             return
@@ -612,7 +882,12 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         point = {"x": x, "y": y}
         self._last_hover_point = point
         if self._region_pairs:
-            if app_state.fitting_results is not None:
+            if (
+                self._nlls_edge_preview_active
+                and self._nlls_edge_preview_plot is not None
+            ):
+                self._update_paneB(self._nlls_edge_preview_plot)
+            elif app_state.fitting_results is not None:
                 self.plot_fitting(self._energy, app_state.fitting_results)
             else:
                 self._last_hover_ts = self._now_ms()
@@ -622,7 +897,13 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             if self._pc and self._pc.running:
                 self._pc.stop()
             self._last_hover_ts = None
-            self._show_spectrum(point=point)
+            if (
+                self._nlls_edge_preview_active
+                and self._nlls_edge_preview_plot is not None
+            ):
+                self._update_paneB(self._nlls_edge_preview_plot)
+            else:
+                self._show_spectrum(point=point)
 
     @override
     def _process_selection(self, index=None):
@@ -664,7 +945,13 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         if x is not None and y is not None:
             point = {"x": x, "y": y}
             self._last_hover_point = point
-            self._show_spectrum(point=point)
+            if (
+                self._nlls_edge_preview_active
+                and self._nlls_edge_preview_plot is not None
+            ):
+                self._update_paneB(self._nlls_edge_preview_plot)
+            else:
+                self._show_spectrum(point=point)
 
     # --- Cleanup ---
 

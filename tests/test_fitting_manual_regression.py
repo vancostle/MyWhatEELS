@@ -577,6 +577,92 @@ class ManualFittingRegressionTests(unittest.TestCase):
         )
         self.assertIn("margin-bottom: 5px", execution_stylesheet)
 
+    def test_edge_definition_preview_scales_oos_without_touching_manual_state(self):
+        visualizer = SpectrumImageVisualizer(self.model, self.dataset)
+        energy = np.asarray(self.dataset.coords["Eloss"], dtype=float)
+        normalized_oos = np.exp(-0.5 * ((energy - 4.0) / 0.65) ** 2)
+        reference = 250.0 * normalized_oos
+        original_oos = normalized_oos.copy()
+        previous_plot = visualizer._paneB_pipe.data
+
+        try:
+            visualizer.show_nlls_edge_preview(
+                energy,
+                reference,
+                (("H K1 OOS", energy, normalized_oos),),
+                spectrum_label="ROI mean",
+            )
+
+            self.assertTrue(visualizer.nlls_edge_preview_active)
+            preview = visualizer._paneB_pipe.data
+            self.assertIsInstance(preview, hv.Overlay)
+            preview_curves = [
+                element for element in preview if isinstance(element, hv.Curve)
+            ]
+            self.assertEqual(
+                {curve.label for curve in preview_curves},
+                {"ROI mean", "H K1 OOS"},
+            )
+            oos_curve = next(
+                curve for curve in preview_curves if curve.label == "H K1 OOS"
+            )
+            self.assertAlmostEqual(
+                float(np.max(oos_curve.dimension_values("y"))),
+                250.0,
+                places=5,
+            )
+            np.testing.assert_allclose(normalized_oos, original_oos)
+            self.assertIsNone(self.state.fitting_results)
+
+            visualizer._current_x_range = (3.0, 5.0)
+            visualizer._current_y_range = (0.0, 300.0)
+            shifted_oos = np.interp(
+                energy + 0.1,
+                energy,
+                normalized_oos,
+                left=0.0,
+                right=0.0,
+            )
+            visualizer.show_nlls_edge_preview(
+                energy,
+                reference,
+                (("H K1 OOS (shift +0.1 eV)", energy, shifted_oos),),
+                spectrum_label="ROI mean",
+            )
+            self.assertEqual(visualizer._current_x_range, (3.0, 5.0))
+            self.assertEqual(visualizer._current_y_range, (0.0, 300.0))
+
+            visualizer.clear_nlls_edge_preview()
+            self.assertFalse(visualizer.nlls_edge_preview_active)
+            self.assertIsNone(visualizer._nlls_edge_preview_plot)
+            self.assertIs(visualizer._paneB_pipe.data, previous_plot)
+        finally:
+            visualizer.cleanup()
+
+    def test_edge_definition_preview_restores_an_existing_nlls_result(self):
+        visualizer = SpectrumImageVisualizer(self.model, self.dataset)
+        energy = np.asarray(self.dataset.coords["Eloss"], dtype=float)
+        result_plot = hv.Overlay(
+            [hv.Curve((energy, np.ones_like(energy)), label="NLLS result")]
+        )
+
+        try:
+            visualizer.show_nlls_reference_result(result_plot)
+            previous_plot = visualizer._paneB_pipe.data
+            visualizer.show_nlls_edge_preview(
+                energy,
+                np.ones_like(energy),
+                (("H K1 OOS", energy, np.ones_like(energy)),),
+            )
+
+            self.assertFalse(visualizer.nlls_result_active)
+            visualizer.clear_nlls_edge_preview()
+
+            self.assertTrue(visualizer.nlls_result_active)
+            self.assertIs(visualizer._paneB_pipe.data, previous_plot)
+        finally:
+            visualizer.cleanup()
+
     def test_main_panels_switch_from_image_and_roi_to_clustering_and_result(self):
         visualizer = SpectrumImageVisualizer(self.model, self.dataset)
 
@@ -2032,7 +2118,9 @@ class ElementalReferenceControllerTests(unittest.TestCase):
 
         @staticmethod
         def element_info(atomic_number):
-            return "Hydrogen", "H"
+            if int(atomic_number) == 1:
+                return "Hydrogen", "H"
+            return "Helium", "He"
 
         @staticmethod
         def load_raw(atomic_number, shell):
@@ -2049,6 +2137,9 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         ):
             energy = np.asarray(eloss, dtype=float)
             shape = np.exp(-0.5 * ((energy - 5.0) / 1.0) ** 2)
+            _, symbol = ElementalReferenceControllerTests.FakeProvider.element_info(
+                atomic_number
+            )
             return OOSCurveSnapshot(
                 energy_eV=energy,
                 normalized_shape=shape,
@@ -2058,7 +2149,7 @@ class ElementalReferenceControllerTests(unittest.TestCase):
                 formula_version=OOS_FORMULA_VERSION,
                 provider_version=OOS_PROVIDER_VERSION,
                 atomic_number=int(atomic_number),
-                symbol="H",
+                symbol=symbol,
                 shells=tuple(shells),
                 onsets_eV=tuple(2.0 for _ in shells),
                 table_checksums=tuple("test" for _ in shells),
@@ -2103,10 +2194,13 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             }
         }
         self.layout = FittingRightSidebarLayout(FittingModel())
+        self.layout.fitting_tabs.active = 1
         self.visualizer = SimpleNamespace(
             _region_pairs=[(0, 0), (1, 0)],
             main_result_plot=None,
             clustering_payload=None,
+            edge_preview_payload=None,
+            edge_preview_updates=[],
         )
         self.visualizer.show_nlls_reference_result = (
             lambda plot: setattr(self.visualizer, "main_result_plot", plot)
@@ -2123,6 +2217,28 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         )
         self.visualizer.clear_nlls_clustering = (
             lambda: setattr(self.visualizer, "clustering_payload", None)
+        )
+
+        def show_edge_preview(energy, spectrum, curves, *, spectrum_label="Spectrum"):
+            payload = (
+                np.asarray(energy, dtype=float),
+                np.asarray(spectrum, dtype=float),
+                tuple(
+                    (
+                        str(label),
+                        np.asarray(curve_x, dtype=float),
+                        np.asarray(curve_y, dtype=float),
+                    )
+                    for label, curve_x, curve_y in curves
+                ),
+                str(spectrum_label),
+            )
+            self.visualizer.edge_preview_payload = payload
+            self.visualizer.edge_preview_updates.append(payload)
+
+        self.visualizer.show_nlls_edge_preview = show_edge_preview
+        self.visualizer.clear_nlls_edge_preview = (
+            lambda: setattr(self.visualizer, "edge_preview_payload", None)
         )
         self.published_multifit_results = []
         self.published_derived_results = []
@@ -2160,6 +2276,88 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(widget.value, ["K1"])
         self.assertIn('data-value="K1"', stylesheet)
         self.assertIn('--subshell-onset: "2 eV"', stylesheet)
+
+    def test_edge_preview_reacts_to_shift_and_updates_the_saved_definition(self):
+        payload = self.visualizer.edge_preview_payload
+        self.assertIsNotNone(payload)
+        preview_energy, preview_spectrum, curves, spectrum_label = payload
+        self.assertEqual(spectrum_label, "ROI mean (2 pixels)")
+        np.testing.assert_allclose(preview_energy, self.eloss)
+        np.testing.assert_allclose(preview_spectrum, 2.0 * self.base_shape)
+        self.assertEqual(len(curves), 1)
+        initial_label, initial_x, initial_y = curves[0]
+        self.assertIn("H K1 OOS", initial_label)
+        self.assertIn("shift +0 eV", initial_label)
+        self.assertAlmostEqual(initial_x[np.argmax(initial_y)], 5.0)
+        self.assertTrue(self.controller.workspace.is_area_built("default"))
+
+        update_count = len(self.visualizer.edge_preview_updates)
+        self.layout.elemental_input["chemical_shift"].value = 1.0
+
+        continuum = self.controller.workspace.areas["default"].continuum_specs[0]
+        self.assertEqual(continuum.chemical_shift.value, 1.0)
+        self.assertFalse(self.controller.workspace.is_area_built("default"))
+        self.assertGreater(len(self.visualizer.edge_preview_updates), update_count)
+        _, _, shifted_curves, _ = self.visualizer.edge_preview_payload
+        shifted_label, shifted_x, shifted_y = shifted_curves[0]
+        self.assertIn("shift +1 eV", shifted_label)
+        np.testing.assert_allclose(shifted_x, initial_x)
+        self.assertAlmostEqual(shifted_x[np.argmax(shifted_y)], 4.0)
+
+    def test_edge_preview_is_scoped_to_the_elemental_tab(self):
+        self.assertIsNotNone(self.visualizer.edge_preview_payload)
+
+        self.layout.fitting_tabs.active = 0
+        self.assertIsNone(self.visualizer.edge_preview_payload)
+        update_count = len(self.visualizer.edge_preview_updates)
+
+        self.layout.elemental_input["chemical_shift"].value = 0.5
+        self.assertIsNone(self.visualizer.edge_preview_payload)
+        self.assertEqual(len(self.visualizer.edge_preview_updates), update_count)
+
+        self.layout.fitting_tabs.active = 1
+        self.assertIsNotNone(self.visualizer.edge_preview_payload)
+        _, _, curves, _ = self.visualizer.edge_preview_payload
+        self.assertIn("shift +0.5 eV", curves[0][0])
+
+    def test_new_edge_selection_does_not_inherit_a_saved_shift(self):
+        self.layout.elemental_input["chemical_shift"].value = 1.0
+        self.layout.elemental_input["soften_edge"].value = False
+        self.layout.elemental_input["soften_strength"].value = 2.25
+        saved = self.controller.workspace.areas["default"].continuum_specs[0]
+        self.assertEqual(saved.chemical_shift.value, 1.0)
+        self.assertFalse(saved.broadening.enabled)
+        self.assertEqual(saved.broadening.sigma_eV, 2.25)
+
+        self.layout.elemental_input["element_atomic_number"].value = 2
+
+        self.assertEqual(
+            self.layout.elemental_input["chemical_shift"].value,
+            0.0,
+        )
+        saved = self.controller.workspace.areas["default"].continuum_specs[0]
+        self.assertEqual(saved.chemical_shift.value, 1.0)
+        self.assertFalse(saved.broadening.enabled)
+        self.assertEqual(saved.broadening.sigma_eV, 2.25)
+        self.assertTrue(self.layout.elemental_input["soften_edge"].value)
+        self.assertEqual(
+            self.layout.elemental_input["soften_strength"].value,
+            1.5,
+        )
+        _, _, curves, _ = self.visualizer.edge_preview_payload
+        self.assertIn("He K1 OOS", curves[-1][0])
+        self.assertIn("shift +0 eV", curves[-1][0])
+
+    def test_softening_preview_updates_the_saved_definition(self):
+        self.assertTrue(self.controller.workspace.is_area_built("default"))
+        update_count = len(self.visualizer.edge_preview_updates)
+
+        self.layout.elemental_input["soften_strength"].value = 2.25
+
+        continuum = self.controller.workspace.areas["default"].continuum_specs[0]
+        self.assertEqual(continuum.broadening.sigma_eV, 2.25)
+        self.assertFalse(self.controller.workspace.is_area_built("default"))
+        self.assertGreater(len(self.visualizer.edge_preview_updates), update_count)
 
     def test_fit_current_uses_committed_roi_as_default_reference(self):
         self.assertFalse(self.layout.elemental_fit_button.disabled)
