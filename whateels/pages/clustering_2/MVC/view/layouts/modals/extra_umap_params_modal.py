@@ -43,8 +43,8 @@ class ExtraUmapParamsModal(pn.Column):
         random_state_input : pn.widgets.IntInput = self._create_random_state_input()
         
         close_button = pn.widgets.Button(
-            name="Okay.",
-            button_type="primary",
+            name="Save & Close",
+            button_type="success",
             sizing_mode="stretch_width",
             margin=0
         )

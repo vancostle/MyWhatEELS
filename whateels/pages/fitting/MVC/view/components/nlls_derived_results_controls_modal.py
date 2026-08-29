@@ -37,7 +37,7 @@ class NLLSDerivedResultsControlsModal(pn.Column):
         )
         self._close_button = pn.widgets.Button(
             name="Close",
-            button_type="primary",
+            button_type="success",
             sizing_mode="stretch_width",
             height=42,
             margin=0,

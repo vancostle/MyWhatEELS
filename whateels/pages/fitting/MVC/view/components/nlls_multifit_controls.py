@@ -120,8 +120,8 @@ class NLLSMultifitControls(pn.Column):
             styles={"gap": "8px", "min-width": "0", "max-width": "100%"},
         )
         self._center_button = pn.widgets.Button(
-            name="Get Distances",
-            button_type="primary",
+            name="Get distances & Close",
+            button_type="success",
             disabled=True,
             sizing_mode=self._STRETCH_WIDTH,
             height=40,
@@ -163,8 +163,8 @@ class NLLSMultifitControls(pn.Column):
             name="Invert ratio", value=False, sizing_mode=self._STRETCH_WIDTH
         )
         self._white_button = pn.widgets.Button(
-            name="Compute White Lines",
-            button_type="primary",
+            name="Compute White Lines & Close",
+            button_type="success",
             disabled=True,
             sizing_mode=self._STRETCH_WIDTH,
             height=40,

@@ -88,8 +88,8 @@ class HDBSCANGridParamsModal(pn.Column):
         step_input = self._create_step_input()
 
         close_button = pn.widgets.Button(
-            name="Okay.",
-            button_type="primary",
+            name="Save & Close",
+            button_type="success",
             sizing_mode="stretch_width",
             margin=0,
         )

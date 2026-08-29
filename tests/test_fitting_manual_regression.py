@@ -2390,7 +2390,8 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         modal.refresh()
 
         self.assertIn("Edges Added", modal._title_pane.object)
-        self.assertEqual(modal._close_button.name, "Okay.")
+        self.assertEqual(modal._close_button.name, "Save & Close")
+        self.assertEqual(modal._close_button.button_type, "success")
         first_card, second_card = modal._body.objects
         first_toggle = first_card.objects[0].objects[0]
         first_details = first_card.objects[1]
@@ -2609,8 +2610,14 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         run_view = NLLSMultifitResultsPlot(result, run_number=1)
         controls.register(run_view)
         try:
+            controls._open_derived_analyses(None)
+            self.assertTrue(controls.derived_analyses_modal.visible)
             self.controller._on_compute_center_analysis(None)
+            self.assertFalse(controls.derived_analyses_modal.visible)
+            controls._open_derived_analyses(None)
+            self.assertTrue(controls.derived_analyses_modal.visible)
             self.controller._on_compute_white_lines(None)
+            self.assertFalse(controls.derived_analyses_modal.visible)
             self.assertEqual(len(self.published_derived_results), 2)
             center, white_lines = self.published_derived_results
             self.assertEqual(center.attrs["analysis_type"], "center_distance")

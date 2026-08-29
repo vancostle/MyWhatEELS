@@ -34,8 +34,8 @@ class EdgeAddedModal(pn.Column):
         self._editable = True
 
         self._close_button = pn.widgets.Button(
-            name="Okay.",
-            button_type="primary",
+            name="Save & Close",
+            button_type="success",
             sizing_mode="stretch_width",
             margin=0,
         )

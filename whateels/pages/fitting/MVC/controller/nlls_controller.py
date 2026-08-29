@@ -1028,6 +1028,7 @@ class NLLSController:
             )
             self._publish_derived_analysis(result)
             self._notify("success", "Center Analysis distance map added above the runs.")
+            controls.derived_analyses_modal.close()
         except Exception as exc:
             self._notify("error", f"Center Analysis failed: {exc}", 9000)
 
@@ -1059,6 +1060,7 @@ class NLLSController:
             )
             self._publish_derived_analysis(result)
             self._notify("success", "White Lines ratio map added above the runs.")
+            controls.derived_analyses_modal.close()
         except Exception as exc:
             self._notify("error", f"White Lines analysis failed: {exc}", 9000)
 

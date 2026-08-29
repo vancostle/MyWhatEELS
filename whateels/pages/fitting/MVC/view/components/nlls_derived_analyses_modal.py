@@ -29,20 +29,9 @@ class NLLSDerivedAnalysesModal(pn.Column):
                 "overflow-y": "auto",
             },
         )
-        self._close_button = pn.widgets.Button(
-            name="Close",
-            button_type="primary",
-            sizing_mode="stretch_width",
-            height=42,
-            margin=0,
-        )
-        self._close_button.on_click(self._close)
-
         super().__init__(
             pn.pane.Markdown("## Derived analyses", margin=0),
             self._controls_slot,
-            pn.Spacer(height=8),
-            self._close_button,
             width=440,
             styles={"padding": "16px", "gap": "8px"},
             **params,
@@ -55,7 +44,8 @@ class NLLSDerivedAnalysesModal(pn.Column):
     def mount(self, controls: tuple | list) -> None:
         self._controls_slot.objects = list(controls)
 
-    def _close(self, event) -> None:
+    def close(self) -> None:
+        """Dismiss the modal after a derived analysis has been created."""
         self.visible = False
         if self._custom_page is not None:
             self._custom_page.close_modal()

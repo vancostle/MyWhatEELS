@@ -72,8 +72,8 @@ class SVMTrainSettingsModal(pn.Column):
         self._refresh_kernel_fields()
 
         close_button = pn.widgets.Button(
-            name="Okay.",
-            button_type="primary",
+            name="Save & Close",
+            button_type="success",
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
         )
