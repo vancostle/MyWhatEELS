@@ -599,14 +599,31 @@ class NLLSController:
 
     @staticmethod
     def _shifted_oos_preview(snapshot, eloss: np.ndarray, chemical_shift: float) -> np.ndarray:
-        """Evaluate an OOS snapshot with the same sign convention as the model."""
+        """Evaluate an OOS snapshot with the same sign convention as the model.
+
+        The preview must never draw a flat 0 or a fake upward ramp where the OOS
+        table has no real data. Zero-valued samples are treated as absent instead
+        of as visible line segments, while valid non-zero data remain intact.
+        """
         axis = np.asarray(eloss, dtype=float)
+        shifted_axis = axis + float(chemical_shift)
+        support = np.asarray(snapshot.energy_eV, dtype=float)
+        curve = np.asarray(snapshot.normalized_shape, dtype=float)
+
+        finite_curve = np.isfinite(curve)
+        if np.count_nonzero(finite_curve) == 0:
+            return np.full(axis.shape, np.nan, dtype=float)
+
+        masked_curve = curve.copy()
+        masked_curve[~finite_curve] = np.nan
+        masked_curve[np.isclose(masked_curve, 0.0, atol=0.0)] = np.nan
+
         return np.interp(
-            axis + float(chemical_shift),
-            np.asarray(snapshot.energy_eV, dtype=float),
-            np.asarray(snapshot.normalized_shape, dtype=float),
-            left=0.0,
-            right=0.0,
+            shifted_axis,
+            support,
+            masked_curve,
+            left=np.nan,
+            right=np.nan,
         )
 
     def _edge_preview_reference(self):

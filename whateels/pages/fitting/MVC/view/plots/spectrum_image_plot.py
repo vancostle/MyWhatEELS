@@ -407,6 +407,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             ).opts(
                 color="black",
                 line_width=1.75,
+                alpha=0.7,
             )
         ]
 

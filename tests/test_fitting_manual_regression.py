@@ -209,6 +209,61 @@ def _derived_nlls_result() -> xr.Dataset:
     )
 
 
+class NLLSVisualPreviewTests(unittest.TestCase):
+    def test_shifted_oos_preview_does_not_drop_to_zero_outside_support(self):
+        snapshot = OOSCurveSnapshot(
+            energy_eV=np.array([100.0, 110.0, 120.0], dtype=float),
+            normalized_shape=np.array([0.0, 0.5, 0.0], dtype=float),
+            physical_shape=np.array([0.0, 0.5, 0.0], dtype=float),
+            normalization_factor=1.0,
+            units=OOS_UNITS,
+            formula_version=OOS_FORMULA_VERSION,
+            provider_version=OOS_PROVIDER_VERSION,
+            atomic_number=10,
+            symbol="Ts",
+            shells=("L2",),
+            onsets_eV=(100.0,),
+            table_checksums=("checksum",),
+            broadening_sigma_eV=0.0,
+            fit_range=FitRange(90.0, 130.0),
+        )
+        eloss = np.array([90.0, 105.0, 115.0, 130.0], dtype=float)
+
+        preview = NLLSController._shifted_oos_preview(snapshot, eloss, 0.0)
+
+        self.assertTrue(np.isnan(preview[0]))
+        self.assertTrue(np.isfinite(preview[1]))
+        self.assertTrue(np.isnan(preview[3]))
+        self.assertFalse(np.any(preview == 0.0))
+
+    def test_shifted_oos_preview_ignores_zero_values_without_hiding_real_onset(self):
+        snapshot = OOSCurveSnapshot(
+            energy_eV=np.array([95.0, 100.0, 105.0], dtype=float),
+            normalized_shape=np.array([0.0, 0.5, 1.0], dtype=float),
+            physical_shape=np.array([0.0, 0.5, 1.0], dtype=float),
+            normalization_factor=1.0,
+            units=OOS_UNITS,
+            formula_version=OOS_FORMULA_VERSION,
+            provider_version=OOS_PROVIDER_VERSION,
+            atomic_number=10,
+            symbol="Ts",
+            shells=("L2",),
+            onsets_eV=(100.0,),
+            table_checksums=("checksum",),
+            broadening_sigma_eV=0.0,
+            fit_range=FitRange(90.0, 130.0),
+        )
+        eloss = np.array([95.0, 99.0, 100.0, 101.0], dtype=float)
+
+        preview = NLLSController._shifted_oos_preview(snapshot, eloss, 0.0)
+
+        self.assertTrue(np.isnan(preview[0]))
+        self.assertTrue(np.isnan(preview[1]))
+        self.assertTrue(np.isfinite(preview[2]))
+        self.assertTrue(np.isfinite(preview[3]))
+        self.assertFalse(np.any(preview == 0.0))
+
+
 def _current_map(view):
     current = getattr(view, "current_map_plot", None)
     return current if current is not None else view.map_pane.object
