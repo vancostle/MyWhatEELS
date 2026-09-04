@@ -2528,6 +2528,9 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertIn((second_fine.id, "center"), editor.parameter_widgets)
         fine_controls = editor.fine_structure_widgets[second_fine.id]
         self.assertIsInstance(fine_controls["enabled"], pn.widgets.Switch)
+        self.assertEqual(
+            fine_controls["enabled"].styles["transform"], "translateY(5px)"
+        )
         self.assertIs(editor._elnes_body.objects[0], editor._elnes_form)
         self.assertIs(editor._elnes_selector_row.objects[0], editor.elnes_selector)
         self.assertIs(editor._elnes_selector_row.objects[1], fine_controls["enabled"])

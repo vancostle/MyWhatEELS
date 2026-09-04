@@ -387,6 +387,7 @@ class EdgeAddedModal(pn.Column):
                 width=50,
                 disabled=not self._editable,
                 margin=0,
+                styles={"transform": "translateY(5px)"},
             )
             if compact
             else pn.widgets.Checkbox(
