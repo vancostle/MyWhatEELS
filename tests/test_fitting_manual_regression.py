@@ -2409,6 +2409,23 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         np.testing.assert_allclose(shifted_x, initial_x)
         self.assertAlmostEqual(shifted_x[np.nanargmax(shifted_y)], 4.0)
 
+    def test_elnes_initial_centers_use_each_subshell_local_peak(self):
+        """A doublet must not initialise both Gaussians on the higher line."""
+        energy = np.array(
+            [454.0, 455.184, 457.0, 459.324, 460.0, 461.223, 462.0, 464.673, 467.0]
+        )
+        intensity = np.array([0.0, 0.1, 1.0, 1.9, 0.5, 0.2, 1.0, 2.6, 0.4])
+
+        l3_offset = self.controller._initial_elnes_center_offset(
+            energy, intensity, 455.184, 461.223
+        )
+        l2_offset = self.controller._initial_elnes_center_offset(
+            energy, intensity, 461.223, None
+        )
+
+        self.assertAlmostEqual(l3_offset, 4.14, places=2)
+        self.assertAlmostEqual(l2_offset, 3.45, places=2)
+
     def test_chemical_shift_moves_the_associated_elnes_in_the_live_preview(self):
         self.layout.elemental_input["model_composition"].value = (
             "continuum_plus_elnes"
@@ -2416,11 +2433,30 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.layout.elemental_input["chemical_shift"].value = 1.0
 
         fine = self.controller.workspace.areas["default"].fine_structure_specs[0]
-        self.assertEqual(fine.center.value, 1.0)
+        # The initial center is the local maximum (5 eV), i.e. 3 eV above
+        # the unshifted onset.  A chemical shift moves that entire relation.
+        self.assertEqual(fine.offset_from_onset.value, 3.0)
+        self.assertEqual(fine.offset_from_onset.minimum, 0.0)
+        self.assertEqual(fine.offset_from_onset.maximum, 14.0)
         _, _, curves, _ = self.visualizer.edge_preview_payload
         label, energy, values = next(curve for curve in curves if "Gaussian" in curve[0])
-        self.assertIn("center 1 eV", label)
-        self.assertAlmostEqual(energy[np.argmax(values)], 1.0, places=1)
+        self.assertIn("center 4 eV", label)
+        self.assertAlmostEqual(energy[np.argmax(values)], 4.0, places=1)
+
+    def test_add_edge_initializes_elnes_from_the_local_peak(self):
+        """A new ELNES uses the local peak relative to its shifted onset."""
+        edge = self.controller.workspace.areas["default"].edges[0]
+        self.controller.workspace.remove_edge("default", edge.id)
+        self.layout.elemental_input["chemical_shift"].value = 1.0
+
+        self.controller._on_add_edge(None)
+
+        area = self.controller.workspace.areas["default"]
+        self.assertEqual(area.continuum_specs[0].chemical_shift.value, 1.0)
+        offset = area.fine_structure_specs[0].offset_from_onset
+        self.assertEqual(offset.value, 4.0)
+        self.assertEqual(offset.minimum, 0.0)
+        self.assertEqual(offset.maximum, 14.0)
 
     def test_continuum_card_edits_once_with_matching_shift_bounds(self):
         # The layout's model normally shares this state through CacheManager.
@@ -2446,15 +2482,22 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         continuum = self.controller.workspace.areas["default"].continuum_specs[0]
         self.assertEqual(continuum.chemical_shift.value, 1.0)
         fine = self.controller.workspace.areas["default"].fine_structure_specs[0]
-        self.assertEqual(fine.center.value, 1.0)
+        self.assertEqual(fine.offset_from_onset.value, 3.0)
         self.assertEqual(
-            editor.parameter_widgets[(fine.id, "center")]["value"].value,
-            1.0,
+            editor.parameter_widgets[(fine.id, "offset_from_onset")]["value"].value,
+            4.0,
         )
+        self.assertEqual(editor._onset_readouts[fine.id].value, "Shifted onset: 1.00 eV")
+
+        # The card shows absolute energy, even after a shift. Its next edit
+        # must still persist the correct onset-relative model parameter.
+        editor.parameter_widgets[(fine.id, "offset_from_onset")]["value"].value = 5.0
+        updated = self.controller.workspace.areas["default"].fine_structure_specs[0]
+        self.assertEqual(updated.offset_from_onset.value, 4.0)
 
         shift_input.value = 21.0
         self.assertEqual(shift_input.value, 1.0)
-        self.assertEqual(self.state.nlls_revision, revision + 1)
+        self.assertEqual(self.state.nlls_revision, revision + 2)
 
     def test_model_cards_select_one_component_with_compact_parameter_rows(self):
         self.layout._model._app_state = self.state
@@ -2525,7 +2568,9 @@ class ElementalReferenceControllerTests(unittest.TestCase):
 
         editor.elnes_selector.value = second_fine.id
         self.assertIn(second_fine.id, editor.fine_structure_widgets)
-        self.assertIn((second_fine.id, "center"), editor.parameter_widgets)
+        self.assertIn(
+            (second_fine.id, "offset_from_onset"), editor.parameter_widgets
+        )
         fine_controls = editor.fine_structure_widgets[second_fine.id]
         self.assertIsInstance(fine_controls["enabled"], pn.widgets.Switch)
         self.assertEqual(
@@ -2546,20 +2591,21 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(fine_controls["shape"].sizing_mode, "stretch_width")
         self.assertEqual(fine_controls["shape"].stylesheets, [])
         parameter_editor = editor._elnes_form.objects[2]
+        self.assertEqual(parameter_editor.objects[0].value, "Shifted onset: 2.00 eV")
         assert_parameter_block(
-            parameter_editor.objects[0],
-            editor.parameter_widgets[(second_fine.id, "center")],
+            parameter_editor.objects[1],
+            editor.parameter_widgets[(second_fine.id, "offset_from_onset")],
             "Center (eV)",
             (0, 0, 10, 0),
         )
         assert_parameter_block(
-            parameter_editor.objects[1],
+            parameter_editor.objects[2],
             editor.parameter_widgets[(second_fine.id, "sigma")],
             "Sigma (eV)",
             (0, 0, 10, 0),
         )
         assert_parameter_block(
-            parameter_editor.objects[2],
+            parameter_editor.objects[3],
             editor.parameter_widgets[(second_fine.id, "amplitude")],
             "Amplitude",
             (0, 0, 10, 0),
@@ -2633,18 +2679,18 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         area = self.controller.workspace.areas["default"]
         fine = area.fine_structure_specs[0]
 
-        center = editor.parameter_widgets[(fine.id, "center")]
+        offset = editor.parameter_widgets[(fine.id, "offset_from_onset")]
         sigma = editor.parameter_widgets[(fine.id, "sigma")]
         amplitude = editor.parameter_widgets[(fine.id, "amplitude")]
         initial_revision = self.state.nlls_revision
 
-        center["value"].value = 6.0
+        offset["value"].value = 6.0
         sigma["value"].value = 0.75
         amplitude["value"].value = 2.0
         amplitude["vary"].value = False
 
         updated = self.controller.workspace.areas["default"].fine_structure_specs[0]
-        self.assertEqual(updated.center.value, 6.0)
+        self.assertEqual(updated.offset_from_onset.value, 4.0)
         self.assertEqual(updated.sigma.value, 0.75)
         self.assertEqual(updated.amplitude.value, 2.0)
         self.assertFalse(updated.amplitude.vary)
@@ -2660,8 +2706,8 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertGreater(float(np.max(gaussian_y)), 0.0)
 
         revision = self.state.nlls_revision
-        center["minimum"].value = 7.0
-        self.assertEqual(center["minimum"].value, updated.center.minimum)
+        offset["minimum"].value = 7.0
+        self.assertEqual(offset["minimum"].value, 2.0)
         self.assertEqual(self.state.nlls_revision, revision)
         self.assertTrue(editor._elnes_error.visible)
 

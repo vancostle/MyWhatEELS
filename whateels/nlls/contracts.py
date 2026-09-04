@@ -192,7 +192,8 @@ class FineStructureSpec:
     shell: str
     prefix: str
     shape: str
-    center: ParameterSpec
+    onset_eV: float
+    offset_from_onset: ParameterSpec
     sigma: ParameterSpec
     amplitude: ParameterSpec
     enabled: bool = True

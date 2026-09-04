@@ -19,7 +19,7 @@ CHEMICAL_SHIFT_CONVENTION = (
 )
 CHEMICAL_SHIFT_TOOLTIP = (
     "Positive chemical shift evaluates table(x + shift) and moves the modeled edge "
-    "to lower energy. Associated ELNES centers move with the same edge."
+    "to lower energy. Associated ELNES center intervals move with the same edge."
 )
 
 DEFAULT_MODEL_COMPOSITION = "continuum_plus_elnes"
@@ -96,15 +96,22 @@ def continuum_parameter_specs(chemical_shift: float = 0.0) -> tuple[ParameterSpe
 
 
 def fine_structure_parameter_specs(
-    onset_eV: float, fwhm_eV: float
+    fwhm_eV: float,
+    center_offset_eV: float = 7.0,
 ) -> tuple[ParameterSpec, ParameterSpec, ParameterSpec]:
-    """Return center, sigma and amplitude defaults for one ELNES component."""
+    """Return ELNES offset, width and amplitude defaults.
+
+    The offset is relative to the shell onset: 0 eV is the onset itself and
+    14 eV is its initial upper search bound.  Seven eV is the fallback center
+    when a local white-line maximum is unavailable.
+    """
     sigma = max(0.5, float(fwhm_eV) / 2.354820045)
+    center_offset = min(14.0, max(0.0, float(center_offset_eV)))
     return (
         ParameterSpec(
-            value=float(onset_eV),
-            minimum=float(onset_eV) - 7.0,
-            maximum=float(onset_eV) + 7.0,
+            minimum=0.0,
+            value=center_offset,
+            maximum=14.0,
             vary=True,
         ),
         ParameterSpec(

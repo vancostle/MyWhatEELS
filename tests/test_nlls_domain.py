@@ -136,6 +136,13 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
         self.assertEqual(chemical_shift.minimum, -20.0)
         self.assertEqual(chemical_shift.maximum, 20.0)
 
+    def test_elnes_offset_defaults_define_the_initial_center_interval(self):
+        offset, _sigma, _amplitude = fine_structure_parameter_specs(4.8)
+
+        self.assertEqual(offset.minimum, 0.0)
+        self.assertEqual(offset.value, 7.0)
+        self.assertEqual(offset.maximum, 14.0)
+
     @staticmethod
     def _workspace_with_edge():
         dataset = _dataset()
@@ -163,14 +170,15 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
             provider_version=OOS_PROVIDER_VERSION,
             chemical_shift_convention=CHEMICAL_SHIFT_CONVENTION,
         )
-        center, sigma, amplitude = fine_structure_parameter_specs(95.0, 4.8)
+        offset, sigma, amplitude = fine_structure_parameter_specs(4.8)
         fine = FineStructureSpec(
             id="ts_l2_elnes",
             edge_id=edge.id,
             shell="L2",
             prefix="ts_l2_elnes_",
             shape="GaussianModel",
-            center=center,
+            onset_eV=95.0,
+            offset_from_onset=offset,
             sigma=sigma,
             amplitude=amplitude,
             enabled=True,
@@ -201,9 +209,9 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
         workspace.set_continuum_parameter(
             "default", continuum.id, "amplitude", updated_amplitude
         )
-        updated_center = replace(fine.center, value=97.0)
+        updated_offset = replace(fine.offset_from_onset, value=8.0)
         workspace.set_fine_structure_parameter(
-            "default", fine.id, "center", updated_center
+            "default", fine.id, "offset_from_onset", updated_offset
         )
         workspace.configure_fine_structure(
             "default", fine.id, shape="LorentzianModel", enabled=False
@@ -211,7 +219,7 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
 
         area = workspace.areas["default"]
         self.assertEqual(area.continuum_specs[0].amplitude, updated_amplitude)
-        self.assertEqual(area.fine_structure_specs[0].center, updated_center)
+        self.assertEqual(area.fine_structure_specs[0].offset_from_onset, updated_offset)
         self.assertEqual(area.fine_structure_specs[0].shape, "LorentzianModel")
         self.assertFalse(area.fine_structure_specs[0].enabled)
         self.assertEqual(area.revision, initial_revision + 3)
@@ -221,17 +229,14 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
                 "default", fine.id, shape="UnsupportedModel"
             )
 
-    def test_chemical_shift_translates_associated_elnes_center_and_bounds(self):
+    def test_chemical_shift_does_not_mutate_the_onset_relative_elnes_offset(self):
         workspace, _edge, continuum, fine = self._workspace_with_edge()
 
         workspace.set_continuum_chemical_shift(
             "default", (continuum.id,), 2.0
         )
         area = workspace.areas["default"]
-        shifted = area.fine_structure_specs[0].center
-        self.assertEqual(shifted.value, fine.center.value - 1.5)
-        self.assertEqual(shifted.minimum, fine.center.minimum - 1.5)
-        self.assertEqual(shifted.maximum, fine.center.maximum - 1.5)
+        self.assertEqual(area.fine_structure_specs[0].offset_from_onset, fine.offset_from_onset)
 
         current_continuum = area.continuum_specs[0]
         workspace.set_continuum_parameter(
@@ -240,10 +245,8 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
             "chemical_shift",
             replace(current_continuum.chemical_shift, value=-1.0),
         )
-        restored_direction = workspace.areas["default"].fine_structure_specs[0].center
-        self.assertEqual(restored_direction.value, fine.center.value + 1.5)
-        self.assertEqual(restored_direction.minimum, fine.center.minimum + 1.5)
-        self.assertEqual(restored_direction.maximum, fine.center.maximum + 1.5)
+        restored = workspace.areas["default"].fine_structure_specs[0]
+        self.assertEqual(restored.offset_from_onset, fine.offset_from_onset)
 
 
 class OOSProviderTests(unittest.TestCase):
@@ -518,7 +521,7 @@ class BuilderTests(unittest.TestCase):
 
         self.builder = NLLSModelBuilder(FakeProvider())
         amp, shift = continuum_parameter_specs()
-        center, sigma, fine_amp = fine_structure_parameter_specs(1.0, 1.0)
+        offset, sigma, fine_amp = fine_structure_parameter_specs(1.0)
         self.area = AreaModelSpec(
             area_id="default",
             label="Default",
@@ -546,7 +549,8 @@ class BuilderTests(unittest.TestCase):
                     shell="L2",
                     prefix="ts_l2_elnes_",
                     shape="GaussianModel",
-                    center=center,
+                    onset_eV=1.0,
+                    offset_from_onset=offset,
                     sigma=sigma,
                     amplitude=fine_amp,
                 ),
@@ -575,6 +579,24 @@ class BuilderTests(unittest.TestCase):
         )
         self.assertIn("ts_l23_cont_A", built.params)
         self.assertIn("ts_l2_elnes_center", built.params)
+        self.assertIn("ts_l2_elnes_offset_from_onset", built.params)
+
+    def test_elnes_center_is_derived_from_onset_shift_and_offset(self):
+        built = self.builder.build(
+            self.area,
+            ExperimentalGeometry(200.0, 20.0, 0.0),
+            np.array([0.0, 1.0, 2.0]),
+        )
+        params = built.params
+        center = params["ts_l2_elnes_center"]
+
+        self.assertEqual(params["ts_l2_elnes_offset_from_onset"].value, 7.0)
+        self.assertEqual(center.value, 8.0)
+        self.assertIn("ts_l23_cont_chemical_shift", center.expr)
+
+        params["ts_l23_cont_chemical_shift"].value = 1.0
+        params.update_constraints()
+        self.assertEqual(center.value, 7.0)
 
     def test_reference_fit_returns_lightweight_snapshot(self):
         area = replace(self.area, model_composition=ModelComposition.CONTINUUM_ONLY)

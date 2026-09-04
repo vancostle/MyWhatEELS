@@ -60,7 +60,7 @@ class NLLSModelBuilder:
         """Create ``A * table(x + chemical_shift)`` from a portable snapshot.
 
         Positive ``chemical_shift`` moves the tabulated feature toward lower
-        energy loss. This sign is intentionally opposite to an ELNES ``center``.
+        energy loss. ELNES centers are constrained from the same shifted onset.
         """
         energy = np.asarray(snapshot.energy_eV, dtype=float)
         shape = np.asarray(snapshot.normalized_shape, dtype=float)
@@ -103,7 +103,32 @@ class NLLSModelBuilder:
             brute_step=spec.brute_step,
         )
 
+    @staticmethod
+    def absolute_center_spec(
+        spec: FineStructureSpec, chemical_shift: float = 0.0
+    ) -> ParameterSpec:
+        """Resolve an ELNES center interval from its onset-relative offset."""
+        onset = float(spec.onset_eV) - float(chemical_shift)
+        offset = spec.offset_from_onset
+        return ParameterSpec(
+            value=onset + offset.value,
+            minimum=onset + offset.minimum,
+            maximum=onset + offset.maximum,
+            vary=offset.vary,
+            expr=offset.expr,
+            brute_step=offset.brute_step,
+        )
+
+    @staticmethod
+    def _center_expression(spec: FineStructureSpec, continuum_prefix: str) -> str:
+        return (
+            f"({float(spec.onset_eV):.16g}) - "
+            f"{continuum_prefix}chemical_shift + "
+            f"{spec.prefix}offset_from_onset"
+        )
+
     def _apply_parameter_specs(self, params: Parameters, area: AreaModelSpec) -> None:
+        continuum_by_edge = {item.edge_id: item for item in area.continuum_specs}
         for continuum in area.continuum_specs:
             self._apply_parameter_spec(params[f"{continuum.prefix}A"], continuum.amplitude)
             self._apply_parameter_spec(
@@ -115,7 +140,20 @@ class NLLSModelBuilder:
         for fine in area.fine_structure_specs:
             if not fine.enabled:
                 continue
-            self._apply_parameter_spec(params[f"{fine.prefix}center"], fine.center)
+            continuum = continuum_by_edge.get(fine.edge_id)
+            if continuum is None:
+                raise ValueError(
+                    f"ELNES component {fine.id!r} has no associated continuum"
+                )
+            offset_name = f"{fine.prefix}offset_from_onset"
+            params.add(offset_name)
+            self._apply_parameter_spec(params[offset_name], fine.offset_from_onset)
+            params[f"{fine.prefix}center"].set(
+                min=-np.inf,
+                max=np.inf,
+                vary=False,
+                expr=self._center_expression(fine, continuum.prefix),
+            )
             self._apply_parameter_spec(params[f"{fine.prefix}sigma"], fine.sigma)
             self._apply_parameter_spec(params[f"{fine.prefix}amplitude"], fine.amplitude)
             sigma_r = params.get(f"{fine.prefix}sigma_r")
@@ -127,6 +165,7 @@ class NLLSModelBuilder:
         spec: FineStructureSpec,
         eloss: np.ndarray,
         *,
+        chemical_shift: float = 0.0,
         amplitude: float | None = None,
     ) -> np.ndarray:
         """Evaluate one ELNES spec with the exact model semantics used by Build.
@@ -136,7 +175,10 @@ class NLLSModelBuilder:
         """
         model = self._make_elnes_component(spec)
         params = model.make_params()
-        self._apply_parameter_spec(params[f"{spec.prefix}center"], spec.center)
+        self._apply_parameter_spec(
+            params[f"{spec.prefix}center"],
+            self.absolute_center_spec(spec, chemical_shift),
+        )
         self._apply_parameter_spec(params[f"{spec.prefix}sigma"], spec.sigma)
         self._apply_parameter_spec(params[f"{spec.prefix}amplitude"], spec.amplitude)
         sigma_r = params.get(f"{spec.prefix}sigma_r")

@@ -679,6 +679,41 @@ class NLLSController:
         )
         return selection, f"Central-window mean ({selection.pixel_count} pixels)"
 
+    @staticmethod
+    def _initial_elnes_center_offset(
+        eloss: np.ndarray,
+        spectrum: np.ndarray | None,
+        shifted_onset: float,
+        next_shifted_onset: float | None,
+    ) -> float:
+        """Estimate a white-line center inside its onset-constrained window.
+
+        The lower bound is the shifted onset and the default upper bound is
+        14 eV above it.  For the lower member of a doublet, stop before the
+        next onset so its initial peak cannot lock onto the other white line.
+        """
+        default_offset = 7.0
+        if spectrum is None:
+            return default_offset
+        energy = np.asarray(eloss, dtype=float)
+        values = np.asarray(spectrum, dtype=float)
+        if energy.shape != values.shape:
+            return default_offset
+        upper = float(shifted_onset) + 14.0
+        if next_shifted_onset is not None:
+            upper = min(upper, float(next_shifted_onset))
+        mask = (
+            np.isfinite(energy)
+            & np.isfinite(values)
+            & (energy >= float(shifted_onset))
+            & (energy < upper)
+        )
+        if not np.any(mask):
+            return default_offset
+        candidates = np.flatnonzero(mask)
+        peak_index = candidates[int(np.argmax(values[candidates]))]
+        return float(np.clip(energy[peak_index] - shifted_onset, 0.0, 14.0))
+
     def _clear_edge_preview(self) -> None:
         visualizer = self._active_visualizer()
         clear = getattr(visualizer, "clear_nlls_edge_preview", None)
@@ -776,19 +811,33 @@ class NLLSController:
 
             if area.model_composition.value == "continuum_plus_elnes":
                 edge_by_id = {edge.id: edge for edge in area.edges}
+                continuum_by_edge = {
+                    continuum.edge_id: continuum
+                    for continuum in area.continuum_specs
+                }
                 for component in area.fine_structure_specs:
                     if not component.enabled:
                         continue
-                    curve = self.builder.evaluate_fine_structure(component, eloss)
-                    unit_curve = self.builder.evaluate_fine_structure(
-                        component, eloss, amplitude=1.0
+                    continuum = continuum_by_edge.get(component.edge_id)
+                    if continuum is None:
+                        continue
+                    shift = float(continuum.chemical_shift.value)
+                    curve = self.builder.evaluate_fine_structure(
+                        component, eloss, chemical_shift=shift
                     )
+                    unit_curve = self.builder.evaluate_fine_structure(
+                        component,
+                        eloss,
+                        chemical_shift=shift,
+                        amplitude=1.0,
+                    )
+                    center = self.builder.absolute_center_spec(component, shift)
                     edge = edge_by_id.get(component.edge_id)
                     symbol = edge.symbol if edge is not None else "ELNES"
                     shape_name = component.shape.removesuffix("Model")
                     label = (
                         f"{symbol} {component.shell} {shape_name} "
-                        f"(center {component.center.value:g} eV, "
+                        f"(center {center.value:g} eV, "
                         f"sigma {component.sigma.value:g} eV, "
                         f"amplitude {component.amplitude.value:g})"
                     )
@@ -1559,6 +1608,9 @@ class NLLSController:
                         )
                         if model_editor is not None:
                             model_editor.refresh()
+                        edge_modal = getattr(self.view, "edge_added_modal", None)
+                        if edge_modal is not None:
+                            edge_modal.refresh()
         except (NLLSError, ValueError, TypeError):
             pass
         self._refresh_edge_preview()
@@ -1691,6 +1743,13 @@ class NLLSController:
             amplitude_spec, shift_spec = continuum_parameter_specs(chemical_shift)
             shape = str(self.view.elemental_input["elnes_shape"].value)
             fwhm_eV = fwhm_from_attrs(self._active_dataset().attrs)
+            eloss = np.asarray(
+                self._active_dataset().coords["Eloss"].values, dtype=float
+            )
+            try:
+                reference_spectrum = self._edge_preview_reference()[0].spectrum
+            except (NLLSError, ValueError, TypeError, KeyError):
+                reference_spectrum = None
             target_area_ids = ("default",)
 
             added: list[str] = []
@@ -1720,9 +1779,28 @@ class NLLSController:
                     chemical_shift_convention=CHEMICAL_SHIFT_CONVENTION,
                 )
                 fine_structures: list[FineStructureSpec] = []
+                shifted_onsets = tuple(
+                    float(shell_onset) - chemical_shift
+                    for shell_onset in snapshot.onsets_eV
+                )
                 for shell, shell_onset in zip(group, snapshot.onsets_eV):
-                    center, sigma, amplitude = fine_structure_parameter_specs(
-                        shell_onset, fwhm_eV
+                    shifted_onset = float(shell_onset) - chemical_shift
+                    next_onset = min(
+                        (
+                            candidate
+                            for candidate in shifted_onsets
+                            if candidate > shifted_onset
+                        ),
+                        default=None,
+                    )
+                    center_offset = self._initial_elnes_center_offset(
+                        eloss,
+                        reference_spectrum,
+                        shifted_onset,
+                        next_onset,
+                    )
+                    offset_from_onset, sigma, amplitude = (
+                        fine_structure_parameter_specs(fwhm_eV, center_offset)
                     )
                     shell_token = stable_component_token(edge.symbol, (shell,))
                     fine_structures.append(
@@ -1732,7 +1810,8 @@ class NLLSController:
                             shell=shell,
                             prefix=f"{shell_token}_elnes_",
                             shape=shape,
-                            center=center,
+                            onset_eV=shell_onset,
+                            offset_from_onset=offset_from_onset,
                             sigma=sigma,
                             amplitude=amplitude,
                         )

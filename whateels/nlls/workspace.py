@@ -135,7 +135,6 @@ class NLLSWorkspace:
         requested_set = set(requested)
         found: set[str] = set()
         changed = False
-        edge_shift_deltas: dict[str, float] = {}
         continua: list[ContinuumSpec] = []
         for continuum in area.continuum_specs:
             if continuum.id not in requested_set:
@@ -146,9 +145,6 @@ class NLLSWorkspace:
             updated = replace(continuum, chemical_shift=updated_shift)
             continua.append(updated)
             changed = changed or updated != continuum
-            delta = updated_shift.value - continuum.chemical_shift.value
-            if delta:
-                edge_shift_deltas[continuum.edge_id] = delta
 
         missing = requested_set.difference(found)
         if missing:
@@ -157,47 +153,12 @@ class NLLSWorkspace:
             )
         if not changed:
             return area
-        fine_structures = self._translate_elnes_centers(
-            area.fine_structure_specs, edge_shift_deltas
-        )
         return self._replace_area(
             replace(
                 area,
                 continuum_specs=tuple(continua),
-                fine_structure_specs=fine_structures,
             )
         )
-
-    @staticmethod
-    def _translate_elnes_centers(
-        components: tuple[FineStructureSpec, ...],
-        edge_shift_deltas: dict[str, float],
-    ) -> tuple[FineStructureSpec, ...]:
-        """Move ELNES centers with their OOS edge while preserving relative bounds.
-
-        The continuum is evaluated as ``table(x + chemical_shift)``. Therefore a
-        positive shift moves it towards lower energy and the associated ELNES
-        center and its bounds must be translated by the negative shift delta.
-        """
-        translated: list[FineStructureSpec] = []
-        for component in components:
-            delta = float(edge_shift_deltas.get(component.edge_id, 0.0))
-            if not delta:
-                translated.append(component)
-                continue
-            center = component.center
-            translated.append(
-                replace(
-                    component,
-                    center=replace(
-                        center,
-                        value=center.value - delta,
-                        minimum=center.minimum - delta,
-                        maximum=center.maximum - delta,
-                    ),
-                )
-            )
-        return tuple(translated)
 
     def set_continuum_broadening(
         self,
@@ -252,7 +213,6 @@ class NLLSWorkspace:
         target = str(continuum_id)
         found = False
         changed = False
-        edge_shift_deltas: dict[str, float] = {}
         continua: list[ContinuumSpec] = []
         for continuum in area.continuum_specs:
             if continuum.id != target:
@@ -262,22 +222,14 @@ class NLLSWorkspace:
             updated = replace(continuum, **{parameter_name: parameter})
             continua.append(updated)
             changed = changed or updated != continuum
-            if parameter_name == "chemical_shift":
-                delta = parameter.value - continuum.chemical_shift.value
-                if delta:
-                    edge_shift_deltas[continuum.edge_id] = delta
         if not found:
             raise ValueError(f"unknown continuum id: {target}")
         if not changed:
             return area
-        fine_structures = self._translate_elnes_centers(
-            area.fine_structure_specs, edge_shift_deltas
-        )
         return self._replace_area(
             replace(
                 area,
                 continuum_specs=tuple(continua),
-                fine_structure_specs=fine_structures,
             )
         )
 
@@ -288,8 +240,8 @@ class NLLSWorkspace:
         parameter_name: str,
         parameter: ParameterSpec,
     ) -> AreaModelSpec:
-        """Replace center, sigma or amplitude for one saved ELNES component."""
-        if parameter_name not in {"center", "sigma", "amplitude"}:
+        """Replace offset, sigma or amplitude for one saved ELNES component."""
+        if parameter_name not in {"offset_from_onset", "sigma", "amplitude"}:
             raise ValueError(f"unsupported fine-structure parameter: {parameter_name}")
         if not isinstance(parameter, ParameterSpec):
             raise TypeError("fine-structure parameter must be a ParameterSpec")

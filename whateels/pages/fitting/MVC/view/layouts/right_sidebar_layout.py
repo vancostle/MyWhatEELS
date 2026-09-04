@@ -37,6 +37,7 @@ class EdgeAddedModal(pn.Column):
         self._syncing_widgets = False
         self._parameter_widgets = {}
         self._fine_structure_widgets = {}
+        self._onset_readouts = {}
 
         self._close_button = pn.widgets.Button(
             name="Close",
@@ -149,6 +150,7 @@ class EdgeAddedModal(pn.Column):
         parameter_name: str,
         label: str,
         parameter: ParameterSpec,
+        to_storage=None,
     ) -> pn.Row:
         is_chemical_shift = parameter_name == "chemical_shift"
         compact = bool(getattr(self, "_compact_editor", False))
@@ -253,7 +255,9 @@ class EdgeAddedModal(pn.Column):
                         if item.id == component_id
                     )
                     current = getattr(component, parameter_name)
-                    updated = self._parameter_from_widgets(widgets, current)
+                    updated = self._parameter_from_widgets(widgets, parameter)
+                    if to_storage is not None:
+                        updated = to_storage(updated, current)
                     workspace.set_fine_structure_parameter(
                         "default", component_id, parameter_name, updated
                     )
@@ -357,6 +361,71 @@ class EdgeAddedModal(pn.Column):
             styles={"gap": "8px", "min-width": "0", "flex-wrap": "nowrap"},
         )
 
+    def _absolute_elnes_center_parameter(self, component) -> ParameterSpec:
+        """Resolve the user-facing center interval from stored relative data."""
+        workspace = self._workspace()
+        if workspace is None or "default" not in workspace.areas:
+            raise ValueError("no Elemental workspace is available")
+        continuum = next(
+            item
+            for item in workspace.areas["default"].continuum_specs
+            if item.edge_id == component.edge_id
+        )
+        shifted_onset = float(component.onset_eV) - float(
+            continuum.chemical_shift.value
+        )
+        offset = component.offset_from_onset
+        return ParameterSpec(
+            value=shifted_onset + offset.value,
+            minimum=shifted_onset + offset.minimum,
+            maximum=shifted_onset + offset.maximum,
+            vary=offset.vary,
+            expr=offset.expr,
+            brute_step=offset.brute_step,
+        )
+
+    @staticmethod
+    def _offset_from_absolute_center(
+        absolute: ParameterSpec,
+        current_offset: ParameterSpec,
+        shifted_onset: float,
+    ) -> ParameterSpec:
+        """Map an absolute Center-card edit back to an onset-relative offset."""
+        return ParameterSpec(
+            value=absolute.value - shifted_onset,
+            minimum=absolute.minimum - shifted_onset,
+            maximum=absolute.maximum - shifted_onset,
+            vary=absolute.vary,
+            expr=current_offset.expr,
+            brute_step=current_offset.brute_step,
+        )
+
+    def _sync_linked_parameter_widgets(self) -> None:
+        """Refresh absolute Center fields after a chemical-shift edit."""
+        workspace = self._workspace()
+        if workspace is None or "default" not in workspace.areas:
+            return
+        self._syncing_widgets = True
+        try:
+            for component in workspace.areas["default"].fine_structure_specs:
+                widgets = self._parameter_widgets.get(
+                    (component.id, "offset_from_onset")
+                )
+                if widgets is None:
+                    continue
+                center = self._absolute_elnes_center_parameter(component)
+                widgets["value"].value = center.value
+                widgets["minimum"].value = center.minimum
+                widgets["maximum"].value = center.maximum
+                onset_readout = self._onset_readouts.get(component.id)
+                if onset_readout is not None:
+                    onset_readout.value = (
+                        "Shifted onset: "
+                        f"{center.minimum - component.offset_from_onset.minimum:.2f} eV"
+                    )
+        finally:
+            self._syncing_widgets = False
+
     def _fine_structure_editor(
         self,
         component,
@@ -446,14 +515,35 @@ class EdgeAddedModal(pn.Column):
                     },
                 )
             )
+        absolute_center = self._absolute_elnes_center_parameter(component)
+        shifted_onset = absolute_center.minimum - component.offset_from_onset.minimum
+        onset_readout = pn.widgets.StaticText(
+            value=f"Shifted onset: {shifted_onset:.2f} eV",
+            sizing_mode="stretch_width",
+            margin=(0, 0, 6, 0),
+            styles={"font-size": "13px", "color": "#5c677d"},
+        )
+        self._onset_readouts[component.id] = onset_readout
+
+        def _to_offset(absolute: ParameterSpec, current: ParameterSpec) -> ParameterSpec:
+            # This callback outlives a Chemical-shift edit. Re-read the onset
+            # instead of closing over the value used when the card was rendered.
+            current_absolute = self._absolute_elnes_center_parameter(component)
+            current_onset = current_absolute.minimum - current.minimum
+            return self._offset_from_absolute_center(
+                absolute, current, current_onset
+            )
+
         objects.extend(
             (
+                onset_readout,
                 self._parameter_row(
                     component_kind="fine",
                     component_id=component.id,
-                    parameter_name="center",
+                    parameter_name="offset_from_onset",
                     label="Center (eV)",
-                    parameter=component.center,
+                    parameter=absolute_center,
+                    to_storage=_to_offset,
                 ),
                 self._parameter_row(
                     component_kind="fine",
@@ -498,6 +588,7 @@ class EdgeAddedModal(pn.Column):
     def _edge_entries(self):
         self._parameter_widgets = {}
         self._fine_structure_widgets = {}
+        self._onset_readouts = {}
         workspace = self._workspace()
         if workspace is None or "default" not in workspace.areas:
             return [pn.pane.Markdown("No edges added.", styles={"padding": "12px", "color": "#374151"})]
@@ -655,6 +746,11 @@ class ElementalModelParameterEditor:
 
     _parameter_from_widgets = staticmethod(EdgeAddedModal._parameter_from_widgets)
     _parameter_row = EdgeAddedModal._parameter_row
+    _absolute_elnes_center_parameter = EdgeAddedModal._absolute_elnes_center_parameter
+    _offset_from_absolute_center = staticmethod(
+        EdgeAddedModal._offset_from_absolute_center
+    )
+    _sync_linked_parameter_widgets = EdgeAddedModal._sync_linked_parameter_widgets
     _fine_structure_editor = EdgeAddedModal._fine_structure_editor
 
     def __init__(self, model: "FittingModel"):
@@ -665,6 +761,7 @@ class ElementalModelParameterEditor:
         self._compact_editor = True
         self._parameter_widgets = {}
         self._fine_structure_widgets = {}
+        self._onset_readouts = {}
         self._selected_continuum_id = None
         self._selected_elnes_id = None
         self._continuum_error = self._make_error_pane()
@@ -881,27 +978,11 @@ class ElementalModelParameterEditor:
         self._clear_errors()
         self._render_selected_forms()
 
-    def _sync_linked_parameter_widgets(self) -> None:
-        """Refresh linked ELNES center fields after a chemical-shift mutation."""
-        workspace = self._workspace()
-        if workspace is None or "default" not in workspace.areas:
-            return
-        self._syncing_widgets = True
-        try:
-            for component in workspace.areas["default"].fine_structure_specs:
-                widgets = self._parameter_widgets.get((component.id, "center"))
-                if widgets is None:
-                    continue
-                widgets["value"].value = component.center.value
-                widgets["minimum"].value = component.center.minimum
-                widgets["maximum"].value = component.center.maximum
-        finally:
-            self._syncing_widgets = False
-
     def _render_selected_forms(self) -> None:
         """Render only the two components selected by the card dropdowns."""
         self._parameter_widgets = {}
         self._fine_structure_widgets = {}
+        self._onset_readouts = {}
         workspace = self._workspace()
         if workspace is None or "default" not in workspace.areas:
             self._continuum_body.objects = [
