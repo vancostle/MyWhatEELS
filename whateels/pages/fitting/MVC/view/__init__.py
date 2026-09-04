@@ -136,9 +136,9 @@ class FittingView:
         """Access the live modal used to edit saved elemental edges."""
         return self._edge_added_modal
     @property
-    def elemental_build_model_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Build Elemental Model' button."""
-        return self._elemental_build_model_button
+    def elemental_model_editor(self):
+        """Access the Continuum and ELNES sidebar editor."""
+        return self._elemental_model_editor
     @property
     def elemental_fit_button(self) -> pn.widgets.Button:
         """Access the Elemental NLLS reference-fit button."""
@@ -183,6 +183,14 @@ class FittingView:
     def elemental_model_section(self):
         """Access the collapsible Elemental 'Model Setup' section."""
         return self._elemental_model_section
+    @property
+    def elemental_continuum_section(self):
+        """Access the collapsible Elemental 'Continuum' section."""
+        return self._elemental_continuum_section
+    @property
+    def elemental_elnes_section(self):
+        """Access the collapsible Elemental 'ELNES' section."""
+        return self._elemental_elnes_section
     @property
     def elemental_onset_readout(self) -> pn.widgets.StaticText:
         """Access the read-only Elemental NLLS edge onset readout."""
@@ -278,8 +286,8 @@ class FittingView:
         # Elemental tab.
         self._elemental_input = layout.elemental_input
         self._edge_added_modal = layout.edge_added_modal
+        self._elemental_model_editor = layout.elemental_model_editor
         self._elemental_add_edge_button = layout.elemental_add_edge_button
-        self._elemental_build_model_button = layout.elemental_build_model_button
         self._elemental_fit_button = layout.elemental_fit_button
         self._elemental_fit_area_settings_button = layout.elemental_fit_area_settings_button
         self._elemental_fit_areas_input = layout.elemental_fit_areas_input
@@ -292,6 +300,8 @@ class FittingView:
         self._elemental_geometry_status = layout.elemental_geometry_status
         self._elemental_edge_section = layout.elemental_edge_section
         self._elemental_model_section = layout.elemental_model_section
+        self._elemental_continuum_section = layout.elemental_continuum_section
+        self._elemental_elnes_section = layout.elemental_elnes_section
         self._elemental_onset_readout = layout.elemental_onset_readout
         self._elemental_results_view = layout.elemental_results_view
         self._elemental_multifit_controls = layout.elemental_multifit_controls

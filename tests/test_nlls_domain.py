@@ -130,11 +130,18 @@ def _clustering_result(labels, *, file="synthetic.dm4", image="synthetic"):
 
 
 class NLLSWorkspaceEdgeTests(unittest.TestCase):
-    def test_remove_edge_deletes_edge_and_its_saved_parts(self):
+    def test_default_chemical_shift_bounds_are_twenty_ev(self):
+        _amplitude, chemical_shift = continuum_parameter_specs()
+
+        self.assertEqual(chemical_shift.minimum, -20.0)
+        self.assertEqual(chemical_shift.maximum, 20.0)
+
+    @staticmethod
+    def _workspace_with_edge():
         dataset = _dataset()
-        identity = _identity(dataset)
-        geometry = ExperimentalGeometry(200.0, 20.0, 0.0)
-        workspace = NLLSWorkspace.create(identity, geometry)
+        workspace = NLLSWorkspace.create(
+            _identity(dataset), ExperimentalGeometry(200.0, 20.0, 0.0)
+        )
         edge = EdgeSpec(
             id="ts_l23_edge",
             atomic_number=10,
@@ -156,18 +163,23 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
             provider_version=OOS_PROVIDER_VERSION,
             chemical_shift_convention=CHEMICAL_SHIFT_CONVENTION,
         )
+        center, sigma, amplitude = fine_structure_parameter_specs(95.0, 4.8)
         fine = FineStructureSpec(
             id="ts_l2_elnes",
             edge_id=edge.id,
             shell="L2",
             prefix="ts_l2_elnes_",
             shape="GaussianModel",
-            center=continuum_parameter_specs(0.0)[0],
-            sigma=continuum_parameter_specs(0.0)[0],
-            amplitude=continuum_parameter_specs(0.0)[0],
+            center=center,
+            sigma=sigma,
+            amplitude=amplitude,
             enabled=True,
         )
         workspace.add_edge("default", edge, continuum, (fine,))
+        return workspace, edge, continuum, fine
+
+    def test_remove_edge_deletes_edge_and_its_saved_parts(self):
+        workspace, edge, continuum, fine = self._workspace_with_edge()
 
         updated = workspace.remove_edge("default", edge.id)
 
@@ -175,6 +187,63 @@ class NLLSWorkspaceEdgeTests(unittest.TestCase):
         self.assertEqual(updated.continuum_specs, ())
         self.assertEqual(updated.fine_structure_specs, ())
         self.assertFalse(any(item.id == edge.id for item in workspace.areas["default"].edges))
+
+    def test_advanced_parameter_updates_are_typed_and_invalidate_the_area(self):
+        workspace, _edge, continuum, fine = self._workspace_with_edge()
+        initial_revision = workspace.areas["default"].revision
+
+        updated_amplitude = replace(
+            continuum.amplitude,
+            value=3.0,
+            maximum=8.0,
+            vary=False,
+        )
+        workspace.set_continuum_parameter(
+            "default", continuum.id, "amplitude", updated_amplitude
+        )
+        updated_center = replace(fine.center, value=97.0)
+        workspace.set_fine_structure_parameter(
+            "default", fine.id, "center", updated_center
+        )
+        workspace.configure_fine_structure(
+            "default", fine.id, shape="LorentzianModel", enabled=False
+        )
+
+        area = workspace.areas["default"]
+        self.assertEqual(area.continuum_specs[0].amplitude, updated_amplitude)
+        self.assertEqual(area.fine_structure_specs[0].center, updated_center)
+        self.assertEqual(area.fine_structure_specs[0].shape, "LorentzianModel")
+        self.assertFalse(area.fine_structure_specs[0].enabled)
+        self.assertEqual(area.revision, initial_revision + 3)
+        self.assertFalse(area.is_built)
+        with self.assertRaises(ValueError):
+            workspace.configure_fine_structure(
+                "default", fine.id, shape="UnsupportedModel"
+            )
+
+    def test_chemical_shift_translates_associated_elnes_center_and_bounds(self):
+        workspace, _edge, continuum, fine = self._workspace_with_edge()
+
+        workspace.set_continuum_chemical_shift(
+            "default", (continuum.id,), 2.0
+        )
+        area = workspace.areas["default"]
+        shifted = area.fine_structure_specs[0].center
+        self.assertEqual(shifted.value, fine.center.value - 1.5)
+        self.assertEqual(shifted.minimum, fine.center.minimum - 1.5)
+        self.assertEqual(shifted.maximum, fine.center.maximum - 1.5)
+
+        current_continuum = area.continuum_specs[0]
+        workspace.set_continuum_parameter(
+            "default",
+            current_continuum.id,
+            "chemical_shift",
+            replace(current_continuum.chemical_shift, value=-1.0),
+        )
+        restored_direction = workspace.areas["default"].fine_structure_specs[0].center
+        self.assertEqual(restored_direction.value, fine.center.value + 1.5)
+        self.assertEqual(restored_direction.minimum, fine.center.minimum + 1.5)
+        self.assertEqual(restored_direction.maximum, fine.center.maximum + 1.5)
 
 
 class OOSProviderTests(unittest.TestCase):

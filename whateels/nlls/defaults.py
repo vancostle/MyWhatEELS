@@ -19,7 +19,7 @@ CHEMICAL_SHIFT_CONVENTION = (
 )
 CHEMICAL_SHIFT_TOOLTIP = (
     "Positive chemical shift evaluates table(x + shift) and moves the modeled edge "
-    "to lower energy; ELNES center uses the opposite direction."
+    "to lower energy. Associated ELNES centers move with the same edge."
 )
 
 DEFAULT_MODEL_COMPOSITION = "continuum_plus_elnes"
@@ -88,8 +88,8 @@ def continuum_parameter_specs(chemical_shift: float = 0.0) -> tuple[ParameterSpe
         ParameterSpec(value=1.0, minimum=0.0, maximum=math.inf, vary=True),
         ParameterSpec(
             value=float(chemical_shift),
-            minimum=-10.0,
-            maximum=10.0,
+            minimum=-20.0,
+            maximum=20.0,
             vary=False,
         ),
     )

@@ -371,6 +371,7 @@ class ManualFittingRegressionTests(unittest.TestCase):
         self.assertNotIn("Load Clustering JSON", markdown)
         button_names = {button.name for button in layout.select(pn.widgets.Button)}
         self.assertNotIn("Reset Area", button_names)
+        self.assertNotIn("Build Elemental Model", button_names)
         self.assertNotIn("Fit Current Reference", button_names)
         self.assertNotIn("Fit All References", button_names)
         self.assertIn("Fit", button_names)
@@ -393,13 +394,15 @@ class ManualFittingRegressionTests(unittest.TestCase):
         layout = FittingRightSidebarLayout(self.model)
         edge = layout.elemental_edge_section
         model = layout.elemental_model_section
+        continuum = layout.elemental_continuum_section
+        elnes = layout.elemental_elnes_section
         background = layout.elemental_background_status
         geometry = layout.elemental_geometry_status
 
         # No controller has validated a source yet, so nothing may be opened.
         self.assertTrue(background.visible)
         self.assertTrue(geometry.visible)
-        for section in (edge, model):
+        for section in (edge, model, continuum, elnes):
             self.assertTrue(section.locked)
             self.assertFalse(section.expanded)
             self.assertTrue(section._button_header.disabled)
@@ -411,7 +414,10 @@ class ManualFittingRegressionTests(unittest.TestCase):
             for column in layout.fitting_tabs[1].select(pn.Column)
             if "elemental-input-container" in column.css_classes
         )
-        self.assertEqual(container.objects, [background, geometry, edge, model])
+        self.assertEqual(
+            container.objects,
+            [background, geometry, edge, model, continuum, elnes],
+        )
 
     def test_results_tab_uses_reactive_elemental_results_view(self):
         layout = FittingRightSidebarLayout(self.model)
@@ -522,6 +528,15 @@ class ManualFittingRegressionTests(unittest.TestCase):
 
         parent_rows = [row for row in layout.select(pn.Row) if subshell in row.objects]
         self.assertEqual(parent_rows, [])
+
+    def test_chemical_shift_uses_twenty_ev_limits_and_two_decimal_display(self):
+        layout = FittingRightSidebarLayout(self.model)
+        chemical_shift = layout.elemental_input["chemical_shift"]
+
+        self.assertEqual(chemical_shift.start, -20.0)
+        self.assertEqual(chemical_shift.end, 20.0)
+        self.assertEqual(chemical_shift.step, 0.01)
+        self.assertEqual(chemical_shift.format, "0.00")
 
     def test_element_atomic_number_has_periodic_table_modal_button(self):
         class PageStub:
@@ -691,6 +706,34 @@ class ManualFittingRegressionTests(unittest.TestCase):
             self.assertFalse(visualizer.nlls_edge_preview_active)
             self.assertIsNone(visualizer._nlls_edge_preview_plot)
             self.assertIs(visualizer._paneB_pipe.data, previous_plot)
+        finally:
+            visualizer.cleanup()
+
+    def test_elemental_preview_keeps_amplitude_visible_with_a_unit_scale_basis(self):
+        visualizer = SpectrumImageVisualizer(self.model, self.dataset)
+        energy = np.asarray(self.dataset.coords["Eloss"], dtype=float)
+        unit_gaussian = np.exp(-0.5 * ((energy - 4.0) / 0.65) ** 2)
+        reference = 100.0 * unit_gaussian
+
+        try:
+            visualizer.show_nlls_edge_preview(
+                energy,
+                reference,
+                (("H K1 Gaussian", energy, 2.0 * unit_gaussian),),
+                spectrum_label="ROI mean",
+                scale_bases=(unit_gaussian,),
+            )
+            preview = visualizer._paneB_pipe.data
+            gaussian = next(
+                curve
+                for curve in preview
+                if isinstance(curve, hv.Curve) and curve.label == "H K1 Gaussian"
+            )
+            self.assertAlmostEqual(
+                float(np.max(gaussian.dimension_values("y"))),
+                200.0,
+                places=5,
+            )
         finally:
             visualizer.cleanup()
 
@@ -2274,7 +2317,14 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             lambda: setattr(self.visualizer, "clustering_payload", None)
         )
 
-        def show_edge_preview(energy, spectrum, curves, *, spectrum_label="Spectrum"):
+        def show_edge_preview(
+            energy,
+            spectrum,
+            curves,
+            *,
+            spectrum_label="Spectrum",
+            scale_bases=None,
+        ):
             payload = (
                 np.asarray(energy, dtype=float),
                 np.asarray(spectrum, dtype=float),
@@ -2343,7 +2393,7 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         initial_label, initial_x, initial_y = curves[0]
         self.assertIn("H K1 OOS", initial_label)
         self.assertIn("shift +0 eV", initial_label)
-        self.assertAlmostEqual(initial_x[np.argmax(initial_y)], 5.0)
+        self.assertAlmostEqual(initial_x[np.nanargmax(initial_y)], 5.0)
         self.assertTrue(self.controller.workspace.is_area_built("default"))
 
         update_count = len(self.visualizer.edge_preview_updates)
@@ -2357,30 +2407,171 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         shifted_label, shifted_x, shifted_y = shifted_curves[0]
         self.assertIn("shift +1 eV", shifted_label)
         np.testing.assert_allclose(shifted_x, initial_x)
-        self.assertAlmostEqual(shifted_x[np.argmax(shifted_y)], 4.0)
+        self.assertAlmostEqual(shifted_x[np.nanargmax(shifted_y)], 4.0)
 
-    def test_edges_modal_edits_once_with_matching_shift_bounds(self):
+    def test_chemical_shift_moves_the_associated_elnes_in_the_live_preview(self):
+        self.layout.elemental_input["model_composition"].value = (
+            "continuum_plus_elnes"
+        )
+        self.layout.elemental_input["chemical_shift"].value = 1.0
+
+        fine = self.controller.workspace.areas["default"].fine_structure_specs[0]
+        self.assertEqual(fine.center.value, 1.0)
+        _, _, curves, _ = self.visualizer.edge_preview_payload
+        label, energy, values = next(curve for curve in curves if "Gaussian" in curve[0])
+        self.assertIn("center 1 eV", label)
+        self.assertAlmostEqual(energy[np.argmax(values)], 1.0, places=1)
+
+    def test_continuum_card_edits_once_with_matching_shift_bounds(self):
         # The layout's model normally shares this state through CacheManager.
         # Use the isolated controller state explicitly in this regression fixture.
         self.layout._model._app_state = self.state
-        modal = self.layout.edge_added_modal
-        modal.refresh()
-        card = modal._body.objects[0]
-        shift_input = card.objects[1].objects[-1]
+        editor = self.layout.elemental_model_editor
+        editor.refresh()
+        continuum = self.controller.workspace.areas["default"].continuum_specs[0]
+        shift_widgets = editor.parameter_widgets[
+            (continuum.id, "chemical_shift")
+        ]
+        shift_input = shift_widgets["value"]
 
-        self.assertIn("Edges Added", modal._title_pane.object)
-        self.assertEqual(shift_input.start, -10.0)
-        self.assertEqual(shift_input.end, 10.0)
+        self.assertEqual(shift_widgets["minimum"].value, -20.0)
+        self.assertEqual(shift_widgets["maximum"].value, 20.0)
+        self.assertEqual(shift_widgets["value"].format, "0.00")
+        self.assertEqual(shift_widgets["minimum"].format, "0.00")
+        self.assertEqual(shift_widgets["maximum"].format, "0.00")
         revision = self.state.nlls_revision
         shift_input.value = 1.0
 
         self.assertEqual(self.state.nlls_revision, revision + 1)
         continuum = self.controller.workspace.areas["default"].continuum_specs[0]
         self.assertEqual(continuum.chemical_shift.value, 1.0)
+        fine = self.controller.workspace.areas["default"].fine_structure_specs[0]
+        self.assertEqual(fine.center.value, 1.0)
+        self.assertEqual(
+            editor.parameter_widgets[(fine.id, "center")]["value"].value,
+            1.0,
+        )
 
-        shift_input.value = 11.0
+        shift_input.value = 21.0
         self.assertEqual(shift_input.value, 1.0)
         self.assertEqual(self.state.nlls_revision, revision + 1)
+
+    def test_model_cards_select_one_component_with_compact_parameter_rows(self):
+        self.layout._model._app_state = self.state
+        self.layout.elemental_input["element_atomic_number"].value = 2
+        self.controller._on_add_edge(None)
+        editor = self.layout.elemental_model_editor
+        editor.refresh()
+        area = self.controller.workspace.areas["default"]
+        first_continuum, second_continuum = area.continuum_specs
+        second_fine = next(
+            component
+            for component in area.fine_structure_specs
+            if component.edge_id == second_continuum.edge_id
+        )
+
+        self.assertIs(editor._continuum_body.objects[0], editor._continuum_selector_row)
+        self.assertIs(editor._continuum_selector_row.objects[0], editor.continuum_selector)
+        self.assertGreaterEqual(editor._continuum_selector_row.min_height, 38)
+        self.assertEqual(editor._continuum_selector_row.margin, (0, 0, 5, 0))
+        self.assertEqual(len(editor.continuum_selector.options), 2)
+        self.assertEqual(len(editor.elnes_selector.options), 2)
+        self.assertEqual(editor.continuum_selector.sizing_mode, "stretch_width")
+        self.assertEqual(editor.continuum_selector.stylesheets, [])
+        self.assertEqual(editor._continuum_form.styles["background"], "transparent")
+
+        def assert_parameter_block(block, widgets, label, margin):
+            header, numeric_fields = block.objects
+            self.assertEqual(header.objects[0].value, label)
+            self.assertEqual(header.objects[-2].value, "Flexibility")
+            self.assertIs(header.objects[-1], widgets["vary"])
+            self.assertEqual(block.margin, margin)
+            self.assertEqual(block.styles["gap"], "8px")
+            self.assertEqual(len(numeric_fields.objects), 3)
+            self.assertIs(numeric_fields.objects[0], widgets["value"])
+            self.assertIs(numeric_fields.objects[1], widgets["minimum"])
+            self.assertIs(numeric_fields.objects[2], widgets["maximum"])
+            for numeric_widget in numeric_fields.objects:
+                self.assertEqual(numeric_widget.format, "0.00")
+                self.assertEqual(numeric_widget.step, 0.01)
+
+        first_amplitude = editor.parameter_widgets[(first_continuum.id, "amplitude")]
+        first_shift = editor.parameter_widgets[(first_continuum.id, "chemical_shift")]
+        assert_parameter_block(
+            editor._continuum_form.objects[0],
+            first_amplitude,
+            "Amplitude",
+            (0, 0, 10, 0),
+        )
+        assert_parameter_block(
+            editor._continuum_form.objects[1],
+            first_shift,
+            "Chemical shift (eV)",
+            (0, 0, 10, 0),
+        )
+
+        editor.continuum_selector.value = second_continuum.id
+        self.assertNotIn(
+            (first_continuum.id, "amplitude"), editor.parameter_widgets
+        )
+        second_amplitude = editor.parameter_widgets[
+            (second_continuum.id, "amplitude")
+        ]
+        second_amplitude["value"].value = 3.0
+        self.assertEqual(
+            self.controller.workspace.areas["default"].continuum_specs[1].amplitude.value,
+            3.0,
+        )
+
+        editor.elnes_selector.value = second_fine.id
+        self.assertIn(second_fine.id, editor.fine_structure_widgets)
+        self.assertIn((second_fine.id, "center"), editor.parameter_widgets)
+        fine_controls = editor.fine_structure_widgets[second_fine.id]
+        self.assertIsInstance(fine_controls["enabled"], pn.widgets.Switch)
+        self.assertIs(editor._elnes_body.objects[0], editor._elnes_form)
+        self.assertIs(editor._elnes_selector_row.objects[0], editor.elnes_selector)
+        self.assertIs(editor._elnes_selector_row.objects[1], fine_controls["enabled"])
+        self.assertEqual(fine_controls["enabled"].name, "")
+        self.assertEqual(
+            editor._elnes_selector_row.styles["align-items"], "center"
+        )
+        self.assertIsInstance(editor._elnes_shape_row, pn.Column)
+        self.assertEqual(editor._elnes_shape_row.objects, [fine_controls["shape"]])
+        self.assertGreaterEqual(editor._elnes_shape_row.min_height, 76)
+        self.assertEqual(editor._elnes_shape_row.margin, (0, 0, 10, 0))
+        self.assertEqual(editor._elnes_selector_row.margin, (0, 0, 10, 0))
+        self.assertEqual(fine_controls["shape"].sizing_mode, "stretch_width")
+        self.assertEqual(fine_controls["shape"].stylesheets, [])
+        parameter_editor = editor._elnes_form.objects[2]
+        assert_parameter_block(
+            parameter_editor.objects[0],
+            editor.parameter_widgets[(second_fine.id, "center")],
+            "Center (eV)",
+            (0, 0, 10, 0),
+        )
+        assert_parameter_block(
+            parameter_editor.objects[1],
+            editor.parameter_widgets[(second_fine.id, "sigma")],
+            "Sigma (eV)",
+            (0, 0, 10, 0),
+        )
+        assert_parameter_block(
+            parameter_editor.objects[2],
+            editor.parameter_widgets[(second_fine.id, "amplitude")],
+            "Amplitude",
+            (0, 0, 10, 0),
+        )
+        fine_controls["enabled"].value = False
+        self.assertFalse(
+            next(
+                item
+                for item in self.controller.workspace.areas["default"].fine_structure_specs
+                if item.id == second_fine.id
+            ).enabled
+        )
+        editor.refresh()
+        self.assertEqual(editor.continuum_selector.value, second_continuum.id)
+        self.assertEqual(editor.elnes_selector.value, second_fine.id)
 
     def test_edges_modal_keeps_each_card_toggle_and_edit_controls_independent(self):
         self.layout._model._app_state = self.state
@@ -2390,7 +2581,7 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         modal.refresh()
 
         self.assertIn("Edges Added", modal._title_pane.object)
-        self.assertEqual(modal._close_button.name, "Save & Close")
+        self.assertEqual(modal._close_button.name, "Close")
         self.assertEqual(modal._close_button.button_type, "success")
         first_card, second_card = modal._body.objects
         first_toggle = first_card.objects[0].objects[0]
@@ -2408,10 +2599,93 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         try:
             card = modal._body.objects[0]
             self.assertTrue(card.objects[0].objects[1].disabled)
-            self.assertTrue(card.objects[1].objects[-1].disabled)
+            editor = self.layout.elemental_model_editor
+            self.assertTrue(
+                all(
+                    widget.disabled
+                    for widgets in editor.parameter_widgets.values()
+                    for widget in widgets.values()
+                )
+            )
+            self.assertTrue(
+                all(
+                    widget.disabled
+                    for widgets in editor.fine_structure_widgets.values()
+                    for widget in widgets.values()
+                )
+            )
         finally:
             self.controller._active_run_request = None
             self.controller._refresh_button_states()
+
+    def test_advanced_model_editor_updates_gaussian_and_live_spectrum_preview(self):
+        self.layout._model._app_state = self.state
+        self.layout.elemental_input["model_composition"].value = (
+            "continuum_plus_elnes"
+        )
+        editor = self.layout.elemental_model_editor
+        editor.refresh()
+        self.assertIsNotNone(self.layout.elemental_continuum_section.get_root(Document()))
+        self.assertIsNotNone(self.layout.elemental_elnes_section.get_root(Document()))
+        area = self.controller.workspace.areas["default"]
+        fine = area.fine_structure_specs[0]
+
+        center = editor.parameter_widgets[(fine.id, "center")]
+        sigma = editor.parameter_widgets[(fine.id, "sigma")]
+        amplitude = editor.parameter_widgets[(fine.id, "amplitude")]
+        initial_revision = self.state.nlls_revision
+
+        center["value"].value = 6.0
+        sigma["value"].value = 0.75
+        amplitude["value"].value = 2.0
+        amplitude["vary"].value = False
+
+        updated = self.controller.workspace.areas["default"].fine_structure_specs[0]
+        self.assertEqual(updated.center.value, 6.0)
+        self.assertEqual(updated.sigma.value, 0.75)
+        self.assertEqual(updated.amplitude.value, 2.0)
+        self.assertFalse(updated.amplitude.vary)
+        self.assertFalse(self.controller.workspace.is_area_built("default"))
+        self.assertGreater(self.state.nlls_revision, initial_revision)
+
+        _, _, curves, _ = self.visualizer.edge_preview_payload
+        gaussian_label, gaussian_x, gaussian_y = next(
+            curve for curve in curves if "Gaussian" in curve[0]
+        )
+        self.assertIn("center 6 eV", gaussian_label)
+        self.assertAlmostEqual(gaussian_x[np.argmax(gaussian_y)], 6.0, places=1)
+        self.assertGreater(float(np.max(gaussian_y)), 0.0)
+
+        revision = self.state.nlls_revision
+        center["minimum"].value = 7.0
+        self.assertEqual(center["minimum"].value, updated.center.minimum)
+        self.assertEqual(self.state.nlls_revision, revision)
+        self.assertTrue(editor._elnes_error.visible)
+
+    def test_advanced_model_editor_updates_continuum_bounds_and_elnes_shape(self):
+        self.layout._model._app_state = self.state
+        editor = self.layout.elemental_model_editor
+        editor.refresh()
+        area = self.controller.workspace.areas["default"]
+        continuum = area.continuum_specs[0]
+        fine = area.fine_structure_specs[0]
+
+        continuum_amplitude = editor.parameter_widgets[(continuum.id, "amplitude")]
+        continuum_amplitude["value"].value = 3.0
+        continuum_amplitude["maximum"].value = 8.0
+        continuum_amplitude["vary"].value = False
+        fine_controls = editor.fine_structure_widgets[fine.id]
+        fine_controls["shape"].value = "LorentzianModel"
+        fine_controls["enabled"].value = False
+
+        updated_area = self.controller.workspace.areas["default"]
+        updated_continuum = updated_area.continuum_specs[0]
+        updated_fine = updated_area.fine_structure_specs[0]
+        self.assertEqual(updated_continuum.amplitude.value, 3.0)
+        self.assertEqual(updated_continuum.amplitude.maximum, 8.0)
+        self.assertFalse(updated_continuum.amplitude.vary)
+        self.assertEqual(updated_fine.shape, "LorentzianModel")
+        self.assertFalse(updated_fine.enabled)
 
     def test_edge_preview_is_scoped_to_the_elemental_tab(self):
         self.assertIsNotNone(self.visualizer.edge_preview_payload)
@@ -2467,6 +2741,16 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(continuum.broadening.sigma_eV, 2.25)
         self.assertFalse(self.controller.workspace.is_area_built("default"))
         self.assertGreater(len(self.visualizer.edge_preview_updates), update_count)
+
+    def test_fit_builds_the_dirty_model_automatically(self):
+        self.layout.elemental_input["soften_strength"].value = 2.25
+        self.assertFalse(self.controller.workspace.is_area_built("default"))
+        self.assertFalse(self.layout.elemental_fit_button.disabled)
+
+        self.controller._on_fit(None)
+
+        self.assertTrue(self.controller.workspace.is_area_built("default"))
+        self.assertIn("default", self.controller.workspace.reference_fits)
 
     def test_fit_current_uses_committed_roi_as_default_reference(self):
         self.assertFalse(self.layout.elemental_fit_button.disabled)
@@ -2801,6 +3085,8 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         for section in (
             self.layout.elemental_edge_section,
             self.layout.elemental_model_section,
+            self.layout.elemental_continuum_section,
+            self.layout.elemental_elnes_section,
         ):
             self.assertTrue(section.locked)
             self.assertFalse(section.expanded)
@@ -2810,13 +3096,15 @@ class ElementalReferenceControllerTests(unittest.TestCase):
     def test_elemental_sections_are_gated_by_background_and_geometry(self):
         edge = self.layout.elemental_edge_section
         model = self.layout.elemental_model_section
+        continuum = self.layout.elemental_continuum_section
+        elnes = self.layout.elemental_elnes_section
         background = self.layout.elemental_background_status
         geometry = self.layout.elemental_geometry_status
 
         # Both gates valid: no alert is published and both sections are open on top.
         self.assertFalse(background.visible)
         self.assertFalse(geometry.visible)
-        for section in (edge, model):
+        for section in (edge, model, continuum, elnes):
             self.assertFalse(section.locked)
             self.assertTrue(section.expanded)
 

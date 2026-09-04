@@ -4,6 +4,8 @@ import panel as pn
 
 from bokeh.models import Tooltip
 from whateels.components import PeriodicTableOfElementsModal, SimpleDetails, ToggleButton
+from whateels.nlls.contracts import ParameterSpec
+from whateels.nlls.defaults import SUPPORTED_ELNES_SHAPES
 from ..components.nlls_fit_areas_modal import NLLSFitAreasModal
 from ..components.nlls_multifit_controls import NLLSMultifitControls
 from ..components.nlls_results_view import NLLSResultsView
@@ -16,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class EdgeAddedModal(pn.Column):
-    """Live editor for the saved elemental edges in the active NLLS workspace."""
+    """Manage the saved elemental edges in the active NLLS workspace."""
 
     def __init__(
         self,
@@ -32,9 +34,12 @@ class EdgeAddedModal(pn.Column):
         self._on_close = on_close
         self._change_callback = None
         self._editable = True
+        self._syncing_widgets = False
+        self._parameter_widgets = {}
+        self._fine_structure_widgets = {}
 
         self._close_button = pn.widgets.Button(
-            name="Save & Close",
+            name="Close",
             button_type="success",
             sizing_mode="stretch_width",
             margin=0,
@@ -51,10 +56,18 @@ class EdgeAddedModal(pn.Column):
             sizing_mode="stretch_width",
             styles={"min-width": "0", "max-width": "100%"},
         )
+        self._error_pane = pn.pane.Alert(
+            "",
+            alert_type="danger",
+            visible=False,
+            sizing_mode="stretch_width",
+            margin=(0, 0, 8, 0),
+        )
 
         super().__init__(
             self._title_pane,
             pn.Spacer(height=10),
+            self._error_pane,
             self._body,
             pn.Spacer(height=10),
             self._close_button,
@@ -62,9 +75,10 @@ class EdgeAddedModal(pn.Column):
             styles={
                 "padding": "12px 20px 20px",
                 "background": "rgba(255,255,255,0.98)",
-                "maxWidth": "30vw",
-                "minWidth": "220px",
-                "maxHeight": "40vh",
+                "width": "min(560px, 92vw)",
+                "maxWidth": "92vw",
+                "minWidth": "min(420px, 92vw)",
+                "maxHeight": "82vh",
                 "overflow": "auto",
                 "overflow-x": "hidden",
                 "boxShadow": "0 0 32px 8px #0002",
@@ -75,6 +89,16 @@ class EdgeAddedModal(pn.Column):
 
     def set_change_callback(self, callback) -> None:
         self._change_callback = callback
+
+    @property
+    def parameter_widgets(self) -> dict:
+        """Live parameter rows keyed by ``(component_id, parameter_name)``."""
+        return self._parameter_widgets
+
+    @property
+    def fine_structure_widgets(self) -> dict:
+        """Shape/enabled controls keyed by fine-structure component id."""
+        return self._fine_structure_widgets
 
     def set_editable(self, editable: bool) -> None:
         """Enable or lock edits while a frozen NLLS run owns the workspace."""
@@ -91,8 +115,389 @@ class EdgeAddedModal(pn.Column):
             except Exception:
                 pass
 
+    def _workspace(self):
+        return getattr(self._model.app_state, "nlls_workspace", None)
+
+    def _commit_editor_change(self) -> None:
+        workspace = self._workspace()
+        if workspace is not None:
+            workspace.refresh_clustering_from_template()
+        self._error_pane.visible = False
+        self._error_pane.object = ""
+        self._emit_change()
+
+    def _show_editor_error(self, message: str, component_kind: str | None = None) -> None:
+        self._error_pane.object = f"Cannot update model: {message}"
+        self._error_pane.visible = True
+
+    @staticmethod
+    def _parameter_from_widgets(widgets: dict, current: ParameterSpec) -> ParameterSpec:
+        return ParameterSpec(
+            value=float(widgets["value"].value),
+            minimum=float(widgets["minimum"].value),
+            maximum=float(widgets["maximum"].value),
+            vary=bool(widgets["vary"].value),
+            expr=current.expr,
+            brute_step=current.brute_step,
+        )
+
+    def _parameter_row(
+        self,
+        *,
+        component_kind: str,
+        component_id: str,
+        parameter_name: str,
+        label: str,
+        parameter: ParameterSpec,
+    ) -> pn.Row:
+        is_chemical_shift = parameter_name == "chemical_shift"
+        compact = bool(getattr(self, "_compact_editor", False))
+        compact_block_margin = (
+            (0, 0, 10, 0)
+            if compact
+            else 0
+        )
+        # Cards are deliberately concise: show values to two decimals and use
+        # matching spinner increments without changing the persisted precision.
+        number_format = "0.00" if compact or is_chemical_shift else None
+        step = 0.01 if compact or is_chemical_shift else 0.1
+        # The compact cards place the Boolean beside the parameter title, then
+        # give Value / Min / Max the full width of a second row.  The modal
+        # keeps its legacy inline layout.
+        input_layout = (
+            {"sizing_mode": "stretch_width", "min_width": 0}
+            if compact
+            else {"width": 112}
+        )
+        vary_width = 34 if compact else 100
+        compact_control_stylesheets = (
+            [
+                """
+                :host { min-width: 0 !important; }
+                :host input,
+                :host .bk-input {
+                    border: 1px solid #c7d9ed !important;
+                    border-radius: 6px !important;
+                    font-size: 14px !important;
+                }
+                """
+            ]
+            if compact
+            else None
+        )
+        widgets = {
+            "value": pn.widgets.FloatInput(
+                name="Value",
+                value=float(parameter.value),
+                step=step,
+                format=number_format,
+                **input_layout,
+                disabled=not self._editable,
+                margin=0,
+                stylesheets=compact_control_stylesheets,
+            ),
+            "minimum": pn.widgets.FloatInput(
+                name="Min",
+                value=float(parameter.minimum),
+                step=step,
+                format=number_format,
+                **input_layout,
+                disabled=not self._editable,
+                margin=0,
+                stylesheets=compact_control_stylesheets,
+            ),
+            "maximum": pn.widgets.FloatInput(
+                name="Max",
+                value=float(parameter.maximum),
+                step=step,
+                format=number_format,
+                **input_layout,
+                disabled=not self._editable,
+                margin=0,
+                stylesheets=compact_control_stylesheets,
+            ),
+            "vary": pn.widgets.Checkbox(
+                name="" if compact else "Flexibility",
+                value=bool(parameter.vary),
+                width=vary_width,
+                disabled=not self._editable,
+                margin=0 if compact else (20, 0, 0, 0),
+                styles={"justify-content": "center"} if compact else {},
+                stylesheets=compact_control_stylesheets,
+            ),
+        }
+        key = (component_id, parameter_name)
+        self._parameter_widgets[key] = widgets
+
+        def _changed(event) -> None:
+            if self._syncing_widgets or not self._editable:
+                return
+            workspace = self._workspace()
+            if workspace is None or "default" not in workspace.areas:
+                return
+            try:
+                area = workspace.areas["default"]
+                if component_kind == "continuum":
+                    component = next(
+                        item for item in area.continuum_specs if item.id == component_id
+                    )
+                    current = getattr(component, parameter_name)
+                    updated = self._parameter_from_widgets(widgets, current)
+                    workspace.set_continuum_parameter(
+                        "default", component_id, parameter_name, updated
+                    )
+                else:
+                    component = next(
+                        item
+                        for item in area.fine_structure_specs
+                        if item.id == component_id
+                    )
+                    current = getattr(component, parameter_name)
+                    updated = self._parameter_from_widgets(widgets, current)
+                    workspace.set_fine_structure_parameter(
+                        "default", component_id, parameter_name, updated
+                    )
+                sync_linked = getattr(
+                    self, "_sync_linked_parameter_widgets", None
+                )
+                if sync_linked is not None:
+                    sync_linked()
+                self._commit_editor_change()
+            except (StopIteration, TypeError, ValueError) as exc:
+                self._syncing_widgets = True
+                try:
+                    event.obj.value = event.old
+                finally:
+                    self._syncing_widgets = False
+                self._show_editor_error(str(exc), component_kind)
+
+        for widget in widgets.values():
+            widget.param.watch(_changed, "value")
+
+        label_widget = pn.widgets.StaticText(
+            value=label,
+            width=None if compact else 92,
+            sizing_mode="stretch_width" if compact else "fixed",
+            margin=(0, 0, 2, 0) if compact else (20, 0, 0, 0),
+            styles=(
+                {
+                    "font-size": "14px",
+                    "font-weight": "600",
+                    "line-height": "18px",
+                    "white-space": "nowrap",
+                }
+                if compact
+                else {}
+            ),
+        )
+        if compact:
+            vary_label = pn.widgets.StaticText(
+                value="Flexibility",
+                width=78,
+                margin=0,
+                styles={
+                    "font-size": "14px",
+                    "line-height": "18px",
+                    "text-align": "right",
+                    "white-space": "nowrap",
+                },
+            )
+            header = pn.Row(
+                label_widget,
+                pn.Spacer(sizing_mode="stretch_width", min_width=0),
+                vary_label,
+                widgets["vary"],
+                sizing_mode="stretch_width",
+                margin=0,
+                styles={
+                    "align-items": "center",
+                    "gap": "4px",
+                    "min-width": "0",
+                    "flex-wrap": "nowrap",
+                },
+            )
+            fields = pn.Row(
+                widgets["value"],
+                widgets["minimum"],
+                widgets["maximum"],
+                sizing_mode="stretch_width",
+                styles={
+                    "align-items": "flex-start",
+                    "gap": "8px",
+                    "min-width": "0",
+                    "flex-wrap": "nowrap",
+                },
+            )
+            return pn.Column(
+                header,
+                fields,
+                sizing_mode="stretch_width",
+                # ELNES needs the relaxed vertical rhythm used by the card:
+                # each Center/Sigma/Amplitude group stays clearly distinct.
+                margin=compact_block_margin,
+                styles={"gap": "8px", "min-width": "0"},
+            )
+        fields = pn.Row(
+            widgets["value"],
+            widgets["minimum"],
+            widgets["maximum"],
+            widgets["vary"],
+            sizing_mode="stretch_width",
+            styles={
+                "align-items": "flex-start",
+                "gap": "8px",
+                "min-width": "0",
+                "flex-wrap": "wrap",
+            },
+        )
+        return pn.Row(
+            label_widget,
+            fields,
+            sizing_mode="stretch_width",
+            styles={"gap": "8px", "min-width": "0", "flex-wrap": "nowrap"},
+        )
+
+    def _fine_structure_editor(
+        self,
+        component,
+        *,
+        show_heading: bool = True,
+        flat: bool = False,
+        include_configuration_controls: bool = True,
+    ) -> pn.Column:
+        compact = bool(getattr(self, "_compact_editor", False))
+        heading = pn.pane.Markdown(
+            f"#### {component.shell} ELNES · {component.shape.removesuffix('Model')}",
+            margin=(8, 0, 0, 0),
+        )
+        shape = pn.widgets.Select(
+            name="Peak shape",
+            options=list(SUPPORTED_ELNES_SHAPES),
+            value=component.shape,
+            width=None if compact else 190,
+            sizing_mode="stretch_width" if compact else "fixed",
+            min_width=0 if compact else None,
+            disabled=not self._editable,
+            margin=0,
+        )
+        enabled = (
+            pn.widgets.Switch(
+                name="",
+                value=bool(component.enabled),
+                width=50,
+                disabled=not self._editable,
+                margin=0,
+            )
+            if compact
+            else pn.widgets.Checkbox(
+                name="Enabled",
+                value=bool(component.enabled),
+                width=90,
+                disabled=not self._editable,
+                margin=(20, 0, 0, 0),
+            )
+        )
+        self._fine_structure_widgets[component.id] = {
+            "shape": shape,
+            "enabled": enabled,
+        }
+
+        def _configuration_changed(event) -> None:
+            if self._syncing_widgets or not self._editable:
+                return
+            workspace = self._workspace()
+            if workspace is None:
+                return
+            try:
+                workspace.configure_fine_structure(
+                    "default",
+                    component.id,
+                    shape=str(shape.value),
+                    enabled=bool(enabled.value),
+                )
+                heading.object = (
+                    f"#### {component.shell} ELNES · "
+                    f"{str(shape.value).removesuffix('Model')}"
+                )
+                self._commit_editor_change()
+            except (TypeError, ValueError) as exc:
+                self._syncing_widgets = True
+                try:
+                    event.obj.value = event.old
+                finally:
+                    self._syncing_widgets = False
+                self._show_editor_error(str(exc), "fine")
+
+        shape.param.watch(_configuration_changed, "value")
+        enabled.param.watch(_configuration_changed, "value")
+
+        objects = []
+        if include_configuration_controls:
+            objects.append(
+                pn.Row(
+                    shape,
+                    enabled,
+                    sizing_mode="stretch_width",
+                    styles={
+                        "gap": "8px" if compact else "12px",
+                        "flex-wrap": "nowrap" if compact else "wrap",
+                        "min-width": "0",
+                    },
+                )
+            )
+        objects.extend(
+            (
+                self._parameter_row(
+                    component_kind="fine",
+                    component_id=component.id,
+                    parameter_name="center",
+                    label="Center (eV)",
+                    parameter=component.center,
+                ),
+                self._parameter_row(
+                    component_kind="fine",
+                    component_id=component.id,
+                    parameter_name="sigma",
+                    label="Sigma (eV)",
+                    parameter=component.sigma,
+                ),
+                self._parameter_row(
+                    component_kind="fine",
+                    component_id=component.id,
+                    parameter_name="amplitude",
+                    label="Amplitude",
+                    parameter=component.amplitude,
+                ),
+            )
+        )
+        if show_heading:
+            objects.insert(0, heading)
+
+        return pn.Column(
+            *objects,
+            sizing_mode="stretch_width",
+            styles={
+                **({
+                    "padding": "0",
+                    "border": "0",
+                    "border-radius": "0",
+                    "background": "transparent",
+                } if flat else {
+                "padding": "8px",
+                "border": "1px solid #dedee8",
+                "border-radius": "6px",
+                "background": "#fff",
+                }),
+                "box-sizing": "border-box",
+                "min-width": "0",
+                "max-width": "100%",
+            },
+        )
+
     def _edge_entries(self):
-        workspace = getattr(self._model.app_state, "nlls_workspace", None)
+        self._parameter_widgets = {}
+        self._fine_structure_widgets = {}
+        workspace = self._workspace()
         if workspace is None or "default" not in workspace.areas:
             return [pn.pane.Markdown("No edges added.", styles={"padding": "12px", "color": "#374151"})]
 
@@ -103,60 +508,6 @@ class EdgeAddedModal(pn.Column):
         entries = []
         for continuum in area.continuum_specs:
             edge_label = f"{continuum.symbol} {'+'.join(continuum.shells)}"
-            shift_input = pn.widgets.FloatInput(
-                value=float(continuum.chemical_shift.value),
-                start=float(continuum.chemical_shift.minimum),
-                end=float(continuum.chemical_shift.maximum),
-                step=0.1,
-                width=100,
-                min_width=0,
-                max_width=100,
-                margin=(0, 0, 0, 0),
-                visible=True,
-                disabled=not self._editable,
-                styles={
-                    "min-width": "0",
-                    "max-width": "100%",
-                    "box-sizing": "border-box",
-                },
-            )
-
-            def _shift_changed(
-                event,
-                continuum_id=continuum.id,
-                saved_shift=float(continuum.chemical_shift.value),
-            ):
-                if not self._editable:
-                    return
-                workspace = getattr(self._model.app_state, "nlls_workspace", None)
-                if workspace is None:
-                    return
-                persisted_shift = saved_shift
-                try:
-                    persisted_shift = next(
-                        (
-                            float(item.chemical_shift.value)
-                            for item in workspace.areas["default"].continuum_specs
-                            if item.id == continuum_id
-                        ),
-                        saved_shift,
-                    )
-                    previous_revision = workspace.dirty_revision
-                    workspace.set_continuum_chemical_shift(
-                        "default", (continuum_id,), float(event.new)
-                    )
-                    if workspace.dirty_revision == previous_revision:
-                        return
-                    workspace.refresh_clustering_from_template()
-                    self._emit_change()
-                except (TypeError, ValueError):
-                    # Keep the visible input synchronized with the persisted value
-                    # when Panel receives a value outside the ParameterSpec bounds.
-                    if event.obj.value != persisted_shift:
-                        event.obj.value = persisted_shift
-
-            shift_input.param.watch(_shift_changed, "value")
-
             delete_button = pn.widgets.Button(
                 name="Delete",
                 button_type="danger",
@@ -174,19 +525,19 @@ class EdgeAddedModal(pn.Column):
             def _delete_edge(_event, edge_id=continuum.edge_id):
                 if not self._editable:
                     return
-                workspace = getattr(self._model.app_state, "nlls_workspace", None)
-                if workspace is None:
+                current_workspace = self._workspace()
+                if current_workspace is None:
                     return
                 try:
-                    previous_revision = workspace.dirty_revision
-                    workspace.remove_edge("default", edge_id)
-                    if workspace.dirty_revision == previous_revision:
+                    previous_revision = current_workspace.dirty_revision
+                    current_workspace.remove_edge("default", edge_id)
+                    if current_workspace.dirty_revision == previous_revision:
                         return
-                    workspace.refresh_clustering_from_template()
+                    current_workspace.refresh_clustering_from_template()
                     self.refresh()
                     self._emit_change()
-                except (TypeError, ValueError):
-                    pass
+                except (TypeError, ValueError) as exc:
+                    self._show_editor_error(str(exc))
 
             delete_button.on_click(_delete_edge)
 
@@ -212,18 +563,24 @@ class EdgeAddedModal(pn.Column):
                 margin=(0, 0, 0, 0),
             )
 
-            details_row = pn.Row(
-                pn.widgets.StaticText(value="Chemical Shift (eV)", width=120),
-                pn.Spacer(sizing_mode="stretch_width", min_width=0),
-                shift_input,
+            fine_structures = tuple(
+                component
+                for component in area.fine_structure_specs
+                if component.edge_id == continuum.edge_id
+            )
+            details_row = pn.Column(
+                pn.pane.Markdown(
+                    f"OOS continuum and {len(fine_structures)} ELNES component(s). "
+                    "Edit their parameters in the **Continuum** and **ELNES** "
+                    "sections of the sidebar.",
+                    margin=(0, 8, 8, 8),
+                ),
                 sizing_mode="stretch_width",
                 styles={
-                    "align-items": "center",
-                    "gap": "12px",
+                    "gap": "8px",
                     "margin": "0",
                     "min-width": "0",
                     "max-width": "100%",
-                    "overflow": "hidden",
                 },
             )
 
@@ -276,6 +633,8 @@ class EdgeAddedModal(pn.Column):
         return entries
 
     def refresh(self) -> None:
+        self._error_pane.visible = False
+        self._error_pane.object = ""
         self._body.objects = self._edge_entries()
 
     def _close(self, *_):
@@ -283,6 +642,384 @@ class EdgeAddedModal(pn.Column):
         if self._on_close:
             self._on_close()
         self._custom_page.close_modal()
+
+
+class ElementalModelParameterEditor:
+    """Reactive Continuum and ELNES controls mounted directly in the sidebar.
+
+    Each section intentionally exposes one component at a time. This keeps the
+    controls aligned as a compact table while the preview stays visible beside
+    them, instead of hiding the model editor inside the edge-management modal.
+    """
+
+    _parameter_from_widgets = staticmethod(EdgeAddedModal._parameter_from_widgets)
+    _parameter_row = EdgeAddedModal._parameter_row
+    _fine_structure_editor = EdgeAddedModal._fine_structure_editor
+
+    def __init__(self, model: "FittingModel"):
+        self._model = model
+        self._change_callback = None
+        self._editable = True
+        self._syncing_widgets = False
+        self._compact_editor = True
+        self._parameter_widgets = {}
+        self._fine_structure_widgets = {}
+        self._selected_continuum_id = None
+        self._selected_elnes_id = None
+        self._continuum_error = self._make_error_pane()
+        self._elnes_error = self._make_error_pane()
+        self._continuum_selector = self._make_component_selector(
+            margin=(0, 0, 10, 0)
+        )
+        self._elnes_selector = self._make_component_selector(margin=0)
+        self._elnes_selector_row = None
+        self._elnes_shape_row = None
+        self._continuum_form = self._make_form_body()
+        self._elnes_form = self._make_form_body()
+        self._continuum_selector_row = None
+        self._continuum_body = pn.Column(
+            sizing_mode="stretch_width",
+            styles={"gap": "0", "min-width": "0", "max-width": "100%"},
+        )
+        self._elnes_body = pn.Column(
+            sizing_mode="stretch_width",
+            styles={"gap": "0", "min-width": "0", "max-width": "100%"},
+        )
+        self._continuum_selector.param.watch(
+            self._on_continuum_selection_changed, "value"
+        )
+        self._elnes_selector.param.watch(self._on_elnes_selection_changed, "value")
+        self.continuum_panel = pn.Column(
+            self._continuum_error,
+            self._continuum_body,
+            sizing_mode="stretch_width",
+            styles={"min-width": "0", "max-width": "100%", "gap": "0"},
+        )
+        self.elnes_panel = pn.Column(
+            self._elnes_error,
+            self._elnes_body,
+            sizing_mode="stretch_width",
+            styles={"min-width": "0", "max-width": "100%", "gap": "0"},
+        )
+        self.refresh()
+
+    @classmethod
+    def _make_component_selector(cls, *, margin) -> pn.widgets.Select:
+        return pn.widgets.Select(
+            name="",
+            options={},
+            sizing_mode="stretch_width",
+            margin=margin,
+            styles={"min-width": "0", "max-width": "100%"},
+        )
+
+    @staticmethod
+    def _make_form_body() -> pn.Column:
+        return pn.Column(
+            sizing_mode="stretch_width",
+            styles={
+                "background": "transparent",
+                "box-sizing": "border-box",
+                "gap": "0",
+                "max-width": "100%",
+                "min-width": "0",
+            },
+        )
+
+    @staticmethod
+    def _make_error_pane() -> pn.pane.Alert:
+        return pn.pane.Alert(
+            "",
+            alert_type="danger",
+            visible=False,
+            sizing_mode="stretch_width",
+            margin=(0, 0, 8, 0),
+        )
+
+    @property
+    def parameter_widgets(self) -> dict:
+        return self._parameter_widgets
+
+    @property
+    def fine_structure_widgets(self) -> dict:
+        return self._fine_structure_widgets
+
+    @property
+    def continuum_selector(self) -> pn.widgets.Select:
+        """Component chooser displayed at the top of the Continuum card."""
+        return self._continuum_selector
+
+    @property
+    def elnes_selector(self) -> pn.widgets.Select:
+        """Component chooser displayed at the top of the ELNES card."""
+        return self._elnes_selector
+
+    def set_change_callback(self, callback) -> None:
+        self._change_callback = callback
+
+    def set_editable(self, editable: bool) -> None:
+        editable = bool(editable)
+        if editable == self._editable:
+            return
+        self._editable = editable
+        self.refresh()
+
+    def _workspace(self):
+        return getattr(self._model.app_state, "nlls_workspace", None)
+
+    def _emit_change(self) -> None:
+        if self._change_callback is not None:
+            try:
+                self._change_callback()
+            except Exception:
+                pass
+
+    def _clear_errors(self) -> None:
+        for pane in (self._continuum_error, self._elnes_error):
+            pane.object = ""
+            pane.visible = False
+
+    def _commit_editor_change(self) -> None:
+        workspace = self._workspace()
+        if workspace is not None:
+            workspace.refresh_clustering_from_template()
+        self._clear_errors()
+        self._emit_change()
+
+    def _show_editor_error(
+        self, message: str, component_kind: str | None = None
+    ) -> None:
+        pane = (
+            self._continuum_error
+            if component_kind == "continuum"
+            else self._elnes_error
+        )
+        pane.object = f"Cannot update model: {message}"
+        pane.visible = True
+
+    @staticmethod
+    def _component_options(components, label_for) -> dict[str, str]:
+        """Build readable Select labels without dropping duplicate components."""
+        options = {}
+        for component in components:
+            label = label_for(component)
+            unique_label = label
+            index = 2
+            while unique_label in options:
+                unique_label = f"{label} ({index})"
+                index += 1
+            options[unique_label] = component.id
+        return options
+
+    @staticmethod
+    def _component_for_id(components, component_id):
+        return next(
+            (component for component in components if component.id == component_id),
+            None,
+        )
+
+    @staticmethod
+    def _selected_id(options: dict[str, str], previous_id):
+        if previous_id in options.values():
+            return previous_id
+        return next(iter(options.values()), None)
+
+    def _set_selector_options(
+        self,
+        selector: pn.widgets.Select,
+        options: dict[str, str],
+        selected_id,
+    ) -> None:
+        selector.options = options
+        selector.value = selected_id
+        selector.visible = bool(options)
+        selector.disabled = not self._editable
+
+    def _sync_selectors(self, area) -> None:
+        continuum_options = self._component_options(
+            area.continuum_specs,
+            lambda continuum: f"{continuum.symbol} {'+'.join(continuum.shells)} OOS",
+        )
+        edge_by_id = {edge.id: edge for edge in area.edges}
+        elnes_options = self._component_options(
+            area.fine_structure_specs,
+            lambda component: (
+                f"{edge_by_id[component.edge_id].symbol} {component.shell} ELNES"
+                if component.edge_id in edge_by_id
+                else f"{component.shell} ELNES"
+            ),
+        )
+        self._selected_continuum_id = self._selected_id(
+            continuum_options, self._selected_continuum_id
+        )
+        self._selected_elnes_id = self._selected_id(
+            elnes_options, self._selected_elnes_id
+        )
+        self._set_selector_options(
+            self._continuum_selector,
+            continuum_options,
+            self._selected_continuum_id,
+        )
+        self._set_selector_options(
+            self._elnes_selector,
+            elnes_options,
+            self._selected_elnes_id,
+        )
+
+    def _on_continuum_selection_changed(self, event) -> None:
+        if self._syncing_widgets:
+            return
+        self._selected_continuum_id = event.new
+        self._clear_errors()
+        self._render_selected_forms()
+
+    def _on_elnes_selection_changed(self, event) -> None:
+        if self._syncing_widgets:
+            return
+        self._selected_elnes_id = event.new
+        self._clear_errors()
+        self._render_selected_forms()
+
+    def _sync_linked_parameter_widgets(self) -> None:
+        """Refresh linked ELNES center fields after a chemical-shift mutation."""
+        workspace = self._workspace()
+        if workspace is None or "default" not in workspace.areas:
+            return
+        self._syncing_widgets = True
+        try:
+            for component in workspace.areas["default"].fine_structure_specs:
+                widgets = self._parameter_widgets.get((component.id, "center"))
+                if widgets is None:
+                    continue
+                widgets["value"].value = component.center.value
+                widgets["minimum"].value = component.center.minimum
+                widgets["maximum"].value = component.center.maximum
+        finally:
+            self._syncing_widgets = False
+
+    def _render_selected_forms(self) -> None:
+        """Render only the two components selected by the card dropdowns."""
+        self._parameter_widgets = {}
+        self._fine_structure_widgets = {}
+        workspace = self._workspace()
+        if workspace is None or "default" not in workspace.areas:
+            self._continuum_body.objects = [
+                pn.pane.Markdown("Add an edge to edit its continuum.", margin=0)
+            ]
+            self._elnes_body.objects = [
+                pn.pane.Markdown("Add an edge to edit its ELNES components.", margin=0)
+            ]
+            return
+
+        area = workspace.areas["default"]
+        continuum = self._component_for_id(
+            area.continuum_specs, self._selected_continuum_id
+        )
+        if continuum is None:
+            self._continuum_selector_row = None
+            self._continuum_body.objects = [
+                pn.pane.Markdown("Add an edge to edit its continuum.", margin=0)
+            ]
+        else:
+            self._continuum_selector_row = pn.Column(
+                self._continuum_selector,
+                sizing_mode="stretch_width",
+                min_height=55,
+                margin=(0, 0, 5, 0),
+                styles={
+                    "gap": "0",
+                    "min-width": "0",
+                    "max-width": "100%",
+                },
+            )
+            self._continuum_form.objects = [
+                self._parameter_row(
+                    component_kind="continuum",
+                    component_id=continuum.id,
+                    parameter_name="amplitude",
+                    label="Amplitude",
+                    parameter=continuum.amplitude,
+                ),
+                self._parameter_row(
+                    component_kind="continuum",
+                    component_id=continuum.id,
+                    parameter_name="chemical_shift",
+                    label="Chemical shift (eV)",
+                    parameter=continuum.chemical_shift,
+                ),
+            ]
+            self._continuum_body.objects = [
+                self._continuum_selector_row,
+                self._continuum_form,
+            ]
+
+        component = self._component_for_id(
+            area.fine_structure_specs, self._selected_elnes_id
+        )
+        if component is None:
+            self._elnes_selector_row = None
+            self._elnes_shape_row = None
+            self._elnes_body.objects = [
+                pn.pane.Markdown("Add an edge to edit its ELNES components.", margin=0)
+            ]
+        else:
+            parameter_editor = self._fine_structure_editor(
+                component,
+                show_heading=False,
+                flat=True,
+                include_configuration_controls=False,
+            )
+            fine_controls = self._fine_structure_widgets[component.id]
+            self._elnes_selector_row = pn.Row(
+                self._elnes_selector,
+                fine_controls["enabled"],
+                sizing_mode="stretch_width",
+                margin=(0, 0, 10, 0),
+                styles={
+                    "align-items": "center",
+                    "gap": "8px",
+                    "min-width": "0",
+                    "flex-wrap": "nowrap",
+                },
+            )
+            # A named Select paints both a title and its input.  In a Row the
+            # automatic height can be based on the input alone, allowing the
+            # first parameter title to paint over the bottom of the Select in
+            # a narrow sidebar.  A vertical container with an explicit minimum
+            # reserves the complete labelled-control footprint.
+            self._elnes_shape_row = pn.Column(
+                fine_controls["shape"],
+                sizing_mode="stretch_width",
+                min_height=70,
+                margin=(0, 0, 10, 0),
+                styles={
+                    "gap": "0",
+                    "min-width": "0",
+                    "max-width": "100%",
+                },
+            )   
+            self._elnes_form.objects = [
+                self._elnes_selector_row,
+                self._elnes_shape_row,
+                parameter_editor,
+            ]
+            self._elnes_body.objects = [self._elnes_form]
+
+    def refresh(self) -> None:
+        self._clear_errors()
+        workspace = self._workspace()
+        self._syncing_widgets = True
+        try:
+            if workspace is None or "default" not in workspace.areas:
+                self._selected_continuum_id = None
+                self._selected_elnes_id = None
+                self._set_selector_options(self._continuum_selector, {}, None)
+                self._set_selector_options(self._elnes_selector, {}, None)
+            else:
+                self._sync_selectors(workspace.areas["default"])
+        finally:
+            self._syncing_widgets = False
+        self._render_selected_forms()
 
 
 class FittingRightSidebarLayout(pn.Column):
@@ -533,14 +1270,6 @@ class FittingRightSidebarLayout(pn.Column):
                 self._modal_manager.open_modal(self._EDGE_ADDED_MODAL_ID)
 
             self._elemental_edges_added_button.on_click(_open_edges_added_modal)
-        self._elemental_build_model_button = pn.widgets.Button(
-            name='Build Elemental Model',
-            button_type='primary',
-            height=55,
-            margin=(10, 0, 0, 0),
-            sizing_mode=self._STRETCH_WIDTH,
-            disabled=True,
-        )
         self._elemental_use_current_clustering_button = (
             self._elemental_fit_areas_modal.use_current_clustering_button
         )
@@ -779,9 +1508,17 @@ class FittingRightSidebarLayout(pn.Column):
         return self._edge_added_modal
 
     @property
-    def elemental_build_model_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Build Elemental Model' button."""
-        return self._elemental_build_model_button
+    def elemental_model_editor(self) -> ElementalModelParameterEditor:
+        """Access the always-visible Continuum and ELNES parameter editor."""
+        return self._elemental_model_editor
+
+    @property
+    def elemental_continuum_section(self) -> SimpleDetails:
+        return self._elemental_continuum_section
+
+    @property
+    def elemental_elnes_section(self) -> SimpleDetails:
+        return self._elemental_elnes_section
 
     @property
     def elemental_use_current_clustering_button(self) -> pn.widgets.Button:
@@ -1082,11 +1819,30 @@ class FittingRightSidebarLayout(pn.Column):
         """
         self._elemental_input = {}
 
-        # Both sections start locked: the controller unlocks and opens them only once
+        # All sections start locked: the controller unlocks and opens them only once
         # background provenance AND geometry are valid, so an unusable source can never
-        # expose Add Edge / Build Elemental Model.
+        # expose model definition or fitting controls.
         edge_details = self._elemental_edge_section = self._create_elemental_edge_section()
         model_details = self._elemental_model_section = self._create_elemental_model_section()
+        self._elemental_model_editor = ElementalModelParameterEditor(self._model)
+        continuum_details = self._elemental_continuum_section = SimpleDetails(
+            title="Continuum",
+            content=self._elemental_model_editor.continuum_panel,
+            expanded=True,
+            locked=True,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+            styles=dict(self._SECTION_CONTAINED),
+        )
+        elnes_details = self._elemental_elnes_section = SimpleDetails(
+            title="ELNES",
+            content=self._elemental_model_editor.elnes_panel,
+            expanded=True,
+            locked=True,
+            sizing_mode=self._STRETCH_WIDTH,
+            margin=(0, 10, 10, 10),
+            styles=dict(self._SECTION_CONTAINED),
+        )
 
         elemental_tab = pn.Column(
             # Scrollable section stack. It must stay the PARENT of the SimpleDetails
@@ -1098,6 +1854,8 @@ class FittingRightSidebarLayout(pn.Column):
                 self._elemental_geometry_status,
                 edge_details,
                 model_details,
+                continuum_details,
+                elnes_details,
                 sizing_mode=self._STRETCH_BOTH,
                 css_classes=["elemental-input-container"],
                 # The .elemental-input-container rule in fitting.css is dead (shadow root),
@@ -1205,6 +1963,7 @@ class FittingRightSidebarLayout(pn.Column):
             start=constants.ELEMENTAL_CHEMICAL_SHIFT_MIN,
             end=constants.ELEMENTAL_CHEMICAL_SHIFT_MAX,
             step=constants.ELEMENTAL_CHEMICAL_SHIFT_STEP,
+            format="0.00",
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
         )
@@ -1260,14 +2019,14 @@ class FittingRightSidebarLayout(pn.Column):
             margin=(0, 10, 10, 10),
         )
         self._elemental_input["elnes_shape"] = pn.widgets.Select(
-            name="ELNES shape",
+            name="Default ELNES shape for new edges",
             options=constants.AVAILABLE_ELEMENTAL_MODELS,
             value=constants.DEFAULT_ELEMENTAL_MODEL,
             sizing_mode=self._STRETCH_WIDTH,
             margin=(0, 10, 10, 10),
         )
         self._elemental_input["flexibility"] = pn.widgets.Select(
-            name="Flexibility",
+            name="Default bounds for new edges",
             options=constants.AVAILABLE_ELEMENTAL_FLEXIBILITIES,
             value=constants.DEFAULT_ELEMENTAL_FLEXIBILITY,
             sizing_mode=self._STRETCH_WIDTH,
@@ -1361,7 +2120,7 @@ class FittingRightSidebarLayout(pn.Column):
             margin=0,
             styles={
                 "align-items": "flex-start",
-                "gap": "15px",
+                "gap": "8px",
                 "min-width": "0",
             },
         )
@@ -1429,7 +2188,6 @@ class FittingRightSidebarLayout(pn.Column):
             self._elemental_input["flexibility"],
             self._elemental_soften_controls,
             self._elemental_execution_controls,
-            self._elemental_build_model_button,
             sizing_mode=self._STRETCH_WIDTH,
         )
 

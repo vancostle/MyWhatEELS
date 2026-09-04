@@ -283,7 +283,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
     @property
     def nlls_edge_preview_active(self) -> bool:
-        """Whether paneB is currently showing an Edge Definition OOS preview."""
+        """Whether paneB is showing the live Elemental component preview."""
         return self._nlls_edge_preview_active
 
     def _reset_nlls_edge_preview_state(self) -> None:
@@ -301,7 +301,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         curve_x: np.ndarray,
         curve_y: np.ndarray,
     ) -> float:
-        """Return a positive visual scale for an OOS curve.
+        """Return a positive visual scale for one Elemental component curve.
 
         The primary estimate is the non-negative one-parameter least-squares
         solution on the energy interval shared by the experimental spectrum and
@@ -373,12 +373,15 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         spectrum,
         curves,
         spectrum_label: str = "Spectrum",
+        scale_bases=None,
     ) -> None:
-        """Show the spectrum together with shifted, visually scaled OOS curves.
+        """Show the spectrum together with visually scaled Elemental components.
 
-        ``curves`` is an iterable of ``(label, x, y)`` tuples.  Its ``y`` values
-        remain model-independent: scaling is applied only to the HoloViews
-        objects used for this preview.
+        ``curves`` is an iterable of ``(label, x, y)`` tuples. Its input arrays
+        are never mutated: scaling is applied only to the HoloViews objects used
+        for this preview. ``scale_bases`` may provide one unit-
+        amplitude y array per curve; this keeps the visual gain stable while an
+        amplitude parameter changes, so the change remains visible.
         """
         energy_values = np.asarray(energy, dtype=float).reshape(-1)
         spectrum_values = np.asarray(spectrum, dtype=float).reshape(-1)
@@ -411,7 +414,18 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             )
         ]
 
-        for curve_index, curve in enumerate(curves):
+        curve_entries = tuple(curves)
+        basis_entries = (
+            tuple(scale_bases)
+            if scale_bases is not None
+            else tuple(None for _ in curve_entries)
+        )
+        if len(basis_entries) != len(curve_entries):
+            raise ValueError("Edge preview scale bases must match the curve count")
+
+        for curve_index, (curve, scale_basis) in enumerate(
+            zip(curve_entries, basis_entries)
+        ):
             try:
                 label, x_values, y_values = curve
             except (TypeError, ValueError) as exc:
@@ -431,8 +445,22 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
             finite_x = curve_x[:curve_size][curve_finite]
             finite_y = curve_y[:curve_size][curve_finite]
+            if scale_basis is None:
+                basis_x = finite_x
+                basis_y = finite_y
+            else:
+                raw_basis = np.asarray(scale_basis, dtype=float).reshape(-1)
+                basis_size = min(curve_x.size, raw_basis.size)
+                basis_finite = (
+                    np.isfinite(curve_x[:basis_size])
+                    & np.isfinite(raw_basis[:basis_size])
+                )
+                if np.count_nonzero(basis_finite) < 2:
+                    continue
+                basis_x = curve_x[:basis_size][basis_finite]
+                basis_y = raw_basis[:basis_size][basis_finite]
             scale = self._nlls_edge_preview_scale(
-                spectrum_x, spectrum_y, finite_x, finite_y
+                spectrum_x, spectrum_y, basis_x, basis_y
             )
             scaled_y = finite_y * scale
             if np.any(~np.isfinite(scaled_y)):
@@ -455,7 +483,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
 
         preview_plot = hv.Overlay(preview_elements).opts(
             hv.opts.Overlay(
-                title="Edge Definition - OOS preview (visual scale)",
+                title="Elemental model preview (visual scale)",
                 xlabel=self._X_AXIS_SPECTRUM_TITLE,
                 ylabel=self._Y_AXIS_SPECTRUM_TITLE,
                 legend_position="top_right",

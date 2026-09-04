@@ -140,8 +140,10 @@ class NLLSController:
             )
         if getattr(self.view, "edge_added_modal", None) is not None:
             self.view.edge_added_modal.set_change_callback(self._on_edge_modal_changed)
+        model_editor = getattr(self.view, "elemental_model_editor", None)
+        if model_editor is not None:
+            model_editor.set_change_callback(self._on_model_editor_changed)
         self.view.elemental_add_edge_button.on_click(self._on_add_edge)
-        self.view.elemental_build_model_button.on_click(self._on_build_model)
         self.view.elemental_fit_button.on_click(self._on_fit)
         self.view.elemental_run_nlls_button.on_click(
             self._on_run_elemental_nlls
@@ -187,10 +189,18 @@ class NLLSController:
         self._watchers.clear()
 
     def _on_edge_modal_changed(self) -> None:
-        """Persist the modal edit and redraw all downstream Elemental state."""
+        """Refresh model cards after the edge-management modal changes."""
+        model_editor = getattr(self.view, "elemental_model_editor", None)
+        if model_editor is not None:
+            model_editor.refresh()
+        self._on_model_editor_changed()
+
+    def _on_model_editor_changed(self) -> None:
+        """Persist a card edit and redraw all downstream Elemental state."""
         workspace = self.workspace
         if workspace is not None:
             self._publish_workspace()
+            self._sync_edge_controls_from_selection()
             self._refresh_edge_preview()
             self._refresh_button_states()
 
@@ -246,6 +256,9 @@ class NLLSController:
             self._clear_edge_preview()
             self._update_validation_status()
             self._refresh_element_catalog()
+            model_editor = getattr(self.view, "elemental_model_editor", None)
+            if model_editor is not None:
+                model_editor.refresh()
             self._refresh_button_states()
             return
 
@@ -286,6 +299,9 @@ class NLLSController:
         self._update_validation_status()
         self._refresh_element_catalog()
         self._sync_edge_controls_from_selection()
+        model_editor = getattr(self.view, "elemental_model_editor", None)
+        if model_editor is not None:
+            model_editor.refresh()
         self._refresh_button_states()
         self._refresh_results_view()
         self._refresh_edge_preview()
@@ -396,13 +412,18 @@ class NLLSController:
         self._apply_section_availability(background_valid and geometry_valid)
 
     def _apply_section_availability(self, unlocked: bool) -> None:
-        """Lock/unlock Edge Definition and Model Setup as a single gated block.
+        """Lock/unlock all Elemental definition cards as one gated block.
 
         Sections are opened only on the transition into a valid source, so a user who
         folds one of them while working keeps it folded across later refreshes.
         """
         just_unlocked = unlocked and self._sections_unlocked is not True
-        for name in ("elemental_edge_section", "elemental_model_section"):
+        for name in (
+            "elemental_edge_section",
+            "elemental_model_section",
+            "elemental_continuum_section",
+            "elemental_elnes_section",
+        ):
             section = getattr(self.view, name, None)
             if section is None:
                 continue
@@ -624,17 +645,17 @@ class NLLSController:
         if np.count_nonzero(finite_curve) == 0:
             return np.full(axis.shape, np.nan, dtype=float)
 
-        masked_curve = curve.copy()
-        masked_curve[~finite_curve] = np.nan
-        masked_curve[np.isclose(masked_curve, 0.0, atol=0.0)] = np.nan
-
-        return np.interp(
+        interpolated = np.interp(
             shifted_axis,
             support,
-            masked_curve,
+            np.where(finite_curve, curve, 0.0),
             left=np.nan,
             right=np.nan,
         )
+        onset = min(float(value) for value in snapshot.onsets_eV)
+        interpolated[shifted_axis < onset] = np.nan
+        interpolated[np.isclose(interpolated, 0.0, atol=0.0)] = np.nan
+        return interpolated
 
     def _edge_preview_reference(self):
         """Return a stable mean spectrum for positioning Edge Definition curves."""
@@ -668,11 +689,13 @@ class NLLSController:
                 pass
 
     def _refresh_edge_preview(self) -> None:
-        """Plot saved OOS continua plus the current candidate selection.
+        """Plot saved continua/ELNES plus the current OOS candidate selection.
 
         The candidate is included before ``Add Edge`` so the shift can be aligned
         interactively.  Once an edge exists, the shift watcher updates its saved
         ``ContinuumSpec`` and this same route redraws the committed definition.
+        Fine-structure curves are evaluated through ``NLLSModelBuilder`` so their
+        live preview cannot diverge from Build semantics.
         """
         if not self._edge_definition_tab_active():
             self._clear_edge_preview()
@@ -691,7 +714,9 @@ class NLLSController:
             eloss = np.asarray(dataset.coords["Eloss"].values, dtype=float)
             fit_range = self._current_fit_range()
             entries: dict[str, tuple[str, np.ndarray, np.ndarray]] = {}
+            scale_bases: dict[str, np.ndarray] = {}
             candidate_entries: dict[str, tuple[str, np.ndarray, np.ndarray]] = {}
+            candidate_bases: dict[str, np.ndarray] = {}
             try:
                 groups, snapshots, _broadening = self._validate_selected_curves()
                 atomic_number = int(
@@ -707,11 +732,16 @@ class NLLSController:
                         f"{symbol or f'Z{atomic_number}'} {'+'.join(group)} OOS "
                         f"(shift {shift:+g} eV)"
                     )
-                    candidate_entries[f"{token}_continuum"] = (
+                    component_id = f"{token}_continuum"
+                    candidate_curve = self._shifted_oos_preview(
+                        snapshot, eloss, shift
+                    )
+                    candidate_entries[component_id] = (
                         label,
                         eloss,
-                        self._shifted_oos_preview(snapshot, eloss, shift),
+                        candidate_curve,
                     )
+                    candidate_bases[component_id] = candidate_curve
             except (NLLSError, ValueError, TypeError):
                 pass
 
@@ -730,16 +760,40 @@ class NLLSController:
                     fit_range,
                 )
                 shift = float(continuum.chemical_shift.value)
+                unit_curve = self._shifted_oos_preview(snapshot, eloss, shift)
                 label = (
                     f"{continuum.symbol} {'+'.join(continuum.shells)} OOS "
-                    f"(shift {shift:+g} eV)"
+                    f"(A {continuum.amplitude.value:g}, shift {shift:+g} eV)"
                 )
                 entries[continuum.id] = (
                     label,
                     eloss,
-                    self._shifted_oos_preview(snapshot, eloss, shift),
+                    float(continuum.amplitude.value) * unit_curve,
                 )
+                scale_bases[continuum.id] = unit_curve
             entries.update(candidate_entries)
+            scale_bases.update(candidate_bases)
+
+            if area.model_composition.value == "continuum_plus_elnes":
+                edge_by_id = {edge.id: edge for edge in area.edges}
+                for component in area.fine_structure_specs:
+                    if not component.enabled:
+                        continue
+                    curve = self.builder.evaluate_fine_structure(component, eloss)
+                    unit_curve = self.builder.evaluate_fine_structure(
+                        component, eloss, amplitude=1.0
+                    )
+                    edge = edge_by_id.get(component.edge_id)
+                    symbol = edge.symbol if edge is not None else "ELNES"
+                    shape_name = component.shape.removesuffix("Model")
+                    label = (
+                        f"{symbol} {component.shell} {shape_name} "
+                        f"(center {component.center.value:g} eV, "
+                        f"sigma {component.sigma.value:g} eV, "
+                        f"amplitude {component.amplitude.value:g})"
+                    )
+                    entries[component.id] = (label, eloss, curve)
+                    scale_bases[component.id] = unit_curve
 
             if not entries:
                 self._clear_edge_preview()
@@ -751,6 +805,9 @@ class NLLSController:
                     selection.spectrum,
                     tuple(entries.values()),
                     spectrum_label=spectrum_label,
+                    scale_bases=tuple(
+                        scale_bases[component_id] for component_id in entries
+                    ),
                 )
             except Exception:
                 # Preview rendering is advisory and must never roll back a
@@ -829,6 +886,9 @@ class NLLSController:
         edge_modal = getattr(self.view, "edge_added_modal", None)
         if edge_modal is not None:
             edge_modal.set_editable(not run_active)
+        model_editor = getattr(self.view, "elemental_model_editor", None)
+        if model_editor is not None:
+            model_editor.set_editable(not run_active)
         selected_valid = False
         if workspace is not None:
             try:
@@ -854,10 +914,6 @@ class NLLSController:
         clustering_button.disabled = run_active or not (
             clustering_active or clustering_valid
         )
-
-        area = workspace.areas.get("default") if workspace is not None else None
-        has_continuum = bool(area and area.continuum_specs)
-        self.view.elemental_build_model_button.disabled = run_active or not has_continuum
 
         fit_areas = self.view.elemental_fit_areas_input
         if clustering_active and workspace is not None:
@@ -899,7 +955,7 @@ class NLLSController:
                 if workspace is None or area_id not in workspace.areas:
                     targets_available = False
                     break
-                if not workspace.is_area_built(area_id):
+                if not workspace.areas[area_id].continuum_specs:
                     targets_available = False
                     break
                 self._reference_mask_for_area(area_id)
@@ -1498,6 +1554,11 @@ class NLLSController:
                     if workspace.dirty_revision != previous_revision:
                         workspace.refresh_clustering_from_template()
                         self._publish_workspace()
+                        model_editor = getattr(
+                            self.view, "elemental_model_editor", None
+                        )
+                        if model_editor is not None:
+                            model_editor.refresh()
         except (NLLSError, ValueError, TypeError):
             pass
         self._refresh_edge_preview()
@@ -1686,6 +1747,9 @@ class NLLSController:
                 added.append(f"{edge.symbol} {'+'.join(group)}")
             workspace.refresh_clustering_from_template()
             self._publish_workspace()
+            model_editor = getattr(self.view, "elemental_model_editor", None)
+            if model_editor is not None:
+                model_editor.refresh()
             self._refresh_edge_preview()
             self._refresh_button_states()
             self._notify("success", f"Elemental edge added: {', '.join(added)}")
@@ -1714,8 +1778,8 @@ class NLLSController:
         return built, snapshot
 
     def _on_build_model(self, event) -> None:
+        """Compatibility hook for an explicit build; the UI builds lazily in Fit."""
         self.app_state.nlls_run_state = "building"
-        self.view.elemental_build_model_button.loading = True
         try:
             workspace = self.workspace
             if workspace is None:
@@ -1740,7 +1804,6 @@ class NLLSController:
             self.app_state.nlls_run_state = "error"
             self._notify("error", f"Cannot build Elemental model: {exc}", 8000)
         finally:
-            self.view.elemental_build_model_button.loading = False
             self._refresh_button_states()
 
     def _fit_area(self, area_id: str):
@@ -1748,7 +1811,10 @@ class NLLSController:
         if workspace is None:
             raise ValueError("no valid NLLS workspace")
         if not workspace.is_area_built(area_id):
-            raise ValueError(f"area {area_id} must be built before fitting its reference")
+            self._build_area(area_id)
+            workspace = self.workspace
+            if workspace is None or not workspace.is_area_built(area_id):
+                raise ValueError(f"area {area_id} could not be built for fitting")
         area = workspace.areas[area_id]
         dataset = self._active_dataset()
         eloss = np.asarray(dataset.coords["Eloss"].values, dtype=float)
@@ -1779,7 +1845,10 @@ class NLLSController:
         for area_id in area_ids:
             try:
                 if not workspace.is_area_built(area_id):
-                    raise ValueError(f"area {area_id} must be built first")
+                    self._build_area(area_id)
+                    workspace = self.workspace
+                    if workspace is None or not workspace.is_area_built(area_id):
+                        raise ValueError(f"area {area_id} could not be built for fitting")
                 references[area_id] = self._reference_selection_for_area(area_id)
             except Exception as exc:
                 preparation_failures.append(

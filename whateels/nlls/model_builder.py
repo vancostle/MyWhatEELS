@@ -79,8 +79,8 @@ class NLLSModelBuilder:
         model.set_param_hint(
             "chemical_shift",
             value=0.0,
-            min=-10.0,
-            max=10.0,
+            min=-20.0,
+            max=20.0,
             vary=False,
         )
         return model
@@ -121,6 +121,42 @@ class NLLSModelBuilder:
             sigma_r = params.get(f"{fine.prefix}sigma_r")
             if sigma_r is not None:
                 self._apply_parameter_spec(sigma_r, fine.sigma)
+
+    def evaluate_fine_structure(
+        self,
+        spec: FineStructureSpec,
+        eloss: np.ndarray,
+        *,
+        amplitude: float | None = None,
+    ) -> np.ndarray:
+        """Evaluate one ELNES spec with the exact model semantics used by Build.
+
+        ``amplitude`` is a display-only override used to derive a stable visual
+        scale. It does not mutate the immutable spec or relax its saved bounds.
+        """
+        model = self._make_elnes_component(spec)
+        params = model.make_params()
+        self._apply_parameter_spec(params[f"{spec.prefix}center"], spec.center)
+        self._apply_parameter_spec(params[f"{spec.prefix}sigma"], spec.sigma)
+        self._apply_parameter_spec(params[f"{spec.prefix}amplitude"], spec.amplitude)
+        sigma_r = params.get(f"{spec.prefix}sigma_r")
+        if sigma_r is not None:
+            self._apply_parameter_spec(sigma_r, spec.sigma)
+        if amplitude is not None:
+            params[f"{spec.prefix}amplitude"].set(
+                value=float(amplitude),
+                min=-np.inf,
+                max=np.inf,
+                vary=False,
+                expr=None,
+            )
+        values = np.asarray(
+            model.eval(params=params, x=np.asarray(eloss, dtype=float)),
+            dtype=float,
+        )
+        if np.any(~np.isfinite(values)):
+            raise ValueError("fine-structure preview contains NaN or Inf")
+        return values
 
     def build(
         self,

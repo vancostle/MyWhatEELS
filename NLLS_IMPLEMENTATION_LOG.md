@@ -728,3 +728,99 @@ Estado: completada. Sustituye la cadencia y el doble relayout descritos en T56; 
 - El desmontaje retira el listener global de `resize`, cancela los frames de montaje, drag y relayout, vacía las vistas cacheadas y restaura cualquier `overflow` temporal. No se reintroducen reparentado DOM, `ResizeObserver`, evento global sintético de resize ni temporizadores de 150/200 ms.
 - Auditoría final de código huérfano: retirado el argumento `refresh` de `resolve_relayout_view`, que ya siempre recibía `false`, eliminada una bifurcación duplicada al registrar la última pasada y actualizada la documentación que aún describía el flujo anterior.
 - Verificación automatizada focalizada: las 45 pruebas de `tests.test_fitting_manual_regression` son correctas; `compileall` de los módulos Python modificados y `git diff --check` también son correctos. No se realizó en esta última pasada una nueva medición visual de tiempos en navegador.
+
+### T58 — Edición avanzada del modelo y preview ELNES reactivo
+
+Estado: completada. Cierra la edición de `ParameterSpec` desde las tarjetas que quedó pendiente en T04 y amplía el preview de definición elemental, hasta ahora limitado a los continuos OOS.
+
+- El modal **Edges Added** expone, para cada continuo, amplitud `A` y desplazamiento químico; para cada componente ELNES expone forma, estado habilitado, centro, sigma y amplitud. Cada parámetro permite editar valor, mínimo, máximo y `vary`.
+- Las cuatro formas admitidas por el builder —`GaussianModel`, `LorentzianModel`, `PseudoVoigtModel` y `SplitLorentzianModel`— se seleccionan desde la tarjeta. Los cambios se escriben inmediatamente en el área `default`, se replican a las áreas de clustering y dejan inválidos el build y los ajustes de referencia que ya no corresponden a la definición vigente.
+- La validación sigue centralizada en el `ParameterSpec` inmutable. Un valor fuera de sus cotas, cotas invertidas o una forma no soportada no producen una mutación parcial: el widget recupera el valor persistido y el modal muestra el error.
+- El preview del espectro representa ahora los continuos guardados y todos los ELNES habilitados. Las curvas ELNES se evalúan con los mismos modelos y parámetros de `lmfit` que usa **Build Elemental Model**, por lo que centro, sigma y forma visibles coinciden con el modelo que se ajustará.
+- La escala visual usa una curva base de amplitud unidad y aplica después la amplitud real. De esta forma, modificar la amplitud de una gaussiana cambia su altura en pantalla; el autoescalado visual ya no neutraliza el cambio. Modificar centro o sigma desplaza o ensancha la gaussiana en tiempo real.
+- Corregida también la interpolación visual del continuo OOS: los ceros del soporte ya no contaminan por `NaN` los canales vecinos; el dominio anterior al onset y los valores realmente nulos continúan enmascarados.
+- Regresiones nuevas: mutaciones tipadas e invalidación del workspace, render completo del modal, edición de centro/sigma/amplitud y `vary`, cotas del continuo, cambio/desactivación de forma, rollback de entradas inválidas y escala visible de amplitud. Suite completa: 101 pruebas correctas.
+
+### T59 — Rango y presentación del chemical shift
+
+Estado: completada.
+
+- El desplazamiento químico admite ahora el intervalo cerrado `[-20, +20] eV` tanto en los defaults de dominio como en el selector principal de **Edge Definition** y en el editor avanzado de **Edges Added**.
+- Los controles usan pasos de `0.01 eV` y formato fijo `0.00`, de modo que presentan únicamente dos decimales sin rebajar la precisión interna del `ParameterSpec`.
+- Regresiones añadidas para el contrato de dominio, el control principal y las tres entradas del editor avanzado. Suite completa: 103 pruebas correctas.
+
+### T60 — Tarjetas Continuum/ELNES y construcción implícita en Fit
+
+Estado: completada. Sustituye la edición avanzada escondida en el modal de T58 por un flujo visible durante la previsualización.
+
+- Añadidas dos secciones independientes y reactivas en el sidebar de Elemental: **Continuum** contiene amplitud y chemical shift de cada edge; **ELNES** contiene forma, habilitación, centro, sigma y amplitud de cada componente. Valor, mínimo, máximo y `vary` permanecen editables. Ambas tarjetas se actualizan al añadir o borrar edges y se bloquean mientras un run posee el workspace.
+- **Edges Added** queda limitado a inspeccionar y eliminar edges. Ya no es necesario abrir un modal para editar parámetros, por lo que el usuario mantiene simultáneamente a la vista los controles y el preview espectral.
+- Retirado de la interfaz **Build Elemental Model**. La función de build y su snapshot siguen siendo obligatorios internamente, pero **Fit** los crea automáticamente cuando el área está dirty y, a continuación, ajusta la referencia. Fit se habilita a partir de una definición válida con continuo; Run continúa exigiendo build y referencia vigentes.
+- El selector global se aclara como default para componentes nuevos: `Default ELNES shape for new edges` y `Default bounds for new edges`. Las tarjetas ELNES son la fuente para modificar componentes ya existentes.
+- Corregido el acoplamiento físico del chemical shift. Como el continuo usa `table(x + shift)`, un incremento positivo lo mueve a menor energía; ahora todos los centros ELNES asociados y sus cotas se trasladan por el delta opuesto, manteniendo su posición relativa respecto al edge. Esto funciona tanto desde Edge Definition como desde la tarjeta Continuum y se refleja inmediatamente en los controles y en el espectro.
+- Regresiones añadidas para topología/render de las tarjetas, bloqueo, edición reactiva, traslación atómica de centro/cotas ELNES, preview desplazado y build automático desde Fit. Suite completa: 106 pruebas correctas.
+
+### T61 — Diseño compacto de las tarjetas Continuum y ELNES
+
+Estado: completada.
+
+- Las dos tarjetas conservan la cabecera desplegable magenta de `SimpleDetails` y ahora siguen el patrón compacto acordado: selector blanco del componente en la parte superior y una única tabla visible de parámetros con las columnas `Value`, `Min`, `Max` y `Vary`.
+- Se elimina la pila de tarjetas blancas anidadas. El fondo gris, la sombra y el espaciado pertenecen a la tarjeta exterior, por lo que el selector y las filas quedan visualmente alineados con el diseño de referencia.
+- Continuum presenta `Amplitude A` y `Chemical shift (eV)`; ELNES presenta forma/estado y centro, sigma y amplitud con el mismo patrón. Al cambiar de componente se reconstruye solo el formulario mostrado, sin cerrar la tarjeta ni afectar al preview reactivo.
+- La selección se conserva tras una actualización del modelo y, si se borra el componente seleccionado, pasa de forma segura al primero disponible. Las etiquetas duplicadas se diferencian sin perder ningún componente.
+- Regresión añadida para selector, disposición compacta, edición del componente seleccionado y preservación de selección tras refresh. Suite completa: 107 pruebas correctas.
+
+### T62 — Jerarquía visual de Vary, Enabled y los desplegables
+
+Estado: completada.
+
+- Cada parámetro de Continuum y ELNES se presenta ahora en dos filas: título a la izquierda y `Vary` con su checkbox a la derecha; debajo quedan exclusivamente los tres campos `Value`, `Min` y `Max` a ancho repartido.
+- ELNES coloca el selector de componente y un switch real `Enabled` en la fila superior. `Peak shape` / `GaussianModel` queda inmediatamente debajo como un desplegable de ancho completo.
+- El selector del componente y el selector de forma usan el `Select` nativo de Panel, igual que `Model composition` y `Default ELNES shape for new edges`, para que borde, caret y comportamiento sean inequívocamente clicables. Continuum conserva ese mismo selector y la nueva jerarquía de `Vary`.
+- La regresión comprueba la estructura de ambos bloques de parámetros, el switch nativo de Panel, el selector de forma a ancho completo, la mutación del estado Enabled y la conservación de selección. Verificación: 107 pruebas correctas (38 de dominio/componentes y 69 de Fitting).
+
+### T63 — Dos decimales en los parámetros de tarjeta
+
+Estado: completada.
+
+- Los campos `Value`, `Min` y `Max` de Continuum y ELNES usan formato visual fijo `0.00` y un incremento de spinner de `0.01`.
+- El cambio se limita al editor compacto del sidebar: no redondea ni modifica la precisión persistida de `ParameterSpec` y mantiene intacto el comportamiento del modal heredado.
+- La regresión de estructura comprueba formato e incremento en cada bloque de amplitud, chemical shift, centro y sigma. Verificación: 107 pruebas correctas.
+
+### T64 — Reserva de altura para controles ELNES etiquetados
+
+Estado: completada.
+
+- El selector `Peak shape` de la tarjeta ELNES se monta ahora en una columna propia con altura mínima y margen inferior explícito. Bokeh puede calcular la altura automática de una fila a partir de la caja del selector, sin contar su etiqueta; por eso `Center (eV)` podía solaparse con el borde inferior de `GaussianModel`.
+- La reserva se aplica con `min_height`, no con una altura fija: conserva el desplegable nativo y tolera zoom, DPI y cambios de fuente sin recortar el control.
+- Regresión añadida para la topología de la envoltura y su altura mínima; la edición y el preview reactivo siguen intactos. Verificación: 107 pruebas correctas (69 de Fitting y 38 de dominio/componentes), `compileall` y `git diff --check` correctos.
+
+### T65 — Ritmo vertical y switch compacto de ELNES
+
+Estado: completada.
+
+- Los bloques compactos de parámetros dejan ahora 14 px uniformes antes del siguiente bloque, separando claramente `Center`, `Sigma` y `Amplitude` de sus controles `Value` / `Min` / `Max`.
+- Se retira la etiqueta redundante `Enabled`. El switch se monta directamente a la derecha del selector del componente y la fila lo centra verticalmente respecto al input.
+- La regresión protege tanto el margen de cada bloque como la estructura directa selector + switch y su alineación. Verificación: 69 pruebas de Fitting correctas, `compileall` y `git diff --check` correctos.
+
+### T66 — Etiqueta de flexibilidad por parámetro
+
+Estado: completada.
+
+- La etiqueta visible del checkbox de optimización pasa de `Vary` a `Flexibility` en las tarjetas compactas y en el editor heredado. El estado interno `vary` de `ParameterSpec` no cambia.
+- El espacio reservado para la nueva etiqueta se amplía para mantener la cabecera alineada con el checkbox. Verificación focalizada, `compileall` y `git diff --check` correctos.
+
+### T67 — Espaciado relajado de la tarjeta ELNES
+
+Estado: completada.
+
+- ELNES adopta el ritmo vertical de la referencia: 16 px entre selector y forma, y 30 px entre `Peak shape`, `Center`, `Sigma` y `Amplitude`. Continuum mantiene su espaciado compacto.
+- El switch continúa sin la etiqueta `Enabled` y alineado verticalmente junto al selector de componente.
+- La regresión diferencia explícitamente los márgenes compactos de Continuum de los márgenes amplios de ELNES.
+
+### T68 — Ajuste fino de cabeceras y controles ELNES
+
+Estado: completada.
+
+- El espacio entre `Peak shape` y `Center` se reduce a 22 px para compactar la transición.
+- Cada cabecera de parámetro conserva su separación amplia respecto al siguiente bloque, pero gana 8 px internos antes de sus campos `Value` / `Min` / `Max`; se aplica por igual a `Center`, `Sigma` y `Amplitude`.
