@@ -1960,13 +1960,13 @@ class FittingRightSidebarLayout(pn.Column):
                 self._elemental_run_progress,
                 pn.Row(
                     self._elemental_fit_button,
-                    self._elemental_fit_area_settings_button,
                     margin=0,
                     sizing_mode=self._STRETCH_WIDTH,
                     styles=self._fluid_row_styles(gap='10px'),
                 ),
                 pn.Row(
                     self._elemental_run_nlls_button,
+                    self._elemental_fit_area_settings_button,
                     margin=0,
                     sizing_mode=self._STRETCH_WIDTH,
                     styles=self._fluid_row_styles(gap='10px'),
