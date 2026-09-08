@@ -529,7 +529,7 @@ class ManualFittingRegressionTests(unittest.TestCase):
         self.assertNotIn("Cluster 0", summary)
         self.assertNotIn("background:#ca4bc8", summary.replace(" ", ""))
 
-    def test_elemental_actions_use_a_full_height_scroll_layout(self):
+    def test_elemental_actions_use_a_fixed_sidebar_footer(self):
         layout = FittingRightSidebarLayout(self.model)
         self.assertEqual(layout.sizing_mode, "stretch_both")
         self.assertEqual(layout.fitting_tabs.sizing_mode, "stretch_both")
@@ -543,15 +543,20 @@ class ManualFittingRegressionTests(unittest.TestCase):
             for column in columns
             if "elemental-input-container" in column.css_classes
         )
-        action_container = next(
-            column for column in columns if "elemental-actions" in column.css_classes
-        )
+        action_container = layout._elemental_action_stack
         self.assertEqual(input_container.styles.get("flex"), "1 1 0")
         self.assertEqual(input_container.styles.get("overflow-y"), "auto")
+        self.assertNotIn(action_container, columns)
         self.assertEqual(action_container.styles.get("flex-shrink"), "0")
-        self.assertEqual(action_container.styles.get("padding"), "10px")
+        self.assertEqual(action_container.styles.get("padding"), "0 10px 10px")
+        self.assertEqual(action_container.styles.get("transform"), "translateY(15px)")
         self.assertIn(layout.elemental_run_progress, action_container.objects)
         self.assertFalse(layout.elemental_run_progress.visible)
+        self.assertFalse(action_container.visible)
+        layout.fitting_tabs.active = 1
+        self.assertTrue(action_container.visible)
+        layout.fitting_tabs.active = 0
+        self.assertFalse(action_container.visible)
 
     def test_elemental_sections_do_not_clip_subshell_dropdown(self):
         layout = FittingRightSidebarLayout(self.model)

@@ -1326,6 +1326,7 @@ class FittingRightSidebarLayout(pn.Column):
             },
         )
         self._fitting_tabs: Optional[pn.Tabs] = None
+        self._elemental_action_stack: Optional[pn.Column] = None
         self._elemental_results_view = NLLSResultsView()
         self._elemental_multifit_controls = NLLSMultifitControls(
             custom_page=custom_page,
@@ -1842,6 +1843,11 @@ class FittingRightSidebarLayout(pn.Column):
                 }
             """]
         )
+        self._sync_elemental_action_stack_visibility()
+        self._fitting_tabs.param.watch(
+            self._sync_elemental_action_stack_visibility,
+            "active",
+        )
 
         right_sidebar = pn.Column(
             data_source_container,
@@ -1859,6 +1865,7 @@ class FittingRightSidebarLayout(pn.Column):
                     'transform': 'translateY(-10px)',
                 }
             ),
+            self._elemental_action_stack,
             styles={
                 'display': 'flex',
                 'flex': '1 1 0',
@@ -1871,6 +1878,13 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_BOTH,
         )
         return right_sidebar
+
+    def _sync_elemental_action_stack_visibility(self, event=None) -> None:
+        """Show the fixed action footer only while the Elemental tab is active."""
+        if self._elemental_action_stack is not None:
+            self._elemental_action_stack.visible = bool(
+                self._fitting_tabs is not None and self._fitting_tabs.active == 1
+            )
 
     def _create_manual_tab(self) -> pn.Column:
         """Build the 'Manual' tab: component creation controls and Show Energy Map."""
@@ -2043,9 +2057,10 @@ class FittingRightSidebarLayout(pn.Column):
             styles=dict(self._SECTION_CONTAINED),
         )
 
+        # Keep the editor scrollable within the active tab. Its actions live in
+        # the sidebar footer below, matching the fixed bottom placement used by
+        # the Clustering page.
         elemental_tab = pn.Column(
-            # Scrollable section stack. It must stay the PARENT of the SimpleDetails
-            # blocks: nesting it inside one would drop its flex/overflow rules.
             pn.Column(
                 # Both status panes stay outside the collapsible sections: they gate
                 # Add Edge / Build / Run, so a folded warning would hide the blocker.
@@ -2070,37 +2085,6 @@ class FittingRightSidebarLayout(pn.Column):
                     'padding': '0.5rem 0',
                 },
             ),
-            # Action stack, sibling of the scroll container so it stays visible.
-            pn.Column(
-                self._elemental_run_progress,
-                pn.Row(
-                    self._elemental_fit_button,
-                    self._elemental_cluster_model_select,
-                    margin=0,
-                    sizing_mode=self._STRETCH_WIDTH,
-                    styles=self._fluid_row_styles(gap='10px'),
-                ),
-                pn.Row(
-                    self._elemental_run_nlls_button,
-                    self._elemental_fit_area_settings_button,
-                    margin=0,
-                    sizing_mode=self._STRETCH_WIDTH,
-                    styles=self._fluid_row_styles(gap='10px'),
-                ),
-                margin=0,
-                sizing_mode=self._STRETCH_WIDTH,
-                css_classes=["elemental-actions"],
-                styles={
-                    'box-sizing': 'border-box',
-                    'flex-shrink': '0',
-                    'max-width': '100%',
-                    'min-height': '0',
-                    'min-width': '0',
-                    'overflow-x': 'hidden',
-                    'padding': '10px',
-                    'gap': '10px',
-                },
-            ),
             sizing_mode=self._STRETCH_BOTH,
             css_classes=["elemental-tab"],
             margin=0,
@@ -2112,6 +2096,38 @@ class FittingRightSidebarLayout(pn.Column):
                 'min-width': '0',
                 'overflow': 'hidden',
                 'padding-top': '15px',
+            },
+        )
+
+        self._elemental_action_stack = pn.Column(
+            self._elemental_run_progress,
+            pn.Row(
+                self._elemental_fit_button,
+                self._elemental_cluster_model_select,
+                margin=0,
+                sizing_mode=self._STRETCH_WIDTH,
+                styles=self._fluid_row_styles(gap='10px'),
+            ),
+            pn.Row(
+                self._elemental_run_nlls_button,
+                self._elemental_fit_area_settings_button,
+                margin=0,
+                sizing_mode=self._STRETCH_WIDTH,
+                styles=self._fluid_row_styles(gap='10px'),
+            ),
+            margin=0,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["elemental-actions"],
+            styles={
+                'box-sizing': 'border-box',
+                'flex-shrink': '0',
+                'max-width': '100%',
+                'min-height': '0',
+                'min-width': '0',
+                'overflow-x': 'hidden',
+                'padding': '0 10px 10px',
+                'gap': '10px',
+                'transform': 'translateY(15px)',
             },
         )
 
