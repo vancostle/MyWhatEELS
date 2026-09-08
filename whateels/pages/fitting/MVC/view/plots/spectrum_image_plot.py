@@ -67,6 +67,12 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._nlls_clustering_active = False
         self._nlls_clustering_label_plot = None
         self._nlls_clustering_spectra_plot = None
+        # Keep the single model-reference view distinct from the overlay that
+        # contains every cluster.  A user can select one cluster model while
+        # keeping the clustering map in paneA, and leaving an NLLS preview or
+        # result must return to that selected reference rather than to all
+        # cluster curves.
+        self._nlls_model_spectrum_plot = None
         self._nlls_edge_preview_active = False
         self._nlls_edge_preview_plot = None
         self._nlls_edge_preview_previous_plot = None
@@ -545,6 +551,10 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
                 ) = previous_ranges
             self._update_paneB(previous_plot)
         elif (
+            self._nlls_model_spectrum_plot is not None
+        ):
+            self._show_nlls_main_plot(self._nlls_model_spectrum_plot)
+        elif (
             self._nlls_clustering_active
             and self._nlls_clustering_spectra_plot is not None
         ):
@@ -583,7 +593,9 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         if not self._nlls_result_active:
             return
         self._nlls_result_active = False
-        if self._nlls_clustering_active and self._nlls_clustering_spectra_plot is not None:
+        if self._nlls_model_spectrum_plot is not None:
+            self._show_nlls_main_plot(self._nlls_model_spectrum_plot)
+        elif self._nlls_clustering_active and self._nlls_clustering_spectra_plot is not None:
             self._show_nlls_main_plot(self._nlls_clustering_spectra_plot)
         elif self._region_pairs:
             self._show_nlls_main_plot(self._figB_region(self._region_pairs))
@@ -591,6 +603,57 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
             self._show_nlls_main_plot(
                 self._figB_hover(self._last_hover_point or {"x": 0, "y": 0})
             )
+
+    def show_nlls_model_spectrum(self, energy, spectrum, label) -> None:
+        """Show the reference spectrum for the model selected beside ``Fit``.
+
+        This is intentionally independent from ``_nlls_clustering_spectra_plot``:
+        the latter remains the all-cluster overview, while this plot is the
+        currently selected cluster (or the shared ROI/central reference).
+        """
+        energy_values = np.asarray(energy, dtype=float).reshape(-1)
+        spectrum_values = np.asarray(spectrum, dtype=float).reshape(-1)
+        size = min(energy_values.size, spectrum_values.size)
+        finite = (
+            np.isfinite(energy_values[:size])
+            & np.isfinite(spectrum_values[:size])
+        )
+        if np.count_nonzero(finite) < 2:
+            raise ValueError(
+                "Selected NLLS model spectrum needs at least two finite samples"
+            )
+
+        x_values = energy_values[:size][finite]
+        y_values = spectrum_values[:size][finite]
+        order = np.argsort(x_values, kind="stable")
+        selected_plot = hv.Curve(
+            (x_values[order], y_values[order]),
+            kdims=["Energy loss (eV)"],
+            vdims=["Electron count"],
+            label=str(label or "Selected model spectrum"),
+        ).opts(
+            color="black",
+            line_width=1.75,
+            alpha=0.8,
+            title="Selected model spectrum",
+            xlabel="Energy loss (eV)",
+            ylabel="Electron count",
+            responsive=True,
+            shared_axes=False,
+            framewise=True,
+            tools=["hover", "wheel_zoom", "pan", "reset"],
+            active_tools=["wheel_zoom"],
+        )
+
+        # A deliberate model selection replaces any transient edge preview or
+        # result, but it does not discard the all-cluster overview.
+        self._reset_nlls_edge_preview_state()
+        self._nlls_result_active = False
+        self._nlls_model_spectrum_plot = selected_plot
+        if self._pc and self._pc.running:
+            self._pc.stop()
+        self._last_hover_ts = None
+        self._show_nlls_main_plot(selected_plot)
 
     def show_nlls_clustering(self, labels, energy, cluster_spectra) -> None:
         """Show categorical cluster labels and real mean spectra in the two main panes."""
@@ -687,6 +750,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._reset_nlls_edge_preview_state()
         self._nlls_clustering_active = True
         self._nlls_clustering_spectra_plot = spectra_plot
+        self._nlls_model_spectrum_plot = None
         self._nx, self._ny = nx, ny
         self._publish_paneA_ratio()
         # Publish the cluster map exactly the way the Clustering page does
@@ -704,6 +768,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
     def clear_nlls_clustering(self) -> None:
         """Restore the integrated image after leaving clustered-area mode."""
         if not self._nlls_clustering_active:
+            self._nlls_model_spectrum_plot = None
             return
         self.plot_image()
 
@@ -714,6 +779,7 @@ class SpectrumImageVisualizer(BaseSpectrumImagePlot):
         self._nlls_clustering_active = False
         self._nlls_clustering_label_plot = None
         self._nlls_clustering_spectra_plot = None
+        self._nlls_model_spectrum_plot = None
         display_data = self._get_display_data()
 
         try:

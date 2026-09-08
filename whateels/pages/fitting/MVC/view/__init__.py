@@ -100,9 +100,14 @@ class FittingView:
         return self._fitting_add_compontent_button
     
     @property
-    def background_subtraction_switch(self) -> pn.widgets.Switch:
-        """Access the background subtraction switch."""
-        return self._use_preprocessed_data_switch
+    def preprocessed_data_button(self) -> pn.widgets.Button:
+        """Access the Preprocessed Data source selector."""
+        return self._preprocessed_data_button
+
+    @property
+    def clustering_data_button(self) -> pn.widgets.Button:
+        """Access the Clustering Data source selector."""
+        return self._clustering_data_button
     
     @property
     def energy_map_toggle_button(self) -> ToggleButton:
@@ -144,6 +149,10 @@ class FittingView:
         """Access the Elemental NLLS reference-fit button."""
         return self._elemental_fit_button
     @property
+    def elemental_cluster_model_select(self) -> pn.widgets.Select:
+        """Access the Cluster # Model selector beside Fit."""
+        return self._elemental_cluster_model_select
+    @property
     def elemental_fit_area_settings_button(self) -> pn.widgets.ButtonIcon:
         """Access the clustered-area selection modal trigger."""
         return self._elemental_fit_area_settings_button
@@ -163,10 +172,6 @@ class FittingView:
     def elemental_run_progress(self) -> pn.indicators.Progress:
         """Access the progress indicator for the active multipixel run."""
         return self._elemental_run_progress
-    @property
-    def elemental_use_current_clustering_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Use Current Clustering' button."""
-        return self._elemental_use_current_clustering_button
     @property
     def elemental_background_status(self) -> pn.pane.Alert:
         """Access the Elemental NLLS background status pane."""
@@ -279,7 +284,8 @@ class FittingView:
         # Manual tab (the controller reads these private names directly).
         self._component_model_input = layout.component_input
         self._fitting_add_compontent_button = layout.fitting_add_component_button
-        self._use_preprocessed_data_switch = layout.background_subtraction_switch
+        self._preprocessed_data_button = layout.preprocessed_data_button
+        self._clustering_data_button = layout.clustering_data_button
         self._energy_map_toggle_button = layout.energy_map_toggle_button
         self._component_item_view_container = layout.component_item_view_container
 
@@ -289,12 +295,12 @@ class FittingView:
         self._elemental_model_editor = layout.elemental_model_editor
         self._elemental_add_edge_button = layout.elemental_add_edge_button
         self._elemental_fit_button = layout.elemental_fit_button
+        self._elemental_cluster_model_select = layout.elemental_cluster_model_select
         self._elemental_fit_area_settings_button = layout.elemental_fit_area_settings_button
         self._elemental_fit_areas_input = layout.elemental_fit_areas_input
         self._elemental_select_all_fit_areas_button = layout.elemental_select_all_fit_areas_button
         self._elemental_run_nlls_button = layout.elemental_run_nlls_button
         self._elemental_run_progress = layout.elemental_run_progress
-        self._elemental_use_current_clustering_button = layout.elemental_use_current_clustering_button
         self._elemental_background_status = layout.elemental_background_status
         self._elemental_geometry_status = layout.elemental_geometry_status
         self._elemental_edge_section = layout.elemental_edge_section

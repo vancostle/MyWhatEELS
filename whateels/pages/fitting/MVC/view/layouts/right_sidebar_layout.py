@@ -119,10 +119,25 @@ class EdgeAddedModal(pn.Column):
     def _workspace(self):
         return getattr(self._model.app_state, "nlls_workspace", None)
 
+    @staticmethod
+    def _editing_area_id(workspace) -> str:
+        """Return the workspace area selected by Cluster # Model."""
+        if workspace is None:
+            raise ValueError("no Elemental workspace is available")
+        area_id = str(getattr(workspace, "active_area", "default"))
+        if area_id not in workspace.areas:
+            raise ValueError(f"unknown Elemental model area: {area_id}")
+        return area_id
+
+    @classmethod
+    def _propagate_shared_template(cls, workspace) -> None:
+        """Keep the legacy shared-model behaviour only for the ROI template."""
+        if workspace is not None and cls._editing_area_id(workspace) == "default":
+            workspace.refresh_clustering_from_template()
+
     def _commit_editor_change(self) -> None:
         workspace = self._workspace()
-        if workspace is not None:
-            workspace.refresh_clustering_from_template()
+        self._propagate_shared_template(workspace)
         self._error_pane.visible = False
         self._error_pane.object = ""
         self._emit_change()
@@ -246,10 +261,11 @@ class EdgeAddedModal(pn.Column):
             if self._syncing_widgets or not self._editable:
                 return
             workspace = self._workspace()
-            if workspace is None or "default" not in workspace.areas:
+            if workspace is None:
                 return
             try:
-                area = workspace.areas["default"]
+                area_id = self._editing_area_id(workspace)
+                area = workspace.areas[area_id]
                 if component_kind == "continuum":
                     component = next(
                         item for item in area.continuum_specs if item.id == component_id
@@ -257,7 +273,7 @@ class EdgeAddedModal(pn.Column):
                     current = getattr(component, parameter_name)
                     updated = self._parameter_from_widgets(widgets, current)
                     workspace.set_continuum_parameter(
-                        "default", component_id, parameter_name, updated
+                        area_id, component_id, parameter_name, updated
                     )
                 else:
                     component = next(
@@ -270,7 +286,7 @@ class EdgeAddedModal(pn.Column):
                     if to_storage is not None:
                         updated = to_storage(updated, current)
                     workspace.set_fine_structure_parameter(
-                        "default", component_id, parameter_name, updated
+                        area_id, component_id, parameter_name, updated
                     )
                 sync_linked = getattr(
                     self, "_sync_linked_parameter_widgets", None
@@ -375,11 +391,12 @@ class EdgeAddedModal(pn.Column):
     def _absolute_elnes_center_parameter(self, component) -> ParameterSpec:
         """Resolve the user-facing center interval from stored relative data."""
         workspace = self._workspace()
-        if workspace is None or "default" not in workspace.areas:
+        if workspace is None:
             raise ValueError("no Elemental workspace is available")
+        area_id = self._editing_area_id(workspace)
         continuum = next(
             item
-            for item in workspace.areas["default"].continuum_specs
+            for item in workspace.areas[area_id].continuum_specs
             if item.edge_id == component.edge_id
         )
         shifted_onset = float(component.onset_eV) - float(
@@ -414,11 +431,12 @@ class EdgeAddedModal(pn.Column):
     def _sync_linked_parameter_widgets(self) -> None:
         """Refresh absolute Center fields after a chemical-shift edit."""
         workspace = self._workspace()
-        if workspace is None or "default" not in workspace.areas:
+        if workspace is None:
             return
+        area_id = self._editing_area_id(workspace)
         self._syncing_widgets = True
         try:
-            for component in workspace.areas["default"].fine_structure_specs:
+            for component in workspace.areas[area_id].fine_structure_specs:
                 widgets = self._parameter_widgets.get(
                     (component.id, "offset_from_onset")
                 )
@@ -490,8 +508,9 @@ class EdgeAddedModal(pn.Column):
             if workspace is None:
                 return
             try:
+                area_id = self._editing_area_id(workspace)
                 workspace.configure_fine_structure(
-                    "default",
+                    area_id,
                     component.id,
                     shape=str(shape.value),
                     enabled=bool(enabled.value),
@@ -601,10 +620,11 @@ class EdgeAddedModal(pn.Column):
         self._fine_structure_widgets = {}
         self._onset_readouts = {}
         workspace = self._workspace()
-        if workspace is None or "default" not in workspace.areas:
+        if workspace is None:
             return [pn.pane.Markdown("No edges added.", styles={"padding": "12px", "color": "#374151"})]
 
-        area = workspace.areas["default"]
+        area_id = self._editing_area_id(workspace)
+        area = workspace.areas[area_id]
         if not area.continuum_specs:
             return [pn.pane.Markdown("No edges added.", styles={"padding": "12px", "color": "#374151"})]
 
@@ -632,11 +652,12 @@ class EdgeAddedModal(pn.Column):
                 if current_workspace is None:
                     return
                 try:
+                    area_id = self._editing_area_id(current_workspace)
                     previous_revision = current_workspace.dirty_revision
-                    current_workspace.remove_edge("default", edge_id)
+                    current_workspace.remove_edge(area_id, edge_id)
                     if current_workspace.dirty_revision == previous_revision:
                         return
-                    current_workspace.refresh_clustering_from_template()
+                    self._propagate_shared_template(current_workspace)
                     self.refresh()
                     self._emit_change()
                 except (TypeError, ValueError) as exc:
@@ -763,6 +784,11 @@ class ElementalModelParameterEditor:
     )
     _sync_linked_parameter_widgets = EdgeAddedModal._sync_linked_parameter_widgets
     _fine_structure_editor = EdgeAddedModal._fine_structure_editor
+    _editing_area_id = staticmethod(EdgeAddedModal._editing_area_id)
+
+    @staticmethod
+    def _propagate_shared_template(workspace) -> None:
+        EdgeAddedModal._propagate_shared_template(workspace)
 
     def __init__(self, model: "FittingModel"):
         self._model = model
@@ -890,8 +916,7 @@ class ElementalModelParameterEditor:
 
     def _commit_editor_change(self) -> None:
         workspace = self._workspace()
-        if workspace is not None:
-            workspace.refresh_clustering_from_template()
+        self._propagate_shared_template(workspace)
         self._clear_errors()
         self._emit_change()
 
@@ -995,7 +1020,7 @@ class ElementalModelParameterEditor:
         self._fine_structure_widgets = {}
         self._onset_readouts = {}
         workspace = self._workspace()
-        if workspace is None or "default" not in workspace.areas:
+        if workspace is None:
             self._continuum_body.objects = [
                 pn.pane.Markdown("Add an edge to edit its continuum.", margin=0)
             ]
@@ -1004,7 +1029,7 @@ class ElementalModelParameterEditor:
             ]
             return
 
-        area = workspace.areas["default"]
+        area = workspace.areas[self._editing_area_id(workspace)]
         continuum = self._component_for_id(
             area.continuum_specs, self._selected_continuum_id
         )
@@ -1103,13 +1128,13 @@ class ElementalModelParameterEditor:
         workspace = self._workspace()
         self._syncing_widgets = True
         try:
-            if workspace is None or "default" not in workspace.areas:
+            if workspace is None:
                 self._selected_continuum_id = None
                 self._selected_elnes_id = None
                 self._set_selector_options(self._continuum_selector, {}, None)
                 self._set_selector_options(self._elnes_selector, {}, None)
             else:
-                self._sync_selectors(workspace.areas["default"])
+                self._sync_selectors(workspace.areas[self._editing_area_id(workspace)])
         finally:
             self._syncing_widgets = False
         self._render_selected_forms()
@@ -1253,11 +1278,52 @@ class FittingRightSidebarLayout(pn.Column):
             )
 
         # --- Shared / root widgets ---------------------------------------
-        self._use_preprocessed_data_switch = pn.widgets.Switch(
-            name="Use Preprocessed Data",
-            value=False,
-            sizing_mode=self._STRETCH_BOTH,
-            css_classes=["background-subtraction-switch"],
+        # Independent buttons allow an unavailable source to stay visible while
+        # disabled. A RadioButtonGroup can only disable the whole group.
+        source_button_styles = {
+            "width": "100%",
+            "min-width": "0",
+            "max-width": "100%",
+            "height": "38px",
+            "font-size": "13px",
+            "font-weight": "400",
+            "line-height": "1",
+            "border-radius": "8px",
+            "padding": "0 10px",
+            "display": "flex",
+            "justify-content": "center",
+            "align-items": "center",
+            "box-shadow": "none",
+            "white-space": "nowrap",
+            "overflow": "hidden",
+            "text-overflow": "clip",
+            "text-align": "center",
+            "box-sizing": "border-box",
+        }
+
+        self._preprocessed_data_button = pn.widgets.Button(
+            name="Preprocessed",
+            button_type="default",
+            height=38,
+            margin=0,
+            min_width=0,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["fitting-data-source-option"],
+            styles={
+                **source_button_styles,
+            },
+        )
+        self._clustering_data_button = pn.widgets.Button(
+            name="Clustering",
+            button_type="primary",
+            height=38,
+            margin=0,
+            min_width=0,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["fitting-data-source-option"],
+            styles={
+                **source_button_styles,
+            },
         )
         self._fitting_tabs: Optional[pn.Tabs] = None
         self._elemental_results_view = NLLSResultsView()
@@ -1333,7 +1399,7 @@ class FittingRightSidebarLayout(pn.Column):
             button_type='primary',
             height=55,
             margin=0,
-            sizing_mode='stretch_both',
+            sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
         )
         self._elemental_edges_added_button = pn.widgets.ButtonIcon(
@@ -1363,9 +1429,6 @@ class FittingRightSidebarLayout(pn.Column):
                 self._modal_manager.open_modal(self._EDGE_ADDED_MODAL_ID)
 
             self._elemental_edges_added_button.on_click(_open_edges_added_modal)
-        self._elemental_use_current_clustering_button = (
-            self._elemental_fit_areas_modal.use_current_clustering_button
-        )
         self._elemental_fit_button = pn.widgets.Button(
             name='Fit',
             button_type='success',
@@ -1373,6 +1436,15 @@ class FittingRightSidebarLayout(pn.Column):
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
+        )
+        self._elemental_cluster_model_select = pn.widgets.Select(
+            name="Cluster # Model",
+            options=["Share Current Model"],
+            value="Share Current Model",
+            height=55,
+            margin=0,
+            disabled=True,
+            sizing_mode=self._STRETCH_WIDTH,
         )
         self._elemental_fit_area_settings_button = pn.widgets.ButtonIcon(
             icon=self._ADJUSTMENTS_SVG,
@@ -1512,9 +1584,14 @@ class FittingRightSidebarLayout(pn.Column):
         return self._fitting_tabs
 
     @property
-    def background_subtraction_switch(self) -> pn.widgets.Switch:
-        """Access the 'Use Preprocessed Data' switch."""
-        return self._use_preprocessed_data_switch
+    def preprocessed_data_button(self) -> pn.widgets.Button:
+        """Access the Preprocessed Data source selector."""
+        return self._preprocessed_data_button
+
+    @property
+    def clustering_data_button(self) -> pn.widgets.Button:
+        """Access the Clustering Data source selector."""
+        return self._clustering_data_button
 
     @property
     def component_input(self) -> dict[str, pn.widgets.Widget]:
@@ -1605,14 +1682,14 @@ class FittingRightSidebarLayout(pn.Column):
         return self._elemental_elnes_section
 
     @property
-    def elemental_use_current_clustering_button(self) -> pn.widgets.Button:
-        """Access the Elemental NLLS 'Use Current Clustering' button."""
-        return self._elemental_use_current_clustering_button
-
-    @property
     def elemental_fit_button(self) -> pn.widgets.Button:
         """Access the single Elemental NLLS reference-fit action."""
         return self._elemental_fit_button
+
+    @property
+    def elemental_cluster_model_select(self) -> pn.widgets.Select:
+        """Access the model selector displayed beside the Fit action."""
+        return self._elemental_cluster_model_select
 
     @property
     def elemental_fit_area_settings_button(self) -> pn.widgets.ButtonIcon:
@@ -1668,27 +1745,63 @@ class FittingRightSidebarLayout(pn.Column):
     # Layout composition
     # ------------------------------------------------------------------
     def _create_layout(self) -> pn.Column:
-        """Compose the sidebar root: preprocessed-data switch plus the tab set."""
+        """Compose the sidebar root: data-source selectors plus the tab set."""
         constants = self._model.constants
 
-        background_subtraction_label = pn.pane.Markdown(
-            "### Use Preprocessed Data",
+        data_source_label = pn.pane.Markdown(
+            "### Data",
+            css_classes=["fitting-data-source-label"],
         )
 
         is_preprocessed_available = self._model.is_preprocessed_data_available()
-        self._use_preprocessed_data_switch.disabled = not is_preprocessed_available
+        self._preprocessed_data_button.disabled = not is_preprocessed_available
+        self._clustering_data_button.disabled = True
 
-        subtraction_bg_tooltip = (
-            "Enable use of Home preprocessed data for fitting."
-            if is_preprocessed_available else "Must do some preprocessing first at home page before using this option."
-        )
-        background_subtraction_container = pn.Row(
-            self._left_tooltip_icon(subtraction_bg_tooltip),
-            background_subtraction_label,
-            self._use_preprocessed_data_switch,
+        data_source_buttons = pn.Row(
+            self._preprocessed_data_button,
+            self._clustering_data_button,
+            margin=0,
             sizing_mode=self._STRETCH_WIDTH,
-            css_classes=["background-subtraction-container"],
-            styles=self._fluid_row_styles(),
+            css_classes=["fitting-data-source-buttons"],
+            styles={
+                "display": "grid",
+                "grid-template-columns": "minmax(0, 1fr) minmax(0, 1fr)",
+                "align-items": "center",
+                "column-gap": "0",
+                "min-width": "0",
+                "width": "100%",
+                "transform": "translateY(14px)",
+            },
+        )
+
+        # Reuse Clustering's exact TooltipIcon + Markdown row contract so the
+        # distance between the help icon and heading is identical on both pages.
+        data_source_lead = pn.Row(
+            self._left_tooltip_icon(
+                "Choose Home-preprocessed data or the current compatible clustering."
+            ),
+            data_source_label,
+            margin=0,
+            css_classes=["fitting-data-source-lead"],
+        )
+
+        data_source_container = pn.Row(
+            data_source_lead,
+            data_source_buttons,
+            sizing_mode=self._STRETCH_WIDTH,
+            css_classes=["fitting-data-source-container"],
+            styles={
+                "display": "grid",
+                "grid-template-columns": "max-content minmax(0, 1fr)",
+                "align-items": "center",
+                "column-gap": "8px",
+                "min-width": "0",
+                "width": "100%",
+                "box-sizing": "border-box",
+                "padding": "8px 0 10px 0",
+                "margin": "0",
+                "transform": "translateY(-10px)",
+            },
         )
 
         manual_tab = self._create_manual_tab()
@@ -1731,10 +1844,11 @@ class FittingRightSidebarLayout(pn.Column):
         )
 
         right_sidebar = pn.Column(
-            background_subtraction_container,
+            data_source_container,
             pn.Column(
                 self._fitting_tabs,
                 sizing_mode=self._STRETCH_BOTH,
+                css_classes=["fitting-tabs-container"],
                 styles={
                     'flex': '1 1 0',
                     'height': '100%',
@@ -1742,6 +1856,7 @@ class FittingRightSidebarLayout(pn.Column):
                     'min-height': '0',
                     'min-width': '0',
                     'overflow': 'hidden',
+                    'transform': 'translateY(-10px)',
                 }
             ),
             styles={
@@ -1960,6 +2075,7 @@ class FittingRightSidebarLayout(pn.Column):
                 self._elemental_run_progress,
                 pn.Row(
                     self._elemental_fit_button,
+                    self._elemental_cluster_model_select,
                     margin=0,
                     sizing_mode=self._STRETCH_WIDTH,
                     styles=self._fluid_row_styles(gap='10px'),

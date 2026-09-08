@@ -353,6 +353,58 @@ class ManualFittingRegressionTests(unittest.TestCase):
         self.assertFalse(hasattr(layout, "elemental_load_clustering_json_input"))
         self.assertEqual(layout.select(pn.widgets.FileInput), [])
 
+    def test_data_source_header_uses_compact_global_sidebar_spacing(self):
+        layout = FittingRightSidebarLayout(self.model)
+        label = next(
+            pane
+            for pane in layout.select(pn.pane.Markdown)
+            if "fitting-data-source-label" in pane.css_classes
+        )
+        container = next(
+            row
+            for row in layout.select(pn.Row)
+            if "fitting-data-source-container" in row.css_classes
+        )
+        buttons = next(
+            row
+            for row in layout.select(pn.Row)
+            if "fitting-data-source-buttons" in row.css_classes
+        )
+        lead = next(
+            row
+            for row in layout.select(pn.Row)
+            if "fitting-data-source-lead" in row.css_classes
+        )
+        tabs_container = next(
+            column
+            for column in layout.select(pn.Column)
+            if "fitting-tabs-container" in column.css_classes
+        )
+
+        # Match Clustering's header contract exactly: a level-three Markdown
+        # heading, rather than normal text with an approximated font weight.
+        self.assertEqual(label.object, "### Data")
+        self.assertEqual(container.styles["column-gap"], "8px")
+        self.assertEqual(container.styles["padding"], "8px 0 10px 0")
+        self.assertEqual(container.styles["transform"], "translateY(-10px)")
+        self.assertEqual(buttons.styles["column-gap"], "0")
+        self.assertEqual(buttons.styles["align-items"], "center")
+        self.assertEqual(buttons.styles["transform"], "translateY(14px)")
+        self.assertIsInstance(lead.objects[0], pn.widgets.TooltipIcon)
+        self.assertIs(lead.objects[1], label)
+        self.assertEqual(
+            tabs_container.styles["transform"],
+            "translateY(-10px)",
+        )
+        self.assertEqual(
+            buttons.objects,
+            [layout.preprocessed_data_button, layout.clustering_data_button],
+        )
+        self.assertEqual(
+            layout.preprocessed_data_button.styles["padding"],
+            "0 10px",
+        )
+
     def test_oos_method_and_status_information_is_fully_removed(self):
         layout = FittingRightSidebarLayout(self.model)
         details = layout.select(SimpleDetails)
@@ -382,12 +434,26 @@ class ManualFittingRegressionTests(unittest.TestCase):
         ]
         self.assertTrue(fit_rows)
         self.assertIn(
+            layout.elemental_cluster_model_select,
+            fit_rows[0].objects,
+        )
+        self.assertNotIn(
             layout.elemental_fit_area_settings_button,
             fit_rows[0].objects,
         )
+        run_rows = [
+            row
+            for row in layout.select(pn.Row)
+            if layout.elemental_run_nlls_button in row.objects
+        ]
+        self.assertTrue(run_rows)
         self.assertIn(
-            layout.elemental_use_current_clustering_button,
-            layout._elemental_fit_areas_modal.objects,
+            layout.elemental_fit_area_settings_button,
+            run_rows[0].objects,
+        )
+        self.assertNotIn(
+            "Use Current Clustering",
+            {button.name for button in layout._elemental_fit_areas_modal.select(pn.widgets.Button)},
         )
 
     def test_elemental_sections_start_locked_below_both_status_alerts(self):
@@ -2297,6 +2363,7 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             _region_pairs=[(0, 0), (1, 0)],
             main_result_plot=None,
             clustering_payload=None,
+            model_spectrum_payload=None,
             edge_preview_payload=None,
             edge_preview_updates=[],
         )
@@ -2316,6 +2383,15 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.visualizer.clear_nlls_clustering = (
             lambda: setattr(self.visualizer, "clustering_payload", None)
         )
+
+        def show_nlls_model_spectrum(energy, spectrum, label):
+            self.visualizer.model_spectrum_payload = (
+                np.asarray(energy, dtype=float),
+                np.asarray(spectrum, dtype=float),
+                str(label),
+            )
+
+        self.visualizer.show_nlls_model_spectrum = show_nlls_model_spectrum
 
         def show_edge_preview(
             energy,
@@ -2381,6 +2457,13 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertEqual(widget.value, ["K1"])
         self.assertIn('data-value="K1"', stylesheet)
         self.assertIn('--subshell-onset: "2 eV"', stylesheet)
+
+    def test_empty_element_selection_does_not_break_the_panel_watcher(self):
+        self.layout.elemental_input["element_atomic_number"].value = None
+        widget = self.layout.elemental_input["subshells"]
+        self.assertTrue(widget.disabled)
+        self.assertEqual(widget.options, [])
+        self.assertEqual(widget.value, [])
 
     def test_edge_preview_reacts_to_shift_and_updates_the_saved_definition(self):
         payload = self.visualizer.edge_preview_payload
@@ -3001,7 +3084,7 @@ class ElementalReferenceControllerTests(unittest.TestCase):
 
     def test_run_uses_selected_cluster_areas_only(self):
         self.controller._on_fit(None)
-        self.controller._on_use_current_clustering(None)
+        self.controller.select_clustering_data()
         self.controller._on_fit(None)
         self.layout.elemental_fit_areas_input.value = ["cluster_1"]
         self.assertFalse(self.layout.elemental_run_nlls_button.disabled)
@@ -3066,15 +3149,105 @@ class ElementalReferenceControllerTests(unittest.TestCase):
 
     def test_clustering_settings_are_disabled_without_a_compatible_result(self):
         self.state.last_clustering_result = None
-        self.assertTrue(
-            self.layout.elemental_use_current_clustering_button.disabled
-        )
         self.assertTrue(self.layout.elemental_fit_area_settings_button.disabled)
         self.assertEqual(self.layout.elemental_fit_areas_input.options, {})
 
+    def test_cluster_model_selector_tracks_the_selected_data_source(self):
+        selector = self.layout.elemental_cluster_model_select
+        self.assertEqual(selector.options, {"Current ROI Model": "default"})
+        self.assertEqual(selector.value, "default")
+        self.assertTrue(selector.disabled)
+
+        self.controller.select_clustering_data()
+        self.assertEqual(
+            selector.options,
+            {
+                "Share Current Model": self.controller._SHARED_MODEL_VALUE,
+                "Model Cluster 0": "cluster_0",
+                "Model Cluster 1": "cluster_1",
+            },
+        )
+        self.assertEqual(selector.value, self.controller._SHARED_MODEL_VALUE)
+        self.assertFalse(selector.disabled)
+        self.assertEqual(self.controller.workspace.active_area, "default")
+
+        roi_energy, roi_spectrum, roi_label = self.visualizer.model_spectrum_payload
+        np.testing.assert_allclose(roi_energy, self.eloss)
+        np.testing.assert_allclose(roi_spectrum, 2.0 * self.base_shape)
+        self.assertEqual(roi_label, "ROI mean (2 pixels)")
+
+        selector.value = selector.options["Model Cluster 1"]
+        self.assertEqual(self.controller.workspace.active_area, "cluster_1")
+        cluster_energy, cluster_spectrum, cluster_label = (
+            self.visualizer.model_spectrum_payload
+        )
+        np.testing.assert_allclose(cluster_energy, self.eloss)
+        np.testing.assert_allclose(cluster_spectrum, 4.0 * self.base_shape)
+        self.assertEqual(cluster_label, "Cluster 1 mean (2 pixels)")
+
+        selector.value = selector.options["Share Current Model"]
+        self.assertEqual(self.controller.workspace.active_area, "default")
+        shared_energy, shared_spectrum, shared_label = (
+            self.visualizer.model_spectrum_payload
+        )
+        np.testing.assert_allclose(shared_energy, self.eloss)
+        np.testing.assert_allclose(shared_spectrum, 2.0 * self.base_shape)
+        self.assertEqual(shared_label, "ROI mean (2 pixels)")
+
+        self.controller.select_preprocessed_data()
+        self.assertEqual(selector.options, {"Current ROI Model": "default"})
+        self.assertEqual(selector.value, "default")
+        self.assertTrue(selector.disabled)
+
+    def test_selected_cluster_model_edits_are_isolated_from_roi_and_other_clusters(self):
+        self.controller.select_clustering_data()
+        workspace = self.controller.workspace
+        selector = self.layout.elemental_cluster_model_select
+
+        self.assertEqual(
+            workspace.areas["default"].model_composition.value,
+            "continuum_only",
+        )
+        self.assertEqual(
+            workspace.areas["cluster_0"].model_composition.value,
+            "continuum_only",
+        )
+        selector.value = selector.options["Model Cluster 1"]
+        self.assertEqual(workspace.active_area, "cluster_1")
+
+        self.layout.elemental_input["model_composition"].value = (
+            "continuum_plus_elnes"
+        )
+
+        self.assertEqual(
+            workspace.areas["cluster_1"].model_composition.value,
+            "continuum_plus_elnes",
+        )
+        self.assertEqual(
+            workspace.areas["default"].model_composition.value,
+            "continuum_only",
+        )
+        self.assertEqual(
+            workspace.areas["cluster_0"].model_composition.value,
+            "continuum_only",
+        )
+
+        selector.value = selector.options["Model Cluster 0"]
+        self.assertEqual(workspace.active_area, "cluster_0")
+        self.assertEqual(
+            self.layout.elemental_input["model_composition"].value,
+            "continuum_only",
+        )
+        selector.value = selector.options["Model Cluster 1"]
+        self.assertEqual(workspace.active_area, "cluster_1")
+        self.assertEqual(
+            self.layout.elemental_input["model_composition"].value,
+            "continuum_plus_elnes",
+        )
+
     def test_fit_all_fits_every_cluster_and_isolates_a_failed_cluster(self):
         self.controller._on_fit(None)
-        self.controller._on_use_current_clustering(None)
+        self.controller.select_clustering_data()
         self.assertEqual(
             self.controller.workspace.runnable_area_ids,
             ("cluster_0", "cluster_1"),
@@ -3122,17 +3295,10 @@ class ElementalReferenceControllerTests(unittest.TestCase):
             set(results.area_select.options.values()), {"default", "cluster_0"}
         )
 
-        self.controller._on_use_current_clustering(None)
+        self.controller.select_preprocessed_data()
         self.assertEqual(self.controller.workspace.runnable_area_ids, ("default",))
-        self.assertEqual(
-            self.layout.elemental_use_current_clustering_button.name,
-            "Use Current Clustering",
-        )
-        self.assertFalse(self.layout.elemental_fit_area_settings_button.disabled)
-        self.assertEqual(
-            set(self.layout.elemental_fit_areas_input.options.values()),
-            {"cluster_0", "cluster_1"},
-        )
+        self.assertTrue(self.layout.elemental_fit_area_settings_button.disabled)
+        self.assertEqual(self.layout.elemental_fit_areas_input.options, {})
         self.assertIsNone(self.visualizer.clustering_payload)
 
     def _assert_sections_locked(self):
@@ -3214,7 +3380,7 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.controller._publish_workspace()
         self.controller._refresh_button_states()
 
-        self.controller._on_use_current_clustering(None)
+        self.controller.select_clustering_data()
         self.assertTrue(workspace.clustering_active)
         self.assertFalse(
             any(

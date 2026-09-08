@@ -53,6 +53,20 @@ class NLLSWorkspace:
     def active_area_spec(self) -> AreaModelSpec:
         return self.areas[self.active_area]
 
+    def set_active_area(self, area_id: str) -> AreaModelSpec:
+        """Select the model currently being edited without mutating it.
+
+        Area selection is UI state, not a model edit: it must not invalidate a
+        build or a reference fit for any area.  This distinction lets a cluster
+        keep a private model while the user switches between it and the shared
+        ROI template.
+        """
+        target = str(area_id)
+        if target not in self.areas:
+            raise ValueError(f"unknown NLLS area: {target}")
+        self.active_area = target
+        return self.areas[target]
+
     @property
     def runnable_area_ids(self) -> tuple[str, ...]:
         clustered = tuple(area_id for area_id in self.areas if area_id != "default")
@@ -422,6 +436,7 @@ class NLLSWorkspace:
         """Re-clone current cluster masks after the shared template model changes."""
         if not self.clustering_active:
             return ()
+        previous_active_area = self.active_area
         definitions = tuple(
             AreaDefinition(
                 area_id=area.area_id,
@@ -437,7 +452,12 @@ class NLLSWorkspace:
             and area.mask is not None
             and area.clustering_label is not None
         )
-        return self.apply_clustering(definitions, template_area=template_area)
+        refreshed = self.apply_clustering(definitions, template_area=template_area)
+        # Applying clones normally selects the first cluster. A shared-template
+        # edit must retain the user's Share Current Model selection instead.
+        if previous_active_area in self.areas:
+            self.active_area = previous_active_area
+        return refreshed
 
     def is_area_built(self, area_id: str) -> bool:
         area = self.areas[area_id]

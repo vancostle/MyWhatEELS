@@ -64,6 +64,7 @@ class NLLSController:
 
     _SUBSHELL_ONSET_COLOR = "#5f6368"
     _SUBSHELL_ONSET_HIGHLIGHT_COLOR = "#d1d5db"
+    _SHARED_MODEL_VALUE = "__shared_current_model__"
 
     def __init__(
         self,
@@ -95,6 +96,12 @@ class NLLSController:
         self._prior_complete_results: xr.Dataset | None = None
         self._published_result_ids: set[int] = set()
         self._syncing_edge_controls = False
+        self._syncing_model_area_selection = False
+        # This is deliberately distinct from workspace.clustering_active.
+        # Cluster models remain stored while the user temporarily views the
+        # preprocessed ROI source; only the selected source controls which
+        # areas are fitted and exposed in the model selector.
+        self._data_source_mode = "preprocessed"
         self.bind()
         self.on_source_changed(initial=True)
         self._restore_existing_multifit_result()
@@ -103,6 +110,15 @@ class NLLSController:
     def workspace(self) -> NLLSWorkspace | None:
         value = self.app_state.nlls_workspace
         return value if isinstance(value, NLLSWorkspace) else None
+
+    @property
+    def using_clustering_data(self) -> bool:
+        workspace = self.workspace
+        return bool(
+            self._data_source_mode == "clustering"
+            and workspace is not None
+            and workspace.clustering_active
+        )
 
     def bind(self) -> None:
         inputs = self.view.elemental_input
@@ -131,6 +147,9 @@ class NLLSController:
                 self.view.elemental_fit_areas_input.param.watch(
                     self._on_fit_area_selection_changed, "value"
                 ),
+                self.view.elemental_cluster_model_select.param.watch(
+                    self._on_cluster_model_selected, "value"
+                ),
             ]
         )
         tabs = getattr(self.view, "fitting_tabs", None)
@@ -150,9 +169,6 @@ class NLLSController:
         )
         self.view.elemental_select_all_fit_areas_button.on_click(
             self._on_select_all_fit_areas
-        )
-        self.view.elemental_use_current_clustering_button.on_click(
-            self._on_use_current_clustering
         )
         multifit_controls = getattr(self.view, "elemental_multifit_controls", None)
         if multifit_controls is not None:
@@ -210,6 +226,34 @@ class NLLSController:
             if dataset is not None and dataset is self.app_state.preprocessed_plot_dataset
             else "raw"
         )
+
+    def _editing_area_id(self, workspace: NLLSWorkspace | None = None) -> str:
+        """Return the model selected by Cluster # Model."""
+        current = workspace or self.workspace
+        if current is None or current.active_area not in current.areas:
+            raise ValueError("no active Elemental model area")
+        return current.active_area
+
+    def _propagate_shared_model(self, workspace: NLLSWorkspace) -> None:
+        """Preserve legacy ROI sharing, without overwriting private models."""
+        if self._editing_area_id(workspace) == "default":
+            workspace.refresh_clustering_from_template()
+
+    def _sync_model_composition_from_active_area(
+        self, workspace: NLLSWorkspace
+    ) -> None:
+        """Reflect the selected model in the shared composition widget safely."""
+        composition = workspace.active_area_spec.model_composition.value
+        widget = self.view.elemental_input["model_composition"]
+        if widget.value == composition:
+            return
+        # Assigning the widget normally fires the composition watcher.  This is
+        # a view synchronisation, not an edit to the newly-selected area.
+        self._syncing_model_area_selection = True
+        try:
+            widget.value = composition
+        finally:
+            self._syncing_model_area_selection = False
 
     def _current_fit_range(self) -> FitRange:
         dataset = self._active_dataset()
@@ -368,6 +412,28 @@ class NLLSController:
                 7000,
             )
 
+    def _show_active_model_spectrum(self) -> None:
+        """Show the spectrum belonging to the model selected beside Fit."""
+        workspace = self.workspace
+        visualizer = self._active_visualizer()
+        show = getattr(visualizer, "show_nlls_model_spectrum", None)
+        if workspace is None or visualizer is None or show is None:
+            return
+        try:
+            area_id = workspace.active_area
+            if area_id == "default":
+                # Preserve the established ROI-first, central-window fallback.
+                selection, label = self._edge_preview_reference()
+            else:
+                selection = self._reference_selection_for_area(area_id)
+                label = f"{workspace.areas[area_id].label} mean ({selection.pixel_count} pixels)"
+            energy = np.asarray(
+                self._active_dataset().coords["Eloss"].values, dtype=float
+            )
+            show(energy, selection.spectrum, label)
+        except (NLLSError, ValueError, TypeError, KeyError, AttributeError):
+            pass
+
     def _update_validation_status(self) -> None:
         """Publish both gates and keep the Elemental sections consistent with them.
 
@@ -430,8 +496,19 @@ class NLLSController:
         self._sections_unlocked = unlocked
 
     def _refresh_element_catalog(self) -> None:
-        atomic_number = int(self.view.elemental_input["element_atomic_number"].value)
         shells_widget = self.view.elemental_input["subshells"]
+        selected_value = self.view.elemental_input["element_atomic_number"].value
+        # Panel can briefly publish None while it reconciles a Select's options.
+        # Treat that transient state as an empty catalogue rather than letting a
+        # watcher exception interrupt the Bokeh session.
+        if selected_value is None:
+            shells_widget.stylesheets = []
+            shells_widget.options = []
+            shells_widget.value = []
+            shells_widget.disabled = True
+            self.view.elemental_onset_readout.value = "Onset (eV): -"
+            return
+        atomic_number = self._selected_atomic_number()
         try:
             shells = list(self.provider.available_edges(atomic_number))
             raw_edges = [self.provider.load_raw(atomic_number, shell) for shell in shells]
@@ -451,6 +528,13 @@ class NLLSController:
             shells_widget.value = []
             shells_widget.disabled = True
             self.view.elemental_onset_readout.value = "Onset (eV): -"
+
+    def _selected_atomic_number(self) -> int:
+        """Return the currently selected element, rejecting Panel's temporary None."""
+        value = self.view.elemental_input["element_atomic_number"].value
+        if value is None:
+            raise ValueError("select an element before configuring an edge")
+        return int(value)
 
     @classmethod
     def _subshell_onset_stylesheet(cls, onsets_eV: dict[str, float]) -> str:
@@ -504,7 +588,10 @@ class NLLSController:
         return "\n".join(rules)
 
     def _update_selected_onset(self) -> None:
-        atomic_number = int(self.view.elemental_input["element_atomic_number"].value)
+        if self.view.elemental_input["element_atomic_number"].value is None:
+            self.view.elemental_onset_readout.value = "Onset (eV): -"
+            return
+        atomic_number = self._selected_atomic_number()
         selected = tuple(self.view.elemental_input["subshells"].value)
         if not selected:
             self.view.elemental_onset_readout.value = "Onset (eV): -"
@@ -517,7 +604,7 @@ class NLLSController:
     def _validate_selected_curves(self):
         if self.workspace is None:
             raise ValueError(self._source_error or self._geometry_error or "no valid workspace")
-        atomic_number = int(self.view.elemental_input["element_atomic_number"].value)
+        atomic_number = self._selected_atomic_number()
         selected = tuple(self.view.elemental_input["subshells"].value)
         available = self.provider.available_edges(atomic_number)
         groups = canonical_subshell_groups(selected, available)
@@ -546,7 +633,7 @@ class NLLSController:
 
     def _selected_continuum_ids(self) -> tuple[str, ...]:
         """Return stable IDs for the shell groups selected in Edge Definition."""
-        atomic_number = int(self.view.elemental_input["element_atomic_number"].value)
+        atomic_number = self._selected_atomic_number()
         selected = tuple(self.view.elemental_input["subshells"].value)
         if not selected:
             return ()
@@ -565,7 +652,11 @@ class NLLSController:
         if self._syncing_edge_controls:
             return
         workspace = self.workspace
-        if workspace is None or "default" not in workspace.areas:
+        if workspace is None:
+            return
+        try:
+            area_id = self._editing_area_id(workspace)
+        except ValueError:
             return
         try:
             continuum_ids = self._selected_continuum_ids()
@@ -575,7 +666,7 @@ class NLLSController:
             return
         by_id = {
             continuum.id: continuum
-            for continuum in workspace.areas["default"].continuum_specs
+            for continuum in workspace.areas[area_id].continuum_specs
         }
         broadening = None
         if any(continuum_id not in by_id for continuum_id in continuum_ids):
@@ -656,6 +747,21 @@ class NLLSController:
 
     def _edge_preview_reference(self):
         """Return a stable mean spectrum for positioning Edge Definition curves."""
+        workspace = self.workspace
+        if workspace is not None:
+            try:
+                area_id = self._editing_area_id(workspace)
+                if area_id != "default":
+                    selection = self._reference_selection_for_area(area_id)
+                    label = (
+                        f"{workspace.areas[area_id].label} mean "
+                        f"({selection.pixel_count} pixels)"
+                    )
+                    return selection, label
+            except (NLLSError, ValueError, TypeError, KeyError):
+                # Fall back to the proven ROI/central-window path below.  A
+                # malformed clustering result must not prevent edge setup.
+                pass
         dataset = self._active_dataset()
         cube = np.asarray(dataset["ElectronCount"].values, dtype=float)
         if cube.ndim != 3:
@@ -777,7 +883,7 @@ class NLLSController:
             except (NLLSError, ValueError, TypeError):
                 pass
 
-            area = workspace.areas["default"]
+            area = workspace.areas[self._editing_area_id(workspace)]
             for continuum in area.continuum_specs:
                 # A saved continuum is always rendered from its committed
                 # definition. Candidate controls update that definition before
@@ -875,6 +981,34 @@ class NLLSController:
             tuple(int(value) for value in cube.shape[:2]),
         )
 
+    def has_current_clustering_data(self) -> bool:
+        """Whether the current clustering is compatible with this NLLS source."""
+        try:
+            return bool(self._current_clustering_definitions())
+        except (NLLSError, ValueError, TypeError, KeyError, AttributeError):
+            return False
+
+    @staticmethod
+    def _workspace_matches_clustering(
+        workspace: NLLSWorkspace,
+        definitions: tuple[AreaDefinition, ...],
+    ) -> bool:
+        """Whether stored private cluster models belong to the current labels."""
+        existing_ids = tuple(area_id for area_id in workspace.areas if area_id != "default")
+        expected_ids = tuple(definition.area_id for definition in definitions)
+        if existing_ids != expected_ids:
+            return False
+        for definition in definitions:
+            area = workspace.areas.get(definition.area_id)
+            if area is None:
+                return False
+            if (
+                area.mask_fingerprint != definition.mask_fingerprint
+                or area.clustering_label != definition.label_value
+            ):
+                return False
+        return True
+
     def _roi_pairs(self) -> tuple[tuple[int, int], ...]:
         visualizers = getattr(self.parent.layout, "_chosen_visualizers", ())
         if not visualizers:
@@ -926,6 +1060,73 @@ class NLLSController:
             == ReferenceSpectrumService.mask_fingerprint(mask)
         )
 
+    def _refresh_cluster_model_selector(
+        self,
+        workspace: NLLSWorkspace | None,
+        clustering_active: bool,
+        run_active: bool,
+    ) -> None:
+        """Keep the Fit-adjacent model selector faithful to the selected source."""
+        selector = self.view.elemental_cluster_model_select
+        if workspace is None:
+            options = {"Share Current Model": self._SHARED_MODEL_VALUE}
+            value = self._SHARED_MODEL_VALUE
+            disabled = True
+        elif not clustering_active:
+            # The preprocessed source has exactly one model: the current ROI.
+            options = {"Current ROI Model": "default"}
+            value = "default"
+            disabled = True
+        else:
+            options = {"Share Current Model": self._SHARED_MODEL_VALUE}
+            options.update(
+                {
+                    f"Model {workspace.areas[area_id].label}": area_id
+                    for area_id in workspace.runnable_area_ids
+                }
+            )
+            selected_area = workspace.active_area
+            value = (
+                selected_area
+                if selected_area in options.values()
+                else self._SHARED_MODEL_VALUE
+            )
+            disabled = run_active
+        self._syncing_model_area_selection = True
+        try:
+            selector.param.update(options=options, value=value, disabled=disabled)
+        finally:
+            self._syncing_model_area_selection = False
+
+    def _on_cluster_model_selected(self, event) -> None:
+        """Select the shared ROI model or one independently editable cluster model."""
+        if self._syncing_model_area_selection:
+            return
+        workspace = self.workspace
+        if workspace is None:
+            return
+        requested = str(event.new)
+        area_id = "default" if requested == self._SHARED_MODEL_VALUE else requested
+        if area_id not in workspace.areas:
+            return
+        if area_id != "default" and not self.using_clustering_data:
+            return
+        try:
+            workspace.set_active_area(area_id)
+        except ValueError:
+            return
+        self._sync_model_composition_from_active_area(workspace)
+        model_editor = getattr(self.view, "elemental_model_editor", None)
+        if model_editor is not None:
+            model_editor.refresh()
+        edge_modal = getattr(self.view, "edge_added_modal", None)
+        if edge_modal is not None:
+            edge_modal.refresh()
+        self._sync_edge_controls_from_selection()
+        self._refresh_edge_preview()
+        self._show_active_model_spectrum()
+        self._refresh_button_states()
+
     def _refresh_button_states(self) -> None:
         workspace = self.workspace
         run_active = self._active_run_request is not None
@@ -944,22 +1145,8 @@ class NLLSController:
                 selected_valid = False
         self.view.elemental_add_edge_button.disabled = run_active or not selected_valid
 
-        clustering_definitions: tuple[AreaDefinition, ...] = ()
-        if workspace is not None and self.app_state.last_clustering_result is not None:
-            try:
-                clustering_definitions = self._current_clustering_definitions()
-            except (NLLSError, ValueError, TypeError):
-                clustering_definitions = ()
-        clustering_valid = bool(clustering_definitions)
-        clustering_active = bool(workspace and workspace.clustering_active)
-        clustering_button = self.view.elemental_use_current_clustering_button
-        clustering_button.name = (
-            "Use Preprocessed Data" if clustering_active else "Use Current Clustering"
-        )
-        clustering_button.button_type = "warning" if clustering_active else "primary"
-        clustering_button.disabled = run_active or not (
-            clustering_active or clustering_valid
-        )
+        clustering_active = self.using_clustering_data
+        self._refresh_cluster_model_selector(workspace, clustering_active, run_active)
 
         fit_areas = self.view.elemental_fit_areas_input
         if clustering_active and workspace is not None:
@@ -968,14 +1155,13 @@ class NLLSController:
                 workspace.areas[area_id].label: area_id for area_id in cluster_ids
             }
         else:
-            cluster_ids = tuple(
-                definition.area_id for definition in clustering_definitions
-            )
-            options = {
-                definition.label: definition.area_id
-                for definition in clustering_definitions
-            }
-        previous_options = fit_areas.options if isinstance(fit_areas.options, dict) else {}
+            # Areas are selected only after Clustering Data is activated.  The
+            # settings modal no longer contains a second source-selection action.
+            cluster_ids = ()
+            options = {}
+        previous_options = (
+            fit_areas.options if isinstance(fit_areas.options, dict) else {}
+        )
         previous_ids = tuple(previous_options.values())
         if previous_ids != tuple(cluster_ids):
             fit_areas.param.update(options=options, value=list(cluster_ids))
@@ -983,7 +1169,7 @@ class NLLSController:
             selected = [area_id for area_id in fit_areas.value if area_id in cluster_ids]
             if selected != list(fit_areas.value):
                 fit_areas.value = selected
-        clustering_settings_available = clustering_active or clustering_valid
+        clustering_settings_available = clustering_active
         fit_areas.disabled = run_active or not clustering_settings_available
         self.view.elemental_fit_area_settings_button.disabled = (
             run_active or not clustering_settings_available
@@ -1097,7 +1283,7 @@ class NLLSController:
         workspace = self.workspace
         if workspace is None:
             return ()
-        if workspace.clustering_active:
+        if self.using_clustering_data:
             return tuple(str(value) for value in self.view.elemental_fit_areas_input.value)
         return ("default",)
 
@@ -1587,9 +1773,10 @@ class NLLSController:
             continuum_parameter_specs(shift)
             continuum_ids = self._selected_continuum_ids()
             if workspace is not None and continuum_ids:
+                area_id = self._editing_area_id(workspace)
                 saved_ids = {
                     continuum.id
-                    for continuum in workspace.areas["default"].continuum_specs
+                    for continuum in workspace.areas[area_id].continuum_specs
                 }
                 matching = tuple(
                     continuum_id
@@ -1599,10 +1786,10 @@ class NLLSController:
                 if matching:
                     previous_revision = workspace.dirty_revision
                     workspace.set_continuum_chemical_shift(
-                        "default", matching, shift
+                        area_id, matching, shift
                     )
                     if workspace.dirty_revision != previous_revision:
-                        workspace.refresh_clustering_from_template()
+                        self._propagate_shared_model(workspace)
                         self._publish_workspace()
                         model_editor = getattr(
                             self.view, "elemental_model_editor", None
@@ -1631,9 +1818,10 @@ class NLLSController:
             )
             continuum_ids = self._selected_continuum_ids()
             if workspace is not None and continuum_ids:
+                area_id = self._editing_area_id(workspace)
                 saved_ids = {
                     continuum.id
-                    for continuum in workspace.areas["default"].continuum_specs
+                    for continuum in workspace.areas[area_id].continuum_specs
                 }
                 matching = tuple(
                     continuum_id
@@ -1643,10 +1831,10 @@ class NLLSController:
                 if matching:
                     previous_revision = workspace.dirty_revision
                     workspace.set_continuum_broadening(
-                        "default", matching, broadening
+                        area_id, matching, broadening
                     )
                     if workspace.dirty_revision != previous_revision:
-                        workspace.refresh_clustering_from_template()
+                        self._propagate_shared_model(workspace)
                         self._publish_workspace()
         except (NLLSError, ValueError, TypeError):
             pass
@@ -1669,32 +1857,56 @@ class NLLSController:
         """Re-run both gates after the Dataset Information card rewrites the metadata."""
         self.on_source_changed()
 
-    def _on_use_current_clustering(self, event) -> None:
+    def select_preprocessed_data(self) -> None:
+        """Show the shared ROI model without discarding private cluster models."""
+        self._data_source_mode = "preprocessed"
+        workspace = self.workspace
+        if workspace is not None:
+            workspace.set_active_area("default")
+            self._sync_model_composition_from_active_area(workspace)
+            self._clear_clustering_in_main()
+            model_editor = getattr(self.view, "elemental_model_editor", None)
+            if model_editor is not None:
+                model_editor.refresh()
+            edge_modal = getattr(self.view, "edge_added_modal", None)
+            if edge_modal is not None:
+                edge_modal.refresh()
+            self._sync_edge_controls_from_selection()
+            self._refresh_edge_preview()
+            self._show_active_model_spectrum()
+        self._refresh_button_states()
+
+    def select_clustering_data(self) -> None:
+        """Apply the current clustering as the Elemental NLLS data source."""
+        workspace = self.workspace
+        if workspace is None:
+            raise ValueError("no valid NLLS workspace")
         try:
-            workspace = self.workspace
-            if workspace is None:
-                raise ValueError("no valid NLLS workspace")
-            if workspace.clustering_active:
-                workspace.clear_clustering()
-                self._publish_workspace()
-                self.view.elemental_input["model_composition"].value = (
-                    workspace.active_area_spec.model_composition.value
-                )
-                self._clear_clustering_in_main()
-                self._notify("success", "Returned to the preprocessed ROI data.")
-            else:
-                definitions = self._current_clustering_definitions()
+            definitions = self._current_clustering_definitions()
+            if not self._workspace_matches_clustering(workspace, definitions):
                 areas = workspace.apply_clustering(definitions)
                 self._publish_workspace()
-                self.view.elemental_input["model_composition"].value = (
-                    workspace.active_area_spec.model_composition.value
-                )
-                self._show_clustering_in_main()
-                self._notify(
-                    "success",
-                    f"Current clustering applied to {len(areas)} NLLS areas.",
-                )
+                message = f"Current clustering applied to {len(areas)} NLLS areas."
+            else:
+                message = "Current clustering selected."
+            self._data_source_mode = "clustering"
+            # Share is the default selector state, so editing begins at the ROI
+            # template until the user explicitly chooses a cluster model.
+            workspace.set_active_area("default")
+            self._sync_model_composition_from_active_area(workspace)
+            self._show_clustering_in_main()
+            model_editor = getattr(self.view, "elemental_model_editor", None)
+            if model_editor is not None:
+                model_editor.refresh()
+            edge_modal = getattr(self.view, "edge_added_modal", None)
+            if edge_modal is not None:
+                edge_modal.refresh()
+            self._sync_edge_controls_from_selection()
+            self._refresh_edge_preview()
+            self._show_active_model_spectrum()
+            self._notify("success", message)
         except (NLLSError, ValueError, TypeError) as exc:
+            self._data_source_mode = "preprocessed"
             self._notify("error", f"Cannot use current clustering: {exc}", 8000)
         finally:
             self._refresh_button_states()
@@ -1712,11 +1924,22 @@ class NLLSController:
         self._refresh_button_states()
 
     def _on_model_composition_changed(self, event) -> None:
-        if self.workspace is None:
+        if self._syncing_model_area_selection:
             return
-        self.workspace.set_model_composition("default", event.new)
-        self.workspace.refresh_clustering_from_template()
+        workspace = self.workspace
+        if workspace is None:
+            return
+        area_id = self._editing_area_id(workspace)
+        workspace.set_model_composition(area_id, event.new)
+        self._propagate_shared_model(workspace)
         self._publish_workspace()
+        model_editor = getattr(self.view, "elemental_model_editor", None)
+        if model_editor is not None:
+            model_editor.refresh()
+        edge_modal = getattr(self.view, "edge_added_modal", None)
+        if edge_modal is not None:
+            edge_modal.refresh()
+        self._refresh_edge_preview()
         self._refresh_button_states()
 
     def on_roi_changed(self) -> None:
@@ -1751,7 +1974,7 @@ class NLLSController:
                 reference_spectrum = self._edge_preview_reference()[0].spectrum
             except (NLLSError, ValueError, TypeError, KeyError):
                 reference_spectrum = None
-            target_area_ids = ("default",)
+            target_area_ids = (self._editing_area_id(workspace),)
 
             added: list[str] = []
             for group, snapshot in zip(groups, snapshots):
@@ -1825,11 +2048,14 @@ class NLLSController:
                         tuple(fine_structures),
                     )
                 added.append(f"{edge.symbol} {'+'.join(group)}")
-            workspace.refresh_clustering_from_template()
+            self._propagate_shared_model(workspace)
             self._publish_workspace()
             model_editor = getattr(self.view, "elemental_model_editor", None)
             if model_editor is not None:
                 model_editor.refresh()
+            edge_modal = getattr(self.view, "edge_added_modal", None)
+            if edge_modal is not None:
+                edge_modal.refresh()
             self._refresh_edge_preview()
             self._refresh_button_states()
             self._notify("success", f"Elemental edge added: {', '.join(added)}")
@@ -1864,10 +2090,10 @@ class NLLSController:
             workspace = self.workspace
             if workspace is None:
                 raise ValueError("no valid NLLS workspace")
-            target_area_ids = ("default",)
+            target_area_ids = (self._editing_area_id(workspace),)
             builds = tuple(self._build_area(area_id) for area_id in target_area_ids)
             built, snapshot = builds[0]
-            workspace.refresh_clustering_from_template()
+            self._propagate_shared_model(workspace)
             self._publish_workspace()
             normalizations = ", ".join(
                 f"{component_id}={curve.normalization_factor:.4g} {curve.units}"
@@ -1978,7 +2204,7 @@ class NLLSController:
             return
         target_ids = (
             tuple(self.view.elemental_fit_areas_input.value)
-            if workspace.clustering_active
+            if self.using_clustering_data
             else ("default",)
         )
         self.app_state.nlls_run_state = "fitting_references"

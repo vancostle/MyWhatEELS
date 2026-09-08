@@ -21,14 +21,6 @@ class NLLSFitAreasModal(pn.Column):
         **params,
     ) -> None:
         self._custom_page = custom_page
-        self._use_current_clustering_button = pn.widgets.Button(
-            name="Use Current Clustering",
-            button_type="primary",
-            height=55,
-            disabled=True,
-            sizing_mode="stretch_width",
-            margin=0,
-        )
         self._area_selector = pn.widgets.MultiChoice(
             name="Areas to fit",
             options={},
@@ -55,8 +47,6 @@ class NLLSFitAreasModal(pn.Column):
         super().__init__(
             pn.pane.Markdown(f"## {title}", margin=0, styles={"padding": "0"}),
             pn.Spacer(height=10),
-            self._use_current_clustering_button,
-            pn.layout.Divider(margin=(4, 0, 4, 0)),
             self._area_selector,
             self._select_all_button,
             pn.Spacer(height=10),
@@ -69,10 +59,6 @@ class NLLSFitAreasModal(pn.Column):
     @property
     def area_selector(self) -> pn.widgets.MultiChoice:
         return self._area_selector
-
-    @property
-    def use_current_clustering_button(self) -> pn.widgets.Button:
-        return self._use_current_clustering_button
 
     @property
     def select_all_button(self) -> pn.widgets.Button:
