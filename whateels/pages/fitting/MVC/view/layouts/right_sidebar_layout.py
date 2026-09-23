@@ -1437,8 +1437,9 @@ class FittingRightSidebarLayout(pn.Column):
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
-            # The model names need more horizontal room than this short action.
-            styles={'flex': '0.8 1 0'},
+            # Fit is intentionally compact so the longer NLLS action can remain
+            # legible beside it on the second row.
+            styles={'flex': '0.65 1 0'},
         )
         self._elemental_cluster_model_select = pn.widgets.Select(
             # Keep this control label-free: its option text already identifies the
@@ -1446,11 +1447,11 @@ class FittingRightSidebarLayout(pn.Column):
             name="",
             options=["Share Current Model"],
             value="Share Current Model",
-            height=55,
+            height=45,
             margin=0,
             disabled=True,
             sizing_mode=self._STRETCH_WIDTH,
-            styles={'flex': '1.2 1 0'},
+            styles={'flex': '1 1 0'},
         )
         self._elemental_fit_area_settings_button = pn.widgets.ButtonIcon(
             icon=self._ADJUSTMENTS_SVG,
@@ -1478,6 +1479,7 @@ class FittingRightSidebarLayout(pn.Column):
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
+            styles={'flex': '1.35 1 0'},
         )
         self._elemental_run_progress = pn.indicators.Progress(
             name="Elemental NLLS progress",
@@ -2107,15 +2109,15 @@ class FittingRightSidebarLayout(pn.Column):
         self._elemental_action_stack = pn.Column(
             self._elemental_run_progress,
             pn.Row(
-                self._elemental_fit_button,
                 self._elemental_cluster_model_select,
+                self._elemental_fit_area_settings_button,
                 margin=0,
                 sizing_mode=self._STRETCH_WIDTH,
-                styles=self._fluid_row_styles(gap='10px'),
+                styles=self._fluid_row_styles(gap='10px', **{'align-items': 'center'}),
             ),
             pn.Row(
+                self._elemental_fit_button,
                 self._elemental_run_nlls_button,
-                self._elemental_fit_area_settings_button,
                 margin=0,
                 sizing_mode=self._STRETCH_WIDTH,
                 styles=self._fluid_row_styles(gap='10px'),

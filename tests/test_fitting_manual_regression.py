@@ -434,7 +434,7 @@ class ManualFittingRegressionTests(unittest.TestCase):
         ]
         self.assertTrue(fit_rows)
         self.assertIn(
-            layout.elemental_cluster_model_select,
+            layout.elemental_run_nlls_button,
             fit_rows[0].objects,
         )
         self.assertNotIn(
@@ -448,8 +448,18 @@ class ManualFittingRegressionTests(unittest.TestCase):
         ]
         self.assertTrue(run_rows)
         self.assertIn(
-            layout.elemental_fit_area_settings_button,
+            layout.elemental_fit_button,
             run_rows[0].objects,
+        )
+        model_rows = [
+            row
+            for row in layout.select(pn.Row)
+            if layout.elemental_cluster_model_select in row.objects
+        ]
+        self.assertTrue(model_rows)
+        self.assertIn(
+            layout.elemental_fit_area_settings_button,
+            model_rows[0].objects,
         )
         self.assertNotIn(
             "Use Current Clustering",
