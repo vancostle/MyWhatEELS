@@ -1437,15 +1437,20 @@ class FittingRightSidebarLayout(pn.Column):
             margin=0,
             sizing_mode=self._STRETCH_WIDTH,
             disabled=True,
+            # The model names need more horizontal room than this short action.
+            styles={'flex': '0.8 1 0'},
         )
         self._elemental_cluster_model_select = pn.widgets.Select(
-            name="Cluster # Model",
+            # Keep this control label-free: its option text already identifies the
+            # selected model, and a label makes this row taller than the Fit button.
+            name="",
             options=["Share Current Model"],
             value="Share Current Model",
             height=55,
             margin=0,
             disabled=True,
             sizing_mode=self._STRETCH_WIDTH,
+            styles={'flex': '1.2 1 0'},
         )
         self._elemental_fit_area_settings_button = pn.widgets.ButtonIcon(
             icon=self._ADJUSTMENTS_SVG,
