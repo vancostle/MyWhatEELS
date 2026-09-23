@@ -1876,6 +1876,11 @@ class NLLSController:
             self._show_active_model_spectrum()
         self._refresh_button_states()
 
+    def select_raw_data(self) -> None:
+        """Invalidate Elemental NLLS while the unprocessed source is displayed."""
+        self._data_source_mode = "raw"
+        self.on_source_changed()
+
     def select_clustering_data(self) -> None:
         """Apply the current clustering as the Elemental NLLS data source."""
         workspace = self.workspace

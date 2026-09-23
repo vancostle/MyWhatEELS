@@ -226,7 +226,7 @@ class FittingController(BaseController):
         if not self._has_valid_preprocessed_data(notify=False):
             return False
         nlls_controller = getattr(self, "_nlls_controller", None)
-        if nlls_controller is not None:
+        if nlls_controller is not None and nlls_controller.workspace is not None:
             return nlls_controller.has_current_clustering_data()
         app_state = CacheManager.get_cached_app_state()
         try:
@@ -255,10 +255,14 @@ class FittingController(BaseController):
         clustering_button.disabled = not clustering_available
 
         if self._active_data_source == "clustering" and not clustering_available:
-            self._activate_preprocessed_data(notify=False)
+            if preprocessed_available:
+                self._activate_preprocessed_data(notify=False)
+            else:
+                self._activate_raw_data(notify=False)
             return
         if self._active_data_source == "preprocessed" and not preprocessed_available:
-            self._active_data_source = None
+            self._activate_raw_data(notify=False)
+            return
 
         preprocessed_button.button_type = (
             "primary" if self._active_data_source == "preprocessed" else "default"
@@ -269,7 +273,9 @@ class FittingController(BaseController):
 
     def _on_preprocessed_dataset_changed(self, event) -> None:
         """React to Home preprocessing publication/clear while fitting page is already open."""
-        self._sync_data_source_controls(select_preprocessed=True)
+        self._sync_data_source_controls(
+            select_preprocessed=self._active_data_source == "preprocessed"
+        )
         if hasattr(self, '_nlls_controller'):
             self._nlls_controller.on_source_changed(initial=True)
 
@@ -290,11 +296,19 @@ class FittingController(BaseController):
             self.update_plot(fit_result)
 
     def _on_preprocessed_data_selected(self, event):
-        """Activate the Home-preprocessed ROI source."""
-        self._activate_preprocessed_data(notify=True)
+        """Toggle the Home-preprocessed ROI source; off means raw data."""
+        if self._active_data_source == "preprocessed":
+            self._activate_raw_data(notify=True)
+        else:
+            self._activate_preprocessed_data(notify=True)
+        self._sync_data_source_controls()
 
     def _on_clustering_data_selected(self, event):
-        """Activate the current clustering, always based on preprocessed data."""
+        """Toggle clustering; turning it off restores the raw dataset."""
+        if self._active_data_source == "clustering":
+            self._activate_raw_data(notify=True)
+            self._sync_data_source_controls()
+            return
         if not self._has_compatible_clustering_data():
             return
         self._activate_preprocessed_data(notify=False)
@@ -305,6 +319,43 @@ class FittingController(BaseController):
                 self._active_data_source = "clustering"
         finally:
             self._sync_data_source_controls()
+
+    def _activate_raw_data(self, *, notify: bool) -> None:
+        """Select the original dataset and clear both source-button selections."""
+        app_state = CacheManager.get_cached_app_state()
+        selected_idx = app_state.selected_tab_index_dataset
+        try:
+            raw_dataset = app_state.all_datasets[selected_idx]
+        except (TypeError, IndexError):
+            return
+
+        source_changed = (
+            app_state.plot_dataset is not raw_dataset
+            or self._active_data_source is not None
+        )
+        app_state.plot_dataset = raw_dataset
+        self._active_data_source = None
+
+        if source_changed:
+            self._model.reset_for_data_source_change()
+            self._layout.clear_component_inputs_from_sidebar()
+            app_state.spectra = None
+            self.energy_map_active = False
+            self._view.energy_map_toggle_button.disabled = True
+            self._view.fitting_add_component_button.disabled = True
+            self.layout.reset_for_data_source_change()
+
+        if hasattr(self, '_nlls_controller'):
+            self._nlls_controller.select_raw_data()
+
+        self._view.preprocessed_data_button.button_type = "default"
+        self._view.clustering_data_button.button_type = "default"
+
+        if notify and source_changed:
+            pn.state.notifications.info(
+                "Fitting input switched to raw data. Existing components and fit results were reset.",
+                duration=4000,
+            ) # type: ignore
 
     def _activate_preprocessed_data(self, *, notify: bool) -> None:
         """Switch to Home-preprocessed data and reset derived fitting state once."""
