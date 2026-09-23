@@ -185,10 +185,6 @@ class FittingView:
         """Access the collapsible Elemental 'Edge Definition' section."""
         return self._elemental_edge_section
     @property
-    def elemental_model_section(self):
-        """Access the collapsible Elemental 'Model Setup' section."""
-        return self._elemental_model_section
-    @property
     def elemental_continuum_section(self):
         """Access the collapsible Elemental 'Continuum' section."""
         return self._elemental_continuum_section
@@ -304,7 +300,6 @@ class FittingView:
         self._elemental_background_status = layout.elemental_background_status
         self._elemental_geometry_status = layout.elemental_geometry_status
         self._elemental_edge_section = layout.elemental_edge_section
-        self._elemental_model_section = layout.elemental_model_section
         self._elemental_continuum_section = layout.elemental_continuum_section
         self._elemental_elnes_section = layout.elemental_elnes_section
         self._elemental_onset_readout = layout.elemental_onset_readout

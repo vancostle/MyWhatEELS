@@ -1,4 +1,4 @@
-"""Modal used to choose clustered reference areas for Elemental fitting."""
+"""Modal for Elemental NLLS settings and clustered reference-area selection."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class NLLSFitAreasModal(pn.Column):
-    """Small, stateful selector shared by the Fit action and its controller."""
+    """Stateful Elemental settings modal shared by the Fit action and controller."""
 
     def __init__(
         self,
@@ -43,10 +43,17 @@ class NLLSFitAreasModal(pn.Column):
             margin=0,
         )
         self._close_button.on_click(self._close)
+        self._settings_controls = pn.Column(
+            sizing_mode="stretch_width",
+            margin=0,
+            styles={"gap": "10px"},
+        )
 
         super().__init__(
             pn.pane.Markdown(f"## {title}", margin=0, styles={"padding": "0"}),
             pn.Spacer(height=10),
+            self._settings_controls,
+            pn.layout.Divider(margin=(5, 0)),
             self._area_selector,
             self._select_all_button,
             pn.Spacer(height=10),
@@ -63,6 +70,10 @@ class NLLSFitAreasModal(pn.Column):
     @property
     def select_all_button(self) -> pn.widgets.Button:
         return self._select_all_button
+
+    def set_settings_controls(self, *controls) -> None:
+        """Place persistent Elemental configuration widgets above area selection."""
+        self._settings_controls.objects = list(controls)
 
     def _close(self, event) -> None:
         self.visible = False

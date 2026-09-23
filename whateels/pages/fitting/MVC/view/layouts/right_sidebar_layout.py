@@ -1262,7 +1262,7 @@ class FittingRightSidebarLayout(pn.Column):
 
         self._elemental_fit_areas_modal = NLLSFitAreasModal(
             custom_page,
-            title=self._FIT_AREAS_MODAL_ID,
+            title="Elemental NLLS settings",
         )
         if modal_manager is not None:
             modal_manager.register_modal(
@@ -1652,11 +1652,6 @@ class FittingRightSidebarLayout(pn.Column):
         return self._elemental_edge_section
 
     @property
-    def elemental_model_section(self) -> SimpleDetails:
-        """Access the collapsible 'Model Setup' section."""
-        return self._elemental_model_section
-
-    @property
     def elemental_onset_readout(self) -> pn.widgets.StaticText:
         """Access the read-only Elemental NLLS edge onset readout."""
         return self._elemental_onset_readout
@@ -2043,7 +2038,7 @@ class FittingRightSidebarLayout(pn.Column):
         # background provenance AND geometry are valid, so an unusable source can never
         # expose model definition or fitting controls.
         edge_details = self._elemental_edge_section = self._create_elemental_edge_section()
-        model_details = self._elemental_model_section = self._create_elemental_model_section()
+        self._create_elemental_model_section()
         self._elemental_model_editor = ElementalModelParameterEditor(self._model)
         continuum_details = self._elemental_continuum_section = SimpleDetails(
             title="Continuum",
@@ -2074,7 +2069,6 @@ class FittingRightSidebarLayout(pn.Column):
                 self._elemental_background_status,
                 self._elemental_geometry_status,
                 edge_details,
-                model_details,
                 continuum_details,
                 elnes_details,
                 sizing_mode=self._STRETCH_BOTH,
@@ -2229,8 +2223,8 @@ class FittingRightSidebarLayout(pn.Column):
             styles=dict(self._SECTION_CONTAINED),
         )
 
-    def _create_elemental_model_section(self) -> SimpleDetails:
-        """Build model composition controls and the reversible clustering action."""
+    def _create_elemental_model_section(self) -> None:
+        """Build Elemental settings and place them in the settings modal."""
         constants = self._model.constants
 
         self._elemental_input["model_composition"] = pn.widgets.Select(
@@ -2289,7 +2283,7 @@ class FittingRightSidebarLayout(pn.Column):
         self._elemental_input["execution_mode"] = pn.widgets.Select(
             name="Execution mode",
             options={"Serial": False, "Parallel": True},
-            value=False,
+            value=True,
             sizing_mode=self._STRETCH_WIDTH,
             margin=0,
             stylesheets=["""
@@ -2413,15 +2407,7 @@ class FittingRightSidebarLayout(pn.Column):
             sizing_mode=self._STRETCH_WIDTH,
         )
 
-        return SimpleDetails(
-            title=constants.SECTION_ELEMENTAL_MODEL,
-            content=content,
-            expanded=True,
-            locked=True,
-            sizing_mode=self._STRETCH_WIDTH,
-            margin=(0, 10, 10, 10),
-            styles=dict(self._SECTION_CONTAINED),
-        )
+        self._elemental_fit_areas_modal.set_settings_controls(content)
 
     def _create_results_tab(self) -> pn.Column:
         """Build the scrollable Results tab: one section per kind of NLLS result.

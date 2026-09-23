@@ -483,7 +483,6 @@ class NLLSController:
         just_unlocked = unlocked and self._sections_unlocked is not True
         for name in (
             "elemental_edge_section",
-            "elemental_model_section",
             "elemental_continuum_section",
             "elemental_elnes_section",
         ):
@@ -1169,13 +1168,15 @@ class NLLSController:
             selected = [area_id for area_id in fit_areas.value if area_id in cluster_ids]
             if selected != list(fit_areas.value):
                 fit_areas.value = selected
-        clustering_settings_available = clustering_active
-        fit_areas.disabled = run_active or not clustering_settings_available
+        # Settings also configure the shared ROI model, so the modal is useful
+        # whenever Elemental inputs are available, not only for clusters.
+        settings_available = bool(self._sections_unlocked)
+        fit_areas.disabled = run_active or not clustering_active
         self.view.elemental_fit_area_settings_button.disabled = (
-            run_active or not clustering_settings_available
+            run_active or not settings_available
         )
         self.view.elemental_select_all_fit_areas_button.disabled = (
-            run_active or not clustering_settings_available
+            run_active or not clustering_active
         )
 
         target_ids = (

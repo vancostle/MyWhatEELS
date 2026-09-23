@@ -461,6 +461,18 @@ class ManualFittingRegressionTests(unittest.TestCase):
             layout.elemental_fit_area_settings_button,
             model_rows[0].objects,
         )
+        settings_modal = layout._elemental_fit_areas_modal
+        for key in (
+            "model_composition",
+            "elnes_shape",
+            "flexibility",
+            "soften_edge",
+            "soften_strength",
+            "execution_mode",
+            "workers",
+        ):
+            widget = layout.elemental_input[key]
+            self.assertIn(widget, settings_modal.select(type(widget)))
         self.assertNotIn(
             "Use Current Clustering",
             {button.name for button in layout._elemental_fit_areas_modal.select(pn.widgets.Button)},
@@ -469,7 +481,6 @@ class ManualFittingRegressionTests(unittest.TestCase):
     def test_elemental_sections_start_locked_below_both_status_alerts(self):
         layout = FittingRightSidebarLayout(self.model)
         edge = layout.elemental_edge_section
-        model = layout.elemental_model_section
         continuum = layout.elemental_continuum_section
         elnes = layout.elemental_elnes_section
         background = layout.elemental_background_status
@@ -478,7 +489,7 @@ class ManualFittingRegressionTests(unittest.TestCase):
         # No controller has validated a source yet, so nothing may be opened.
         self.assertTrue(background.visible)
         self.assertTrue(geometry.visible)
-        for section in (edge, model, continuum, elnes):
+        for section in (edge, continuum, elnes):
             self.assertTrue(section.locked)
             self.assertFalse(section.expanded)
             self.assertTrue(section._button_header.disabled)
@@ -492,7 +503,7 @@ class ManualFittingRegressionTests(unittest.TestCase):
         )
         self.assertEqual(
             container.objects,
-            [background, geometry, edge, model, continuum, elnes],
+            [background, geometry, edge, continuum, elnes],
         )
 
     def test_results_tab_uses_reactive_elemental_results_view(self):
@@ -575,7 +586,6 @@ class ManualFittingRegressionTests(unittest.TestCase):
         # each card must let floating widget menus overlap the following card.
         for section in (
             layout.elemental_edge_section,
-            layout.elemental_model_section,
         ):
             self.assertEqual(section.styles.get("overflow"), "visible")
             self.assertNotIn("overflow-x", section.styles)
@@ -3312,14 +3322,13 @@ class ElementalReferenceControllerTests(unittest.TestCase):
 
         self.controller.select_preprocessed_data()
         self.assertEqual(self.controller.workspace.runnable_area_ids, ("default",))
-        self.assertTrue(self.layout.elemental_fit_area_settings_button.disabled)
+        self.assertFalse(self.layout.elemental_fit_area_settings_button.disabled)
         self.assertEqual(self.layout.elemental_fit_areas_input.options, {})
         self.assertIsNone(self.visualizer.clustering_payload)
 
     def _assert_sections_locked(self):
         for section in (
             self.layout.elemental_edge_section,
-            self.layout.elemental_model_section,
             self.layout.elemental_continuum_section,
             self.layout.elemental_elnes_section,
         ):
@@ -3330,7 +3339,6 @@ class ElementalReferenceControllerTests(unittest.TestCase):
 
     def test_elemental_sections_are_gated_by_background_and_geometry(self):
         edge = self.layout.elemental_edge_section
-        model = self.layout.elemental_model_section
         continuum = self.layout.elemental_continuum_section
         elnes = self.layout.elemental_elnes_section
         background = self.layout.elemental_background_status
@@ -3339,16 +3347,9 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         # Both gates valid: no alert is published and both sections are open on top.
         self.assertFalse(background.visible)
         self.assertFalse(geometry.visible)
-        for section in (edge, model, continuum, elnes):
+        for section in (edge, continuum, elnes):
             self.assertFalse(section.locked)
             self.assertTrue(section.expanded)
-
-        # A section folded by hand stays folded across a refresh of the same source.
-        model.toggle()
-        self.assertFalse(model.expanded)
-        self.controller.on_source_changed()
-        self.assertFalse(model.expanded)
-        self.assertFalse(model.locked)
 
         # Geometry alone blocked: only its own alert returns, both sections lock.
         # Editing it in the Dataset Information card republishes all_datasets, which is
@@ -3360,12 +3361,12 @@ class ElementalReferenceControllerTests(unittest.TestCase):
         self.assertIn("blocked", geometry.object)
         self._assert_sections_locked()
 
-        # Recovering the geometry reopens both sections without touching the alerts.
+        # Recovering the geometry reopens the Elemental sections without touching the alerts.
         self.dataset.attrs["beam_energy"] = 200.0
         self.state.all_datasets = [self.dataset]
         self.assertFalse(background.visible)
         self.assertFalse(geometry.visible)
-        for section in (edge, model):
+        for section in (edge, continuum, elnes):
             self.assertFalse(section.locked)
             self.assertTrue(section.expanded)
 

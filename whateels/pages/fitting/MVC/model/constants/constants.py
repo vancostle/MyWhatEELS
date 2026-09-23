@@ -83,10 +83,9 @@ class Constants:
     )
     ELEMENTAL_ONSET_READOUT_PLACEHOLDER = "Onset (eV): -"
 
-    # Elemental tab section titles. Area selection lives in NLLSFitAreasModal,
-    # so the tab itself has no "Areas"/"Run Setup" sections.
+    # Elemental tab section titles. Area selection and model configuration live
+    # in NLLSFitAreasModal, so the tab itself has no setup sections.
     SECTION_ELEMENTAL_EDGE = "Edge Definition"
-    SECTION_ELEMENTAL_MODEL = "Model Setup"
 
     # Results tab section titles
     SECTION_RESULTS_REFERENCE = "Reference Fit"
